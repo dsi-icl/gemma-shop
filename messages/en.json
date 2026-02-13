@@ -1,0 +1,8 @@
+{
+    "$schema": "https://inlang.com/schema/inlang-message-format",
+    "home_page": "Home page",
+    "about_page": "About page",
+    "example_message": "Welcome to GemmaShop",
+    "language_label": "Language",
+    "current_locale": "Current locale: {locale}"
+}

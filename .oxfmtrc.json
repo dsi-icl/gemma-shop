@@ -1,0 +1,15 @@
+{
+    "$schema": "./node_modules/oxfmt/configuration_schema.json",
+    "ignorePatterns": [],
+    "tabWidth": 4,
+    "useTabs": false,
+    "experimentalTailwindcss": {
+        "preserveDuplicates": false
+    },
+    "experimentalSortImports": {},
+    "experimentalSortPackageJson": true,
+    "bracketSpacing": true,
+    "singleQuote": true,
+    "trailingComma": "none",
+    "jsxSingleQuote": false
+}
