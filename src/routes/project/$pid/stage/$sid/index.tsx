@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import StageEditor from '@/components/StageEditor';
+import { StageSidebar } from '@/components/StageSidebar';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 
 export const Route = createFileRoute('/project/$pid/stage/$sid/')({
@@ -10,14 +11,12 @@ export const Route = createFileRoute('/project/$pid/stage/$sid/')({
 function RouteComponent() {
     return (
         <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
-            <ResizablePanel defaultSize="75%">
+            <ResizablePanel>
                 <StageEditor />
             </ResizablePanel>
             <ResizableHandle withHandle />
-            <ResizablePanel defaultSize="20%">
-                <div className="flex h-full items-center justify-center p-6">
-                    <span className="font-semibold">Sidebar</span>
-                </div>
+            <ResizablePanel defaultSize="25%">
+                <StageSidebar />
             </ResizablePanel>
         </ResizablePanelGroup>
     );

@@ -1,5 +1,7 @@
+import { EraserIcon } from '@phosphor-icons/react';
+import { useLiveQuery } from '@tanstack/react-db';
+import { useThrottledCallback } from '@tanstack/react-pacer';
 import Konva from 'konva';
-import { Eraser } from 'lucide-react';
 import { ClassAttributes, DOMAttributes, FC, useEffect, useRef, useState } from 'react';
 import { Stage, Layer, Rect, Line, Transformer, KonvaNodeEvents } from 'react-konva';
 
@@ -7,6 +9,8 @@ import { Stage, Layer, Rect, Line, Transformer, KonvaNodeEvents } from 'react-ko
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Toggle } from '@/components/ui/toggle';
+import { inkCollection } from '@/db/inkCollection';
+import { shapesCollection } from '@/db/shapesCollection';
 
 const DO_WIDTH = 3072;
 const DO_HEIGHT = 432;
@@ -35,12 +39,10 @@ const getDOGridLines = () => {
 };
 
 const StageEditor = () => {
+    const { data: shapes } = useLiveQuery((q) => q.from({ shapes: shapesCollection }));
+    const { data: inks, state } = useLiveQuery((q) => q.from({ inks: inkCollection }));
     const stageSlot = useRef<HTMLDivElement>(null);
-    const [selectedId, selectShape] = useState<string | null>(null);
     const [tool, setTool] = useState('brush');
-    const [drawnLines, setDrawnLines] = useState<Array<{ tool: string; points: Array<number> }>>(
-        []
-    );
     const lastX = useRef(0);
     const stageLastX = useRef(0);
     const isDrawing = useRef(false);
@@ -48,25 +50,64 @@ const StageEditor = () => {
     const [showHighlight, setShowHighlight] = useState(true);
     const [showGrid, setShowGrid] = useState(true);
     const [showInk, setShowInk] = useState(true);
-    const [shapes, setShapes] = useState(
-        () =>
-            Array.from({ length: 10 }, (_, i) => ({
-                id: `${i}`,
-                x: Math.random() * window.innerWidth,
-                y: Math.random() * window.innerHeight,
-                height: Math.random() * 30 + 20,
-                width: Math.random() * 30 + 20,
-                rotation: 0,
-                fill: getRandomColor()
-            })) as Array<Partial<Konva.RectConfig>>
+    const selectedId = shapes?.find((s) => s.selected)?.id ?? null;
+
+    const addShape = (shape: Omit<(typeof shapes)[number], 'id' | 'order'>) => {
+        shapesCollection.insert({
+            id: `s-${Date.now()}`,
+            ...shape,
+            order: shapes?.length ?? 0
+        });
+    };
+
+    const updateShape = useThrottledCallback(
+        (shape: (typeof shapes)[number]) => {
+            shapesCollection.update(shape.id, (attrs) => {
+                Object.entries(shape).forEach(([key, value]) => {
+                    (attrs as any)[key] = value;
+                });
+            });
+        },
+        {
+            wait: 100
+        }
+    );
+
+    const addInk = (line: Omit<(typeof inks)[number], 'id'>) => {
+        inkCollection.insert({
+            id: `l-${Date.now()}`,
+            ...line
+        });
+    };
+
+    const updateInk = useThrottledCallback(
+        (line: (typeof inks)[number]) => {
+            inkCollection.update(line.id, (attrs) => {
+                line.points = Array.from(attrs.points);
+            });
+        },
+        {
+            wait: 100
+        }
     );
 
     const checkDeselect = (e: Konva.KonvaEventObject<TouchEvent | MouseEvent>) => {
-        // deselect when clicked on empty area
         const clickedOnEmpty = e.target === e.target.getStage();
-        if (clickedOnEmpty) {
-            selectShape(null);
+        if (clickedOnEmpty && selectedId) {
+            shapesCollection.update(selectedId, (attrs) => {
+                attrs.selected = false;
+            });
         }
+    };
+
+    const selectShape = (id: string) => {
+        const alreadySelectedShapeId = shapes?.find((s) => s.selected)?.id;
+        shapesCollection.update([alreadySelectedShapeId, id].filter(Boolean), (attrs) => {
+            attrs.forEach((attr) => {
+                if (attr.id === alreadySelectedShapeId) attr.selected = false;
+                else if (attr.id === id) attr.selected = true;
+            });
+        });
     };
 
     const handleDrawMouseStart: KonvaNodeEvents['onTouchStart'] = (e) => {
@@ -98,7 +139,7 @@ const StageEditor = () => {
         if (!isDrawing.current) {
             isDrawing.current = true;
             const pos = e.target.getStage()?.getPointerPosition();
-            if (pos) setDrawnLines([...drawnLines, { tool, points: [pos.x, pos.y] }]);
+            if (pos) addInk({ tool, points: [pos.x, pos.y] });
             return;
         }
 
@@ -107,15 +148,14 @@ const StageEditor = () => {
         if (!point) return;
 
         // To draw line
-        let lastLine = drawnLines[drawnLines.length - 1] ?? {
+        let lastLine = inks[inks.length - 1] ?? {
             points: []
         };
         // add point
         lastLine.points = lastLine.points.concat([point.x, point.y]);
 
         // replace last
-        drawnLines.splice(drawnLines.length - 1, 1, lastLine);
-        setDrawnLines([...drawnLines]);
+        updateInk(lastLine);
     };
 
     const handleDrawMouseUp = () => {
@@ -128,14 +168,17 @@ const StageEditor = () => {
         const pos = stage.getPointerPosition();
         if (!pos) return;
         const newShape = {
-            id: `${shapes.length}`,
+            type: 'rect',
             x: pos.x,
             y: pos.y,
+            rotation: 0,
             height: Math.random() * 30 + 20,
             width: Math.random() * 30 + 20,
-            fill: getRandomColor()
+            fill: getRandomColor(),
+            visible: true,
+            selected: false
         };
-        setShapes([...shapes, newShape]);
+        addShape(newShape);
     };
 
     const handleScroll: DOMAttributes<HTMLDivElement>['onScroll'] = (e) => {
@@ -184,28 +227,49 @@ const StageEditor = () => {
                             onMouseDown={checkDeselect}
                             onTouchStart={checkDeselect}
                         />
-                        {shapes.map((shape) => (
-                            <Rectangle
-                                key={shape.id}
-                                {...shape}
-                                shapeProps={shape}
-                                isSelected={shape.id === selectedId}
-                                onSelect={() => {
-                                    selectShape(shape.id ?? null);
-                                }}
-                                onChange={(newAttrs) => {
-                                    const shapesCopy = shapes.slice();
-                                    const index = shapesCopy.findIndex((s) => s.id === shape.id);
-                                    if (index !== -1) {
-                                        shapesCopy[index] = newAttrs;
-                                        setShapes(shapesCopy);
-                                    }
-                                }}
-                                // onDragMove={(e) => handleDragMove(e, shape.id)}
-                            />
-                        ))}
+                        {shapes
+                            .sort((a, b) => a.order - b.order)
+                            .map((shape) =>
+                                shape.visible ? (
+                                    shape.type === 'rect' ? (
+                                        <Rectangle
+                                            key={shape.id}
+                                            {...shape}
+                                            shapeProps={shape}
+                                            isSelected={shape.selected}
+                                            onSelect={() => {
+                                                selectShape(shape.id);
+                                            }}
+                                            onChange={(newAttrs) => {
+                                                updateShape({
+                                                    ...shape,
+                                                    x: Math.round(newAttrs.x ?? shape.x),
+                                                    y: Math.round(newAttrs.y ?? shape.y),
+                                                    rotation: Math.round(
+                                                        newAttrs.rotation ?? shape.rotation
+                                                    ),
+                                                    width: Math.round(
+                                                        newAttrs.width ?? shape.width
+                                                    ),
+                                                    height: Math.round(
+                                                        newAttrs.height ?? shape.height
+                                                    ),
+                                                    fill: newAttrs.fill?.toString() ?? shape.fill
+                                                });
+                                                // const shapesCopy = shapes.slice();
+                                                // const index = shapesCopy.findIndex((s) => s.id === shape.id);
+                                                // if (index !== -1) {
+                                                //     shapesCopy[index] = newAttrs;
+                                                //     setShapes(shapesCopy);
+                                                // }
+                                            }}
+                                            // onDragMove={(e) => handleDragMove(e, shape.id)}
+                                        />
+                                    ) : null
+                                ) : null
+                            )}
                         {showInk &&
-                            drawnLines.map((line, i) => (
+                            inks.map((line, i) => (
                                 <Line
                                     key={i}
                                     points={line.points}
@@ -253,7 +317,7 @@ const StageEditor = () => {
                             onDragMove={handleHorizontalDragMove}
                         />
                         {showInk &&
-                            drawnLines.map((line, i) => (
+                            inks.map((line, i) => (
                                 <Line
                                     key={i}
                                     points={line.points}
@@ -297,7 +361,10 @@ const StageEditor = () => {
                         variant="outline"
                         onPressedChange={() => setTool(tool === 'eraser' ? 'pen' : 'eraser')}
                     >
-                        <Eraser className="group-data-[state=on]/toggle:fill-foreground" />
+                        <EraserIcon
+                            weight={tool === 'eraser' ? 'fill' : 'regular'}
+                            className="group-data-[state=on]/toggle:fill-foreground"
+                        />
                         Eraser
                     </Toggle>
                 </div>

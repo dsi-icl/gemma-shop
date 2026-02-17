@@ -1,5 +1,5 @@
 import { Link, useMatches } from '@tanstack/react-router';
-import { Sparkle } from 'lucide-react';
+import { DiscoBallIcon } from '@phosphor-icons/react';
 
 import {
     Breadcrumb,
@@ -19,7 +19,7 @@ export default function Header() {
     return (
         <header className="flex items-center gap-2 bg-gray-800 p-4 text-white shadow-lg">
             <span>
-                <Sparkle />
+                <DiscoBallIcon size={32} />
             </span>
             <h1 className="text-xl font-semibold">
                 <Link to="/">GemmaShop</Link>
