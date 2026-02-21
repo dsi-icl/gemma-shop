@@ -1,70 +1,92 @@
 'use client';
+
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { WallEngine } from '../lib/wallEngine';
 
-// 1. Initialize Engine Singleton ONCE
-const engine = WallEngine.getInstance();
+const MY_VIEWPORT = { x: 0, y: 0, w: 1920, h: 1080 };
+
+// Initialize the Singleton Engine once
+const engine = WallEngine.getInstance(MY_VIEWPORT);
 
 export const Route = createFileRoute('/wall')({ component: WallApp });
 
 function WallApp() {
     const [layers, setLayers] = useState<any[]>([]);
 
-    // 2. Subscribe to "Slow" Layout Changes (Mount/Unmount)
     useEffect(() => {
+        // 1. Subscribe to Server State (JSON)
         const unsubscribe = engine.subscribeToLayoutUpdates((data) => {
             if (data.type === 'hydrate') {
                 setLayers(data.layers);
             } else if (data.type === 'upsert_layer') {
-                console.log('Receiving upsert_layer', data);
                 setLayers((prev) => {
-                    // Dedupe logic
-                    console.log('Looking at layers');
-                    const exists = prev.find((l) => l.numericId === data.numericId);
-                    if (exists) return prev;
-                    return [...prev, data];
+                    const filtered = prev.filter((l) => l.numericId !== data.numericId);
+                    return [...filtered, data];
                 });
             }
         });
-        return unsubscribe;
-    }, []);
 
-    // 3. The Animation Loop (Driven by React, executing Engine math)
-    useEffect(() => {
+        // 2. Start the Fast-Path Render Loop (60fps DOM mutation)
         let frameId: number;
         const loop = () => {
             engine.layers.forEach((layer) => {
                 if (!layer.el) return;
 
-                // Ask the engine for the math
-                const { localX, localY, rot, scale } = engine.calculateCurrentPosition(layer);
+                // Calculate current interpolated position based on master clock
+                const pos = engine.calculateCurrentPosition(layer);
 
-                // Apply to DOM (Fast Path)
-                layer.el.style.transform = `translate3d(${localX}px, ${localY}px, 0) rotate(${rot}deg) scale(${scale})`;
+                // Convert global center coordinates to local viewport coordinates
+                const w = layer.config.w;
+                const h = layer.config.h;
+                const localX = pos.cx - w / 2 - MY_VIEWPORT.x;
+                const localY = pos.cy - h / 2 - MY_VIEWPORT.y;
+
+                // Mutate the DOM directly, bypassing React
+                layer.el.style.transform = `translate3d(${localX}px, ${localY}px, 0) rotate(${pos.rotation}deg) scale(${pos.scale})`;
             });
             frameId = requestAnimationFrame(loop);
         };
+
         frameId = requestAnimationFrame(loop);
-        return () => cancelAnimationFrame(frameId);
+
+        return () => {
+            unsubscribe();
+            cancelAnimationFrame(frameId);
+        };
     }, []);
 
-    console.log('layers', layers);
-
     return (
-        <div id="wall">
-            {layers.map((l) => (
-                <div
-                    className="video"
-                    style={{ backgroundColor: 'red', minHeight: '30px', minWidth: '30px' }}
-                    key={l.numericId}
+        <div
+            style={{
+                margin: 0,
+                overflow: 'hidden',
+                background: '#000',
+                width: '100vw',
+                height: '100vh',
+                position: 'relative'
+            }}
+        >
+            {layers.map((layer) => (
+                <video
+                    key={layer.numericId}
+                    src={layer.url}
+                    muted
+                    playsInline
+                    // Pass the raw DOM element to the Engine
                     ref={(el) => {
-                        if (el) engine.registerLayer(l.numericId, el);
+                        if (el) engine.registerLayer(layer.numericId, layer.config, el);
                     }}
-                >
-                    {/* Content */}
-                </div>
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: `${layer.config.w}px`,
+                        height: `${layer.config.h}px`,
+                        transformOrigin: '50% 50%' // Crucial for rotation/scaling
+                    }}
+                />
             ))}
         </div>
     );

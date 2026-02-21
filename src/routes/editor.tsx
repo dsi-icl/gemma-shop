@@ -1,42 +1,29 @@
 'use client';
+
 import { createFileRoute } from '@tanstack/react-router';
-import type { KonvaEventObject } from 'konva/lib/Node';
+import Konva from 'konva';
 import { useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Rect } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage } from 'react-konva';
 
 import { EditorEngine } from '../lib/editorEngine';
 
-const API_URL = `http://localhost:3000`;
-
-// 1. Initialize Engine Singleton ONCE outside the component
 const engine = EditorEngine.getInstance();
-
-interface EditorLayer {
-    numericId: number;
-    url: string;
-    config: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
-}
 
 export const Route = createFileRoute('/editor')({ component: EditorApp });
 
 function EditorApp() {
-    const [layers, setLayers] = useState<EditorLayer[]>([]);
+    const [layers, setLayers] = useState<any[]>([]);
     const nextId = useRef(1);
 
-    // 2. Subscribe to Server State
     useEffect(() => {
         const unsubscribe = engine.subscribe((data) => {
-            // Hydrate state from server if we refresh the page
             if (data.type === 'hydrate') {
                 setLayers(data.layers);
-                // Ensure our local ID generator doesn't collide with hydrated IDs
                 if (data.layers.length > 0) {
-                    const maxId = Math.max(...data.layers.map((l: any) => l.numericId));
-                    nextId.current = maxId + 1;
+                    nextId.current = Math.max(...data.layers.map((l: any) => l.numericId)) + 1;
                 }
             }
         });
-
         return unsubscribe;
     }, []);
 
@@ -49,50 +36,50 @@ function EditorApp() {
         formData.append('asset', file);
 
         try {
-            const res = await fetch(`${API_URL}/upload`, { method: 'POST', body: formData });
+            const res = await fetch(`/upload`, { method: 'POST', body: formData });
             if (!res.ok) throw new Error('Upload failed');
             const data = await res.json();
 
             const numericId = nextId.current++;
-            const newLayer: EditorLayer = {
-                numericId,
-                url: data.url,
-                config: { cx: 400, cy: 300, w: 400, h: 225, rotation: 0, scale: 1 }
-            };
+            const config = { cx: 400, cy: 300, w: 640, h: 360, rotation: 0, scale: 1 };
 
-            // Optimistic UI update
+            const newLayer = { numericId, layerType: 'video', url: data.url, config };
+
             setLayers((prev) => [...prev, newLayer]);
 
-            // Tell the wall screens to mount it via the Engine
+            // Broadcast to Walls
             engine.sendJSON({
                 type: 'upsert_layer',
                 numericId,
                 layerType: 'video',
                 url: data.url,
-                config: newLayer.config
+                config
             });
         } catch (err) {
-            console.error(err);
-            alert('Failed to upload asset.');
+            alert('Upload failed. Check Bun server console.');
         }
     };
 
-    const handlePlayAll = () => {
-        layers.forEach((layer) => {
-            engine.sendJSON({ type: 'video_play', numericId: layer.numericId });
-        });
-    };
-
-    const handleTransform = (e: KonvaEventObject<Event>, numericId: number) => {
+    const handleTransform = (e: any, numericId: number) => {
         const node = e.target;
-        // Push the raw binary movement data to the Engine
         engine.broadcastBinaryMove(numericId, node.x(), node.y(), node.scaleX(), node.rotation());
     };
 
-    // --- RENDER ---
+    // --- PLAYBACK CONTROLS ---
+    const broadcastPlayback = (action: string) => {
+        layers.forEach((layer) => {
+            if (action === 'play')
+                engine.sendJSON({ type: 'video_play', numericId: layer.numericId });
+            if (action === 'pause')
+                engine.sendJSON({ type: 'video_pause', numericId: layer.numericId });
+            if (action === 'rewind')
+                engine.sendJSON({ type: 'video_seek', numericId: layer.numericId, mediaTime: 0 });
+        });
+    };
+
     return (
-        <div style={{ width: '100vw', height: '100vh', background: '#e0e0e0', margin: 0 }}>
-            {/* Editor Controls */}
+        <div style={{ width: '100vw', height: '100vh', background: '#333', margin: 0 }}>
+            {/* Control Panel */}
             <div
                 style={{
                     position: 'absolute',
@@ -102,51 +89,84 @@ function EditorApp() {
                     background: 'white',
                     padding: 15,
                     borderRadius: 8,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                    display: 'flex',
+                    gap: '10px',
+                    alignItems: 'center'
                 }}
             >
-                <input
-                    type="file"
-                    accept="video/mp4"
-                    onChange={handleUpload}
-                    style={{ marginRight: 15 }}
-                />
-                <button
-                    onClick={handlePlayAll}
-                    style={{
-                        padding: '8px 16px',
-                        cursor: 'pointer',
-                        background: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: 4
-                    }}
-                >
-                    Play All Videos
-                </button>
+                <input type="file" accept="video/mp4" onChange={handleUpload} />
+                <div
+                    style={{ borderLeft: '1px solid #ccc', height: '24px', margin: '0 10px' }}
+                ></div>
+                <button onClick={() => broadcastPlayback('rewind')}>⏮ Rewind</button>
+                <button onClick={() => broadcastPlayback('play')}>▶ Play All</button>
+                <button onClick={() => broadcastPlayback('pause')}>⏸ Pause All</button>
             </div>
 
-            {/* Konva Canvas */}
             <Stage width={window.innerWidth} height={window.innerHeight}>
                 <Layer>
                     {layers.map((layer) => (
-                        <Rect
+                        <KonvaVideo
                             key={layer.numericId}
-                            id={layer.numericId.toString()}
-                            x={layer.config.cx}
-                            y={layer.config.cy}
-                            width={layer.config.w}
-                            height={layer.config.h}
-                            offsetX={layer.config.w / 2} // Force Konva Center-Origin!
-                            offsetY={layer.config.h / 2}
-                            fill="#3498db"
-                            draggable
-                            onDragMove={(e) => handleTransform(e, layer.numericId)}
+                            layer={layer}
                             onTransform={(e) => handleTransform(e, layer.numericId)}
                         />
                     ))}
                 </Layer>
             </Stage>
         </div>
+    );
+}
+
+// --- SUB-COMPONENT: Live Video inside Konva ---
+function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) => void }) {
+    const imageRef = useRef<any>(null);
+    const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+
+    useEffect(() => {
+        // Create an invisible DOM video element
+        const vid = document.createElement('video');
+        vid.src = layer.url;
+        vid.crossOrigin = 'anonymous';
+        vid.muted = true;
+        vid.loop = true;
+        vid.play(); // Auto-play locally in the editor so you can see it moving
+        setVideoElement(vid);
+
+        // // Force Konva to redraw every frame so the video animates
+        // const anim = new Konva.Animation(() => {}, imageRef.current?.getLayer());
+        // anim.start();
+        // Force Konva to redraw every frame so the video animates
+        const anim = new Konva.Animation(() => {
+            imageRef.current?.getLayer()?.batchDraw(); // Explicitly force the redraw
+        }, imageRef.current?.getLayer());
+
+        anim.start();
+
+        return () => {
+            anim.stop();
+            vid.pause();
+            vid.removeAttribute('src');
+            vid.load();
+        };
+    }, [layer.url]);
+
+    if (!videoElement) return null;
+
+    return (
+        <KonvaImage
+            ref={imageRef}
+            image={videoElement}
+            id={layer.numericId.toString()}
+            x={layer.config.cx}
+            y={layer.config.cy}
+            width={layer.config.w}
+            height={layer.config.h}
+            offsetX={layer.config.w / 2} // Crucial for Center Origin
+            offsetY={layer.config.h / 2}
+            draggable
+            onDragMove={onTransform}
+            onTransform={onTransform}
+        />
     );
 }

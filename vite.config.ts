@@ -12,14 +12,15 @@ const config = defineConfig({
             serverDir: './src/addons',
             // preset: 'bun',
             features: { websocket: true },
-            serveStatic: true
+            serveStatic: true,
+            ssrRoutes: []
             // node: false,
             // runtimeConfig: { nitro: { envExpansion: true } }
         }),
         devtools(),
         tsconfigPaths({ projects: ['./tsconfig.json'] }),
         tailwindcss(),
-        tanstackStart(),
+        tanstackStart({ spa: { enabled: false } }),
         viteReact({ babel: { plugins: ['babel-plugin-react-compiler'] } })
     ]
 });

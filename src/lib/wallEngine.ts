@@ -1,67 +1,97 @@
 'use client';
 
-const SERVER_URL = `ws://${window.location.hostname}:3000/bus`;
-const MY_VIEWPORT = { x: 0, y: 0, w: 1920, h: 1080 };
-
-// --- TYPES & MATH ---
-type LayerUpdateCallback = (data: any) => void;
-
-interface LayerData {
-    numericId: number;
-    url: string;
-    config: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
+export interface Viewport {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
 }
 
-interface FastPathLayer {
-    el: HTMLVideoElement | HTMLDivElement;
-    startPos: LayerData['config'];
-    targetPos: LayerData['config'];
+export interface LayerPlaybackState {
+    status: 'playing' | 'paused';
+    anchorMediaTime: number;
+    anchorServerTime: number;
+}
+
+export interface LayerState {
+    el: HTMLElement | HTMLVideoElement | null;
+    config: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
+    startPos: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
+    targetPos: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
     animStartTime: number;
     animDuration: number;
-    playback: { status: string; anchorMediaTime: number; anchorServerTime: number };
+    playback: LayerPlaybackState;
 }
 
-export class WallEngine {
-    // Singleton Instance
-    private static instance: WallEngine;
+type LayoutUpdateCallback = (data: any) => void;
 
+export class WallEngine {
+    private static instance: WallEngine;
     public ws: WebSocket;
+
+    // Clock Sync State
     private clockOffset = 0;
     private bestRTT = Infinity;
 
-    // State for the Fast-Path Render Loop
-    public layers = new Map<number, any>();
-    private layerUpdateCallbacks = new Set<LayerUpdateCallback>();
+    // Render State
+    public layers = new Map<number, LayerState>();
+    private layoutCallbacks = new Set<LayoutUpdateCallback>();
+    public viewport: Viewport;
 
-    private constructor() {
-        this.ws = new WebSocket(SERVER_URL);
+    private constructor(viewport: Viewport) {
+        this.viewport = viewport;
+
+        // Automatically detect HTTPS vs HTTP for the WebSocket protocol
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.ws = new WebSocket(`${wsProtocol}//${window.location.host}/bus`);
         this.ws.binaryType = 'arraybuffer';
 
-        // 1. SOLVING THE RACE CONDITION
-        // We attach listeners immediately.
         this.ws.onopen = () => {
-            console.log('Engine: Connected to Server');
+            console.log('Wall Engine: Connected to Master Server');
             this.ws.send(JSON.stringify({ type: 'hello', specimen: 'wall' }));
             this.startClockSync();
         };
 
         this.ws.onmessage = (event) => this.handleMessage(event);
 
-        // If the socket was somehow already open (rare in constructor, but safe)
         if (this.ws.readyState === WebSocket.OPEN) {
             this.startClockSync();
         }
     }
 
-    // Global Accessor
-    public static getInstance(): WallEngine {
+    // --- SINGLETON ACCESSOR ---
+    public static getInstance(viewport?: Viewport): WallEngine {
         if (!WallEngine.instance) {
-            WallEngine.instance = new WallEngine();
+            if (!viewport) throw new Error('Viewport must be provided on first initialization');
+            WallEngine.instance = new WallEngine(viewport);
         }
         return WallEngine.instance;
     }
 
-    // --- CLOCK SYNC LOGIC ---
+    // --- REACT INTERFACE ---
+    public subscribeToLayoutUpdates(callback: LayoutUpdateCallback) {
+        this.layoutCallbacks.add(callback);
+        return () => this.layoutCallbacks.delete(callback);
+    }
+
+    public registerLayer(id: number, config: any, el: HTMLElement) {
+        let layer = this.layers.get(id);
+        if (!layer) {
+            this.layers.set(id, {
+                el,
+                config,
+                startPos: { ...config },
+                targetPos: { ...config },
+                animStartTime: 0,
+                animDuration: 100, // Default interpolation time
+                playback: { status: 'paused', anchorMediaTime: 0, anchorServerTime: 0 }
+            });
+        } else {
+            layer.el = el; // Update the ref if React re-mounted it
+        }
+    }
+
+    // --- CLOCK SYNC ---
     public getServerTime(): number {
         return Date.now() + this.clockOffset;
     }
@@ -71,60 +101,9 @@ export class WallEngine {
             if (this.ws.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify({ type: 'ping', t0: Date.now() }));
             }
-            setTimeout(sendPing, 2000); // Keep syncing forever
+            setTimeout(sendPing, 2000);
         };
         sendPing();
-    }
-
-    // --- MESSAGE ROUTING ---
-    private handleMessage(event: MessageEvent) {
-        // A. BINARY FAST-PATH
-        if (event.data instanceof ArrayBuffer) {
-            const view = new DataView(event.data);
-            if (view.getUint8(0) === 0x05) {
-                // Batched Move
-                const count = view.getUint16(1, true);
-                let offset = 3;
-                for (let i = 0; i < count; i++) {
-                    const id = view.getUint16(offset, true);
-                    const layer = this.layers.get(id);
-
-                    if (layer) {
-                        // Update the math targets directly in the Engine state
-                        layer.startPos = { ...this.calculateCurrentPosition(layer) };
-                        layer.targetPos = {
-                            cx: view.getFloat32(offset + 2, true),
-                            cy: view.getFloat32(offset + 6, true),
-                            scale: view.getFloat32(offset + 10, true),
-                            rotation: view.getFloat32(offset + 14, true)
-                        };
-                        layer.animStartTime = this.getServerTime();
-                        layer.animDuration = 100;
-                    }
-                    offset += 18;
-                }
-            }
-            return;
-        }
-
-        // B. JSON SLOW-PATH
-        if (typeof event.data === 'string') {
-            const data = JSON.parse(event.data);
-
-            if (data.type === 'pong') {
-                this.handlePong(data);
-            } else if (data.type === 'hydrate' || data.type === 'upsert_layer') {
-                // Notify React to mount/unmount components
-                this.layerUpdateCallbacks.forEach((cb) => cb(data));
-            } else if (data.type === 'video_sync') {
-                // Handle Play/Pause logic internally
-                const layer = this.layers.get(data.numericId);
-                if (layer) {
-                    layer.playback = data.playback;
-                    if (layer.playback.status === 'playing') this.schedulePlayback(layer);
-                }
-            }
-        }
     }
 
     private handlePong(data: any) {
@@ -133,83 +112,137 @@ export class WallEngine {
             this.bestRTT = rtt;
             this.clockOffset = (data.t1 - data.t0 + (data.t2 - Date.now())) / 2;
         }
+        // Periodically reset bestRTT to allow for network environment changes
+        setTimeout(() => {
+            this.bestRTT = Infinity;
+        }, 60000);
     }
 
-    // --- REACT INTERFACE ---
-    public subscribeToLayoutUpdates(callback: LayerUpdateCallback) {
-        this.layerUpdateCallbacks.add(callback);
-        return () => {
-            this.layerUpdateCallbacks.delete(callback);
-        };
-    }
+    // --- MESSAGE ROUTING ---
+    private handleMessage(event: MessageEvent) {
+        // A. BINARY FAST-PATH (High-Frequency Movement)
+        if (event.data instanceof ArrayBuffer) {
+            const view = new DataView(event.data);
+            if (view.getUint8(0) === 0x05) {
+                // Opcode: Batched Move
+                const count = view.getUint16(1, true);
+                let offset = 3;
+                for (let i = 0; i < count; i++) {
+                    const id = view.getUint16(offset, true);
+                    const layer = this.layers.get(id);
 
-    // --- MATH HELPERS ---
-    public registerLayer(id: number, ref: HTMLElement) {
-        console.log('registerLayer for', id);
-        // React calls this when it mounts a DOM element
-        // We store the reference so the Engine can animate it directly
-        if (!this.layers.has(id)) {
-            this.layers.set(id, {
-                el: ref,
-                // Default state...
-                startPos: { cx: 0, cy: 0, scale: 1, rotation: 0 },
-                targetPos: { cx: 0, cy: 0, scale: 1, rotation: 0 },
-                playback: { status: 'paused', anchorMediaTime: 0, anchorServerTime: 0 }
-            });
-        } else {
-            // Update ref if React re-renders (rare but possible)
-            const layer = this.layers.get(id);
-            if (layer) layer.el = ref;
+                    if (layer) {
+                        // Set current visual position as the new start, incoming data as the new target
+                        layer.startPos = { ...this.calculateCurrentPosition(layer) };
+                        layer.targetPos = {
+                            ...layer.targetPos,
+                            cx: view.getFloat32(offset + 2, true),
+                            cy: view.getFloat32(offset + 6, true),
+                            scale: view.getFloat32(offset + 10, true),
+                            rotation: view.getFloat32(offset + 14, true)
+                        };
+                        layer.animStartTime = this.getServerTime();
+                        layer.animDuration = 100; // Matches expected editor broadcast rate
+                    }
+                    offset += 18;
+                }
+            }
+            return;
+        }
+
+        // B. JSON SLOW-PATH (Low-Frequency Events)
+        if (typeof event.data === 'string') {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'pong') {
+                this.handlePong(data);
+            } else if (data.type === 'hydrate' || data.type === 'upsert_layer') {
+                // Broadcast to React to update the DOM
+                this.layoutCallbacks.forEach((cb) => cb(data));
+            } else if (data.type === 'video_sync' || data.type === 'video_seek') {
+                const layer = this.layers.get(data.numericId);
+                if (layer) {
+                    layer.playback = data.playback;
+                    this.handlePlaybackStateChange(layer);
+                }
+            }
         }
     }
 
-    public calculateCurrentPosition(layer: any) {
-        const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
+    // --- PLAYBACK & SYNC LOGIC ---
+    private handlePlaybackStateChange(layer: LayerState) {
+        const video = layer.el as HTMLVideoElement;
+        if (!video || typeof video.play !== 'function') return;
 
-        let t = layer.animStartTime
-            ? (this.getServerTime() - layer.animStartTime) / layer.animDuration
-            : 1;
-        t = Math.max(0, Math.min(1, t)); // Clamp between 0 and 1
+        if (layer.playback.status === 'paused') {
+            video.pause();
+            video.currentTime = layer.playback.anchorMediaTime;
+        } else if (layer.playback.status === 'playing') {
+            // Schedule playback to start precisely at anchorServerTime
+            const checkTime = () => {
+                if (this.getServerTime() >= layer.playback.anchorServerTime) {
+                    video.play().catch((e) => console.error('Autoplay blocked:', e));
 
-        const cx = lerp(layer.startPos.cx, layer.targetPos.cx, t);
-        const cy = lerp(layer.startPos.cy, layer.targetPos.cy, t);
-        const scale = lerp(layer.startPos.scale, layer.targetPos.scale, t);
-        const rot = lerp(layer.startPos.rotation, layer.targetPos.rotation, t);
-
-        // Center-Origin DOM Math
-        const w = parseFloat(layer.el.style.width || '0');
-        const h = parseFloat(layer.el.style.height || '0');
-        const localX = cx - w / 2 - MY_VIEWPORT.x;
-        const localY = cy - h / 2 - MY_VIEWPORT.y;
-
-        return { localX, localY, scale, rot };
+                    if ('requestVideoFrameCallback' in video) {
+                        video.requestVideoFrameCallback((n, m) => this.driftController(m, layer));
+                    } else {
+                        console.warn(
+                            'requestVideoFrameCallback not supported. Sync will be loose.'
+                        );
+                    }
+                } else {
+                    requestAnimationFrame(checkTime);
+                }
+            };
+            requestAnimationFrame(checkTime);
+        }
     }
 
-    public schedulePlayback(layer: FastPathLayer) {
-        const videoEl = layer.el as HTMLVideoElement;
+    private driftController(metadata: any, layer: LayerState) {
+        if (layer.playback.status !== 'playing' || !layer.el) return;
 
-        const checkTime = () => {
-            if (this.getServerTime() >= layer.playback.anchorServerTime) {
-                videoEl.play();
-                const driftController = (_: number, metadata: any) => {
-                    if (layer.playback.status !== 'playing') return;
-                    const expectedTime =
-                        layer.playback.anchorMediaTime +
-                        (this.getServerTime() - layer.playback.anchorServerTime) / 1000;
-                    const drift = expectedTime - metadata.mediaTime;
+        const video = layer.el as HTMLVideoElement;
+        const currentServerTime = this.getServerTime();
 
-                    if (drift > 0.5) videoEl.currentTime = expectedTime;
-                    else if (drift > 0.03) videoEl.playbackRate = 1.05;
-                    else if (drift < -0.03) videoEl.playbackRate = 0.95;
-                    else videoEl.playbackRate = 1.0;
+        // Master timeline formula
+        const expectedTime =
+            layer.playback.anchorMediaTime +
+            (currentServerTime - layer.playback.anchorServerTime) / 1000;
+        const drift = expectedTime - metadata.mediaTime;
 
-                    videoEl.requestVideoFrameCallback(driftController);
-                };
-                videoEl.requestVideoFrameCallback(driftController);
-            } else {
-                requestAnimationFrame(checkTime);
-            }
+        // Apply drift corrections
+        if (drift > 0.5) {
+            video.currentTime = expectedTime; // Hard seek if hopelessly lost
+        } else if (drift > 0.03) {
+            video.playbackRate = 1.05; // Subtly speed up
+        } else if (drift < -0.03) {
+            video.playbackRate = 0.95; // Subtly slow down
+        } else {
+            video.playbackRate = 1.0; // Frame locked
+        }
+
+        // Loop exactly when the next hardware frame is presented
+        video.requestVideoFrameCallback((n, m) => this.driftController(m, layer));
+    }
+
+    // --- MATH & LERP ---
+    private lerp(start: number, end: number, t: number): number {
+        return start + (end - start) * t;
+    }
+
+    public calculateCurrentPosition(layer: LayerState) {
+        if (!layer.animStartTime) return layer.targetPos;
+
+        let t = (this.getServerTime() - layer.animStartTime) / layer.animDuration;
+        t = Math.max(0, Math.min(1, t)); // Clamp t between 0 and 1
+
+        return {
+            cx: this.lerp(layer.startPos.cx, layer.targetPos.cx, t),
+            cy: this.lerp(layer.startPos.cy, layer.targetPos.cy, t),
+            scale: this.lerp(layer.startPos.scale, layer.targetPos.scale, t),
+            rotation: this.lerp(layer.startPos.rotation, layer.targetPos.rotation, t),
+            w: layer.config.w,
+            h: layer.config.h
         };
-        requestAnimationFrame(checkTime);
     }
 }
