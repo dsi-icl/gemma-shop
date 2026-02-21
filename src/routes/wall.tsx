@@ -3,6 +3,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
+import type { LayerState } from '@/lib/types';
+
 import { WallEngine } from '../lib/wallEngine';
 
 const MY_VIEWPORT = { x: 0, y: 0, w: 1920, h: 1080 };
@@ -13,7 +15,7 @@ const engine = WallEngine.getInstance(MY_VIEWPORT);
 export const Route = createFileRoute('/wall')({ component: WallApp });
 
 function WallApp() {
-    const [layers, setLayers] = useState<any[]>([]);
+    const [layers, setLayers] = useState<LayerState[]>([]);
 
     useEffect(() => {
         // 1. Subscribe to Server State (JSON)

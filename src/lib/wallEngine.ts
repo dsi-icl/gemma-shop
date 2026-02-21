@@ -1,27 +1,12 @@
 'use client';
 
+import type { LayerState } from './types';
+
 export interface Viewport {
     x: number;
     y: number;
     w: number;
     h: number;
-}
-
-export interface LayerPlaybackState {
-    status: 'playing' | 'paused';
-    anchorMediaTime: number;
-    anchorServerTime: number;
-}
-
-export interface LayerState {
-    el: HTMLElement | HTMLVideoElement | null;
-    config: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
-    startPos: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
-    targetPos: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
-    animStartTime: number;
-    animDuration: number;
-    playback: LayerPlaybackState;
-    rvfcActive?: boolean;
 }
 
 type LayoutUpdateCallback = (data: any) => void;
@@ -81,6 +66,7 @@ export class WallEngine {
             layer = {
                 el,
                 config,
+                numericId: id,
                 startPos: { ...config },
                 targetPos: { ...config },
                 animStartTime: 0,
@@ -185,6 +171,17 @@ export class WallEngine {
         if (video.readyState === 0) {
             video.addEventListener(
                 'loadedmetadata',
+                () => {
+                    this.handlePlaybackStateChange(layer);
+                },
+                { once: true }
+            );
+            return;
+        }
+        if (video.readyState < 2) {
+            // 2 = HAVE_CURRENT_DATA
+            video.addEventListener(
+                'loadeddata',
                 () => {
                     this.handlePlaybackStateChange(layer);
                 },

@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useRef, useState } from 'react';
 import { Stage, Layer, Image as KonvaImage, Transformer } from 'react-konva';
 
@@ -19,7 +20,7 @@ function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
 }
 
 function EditorApp() {
-    const [layers, setLayers] = useState<any[]>([]);
+    const [layers, setLayers] = useState<any[] /* VirtualLayerState[] */>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [highestZ, setHighestZ] = useState(1);
     const [isPinching, setIsPinching] = useState(false);
@@ -87,7 +88,12 @@ function EditorApp() {
                 zIndex: highestZ
             };
 
-            const newLayer = { numericId, layerType: 'video', url: data.url, config };
+            const newLayer /* VirtualLayerState */ = {
+                numericId,
+                layerType: 'video',
+                url: data.url,
+                config
+            };
 
             setLayers((prev) => [...prev, newLayer]);
             engine.sendJSON({
@@ -136,14 +142,14 @@ function EditorApp() {
     };
 
     // --- MULTITOUCH GESTURE LOGIC ---
-    const handleTouchStart = (e: any) => {
-        if (e.evt.touches.length === 1) {
+    const handleTouchStart = (e: KonvaEventObject<any /* MouseEvent | TouchEvent */>) => {
+        if (e.evt.touches?.length === 1) {
             const clickedOnEmpty = e.target === e.target.getStage();
             if (clickedOnEmpty) setSelectedId(null);
         }
 
         // When two fingers hit, disable native dragging!
-        if (e.evt.touches.length === 2) {
+        if (e.evt.touches?.length === 2) {
             setIsPinching(true);
 
             if (selectedId) {
@@ -159,10 +165,10 @@ function EditorApp() {
         }
     };
 
-    const handleTouchMove = (e: any) => {
+    const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
         e.evt.preventDefault();
 
-        if (e.evt.touches.length === 2 && selectedId && trRef.current) {
+        if (e.evt.touches?.length === 2 && selectedId && trRef.current) {
             const stage = trRef.current.getStage();
             const node = stage.findOne(`#${selectedId}`);
             if (!node) return;
@@ -208,9 +214,9 @@ function EditorApp() {
         }
     };
 
-    const handleTouchEnd = (e: any) => {
+    const handleTouchEnd = (e: KonvaEventObject<TouchEvent>) => {
         // If fewer than 2 fingers remain, re-enable standard single-finger dragging
-        if (e.evt.touches.length < 2) {
+        if (e.evt.touches?.length < 2) {
             setIsPinching(false);
         }
         lastDist.current = null;
@@ -222,6 +228,37 @@ function EditorApp() {
         const node = e.target;
         // node.scaleX() is automatically updated by the Transformer
         engine.broadcastBinaryMove(numericId, node.x(), node.y(), node.scaleX(), node.rotation());
+    };
+
+    const handleTransformEnd = (e: any, numericId: number) => {
+        const node = e.target;
+
+        // Find the current layer state
+        const layerToUpdate = layers.find((l) => l.numericId === numericId);
+        if (!layerToUpdate) return;
+
+        const updatedConfig = {
+            ...layerToUpdate.config,
+            cx: node.x(),
+            cy: node.y(),
+            scale: node.scaleX(),
+            rotation: node.rotation()
+        };
+
+        // Update local React state optimistically
+        setLayers((prev) =>
+            prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
+        );
+
+        // Update the Master Server State via JSON
+        engine.sendJSON({
+            type: 'upsert_layer',
+            numericId,
+            layerType: 'video',
+            url: layerToUpdate.url,
+            config: updatedConfig,
+            playback: layerToUpdate.playback
+        });
     };
 
     const broadcastPlayback = (action: string) => {
@@ -302,6 +339,7 @@ function EditorApp() {
                                 isPinching={isPinching}
                                 onSelect={() => setSelectedId(layer.numericId.toString())}
                                 onTransform={(e) => handleTransform(e, layer.numericId)}
+                                onTransformEnd={(e) => handleTransformEnd(e, layer.numericId)}
                             />
                         ))}
 
@@ -327,12 +365,14 @@ function KonvaVideo({
     layer,
     isPinching,
     onSelect,
-    onTransform
+    onTransform,
+    onTransformEnd
 }: {
     layer: any;
     isPinching: boolean;
     onSelect: () => void;
     onTransform: (e: any) => void;
+    onTransformEnd: (e: any) => void;
 }) {
     const imageRef = useRef<any>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
@@ -438,7 +478,9 @@ function KonvaVideo({
             onTap={onSelect}
             // Trigger binary broadcast during drag OR transform
             onDragMove={onTransform}
+            onDragEnd={onTransformEnd}
             onTransform={onTransform}
+            onTransformEnd={onTransformEnd}
         />
     );
 }
