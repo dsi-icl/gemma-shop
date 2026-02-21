@@ -1,0 +1,19 @@
+{
+    "$schema": "./node_modules/oxfmt/configuration_schema.json",
+    "ignorePatterns": [],
+    "singleQuote": true,
+    "tabWidth": 4,
+    "useTabs": false,
+    "objectWrap": "collapse",
+    "experimentalSortPackageJson": true,
+    "experimentalSortImports": {
+        "sortSideEffects": true
+    },
+    "arrowParens": "always",
+    "jsxSingleQuote": false,
+    "semi": true,
+    "embeddedLanguageFormatting": "auto",
+    "trailingComma": "none",
+    "experimentalTailwindcss": {},
+    "htmlWhitespaceSensitivity": "strict"
+}
