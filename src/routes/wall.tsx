@@ -76,7 +76,8 @@ function WallApp() {
                     playsInline
                     // Pass the raw DOM element to the Engine
                     ref={(el) => {
-                        if (el) engine.registerLayer(layer.numericId, layer.config, el);
+                        if (el)
+                            engine.registerLayer(layer.numericId, layer.config, layer.playback, el);
                     }}
                     style={{
                         position: 'absolute',

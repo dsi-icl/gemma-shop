@@ -74,21 +74,26 @@ export class WallEngine {
         return () => this.layoutCallbacks.delete(callback);
     }
 
-    public registerLayer(id: number, config: any, el: HTMLElement) {
+    public registerLayer(id: number, config: any, playback: any, el: HTMLElement) {
         let layer = this.layers.get(id);
         if (!layer) {
-            this.layers.set(id, {
+            layer = {
                 el,
                 config,
                 startPos: { ...config },
                 targetPos: { ...config },
                 animStartTime: 0,
-                animDuration: 100, // Default interpolation time
-                playback: { status: 'paused', anchorMediaTime: 0, anchorServerTime: 0 }
-            });
+                animDuration: 100,
+                playback // Initial hydrated state
+            };
+            this.layers.set(id, layer);
         } else {
-            layer.el = el; // Update the ref if React re-mounted it
+            layer.el = el; // Update ref if React re-rendered
+            layer.playback = playback; // Ensure we have the latest state
         }
+
+        // Evaluate the timeline and start playing/seeking immediately
+        this.handlePlaybackStateChange(layer);
     }
 
     // --- CLOCK SYNC ---

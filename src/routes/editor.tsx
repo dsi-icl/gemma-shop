@@ -23,6 +23,16 @@ function EditorApp() {
                     nextId.current = Math.max(...data.layers.map((l: any) => l.numericId)) + 1;
                 }
             }
+            // Listen for incoming playback syncs!
+            else if (data.type === 'video_sync' || data.type === 'video_seek') {
+                setLayers((prev) =>
+                    prev.map((layer) =>
+                        layer.numericId === data.numericId
+                            ? { ...layer, playback: data.playback }
+                            : layer
+                    )
+                );
+            }
         });
         return unsubscribe;
     }, []);
@@ -123,22 +133,16 @@ function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) 
     const imageRef = useRef<any>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
 
+    // 1. Setup the element and Konva redraw loop
     useEffect(() => {
-        // Create an invisible DOM video element
         const vid = document.createElement('video');
         vid.src = layer.url;
         vid.crossOrigin = 'anonymous';
         vid.muted = true;
-        vid.loop = true;
-        vid.play(); // Auto-play locally in the editor so you can see it moving
         setVideoElement(vid);
 
-        // // Force Konva to redraw every frame so the video animates
-        // const anim = new Konva.Animation(() => {}, imageRef.current?.getLayer());
-        // anim.start();
-        // Force Konva to redraw every frame so the video animates
         const anim = new Konva.Animation(() => {
-            imageRef.current?.getLayer()?.batchDraw(); // Explicitly force the redraw
+            imageRef.current?.getLayer()?.batchDraw();
         }, imageRef.current?.getLayer());
 
         anim.start();
@@ -151,6 +155,24 @@ function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) 
         };
     }, [layer.url]);
 
+    // 2. Control Playback based on Server State
+    useEffect(() => {
+        if (!videoElement || !layer.playback) return;
+
+        if (layer.playback.status === 'paused') {
+            videoElement.pause();
+            videoElement.currentTime = layer.playback.anchorMediaTime;
+        } else if (layer.playback.status === 'playing') {
+            // The Editor doesn't need perfect rVFC sync, standard HTML5 play is fine for authoring
+            // Rough approximation of the expected time using local Date.now()
+            const expectedTime =
+                layer.playback.anchorMediaTime +
+                Math.max(0, (Date.now() - layer.playback.anchorServerTime) / 1000);
+            videoElement.currentTime = expectedTime;
+            videoElement.play().catch((e) => console.warn('Editor autoplay blocked', e));
+        }
+    }, [layer.playback, videoElement]);
+
     if (!videoElement) return null;
 
     return (
@@ -158,11 +180,12 @@ function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) 
             ref={imageRef}
             image={videoElement}
             id={layer.numericId.toString()}
+            // ... rest of your Konva props (x, y, width, height, offsetX, offsetY, draggable, etc) ...
             x={layer.config.cx}
             y={layer.config.cy}
             width={layer.config.w}
             height={layer.config.h}
-            offsetX={layer.config.w / 2} // Crucial for Center Origin
+            offsetX={layer.config.w / 2}
             offsetY={layer.config.h / 2}
             draggable
             onDragMove={onTransform}
