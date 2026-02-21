@@ -85,7 +85,8 @@ function WallApp() {
                         left: 0,
                         width: `${layer.config.w}px`,
                         height: `${layer.config.h}px`,
-                        transformOrigin: '50% 50%' // Crucial for rotation/scaling
+                        transformOrigin: '50% 50%', // Crucial for rotation/scaling
+                        zIndex: layer.config.zIndex || 1
                     }}
                 />
             ))}

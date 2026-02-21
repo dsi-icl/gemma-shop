@@ -9,12 +9,26 @@ const engine = EditorEngine.getInstance();
 
 export const Route = createFileRoute('/editor')({ component: EditorApp });
 
+function getDistance(p1: { x: number; y: number }, p2: { x: number; y: number }) {
+    return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+}
+
+function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
+    // Returns angle in degrees
+    return (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
+}
+
 function EditorApp() {
     const [layers, setLayers] = useState<any[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [highestZ, setHighestZ] = useState(1);
+    const [isPinching, setIsPinching] = useState(false);
 
     const nextId = useRef(1);
     const trRef = useRef<any>(null);
+    const lastCenter = useRef<{ x: number; y: number } | null>(null);
+    const lastDist = useRef<number | null>(null);
+    const lastAngle = useRef<number | null>(null);
 
     useEffect(() => {
         const unsubscribe = engine.subscribe((data) => {
@@ -69,7 +83,8 @@ function EditorApp() {
                 w: videoWidth,
                 h: videoHeight,
                 rotation: 0,
-                scale: initialScale
+                scale: initialScale,
+                zIndex: highestZ
             };
 
             const newLayer = { numericId, layerType: 'video', url: data.url, config };
@@ -90,6 +105,119 @@ function EditorApp() {
         }
     };
 
+    const handleBringToFront = () => {
+        if (!selectedId) return;
+
+        const newZ = highestZ + 1;
+        setHighestZ(newZ);
+
+        const numericId = parseInt(selectedId);
+
+        // Find the layer and update it
+        const layerToUpdate = layers.find((l) => l.numericId === numericId);
+        if (!layerToUpdate) return;
+
+        const updatedConfig = { ...layerToUpdate.config, zIndex: newZ };
+
+        // Optimistically update local state
+        setLayers((prev) =>
+            prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
+        );
+
+        // Broadcast the updated config to the Wall
+        engine.sendJSON({
+            type: 'upsert_layer',
+            numericId: numericId,
+            layerType: 'video',
+            url: layerToUpdate.url,
+            config: updatedConfig,
+            playback: layerToUpdate.playback // Preserve playback state!
+        });
+    };
+
+    // --- MULTITOUCH GESTURE LOGIC ---
+    const handleTouchStart = (e: any) => {
+        if (e.evt.touches.length === 1) {
+            const clickedOnEmpty = e.target === e.target.getStage();
+            if (clickedOnEmpty) setSelectedId(null);
+        }
+
+        // When two fingers hit, disable native dragging!
+        if (e.evt.touches.length === 2) {
+            setIsPinching(true);
+
+            if (selectedId) {
+                const t1 = e.evt.touches[0];
+                const t2 = e.evt.touches[1];
+                const p1 = { x: t1.clientX, y: t1.clientY };
+                const p2 = { x: t2.clientX, y: t2.clientY };
+
+                lastDist.current = getDistance(p1, p2);
+                lastAngle.current = getAngle(p1, p2);
+                lastCenter.current = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+            }
+        }
+    };
+
+    const handleTouchMove = (e: any) => {
+        e.evt.preventDefault();
+
+        if (e.evt.touches.length === 2 && selectedId && trRef.current) {
+            const stage = trRef.current.getStage();
+            const node = stage.findOne(`#${selectedId}`);
+            if (!node) return;
+
+            const t1 = e.evt.touches[0];
+            const t2 = e.evt.touches[1];
+            const p1 = { x: t1.clientX, y: t1.clientY };
+            const p2 = { x: t2.clientX, y: t2.clientY };
+
+            const dist = getDistance(p1, p2);
+            const angle = getAngle(p1, p2);
+            const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+            if (!lastDist.current || !lastAngle.current || !lastCenter.current) return;
+
+            const scaleBy = dist / lastDist.current;
+            const angleDelta = angle - lastAngle.current;
+            const dx = center.x - lastCenter.current.x;
+            const dy = center.y - lastCenter.current.y;
+
+            const newScale = node.scaleX() * scaleBy;
+            if (newScale > 0.1 && newScale < 10) {
+                node.scaleX(newScale);
+                node.scaleY(newScale);
+            }
+
+            node.rotation(node.rotation() + angleDelta);
+            node.x(node.x() + dx);
+            node.y(node.y() + dy);
+
+            trRef.current.getLayer().batchDraw();
+            engine.broadcastBinaryMove(
+                parseInt(selectedId),
+                node.x(),
+                node.y(),
+                node.scaleX(),
+                node.rotation()
+            );
+
+            lastDist.current = dist;
+            lastAngle.current = angle;
+            lastCenter.current = center;
+        }
+    };
+
+    const handleTouchEnd = (e: any) => {
+        // If fewer than 2 fingers remain, re-enable standard single-finger dragging
+        if (e.evt.touches.length < 2) {
+            setIsPinching(false);
+        }
+        lastDist.current = null;
+        lastAngle.current = null;
+        lastCenter.current = null;
+    };
+
     const handleTransform = (e: any, numericId: number) => {
         const node = e.target;
         // node.scaleX() is automatically updated by the Transformer
@@ -105,15 +233,6 @@ function EditorApp() {
             if (action === 'rewind')
                 engine.sendJSON({ type: 'video_seek', numericId: layer.numericId, mediaTime: 0 });
         });
-    };
-
-    // --- SELECTION LOGIC ---
-    const checkDeselect = (e: any) => {
-        // If the user clicks on the empty stage background, deselect everything
-        const clickedOnEmpty = e.target === e.target.getStage();
-        if (clickedOnEmpty) {
-            setSelectedId(null);
-        }
     };
 
     // Effect to physically attach the Transformer to the selected node
@@ -133,7 +252,7 @@ function EditorApp() {
     }, [selectedId, layers]);
 
     return (
-        <div style={{ width: '100vw', height: '100vh', background: '#333', margin: 0 }}>
+        <div style={{ width: '100vw', height: '100vh', margin: 0 }}>
             {/* Control Panel */}
             <div
                 style={{
@@ -153,29 +272,39 @@ function EditorApp() {
                 <div
                     style={{ borderLeft: '1px solid #ccc', height: '24px', margin: '0 10px' }}
                 ></div>
-                <button onClick={() => broadcastPlayback('rewind')}>⏮ Rewind</button>
-                <button onClick={() => broadcastPlayback('play')}>▶ Play All</button>
-                <button onClick={() => broadcastPlayback('pause')}>⏸ Pause All</button>
+                <button onClick={() => broadcastPlayback('rewind')}>⏮</button>
+                <button onClick={() => broadcastPlayback('play')}>▶</button>
+                <button onClick={() => broadcastPlayback('pause')}>⏸</button>
+                <div
+                    style={{ borderLeft: '1px solid #ccc', height: '24px', margin: '0 10px' }}
+                ></div>
+                <button onClick={handleBringToFront} disabled={!selectedId}>
+                    Bring to Front
+                </button>
             </div>
 
             {/* Bind checkDeselect to the Stage */}
             <Stage
                 width={window.innerWidth}
                 height={window.innerHeight}
-                onMouseDown={checkDeselect}
-                onTouchStart={checkDeselect}
+                onMouseDown={handleTouchStart}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
             >
                 <Layer>
-                    {layers.map((layer) => (
-                        <KonvaVideo
-                            key={layer.numericId}
-                            layer={layer}
-                            onSelect={() => setSelectedId(layer.numericId.toString())}
-                            onTransform={(e) => handleTransform(e, layer.numericId)}
-                        />
-                    ))}
+                    {layers
+                        .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
+                        .map((layer) => (
+                            <KonvaVideo
+                                key={layer.numericId}
+                                layer={layer}
+                                isPinching={isPinching}
+                                onSelect={() => setSelectedId(layer.numericId.toString())}
+                                onTransform={(e) => handleTransform(e, layer.numericId)}
+                            />
+                        ))}
 
-                    {/* THE TRANSFORMER */}
                     <Transformer
                         ref={trRef}
                         keepRatio={true} // Forces uniform scaling (maintains aspect ratio)
@@ -196,10 +325,12 @@ function EditorApp() {
 // --- SUB-COMPONENT: Live Video inside Konva ---
 function KonvaVideo({
     layer,
+    isPinching,
     onSelect,
     onTransform
 }: {
     layer: any;
+    isPinching: boolean;
     onSelect: () => void;
     onTransform: (e: any) => void;
 }) {
@@ -239,33 +370,51 @@ function KonvaVideo({
         };
     }, [layer.url]);
 
+    // 2. Control Playback based on Server State
     useEffect(() => {
         if (!videoElement || !layer.playback) return;
 
+        let frameId: number;
+
         if (layer.playback.status === 'paused') {
             videoElement.pause();
-            if (Math.abs(videoElement.currentTime - layer.playback.anchorMediaTime) > 0.1) {
-                videoElement.currentTime = layer.playback.anchorMediaTime;
-            }
+            // REMOVED THE 0.1s THRESHOLD. Force exact frame sync.
+            videoElement.currentTime = layer.playback.anchorMediaTime;
         } else if (layer.playback.status === 'playing') {
-            const checkTime = () => {
+            const loop = () => {
                 const engine = EditorEngine.getInstance();
                 const now = engine.getServerTime();
 
                 if (now >= layer.playback.anchorServerTime) {
+                    if (videoElement.paused) {
+                        videoElement
+                            .play()
+                            .catch((e) => console.warn('Editor autoplay blocked', e));
+                    }
+
                     const expectedTime =
                         layer.playback.anchorMediaTime +
-                        Math.max(0, (now - layer.playback.anchorServerTime) / 1000);
-                    if (Math.abs(videoElement.currentTime - expectedTime) > 0.2) {
+                        (now - layer.playback.anchorServerTime) / 1000;
+                    const drift = expectedTime - videoElement.currentTime;
+
+                    if (Math.abs(drift) > 0.5) {
                         videoElement.currentTime = expectedTime;
+                    } else if (drift > 0.05) {
+                        videoElement.playbackRate = 1.05;
+                    } else if (drift < -0.05) {
+                        videoElement.playbackRate = 0.95;
+                    } else {
+                        videoElement.playbackRate = 1.0;
                     }
-                    videoElement.play().catch((e) => console.warn('Editor autoplay blocked', e));
-                } else {
-                    requestAnimationFrame(checkTime);
                 }
+                frameId = requestAnimationFrame(loop);
             };
-            requestAnimationFrame(checkTime);
+            frameId = requestAnimationFrame(loop);
         }
+
+        return () => {
+            if (frameId) cancelAnimationFrame(frameId);
+        };
     }, [layer.playback, videoElement]);
 
     if (!videoElement) return null;
@@ -284,8 +433,7 @@ function KonvaVideo({
             scaleX={layer.config.scale}
             scaleY={layer.config.scale}
             rotation={layer.config.rotation}
-            draggable
-            // NEW: Bind selection clicks
+            draggable={!isPinching}
             onClick={onSelect}
             onTap={onSelect}
             // Trigger binary broadcast during drag OR transform
