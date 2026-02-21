@@ -377,6 +377,7 @@ function KonvaVideo({
     const imageRef = useRef<any>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
 
+    // 1. Setup the element and Konva redraw loop
     useEffect(() => {
         const vid = document.createElement('video');
         vid.src = layer.url;
@@ -384,10 +385,18 @@ function KonvaVideo({
         vid.muted = true;
 
         vid.addEventListener('loadeddata', () => {
-            vid.currentTime = layer.playback?.anchorMediaTime || 0;
-            imageRef.current?.getLayer()?.batchDraw();
+            const targetTime = layer.playback?.anchorMediaTime || 0;
+
+            // Let the 'seeked' event handle the drawing once the frame is actually ready.
+            if (targetTime > 0.05) {
+                vid.currentTime = targetTime;
+            } else {
+                // If the target is basically 0, it's safe to paint the first frame instantly.
+                imageRef.current?.getLayer()?.batchDraw();
+            }
         });
 
+        // This fires when the async seek from loadeddata (or a pause command) finishes
         vid.addEventListener('seeked', () => {
             imageRef.current?.getLayer()?.batchDraw();
         });
@@ -418,8 +427,11 @@ function KonvaVideo({
 
         if (layer.playback.status === 'paused') {
             videoElement.pause();
-            // REMOVED THE 0.1s THRESHOLD. Force exact frame sync.
-            videoElement.currentTime = layer.playback.anchorMediaTime;
+
+            // Prevents floating-point mismatch thrashing while keeping visual sync perfectly tight.
+            if (Math.abs(videoElement.currentTime - layer.playback.anchorMediaTime) > 0.05) {
+                videoElement.currentTime = layer.playback.anchorMediaTime;
+            }
         } else if (layer.playback.status === 'playing') {
             const loop = () => {
                 const engine = EditorEngine.getInstance();
