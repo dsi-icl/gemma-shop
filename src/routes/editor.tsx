@@ -50,8 +50,31 @@ function EditorApp() {
             if (!res.ok) throw new Error('Upload failed');
             const data = await res.json();
 
+            // NEW: Extract true native video dimensions before broadcasting
+            const { videoWidth, videoHeight } = await new Promise<{
+                videoWidth: number;
+                videoHeight: number;
+            }>((resolve) => {
+                const tempVid = document.createElement('video');
+                tempVid.src = data.url;
+                tempVid.addEventListener('loadedmetadata', () => {
+                    resolve({ videoWidth: tempVid.videoWidth, videoHeight: tempVid.videoHeight });
+                });
+            });
+
             const numericId = nextId.current++;
-            const config = { cx: 400, cy: 300, w: 640, h: 360, rotation: 0, scale: 1 };
+
+            // Scale it down so a massive 4K video fits nicely on the editor screen
+            const initialScale = Math.min(1, 640 / videoWidth);
+
+            const config = {
+                cx: 400,
+                cy: 300,
+                w: videoWidth,
+                h: videoHeight,
+                rotation: 0,
+                scale: initialScale
+            };
 
             const newLayer = { numericId, layerType: 'video', url: data.url, config };
 
@@ -139,10 +162,27 @@ function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) 
         vid.src = layer.url;
         vid.crossOrigin = 'anonymous';
         vid.muted = true;
+
+        // THE FIX: When the first frame is actually ready to be drawn
+        vid.addEventListener('loadeddata', () => {
+            // Set to the server's expected time (or 0)
+            vid.currentTime = layer.playback?.anchorMediaTime || 0;
+            // Explicitly tell Konva to draw this initial frame
+            imageRef.current?.getLayer()?.batchDraw();
+        });
+
+        // THE FIX: When the video is scrubbed/seeked while paused
+        vid.addEventListener('seeked', () => {
+            imageRef.current?.getLayer()?.batchDraw();
+        });
+
         setVideoElement(vid);
 
+        // OPTIMIZATION: Only redraw the canvas 60fps if the video is actually playing
         const anim = new Konva.Animation(() => {
-            imageRef.current?.getLayer()?.batchDraw();
+            if (!vid.paused) {
+                imageRef.current?.getLayer()?.batchDraw();
+            }
         }, imageRef.current?.getLayer());
 
         anim.start();
@@ -161,15 +201,29 @@ function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) 
 
         if (layer.playback.status === 'paused') {
             videoElement.pause();
-            videoElement.currentTime = layer.playback.anchorMediaTime;
+            if (Math.abs(videoElement.currentTime - layer.playback.anchorMediaTime) > 0.1) {
+                videoElement.currentTime = layer.playback.anchorMediaTime;
+            }
         } else if (layer.playback.status === 'playing') {
-            // The Editor doesn't need perfect rVFC sync, standard HTML5 play is fine for authoring
-            // Rough approximation of the expected time using local Date.now()
-            const expectedTime =
-                layer.playback.anchorMediaTime +
-                Math.max(0, (Date.now() - layer.playback.anchorServerTime) / 1000);
-            videoElement.currentTime = expectedTime;
-            videoElement.play().catch((e) => console.warn('Editor autoplay blocked', e));
+            const checkTime = () => {
+                const engine = EditorEngine.getInstance();
+                const now = engine.getServerTime();
+
+                if (now >= layer.playback.anchorServerTime) {
+                    const expectedTime =
+                        layer.playback.anchorMediaTime +
+                        Math.max(0, (now - layer.playback.anchorServerTime) / 1000);
+
+                    if (Math.abs(videoElement.currentTime - expectedTime) > 0.2) {
+                        videoElement.currentTime = expectedTime;
+                    }
+
+                    videoElement.play().catch((e) => console.warn('Editor autoplay blocked', e));
+                } else {
+                    requestAnimationFrame(checkTime);
+                }
+            };
+            requestAnimationFrame(checkTime);
         }
     }, [layer.playback, videoElement]);
 
@@ -180,13 +234,15 @@ function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) 
             ref={imageRef}
             image={videoElement}
             id={layer.numericId.toString()}
-            // ... rest of your Konva props (x, y, width, height, offsetX, offsetY, draggable, etc) ...
             x={layer.config.cx}
             y={layer.config.cy}
             width={layer.config.w}
             height={layer.config.h}
             offsetX={layer.config.w / 2}
             offsetY={layer.config.h / 2}
+            scaleX={layer.config.scale} // Apply the scale!
+            scaleY={layer.config.scale}
+            rotation={layer.config.rotation}
             draggable
             onDragMove={onTransform}
             onTransform={onTransform}

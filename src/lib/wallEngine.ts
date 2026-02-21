@@ -21,6 +21,7 @@ export interface LayerState {
     animStartTime: number;
     animDuration: number;
     playback: LayerPlaybackState;
+    rvfcActive?: boolean;
 }
 
 type LayoutUpdateCallback = (data: any) => void;
@@ -179,26 +180,52 @@ export class WallEngine {
         const video = layer.el as HTMLVideoElement;
         if (!video || typeof video.play !== 'function') return;
 
+        // CRITICAL HYDRATION FIX:
+        // Wait for the video to parse its headers before attempting to seek
+        if (video.readyState === 0) {
+            video.addEventListener(
+                'loadedmetadata',
+                () => {
+                    this.handlePlaybackStateChange(layer);
+                },
+                { once: true }
+            );
+            return;
+        }
+
         if (layer.playback.status === 'paused') {
             video.pause();
             video.currentTime = layer.playback.anchorMediaTime;
         } else if (layer.playback.status === 'playing') {
-            // Schedule playback to start precisely at anchorServerTime
             const checkTime = () => {
-                if (this.getServerTime() >= layer.playback.anchorServerTime) {
+                const now = this.getServerTime();
+
+                if (now >= layer.playback.anchorServerTime) {
+                    // PRE-SEEK: If we joined late, calculate exactly where we should be NOW
+                    const expectedTime =
+                        layer.playback.anchorMediaTime +
+                        (now - layer.playback.anchorServerTime) / 1000;
+
+                    if (Math.abs(video.currentTime - expectedTime) > 0.5) {
+                        video.currentTime = expectedTime;
+                    }
+
                     video.play().catch((e) => console.error('Autoplay blocked:', e));
 
+                    // Attach Drift Controller safely
                     if ('requestVideoFrameCallback' in video) {
-                        video.requestVideoFrameCallback((n, m) => this.driftController(m, layer));
-                    } else {
-                        console.warn(
-                            'requestVideoFrameCallback not supported. Sync will be loose.'
-                        );
+                        if (!layer.rvfcActive) {
+                            layer.rvfcActive = true; // Lock it so it doesn't duplicate
+                            video.requestVideoFrameCallback((n, m) =>
+                                this.driftController(m, layer)
+                            );
+                        }
                     }
                 } else {
                     requestAnimationFrame(checkTime);
                 }
             };
+
             requestAnimationFrame(checkTime);
         }
     }

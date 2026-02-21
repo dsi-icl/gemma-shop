@@ -8,6 +8,8 @@ export class EditorEngine {
     private static instance: EditorEngine;
     public ws: WebSocket;
     private messageCallbacks = new Set<ServerMessageCallback>();
+    private clockOffset = 0;
+    private bestRTT = Infinity;
 
     private constructor() {
         this.ws = new WebSocket(SERVER_URL);
@@ -16,12 +18,19 @@ export class EditorEngine {
         this.ws.onopen = () => {
             console.log('Editor Engine: Connected to Server');
             this.ws.send(JSON.stringify({ type: 'hello', specimen: 'editor' }));
+            this.startClockSync();
         };
 
         this.ws.onmessage = (event) => {
             // The Editor mostly receives JSON (like Hydration state)
             if (typeof event.data === 'string') {
                 const data = JSON.parse(event.data);
+
+                // Intercept Pong to calculate time difference
+                if (data.type === 'pong') {
+                    this.handlePong(data);
+                    return;
+                }
                 this.messageCallbacks.forEach((cb) => cb(data));
             }
         };
@@ -29,10 +38,31 @@ export class EditorEngine {
 
     // Global Accessor
     public static getInstance(): EditorEngine {
-        if (!EditorEngine.instance) {
-            EditorEngine.instance = new EditorEngine();
-        }
+        if (!EditorEngine.instance) EditorEngine.instance = new EditorEngine();
         return EditorEngine.instance;
+    }
+
+    // --- NEW CLOCK MATH ---
+    public getServerTime(): number {
+        return Date.now() + this.clockOffset;
+    }
+
+    private startClockSync() {
+        const sendPing = () => {
+            if (this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ type: 'ping', t0: Date.now() }));
+            }
+            setTimeout(sendPing, 2000);
+        };
+        sendPing();
+    }
+
+    private handlePong(data: any) {
+        const rtt = Date.now() - data.t0 - (data.t2 - data.t1);
+        if (rtt < this.bestRTT) {
+            this.bestRTT = rtt;
+            this.clockOffset = (data.t1 - data.t0 + (data.t2 - Date.now())) / 2;
+        }
     }
 
     // --- REACT INTERFACE ---
