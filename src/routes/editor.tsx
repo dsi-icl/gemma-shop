@@ -2,11 +2,17 @@ import { createFileRoute } from '@tanstack/react-router';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Image as KonvaImage, Transformer } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Transformer, Group, Text, Rect } from 'react-konva';
 
 import { EditorEngine } from '../lib/editorEngine';
 
 const engine = EditorEngine.getInstance();
+
+// Constants for the DO
+const SCREEN_W = 1920;
+const SCREEN_H = 1080;
+const COLS = 16;
+const ROWS = 4;
 
 export const Route = createFileRoute('/editor')({ component: EditorApp });
 
@@ -294,7 +300,7 @@ function EditorApp() {
             <div
                 style={{
                     position: 'absolute',
-                    top: 10,
+                    bottom: 10,
                     left: 10,
                     zIndex: 10,
                     background: 'white',
@@ -302,7 +308,9 @@ function EditorApp() {
                     borderRadius: 8,
                     display: 'flex',
                     gap: '10px',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    scale: 3,
+                    transformOrigin: 'left bottom'
                 }}
             >
                 <input type="file" accept="video/mp4" onChange={handleUpload} />
@@ -328,8 +336,35 @@ function EditorApp() {
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
+                scaleX={0.25}
+                scaleY={0.25}
             >
                 <Layer>
+                    {Array.from({ length: COLS * ROWS }).map((_, i) => {
+                        const col = i % COLS;
+                        const row = Math.floor(i / COLS);
+                        return (
+                            <Group key={`screen-${i}`}>
+                                <Rect
+                                    x={col * SCREEN_W}
+                                    y={row * SCREEN_H}
+                                    width={SCREEN_W}
+                                    height={SCREEN_H}
+                                    stroke="rgba(255, 255, 255, 0.2)"
+                                    strokeWidth={10} // Thick enough to see when zoomed out
+                                    listening={false} // Prevents the grid from capturing mouse clicks
+                                />
+                                <Text
+                                    x={col * SCREEN_W + 50}
+                                    y={row * SCREEN_H + 50}
+                                    text={`Screen C:${col} R:${row}`}
+                                    fontSize={100}
+                                    fill="rgba(255, 255, 255, 0.3)"
+                                    listening={false}
+                                />
+                            </Group>
+                        );
+                    })}
                     {layers
                         .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
                         .map((layer) => (
