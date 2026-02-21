@@ -1,9 +1,7 @@
-'use client';
-
 import { createFileRoute } from '@tanstack/react-router';
 import Konva from 'konva';
 import { useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Image as KonvaImage } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Transformer } from 'react-konva';
 
 import { EditorEngine } from '../lib/editorEngine';
 
@@ -13,7 +11,10 @@ export const Route = createFileRoute('/editor')({ component: EditorApp });
 
 function EditorApp() {
     const [layers, setLayers] = useState<any[]>([]);
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+
     const nextId = useRef(1);
+    const trRef = useRef<any>(null);
 
     useEffect(() => {
         const unsubscribe = engine.subscribe((data) => {
@@ -22,9 +23,7 @@ function EditorApp() {
                 if (data.layers.length > 0) {
                     nextId.current = Math.max(...data.layers.map((l: any) => l.numericId)) + 1;
                 }
-            }
-            // Listen for incoming playback syncs!
-            else if (data.type === 'video_sync' || data.type === 'video_seek') {
+            } else if (data.type === 'video_sync' || data.type === 'video_seek') {
                 setLayers((prev) =>
                     prev.map((layer) =>
                         layer.numericId === data.numericId
@@ -50,7 +49,6 @@ function EditorApp() {
             if (!res.ok) throw new Error('Upload failed');
             const data = await res.json();
 
-            // NEW: Extract true native video dimensions before broadcasting
             const { videoWidth, videoHeight } = await new Promise<{
                 videoWidth: number;
                 videoHeight: number;
@@ -63,8 +61,6 @@ function EditorApp() {
             });
 
             const numericId = nextId.current++;
-
-            // Scale it down so a massive 4K video fits nicely on the editor screen
             const initialScale = Math.min(1, 640 / videoWidth);
 
             const config = {
@@ -79,8 +75,6 @@ function EditorApp() {
             const newLayer = { numericId, layerType: 'video', url: data.url, config };
 
             setLayers((prev) => [...prev, newLayer]);
-
-            // Broadcast to Walls
             engine.sendJSON({
                 type: 'upsert_layer',
                 numericId,
@@ -88,6 +82,9 @@ function EditorApp() {
                 url: data.url,
                 config
             });
+
+            // Auto-select the newly uploaded video
+            setSelectedId(numericId.toString());
         } catch (err) {
             alert('Upload failed. Check Bun server console.');
         }
@@ -95,10 +92,10 @@ function EditorApp() {
 
     const handleTransform = (e: any, numericId: number) => {
         const node = e.target;
+        // node.scaleX() is automatically updated by the Transformer
         engine.broadcastBinaryMove(numericId, node.x(), node.y(), node.scaleX(), node.rotation());
     };
 
-    // --- PLAYBACK CONTROLS ---
     const broadcastPlayback = (action: string) => {
         layers.forEach((layer) => {
             if (action === 'play')
@@ -109,6 +106,31 @@ function EditorApp() {
                 engine.sendJSON({ type: 'video_seek', numericId: layer.numericId, mediaTime: 0 });
         });
     };
+
+    // --- SELECTION LOGIC ---
+    const checkDeselect = (e: any) => {
+        // If the user clicks on the empty stage background, deselect everything
+        const clickedOnEmpty = e.target === e.target.getStage();
+        if (clickedOnEmpty) {
+            setSelectedId(null);
+        }
+    };
+
+    // Effect to physically attach the Transformer to the selected node
+    useEffect(() => {
+        if (selectedId && trRef.current) {
+            // Find the node in Konva's internal scene graph
+            const node = trRef.current.getStage().findOne(`#${selectedId}`);
+            if (node) {
+                trRef.current.nodes([node]);
+                trRef.current.getLayer().batchDraw();
+            }
+        } else if (trRef.current) {
+            // Detach if nothing is selected
+            trRef.current.nodes([]);
+            trRef.current.getLayer().batchDraw();
+        }
+    }, [selectedId, layers]);
 
     return (
         <div style={{ width: '100vw', height: '100vh', background: '#333', margin: 0 }}>
@@ -136,15 +158,35 @@ function EditorApp() {
                 <button onClick={() => broadcastPlayback('pause')}>⏸ Pause All</button>
             </div>
 
-            <Stage width={window.innerWidth} height={window.innerHeight}>
+            {/* Bind checkDeselect to the Stage */}
+            <Stage
+                width={window.innerWidth}
+                height={window.innerHeight}
+                onMouseDown={checkDeselect}
+                onTouchStart={checkDeselect}
+            >
                 <Layer>
                     {layers.map((layer) => (
                         <KonvaVideo
                             key={layer.numericId}
                             layer={layer}
+                            onSelect={() => setSelectedId(layer.numericId.toString())}
                             onTransform={(e) => handleTransform(e, layer.numericId)}
                         />
                     ))}
+
+                    {/* THE TRANSFORMER */}
+                    <Transformer
+                        ref={trRef}
+                        keepRatio={true} // Forces uniform scaling (maintains aspect ratio)
+                        boundBoxFunc={(oldBox, newBox) => {
+                            // Prevent scaling the video into oblivion (min size 50px)
+                            if (Math.abs(newBox.width) < 50 || Math.abs(newBox.height) < 50) {
+                                return oldBox;
+                            }
+                            return newBox;
+                        }}
+                    />
                 </Layer>
             </Stage>
         </div>
@@ -152,33 +194,35 @@ function EditorApp() {
 }
 
 // --- SUB-COMPONENT: Live Video inside Konva ---
-function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) => void }) {
+function KonvaVideo({
+    layer,
+    onSelect,
+    onTransform
+}: {
+    layer: any;
+    onSelect: () => void;
+    onTransform: (e: any) => void;
+}) {
     const imageRef = useRef<any>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
 
-    // 1. Setup the element and Konva redraw loop
     useEffect(() => {
         const vid = document.createElement('video');
         vid.src = layer.url;
         vid.crossOrigin = 'anonymous';
         vid.muted = true;
 
-        // THE FIX: When the first frame is actually ready to be drawn
         vid.addEventListener('loadeddata', () => {
-            // Set to the server's expected time (or 0)
             vid.currentTime = layer.playback?.anchorMediaTime || 0;
-            // Explicitly tell Konva to draw this initial frame
             imageRef.current?.getLayer()?.batchDraw();
         });
 
-        // THE FIX: When the video is scrubbed/seeked while paused
         vid.addEventListener('seeked', () => {
             imageRef.current?.getLayer()?.batchDraw();
         });
 
         setVideoElement(vid);
 
-        // OPTIMIZATION: Only redraw the canvas 60fps if the video is actually playing
         const anim = new Konva.Animation(() => {
             if (!vid.paused) {
                 imageRef.current?.getLayer()?.batchDraw();
@@ -195,7 +239,6 @@ function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) 
         };
     }, [layer.url]);
 
-    // 2. Control Playback based on Server State
     useEffect(() => {
         if (!videoElement || !layer.playback) return;
 
@@ -213,11 +256,9 @@ function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) 
                     const expectedTime =
                         layer.playback.anchorMediaTime +
                         Math.max(0, (now - layer.playback.anchorServerTime) / 1000);
-
                     if (Math.abs(videoElement.currentTime - expectedTime) > 0.2) {
                         videoElement.currentTime = expectedTime;
                     }
-
                     videoElement.play().catch((e) => console.warn('Editor autoplay blocked', e));
                 } else {
                     requestAnimationFrame(checkTime);
@@ -240,10 +281,14 @@ function KonvaVideo({ layer, onTransform }: { layer: any; onTransform: (e: any) 
             height={layer.config.h}
             offsetX={layer.config.w / 2}
             offsetY={layer.config.h / 2}
-            scaleX={layer.config.scale} // Apply the scale!
+            scaleX={layer.config.scale}
             scaleY={layer.config.scale}
             rotation={layer.config.rotation}
             draggable
+            // NEW: Bind selection clicks
+            onClick={onSelect}
+            onTap={onSelect}
+            // Trigger binary broadcast during drag OR transform
             onDragMove={onTransform}
             onTransform={onTransform}
         />
