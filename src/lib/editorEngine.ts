@@ -1,5 +1,7 @@
 'use client';
 
+import { throttle } from '@tanstack/pacer';
+
 const SERVER_URL = `ws://${window.location.hostname}:3000/bus`;
 
 type ServerMessageCallback = (data: any) => void;
@@ -73,38 +75,38 @@ export class EditorEngine {
         };
     }
 
-    public sendJSON(data: any) {
-        if (this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify(data));
-        } else {
-            console.warn('WebSocket not open. Cannot send JSON:', data);
-        }
-    }
+    public sendJSON = throttle(
+        (data: any) => {
+            if (this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(data));
+            } else {
+                console.warn('WebSocket not open. Cannot send JSON:', data);
+            }
+        },
+        { wait: 10 }
+    );
 
     // --- THE BINARY PACKER ---
     // Abstracts the memory management away from React components
-    public broadcastBinaryMove(
-        numericId: number,
-        x: number,
-        y: number,
-        scale: number,
-        rotation: number
-    ) {
-        if (this.ws.readyState !== WebSocket.OPEN) return;
+    public broadcastBinaryMove = throttle(
+        (numericId: number, x: number, y: number, scale: number, rotation: number) => {
+            if (this.ws.readyState !== WebSocket.OPEN) return;
 
-        // Pack 1 object (1 byte opcode + 2 byte count + 18 byte payload)
-        const buffer = new ArrayBuffer(21);
-        const view = new DataView(buffer);
+            // Pack 1 object (1 byte opcode + 2 byte count + 18 byte payload)
+            const buffer = new ArrayBuffer(21);
+            const view = new DataView(buffer);
 
-        view.setUint8(0, 0x05); // Opcode 5: Batched Move
-        view.setUint16(1, 1, true); // Count = 1
+            view.setUint8(0, 0x05); // Opcode 5: Batched Move
+            view.setUint16(1, 1, true); // Count = 1
 
-        view.setUint16(3, numericId, true); // Layer ID
-        view.setFloat32(5, x, true); // X
-        view.setFloat32(9, y, true); // Y
-        view.setFloat32(13, scale, true); // Scale
-        view.setFloat32(17, rotation, true); // Rotation
+            view.setUint16(3, numericId, true); // Layer ID
+            view.setFloat32(5, x, true); // X
+            view.setFloat32(9, y, true); // Y
+            view.setFloat32(13, scale, true); // Scale
+            view.setFloat32(17, rotation, true); // Rotation
 
-        this.ws.send(buffer);
-    }
+            this.ws.send(buffer);
+        },
+        { wait: 10 }
+    );
 }
