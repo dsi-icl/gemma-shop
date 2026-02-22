@@ -14,7 +14,6 @@ type LayoutUpdateCallback = (data: any) => void;
 export class WallEngine {
     private static instance: WallEngine;
     public ws: WebSocket;
-    private cachedHydration: any = null;
 
     // Clock Sync State
     private clockOffset = 0;
@@ -58,11 +57,6 @@ export class WallEngine {
     // --- REACT INTERFACE ---
     public subscribeToLayoutUpdates(callback: LayoutUpdateCallback) {
         this.layoutCallbacks.add(callback);
-
-        if (this.cachedHydration) {
-            callback(this.cachedHydration);
-        }
-
         return () => this.layoutCallbacks.delete(callback);
     }
 
@@ -154,18 +148,11 @@ export class WallEngine {
 
             if (data.type === 'pong') {
                 this.handlePong(data);
-            } else if (data.type === 'hydrate') {
-                this.cachedHydration = data;
-                this.layoutCallbacks.forEach((cb) => cb(data));
-            } else if (data.type === 'upsert_layer') {
-                // Update the cache so it stays accurate if we refresh mid-session
-                if (this.cachedHydration) {
-                    const existingIdx = this.cachedHydration.layers.findIndex(
-                        (l: any) => l.numericId === data.numericId
-                    );
-                    if (existingIdx > -1) this.cachedHydration.layers[existingIdx] = data;
-                    else this.cachedHydration.layers.push(data);
-                }
+            } else if (
+                data.type === 'hydrate' ||
+                data.type === 'upsert_layer' ||
+                data.type === 'delete_layer'
+            ) {
                 this.layoutCallbacks.forEach((cb) => cb(data));
             } else if (data.type === 'video_sync' || data.type === 'video_seek') {
                 const layer = this.layers.get(data.numericId);

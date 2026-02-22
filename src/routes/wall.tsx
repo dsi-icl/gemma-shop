@@ -27,6 +27,8 @@ function WallApp() {
             if (data.type === 'hydrate') setLayers(data.layers);
             else if (data.type === 'upsert_layer') {
                 setLayers((prev) => [...prev.filter((l) => l.numericId !== data.numericId), data]);
+            } else if (data.type === 'delete_layer') {
+                setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
             }
         });
 

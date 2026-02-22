@@ -21,7 +21,7 @@ export class EditorEngine {
     private binaryCallbacks = new Set<BinaryMessageCallback>();
     private playbackCallbacks = new Set<PlaybackCallback>();
     private playbackStates = new Map<number, any>();
-    private cachedHydration: any = null;
+    private bufferedHydration: any = null;
     private clockOffset = 0;
     private bestRTT = Infinity;
 
@@ -73,13 +73,14 @@ export class EditorEngine {
                 }
 
                 if (data.type === 'hydrate') {
-                    this.cachedHydration = data;
+                    this.bufferedHydration = data;
                     // Populate the playback memory on refresh so components have accurate data!
                     data.layers.forEach((l: any) => {
                         if (l.playback) this.playbackStates.set(l.numericId, l.playback);
                     });
                 }
 
+                console.log('Preparing', data);
                 this.messageCallbacks.forEach((cb) => cb(data));
             }
         };
@@ -112,9 +113,12 @@ export class EditorEngine {
         }
     }
 
-    public subscribe(cb: ServerMessageCallback) {
+    public subscribeToJson(cb: ServerMessageCallback) {
         this.messageCallbacks.add(cb);
-        if (this.cachedHydration) cb(this.cachedHydration);
+        if (this.bufferedHydration) {
+            cb(this.bufferedHydration);
+            this.bufferedHydration = null;
+        }
         return () => {
             this.messageCallbacks.delete(cb);
         };

@@ -15,6 +15,13 @@ function broadcastJSON(data: any, clients: Set<Peer>) {
     }
 }
 
+function broadcastOtherOnlyJSON(data: any, clients: Set<Peer>, peer: Peer) {
+    const payload = JSON.stringify(data);
+    for (const client of clients) {
+        if (client !== peer) client.send(payload);
+    }
+}
+
 export default defineWebSocketHandler({
     open(peer) {
         // We don't add them to a pool yet. We wait for the handshake.
@@ -92,8 +99,17 @@ export default defineWebSocketHandler({
                     }
                     stageState.layers.set(data.numericId, data);
 
-                    broadcastJSON(data, wallClients);
-                    broadcastJSON(data, editorClients);
+                    broadcastOtherOnlyJSON(data, wallClients, peer);
+                    broadcastOtherOnlyJSON(data, editorClients, peer);
+                    return;
+                }
+
+                // C.bis Layer Setup
+                if (data.type === 'delete_layer') {
+                    stageState.layers.delete(data.numericId);
+
+                    broadcastOtherOnlyJSON(data, wallClients, peer);
+                    broadcastOtherOnlyJSON(data, editorClients, peer);
                     return;
                 }
 
