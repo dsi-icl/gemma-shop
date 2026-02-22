@@ -414,11 +414,9 @@ function KonvaVideo({
 }) {
     const imageRef = useRef<any>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
-
-    // State to prevent Konva from rendering until the exact requested frame is decoded
     const [isReady, setIsReady] = useState(false);
 
-    // 1. Setup the element and strict frame gating
+    // 1. Setup the element and strictly manage the Ready state
     useEffect(() => {
         const vid = document.createElement('video');
         vid.src = layer.url;
@@ -428,21 +426,20 @@ function KonvaVideo({
 
         const targetTime = layer.playback?.anchorMediaTime || 0;
 
-        // Command the seek immediately, before the browser even thinks about playing
-        vid.currentTime = targetTime;
+        vid.addEventListener('loadeddata', () => {
+            // If we need to seek, start the async seek. Do not mark as ready yet.
+            if (targetTime > 0.05) {
+                vid.currentTime = targetTime;
+            } else {
+                // If it's starting at 0, it's ready right now.
+                setIsReady(true);
+            }
+        });
 
-        const handleReady = () => {
+        vid.addEventListener('seeked', () => {
+            // The exact frame has been extracted by the GPU.
             setIsReady(true);
-            imageRef.current?.getLayer()?.batchDraw();
-        };
-
-        // 'seeked' guarantees the exact frame we requested is in the GPU buffer
-        vid.addEventListener('seeked', handleReady, { once: true });
-
-        // Fallback: If target time is 0, some browsers (Safari) don't fire 'seeked' on load
-        if (targetTime === 0) {
-            vid.addEventListener('canplay', handleReady, { once: true });
-        }
+        });
 
         setVideoElement(vid);
 
@@ -453,7 +450,17 @@ function KonvaVideo({
         };
     }, [layer.url]);
 
-    // 2. Playback Controller (Now heavily optimized for multiple videos)
+    // Listen for React to actually commit the 'isReady' state to the DOM/Konva Node
+    useEffect(() => {
+        if (isReady && imageRef.current) {
+            // Wait one animation frame to ensure Konva has ingested the new `image={videoElement}` prop
+            requestAnimationFrame(() => {
+                imageRef.current?.getLayer()?.batchDraw();
+            });
+        }
+    }, [isReady]);
+
+    // 2. Playback Controller
     useEffect(() => {
         if (!videoElement || !layer.playback) return;
 
@@ -464,16 +471,11 @@ function KonvaVideo({
 
             if (Math.abs(videoElement.currentTime - layer.playback.anchorMediaTime) > 0.05) {
                 videoElement.currentTime = layer.playback.anchorMediaTime;
-                // Draw the frame once the pause-seek finishes
-                videoElement.addEventListener(
-                    'seeked',
-                    () => {
-                        imageRef.current?.getLayer()?.batchDraw();
-                    },
-                    { once: true }
-                );
-            } else {
-                imageRef.current?.getLayer()?.batchDraw();
+            } else if (isReady) {
+                // If it's already at the right time and ready, just make sure it's painted
+                requestAnimationFrame(() => {
+                    imageRef.current?.getLayer()?.batchDraw();
+                });
             }
         } else if (layer.playback.status === 'playing') {
             const loop = () => {
@@ -502,9 +504,9 @@ function KonvaVideo({
                         videoElement.playbackRate = 1.0;
                     }
 
-                    // We safely piggyback on the drift controller to tell Konva to update the canvas (i.e. without Konva.Animation).
-                    // batchDraw() is naturally debounced, so multiple videos won't crash the thread.
-                    imageRef.current?.getLayer()?.batchDraw();
+                    if (isReady) {
+                        imageRef.current?.getLayer()?.batchDraw();
+                    }
                 }
                 frameId = requestAnimationFrame(loop);
             };
@@ -514,15 +516,14 @@ function KonvaVideo({
         return () => {
             if (frameId) cancelAnimationFrame(frameId);
         };
-    }, [layer.playback, videoElement]);
+    }, [layer.playback, videoElement, isReady]); // Make sure isReady is in the dependency array!
 
     if (!videoElement) return null;
 
     return (
         <KonvaImage
             ref={imageRef}
-            // If the exact frame isn't decoded yet, pass undefined.
-            // Konva will render nothing, preventing Frame 0 flash.
+            // Konva only receives the video element AFTER the frame is confirmed ready
             image={isReady ? videoElement : undefined}
             id={layer.numericId.toString()}
             x={layer.config.cx}
@@ -538,9 +539,8 @@ function KonvaVideo({
             onClick={onSelect}
             onTap={onSelect}
             onDragMove={onTransform}
-            onDragEnd={onTransformEnd}
             onTransform={onTransform}
-            onTransformEnd={onTransformEnd}
+            onDragEnd={onTransformEnd}
         />
     );
 }

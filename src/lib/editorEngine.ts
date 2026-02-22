@@ -10,6 +10,7 @@ export class EditorEngine {
     private static instance: EditorEngine;
     public ws: WebSocket;
     private messageCallbacks = new Set<ServerMessageCallback>();
+    private cachedHydration: any = null;
     private clockOffset = 0;
     private bestRTT = Infinity;
 
@@ -32,6 +33,10 @@ export class EditorEngine {
                 if (data.type === 'pong') {
                     this.handlePong(data);
                     return;
+                }
+                // Intercept and cache the hydration payload
+                if (data.type === 'hydrate') {
+                    this.cachedHydration = data;
                 }
                 this.messageCallbacks.forEach((cb) => cb(data));
             }
@@ -68,10 +73,16 @@ export class EditorEngine {
     }
 
     // --- REACT INTERFACE ---
-    public subscribe(callback: ServerMessageCallback) {
-        this.messageCallbacks.add(callback);
+    public subscribe(cb: ServerMessageCallback) {
+        this.messageCallbacks.add(cb);
+
+        // If React mounts AFTER the server already sent the state, feed it immediately
+        if (this.cachedHydration) {
+            cb(this.cachedHydration);
+        }
+
         return () => {
-            this.messageCallbacks.delete(callback);
+            this.messageCallbacks.delete(cb);
         };
     }
 
