@@ -40,7 +40,6 @@ export class EditorEngine {
             if (event.data instanceof ArrayBuffer) {
                 const view = new DataView(event.data);
                 if (view.getUint8(0) === 0x05) {
-                    // Batched Move Opcode
                     const count = view.getUint16(1, true);
                     let offset = 3;
                     for (let i = 0; i < count; i++) {
@@ -57,7 +56,7 @@ export class EditorEngine {
                 return;
             }
 
-            // --- JSON SLOW-PATH (like Hydration state) ---
+            // --- JSON SLOW-PATH ---
             if (typeof event.data === 'string') {
                 const data = JSON.parse(event.data);
 
@@ -75,7 +74,7 @@ export class EditorEngine {
 
                 if (data.type === 'hydrate') {
                     this.cachedHydration = data;
-                    // Populate the playback memory on refresh!
+                    // Populate the playback memory on refresh so components have accurate data!
                     data.layers.forEach((l: any) => {
                         if (l.playback) this.playbackStates.set(l.numericId, l.playback);
                     });
@@ -86,13 +85,11 @@ export class EditorEngine {
         };
     }
 
-    // Global Accessor
     public static getInstance(): EditorEngine {
         if (!EditorEngine.instance) EditorEngine.instance = new EditorEngine();
         return EditorEngine.instance;
     }
 
-    // --- NEW CLOCK MATH ---
     public getServerTime(): number {
         return Date.now() + this.clockOffset;
     }
@@ -115,15 +112,9 @@ export class EditorEngine {
         }
     }
 
-    // --- REACT INTERFACE ---
     public subscribe(cb: ServerMessageCallback) {
         this.messageCallbacks.add(cb);
-
-        // If React mounts AFTER the server already sent the state, feed it immediately
-        if (this.cachedHydration) {
-            cb(this.cachedHydration);
-        }
-
+        if (this.cachedHydration) cb(this.cachedHydration);
         return () => {
             this.messageCallbacks.delete(cb);
         };
@@ -147,40 +138,29 @@ export class EditorEngine {
         return this.playbackStates.get(id);
     }
 
-    public setPlayback(id: number, playback: any) {
-        this.playbackStates.set(id, playback);
+    public setPlayback(id: number, pb: any) {
+        this.playbackStates.set(id, pb);
     }
 
-    public sendJSON = throttle(
-        (data: any) => {
-            if (this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify(data));
-            } else {
-                console.warn('WebSocket not open. Cannot send JSON:', data);
-            }
-        },
-        { wait: 100 }
-    );
+    // Throttling could be good, but only for binary state update
+    // public sendJSON = throttle(
+    public sendJSON = (data: any) => {
+        if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(data));
+        else console.warn('WebSocket not open. Cannot send JSON:', data);
+    };
 
-    // --- THE BINARY PACKER ---
-    // Abstracts the memory management away from React components
     public broadcastBinaryMove = throttle(
         (numericId: number, x: number, y: number, scale: number, rotation: number) => {
             if (this.ws.readyState !== WebSocket.OPEN) return;
-
-            // Pack 1 object (1 byte opcode + 2 byte count + 18 byte payload)
             const buffer = new ArrayBuffer(21);
             const view = new DataView(buffer);
-
-            view.setUint8(0, 0x05); // Opcode 5: Batched Move
-            view.setUint16(1, 1, true); // Count = 1
-
-            view.setUint16(3, numericId, true); // Layer ID
-            view.setFloat32(5, x, true); // X
-            view.setFloat32(9, y, true); // Y
-            view.setFloat32(13, scale, true); // Scale
-            view.setFloat32(17, rotation, true); // Rotation
-
+            view.setUint8(0, 0x05);
+            view.setUint16(1, 1, true);
+            view.setUint16(3, numericId, true);
+            view.setFloat32(5, x, true);
+            view.setFloat32(9, y, true);
+            view.setFloat32(13, scale, true);
+            view.setFloat32(17, rotation, true);
             this.ws.send(buffer);
         },
         { wait: 100 }

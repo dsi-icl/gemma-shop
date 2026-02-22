@@ -1,5 +1,6 @@
+'use client';
+
 import { createFileRoute } from '@tanstack/react-router';
-import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useRef, useState } from 'react';
 import { Stage, Layer, Image as KonvaImage, Transformer, Group, Text, Rect } from 'react-konva';
@@ -8,7 +9,6 @@ import { EditorEngine } from '../lib/editorEngine';
 
 const engine = EditorEngine.getInstance();
 
-// Constants for the DO
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 const COLS = 16;
@@ -21,17 +21,21 @@ function getDistance(p1: { x: number; y: number }, p2: { x: number; y: number })
 }
 
 function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
-    // Returns angle in degrees
     return (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
 }
 
 function EditorApp() {
-    const [layers, setLayers] = useState<any[] /* VirtualLayerState[] */>([]);
+    const [layers, setLayers] = useState<any[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [highestZ, setHighestZ] = useState(1);
     const [isPinching, setIsPinching] = useState(false);
-    // Mutex Lock : tracks if the app is currently processing incoming network data
     const isNetworkUpdate = useRef(false);
+
+    // Prevents stale data from erasing coordinates on click!
+    const layersRef = useRef<any[]>([]);
+    useEffect(() => {
+        layersRef.current = layers;
+    }, [layers]);
 
     const nextId = useRef(1);
     const trRef = useRef<any>(null);
@@ -39,14 +43,8 @@ function EditorApp() {
     const lastDist = useRef<number | null>(null);
     const lastAngle = useRef<number | null>(null);
 
-    // Prevents stale data from broadcasting to the server.
-    const layersRef = useRef<any[]>([]);
     useEffect(() => {
-        layersRef.current = layers;
-    }, [layers]);
-
-    useEffect(() => {
-        // 1. JSON Slow-Path (Spatial & Hydration ONLY)
+        // 1. JSON Slow-Path (Hydration and Setup ONLY. Playback has been stripped out!)
         const unsubscribeJSON = engine.subscribe((data) => {
             if (data.type === 'hydrate') {
                 setLayers(data.layers);
@@ -60,11 +58,9 @@ function EditorApp() {
             }
         });
 
-        // 2. Binary Fast-Path (Real-time Multiplayer Editing)
+        // 2. Binary Fast-Path
         const unsubscribeBinary = engine.subscribeToBinary((id, cx, cy, scale, rotation) => {
-            // 1. LOCK THE MUTEX
             isNetworkUpdate.current = true;
-
             try {
                 if (trRef.current) {
                     const stage = trRef.current.getStage();
@@ -76,16 +72,11 @@ function EditorApp() {
                         node.scaleX(scale);
                         node.scaleY(scale);
                         node.rotation(rotation);
-
-                        if (selectedId === id.toString()) {
-                            trRef.current.forceUpdate();
-                        }
+                        if (selectedId === id.toString()) trRef.current.forceUpdate();
                         node.getLayer().batchDraw();
                     }
                 }
             } finally {
-                // ALWAYS executes, even if the code above crashes
-                // 2. UNLOCK THE MUTEX (Safely returning to user-input mode)
                 isNetworkUpdate.current = false;
             }
         });
@@ -94,9 +85,8 @@ function EditorApp() {
             unsubscribeJSON();
             unsubscribeBinary();
         };
-    }, [selectedId, isPinching]); // Keep dependencies updated so the Transformer check works
+    }, [selectedId, isPinching]);
 
-    // --- ACTIONS ---
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -136,17 +126,17 @@ function EditorApp() {
                 rotation: 0,
                 duration: duration,
                 scale: initialScale,
-                zIndex: highestZ
+                zIndex: highestZ,
+                loop: true // Auto-loop enabled by default
             };
 
-            // Provide a safe default playback state so the Scrubber doesn't crash!
             const defaultPlayback = {
                 status: 'paused',
                 anchorMediaTime: 0,
                 anchorServerTime: engine.getServerTime()
             };
 
-            const newLayer /* VirtualLayerState */ = {
+            const newLayer = {
                 numericId,
                 layerType: 'video',
                 url: data.url,
@@ -155,7 +145,10 @@ function EditorApp() {
             };
 
             setLayers((prev) => [...prev, newLayer]);
+
+            // Register it locally in the Engine so the UI controls work instantly
             engine.setPlayback(numericId, defaultPlayback);
+
             engine.sendJSON({
                 type: 'upsert_layer',
                 numericId,
@@ -165,7 +158,6 @@ function EditorApp() {
                 config
             });
 
-            // Auto-select the newly uploaded video
             setSelectedId(numericId.toString());
         } catch (err) {
             alert('Upload failed. Check Bun server console.');
@@ -174,39 +166,28 @@ function EditorApp() {
 
     const handleBringToFront = () => {
         if (!selectedId) return;
-
         const newZ = highestZ + 1;
         setHighestZ(newZ);
-
         const numericId = parseInt(selectedId);
-
-        // Find the layer and update it
         const layerToUpdate = layers.find((l) => l.numericId === numericId);
         if (!layerToUpdate) return;
 
         const updatedConfig = { ...layerToUpdate.config, zIndex: newZ };
-
-        // Optimistically update local state
         setLayers((prev) =>
             prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
         );
 
-        // Broadcast the updated config to the Wall
         engine.sendJSON({
             type: 'upsert_layer',
             numericId: numericId,
             layerType: 'video',
             url: layerToUpdate.url,
             config: updatedConfig,
-            playback: layerToUpdate.playback // Preserve playback state!
+            playback: engine.getPlayback(numericId) || layerToUpdate.playback
         });
     };
 
-    // --- MULTITOUCH GESTURE LOGIC ---
-    const handleStageInteractionStart = (
-        e: KonvaEventObject<any /* MouseEvent | TouchEvent */>
-    ) => {
-        // 1. DESELECTION: Handle Desktop Click or Single Touch
+    const handleStageInteractionStart = (e: KonvaEventObject<any>) => {
         if (e.evt.touches?.length === 1 || e.type === 'mousedown') {
             const clickedOnEmpty = e.target === e.target.getStage();
             if (clickedOnEmpty && selectedId) {
@@ -214,17 +195,13 @@ function EditorApp() {
                 setSelectedId(null);
             }
         }
-
-        // 2. PINCHING: Handle 2-Finger Touch Start
         if (e.evt.touches?.length === 2 && selectedId) {
             flushNodeState(selectedId);
             setIsPinching(true);
-
             const t1 = e.evt.touches[0];
             const t2 = e.evt.touches[1];
             const p1 = { x: t1.clientX, y: t1.clientY };
             const p2 = { x: t2.clientX, y: t2.clientY };
-
             lastDist.current = getDistance(p1, p2);
             lastAngle.current = getAngle(p1, p2);
             lastCenter.current = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
@@ -233,46 +210,36 @@ function EditorApp() {
 
     const handleTouchMove = (e: any) => {
         e.evt.preventDefault();
-
         if (e.evt.touches.length === 2 && selectedId && trRef.current) {
             const stage = trRef.current.getStage();
             const node = stage.findOne(`#${selectedId}`);
             if (!node) return;
-
             if (node.isDragging()) node.stopDrag();
 
             const t1 = e.evt.touches[0];
             const t2 = e.evt.touches[1];
             const p1 = { x: t1.clientX, y: t1.clientY };
             const p2 = { x: t2.clientX, y: t2.clientY };
-
             const dist = getDistance(p1, p2);
             const angle = getAngle(p1, p2);
             const screenCenter = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
 
             if (!lastDist.current || !lastAngle.current || !lastCenter.current) return;
 
-            // 1. STAGE SCALE CORRECTION (Assuming your Stage has scaleX={0.25})
             const stageScale = stage.scaleX();
             const scaleBy = dist / lastDist.current;
             const angleDelta = angle - lastAngle.current;
 
             const dx = (screenCenter.x - lastCenter.current.x) / stageScale;
             const dy = (screenCenter.y - lastCenter.current.y) / stageScale;
-
             let newX = node.x() + dx;
             let newY = node.y() + dy;
 
-            // 2. CENTER-ORIGIN COMPENSATION MATH
-            // Converts the screen pinch center into logical stage coordinates
             const logicalPinchCenterX = screenCenter.x / stageScale;
             const logicalPinchCenterY = screenCenter.y / stageScale;
-
-            // Pushes the node back against the scale expansion to keep it glued to your fingers
             newX -= (logicalPinchCenterX - newX) * (scaleBy - 1);
             newY -= (logicalPinchCenterY - newY) * (scaleBy - 1);
 
-            // Apply the finalized math
             const newScale = node.scaleX() * scaleBy;
             if (newScale > 0.1 && newScale < 10) {
                 node.scaleX(newScale);
@@ -280,9 +247,7 @@ function EditorApp() {
                 node.x(newX);
                 node.y(newY);
             }
-
             node.rotation(node.rotation() + angleDelta);
-
             trRef.current.getLayer().batchDraw();
             engine.broadcastBinaryMove(
                 parseInt(selectedId),
@@ -299,37 +264,28 @@ function EditorApp() {
     };
 
     const handleTouchEnd = (e: any) => {
-        if (e.evt.touches.length < 2) {
-            setIsPinching(false);
-        }
-
-        // Save the final Multitouch coordinates to the server
+        if (e.evt.touches.length < 2) setIsPinching(false);
         if (selectedId && trRef.current) {
             const stage = trRef.current.getStage();
             const node = stage.findOne(`#${selectedId}`);
-            if (node) {
-                handleTransformEnd({ target: node }, parseInt(selectedId));
-            }
+            if (node) handleTransformEnd({ target: node }, parseInt(selectedId));
         }
-
         lastDist.current = null;
         lastAngle.current = null;
         lastCenter.current = null;
     };
 
     const handleTransform = (e: any, numericId: number) => {
-        // If this event was fired programmatically by the network, drop it!
         if (isNetworkUpdate.current) return;
-
         const node = e.target;
         engine.broadcastBinaryMove(numericId, node.x(), node.y(), node.scaleX(), node.rotation());
     };
 
     const handleTransformEnd = (e: any, numericId: number) => {
         if (isNetworkUpdate.current) return;
-
         const node = e.target;
-        // THE FIX 1: Read from the mirror, not the stale state
+
+        // Must use layersRef to prevent the component from saving old state when dragged
         const layerToUpdate = layersRef.current.find((l) => l.numericId === numericId);
         if (!layerToUpdate) return;
 
@@ -345,7 +301,7 @@ function EditorApp() {
             prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
         );
 
-        // THE FIX 2: Attach the true, active playback state so the Wall doesn't freeze!
+        // Extract actual playback state so moving video doesn't accidentally rewind it for Wall screens
         const truePlayback = engine.getPlayback(numericId) || layerToUpdate.playback;
 
         engine.sendJSON({
@@ -358,28 +314,21 @@ function EditorApp() {
         });
     };
 
-    // Extracts the exact current position of the node and forces a React/Server save
     const flushNodeState = (idToFlush: string) => {
         if (!trRef.current) return;
         const stage = trRef.current.getStage();
         const node = stage.findOne(`#${idToFlush}`);
-        if (node) {
-            // Forcefully trigger the save pipeline
-            handleTransformEnd({ target: node }, parseInt(idToFlush));
-        }
+        if (node) handleTransformEnd({ target: node }, parseInt(idToFlush));
     };
 
-    // Effect to physically attach the Transformer to the selected node
     useEffect(() => {
         if (selectedId && trRef.current) {
-            // Find the node in Konva's internal scene graph
             const node = trRef.current.getStage().findOne(`#${selectedId}`);
             if (node) {
                 trRef.current.nodes([node]);
                 trRef.current.getLayer().batchDraw();
             }
         } else if (trRef.current) {
-            // Detach if nothing is selected
             trRef.current.nodes([]);
             trRef.current.getLayer().batchDraw();
         }
@@ -406,7 +355,6 @@ function EditorApp() {
             >
                 <input type="file" accept="video/mp4" onChange={handleUpload} />
 
-                {/* Only render controls if a video is actively selected */}
                 {selectedId &&
                     (() => {
                         const activeLayer = layers.find(
@@ -456,6 +404,7 @@ function EditorApp() {
                         );
                     })()}
             </div>
+
             <Stage
                 width={window.innerWidth}
                 height={window.innerHeight}
@@ -478,8 +427,8 @@ function EditorApp() {
                                     width={SCREEN_W}
                                     height={SCREEN_H}
                                     stroke="rgba(255, 255, 255, 0.2)"
-                                    strokeWidth={10} // Thick enough to see when zoomed out
-                                    listening={false} // Prevents the grid from capturing mouse clicks
+                                    strokeWidth={10}
+                                    listening={false}
                                 />
                                 <Text
                                     x={col * SCREEN_W + 50}
@@ -492,7 +441,8 @@ function EditorApp() {
                             </Group>
                         );
                     })}
-                    {layers
+
+                    {[...layers]
                         .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
                         .map((layer) => (
                             <KonvaVideo
@@ -509,10 +459,23 @@ function EditorApp() {
                         ref={trRef}
                         keepRatio={true}
                         boundBoxFunc={(oldBox, newBox) => {
-                            if (Math.abs(newBox.width) < 50 || Math.abs(newBox.height) < 50) {
+                            if (Math.abs(newBox.width) < 50 || Math.abs(newBox.height) < 50)
                                 return oldBox;
-                            }
                             return newBox;
+                        }}
+                        onDragEnd={() => {
+                            if (selectedId && trRef.current) {
+                                const node = trRef.current.nodes()[0];
+                                if (node)
+                                    handleTransformEnd({ target: node }, parseInt(selectedId));
+                            }
+                        }}
+                        onTransformEnd={() => {
+                            if (selectedId && trRef.current) {
+                                const node = trRef.current.nodes()[0];
+                                if (node)
+                                    handleTransformEnd({ target: node }, parseInt(selectedId));
+                            }
                         }}
                     />
                 </Layer>
@@ -527,13 +490,16 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
     const [isReady, setIsReady] = useState(false);
 
-    // 1. Setup Video
+    // Use a persistent useRef so the animation loop actually receives network updates
+    const pbRef = useRef(EditorEngine.getInstance().getPlayback(layer.numericId) || layer.playback);
+
     useEffect(() => {
         const vid = document.createElement('video');
         vid.src = layer.url;
         vid.crossOrigin = 'anonymous';
         vid.muted = true;
         vid.preload = 'auto';
+        vid.loop = layer.config.loop ?? true;
 
         const pb = EditorEngine.getInstance().getPlayback(layer.numericId) || layer.playback;
         const targetTime = pb?.anchorMediaTime || 0;
@@ -542,6 +508,7 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
             if (targetTime > 0.05) vid.currentTime = targetTime;
             else setIsReady(true);
         });
+
         vid.addEventListener('seeked', () => {
             setIsReady(true);
             if (vid.paused) imageRef.current?.getLayer()?.batchDraw();
@@ -555,22 +522,26 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
         };
     }, [layer.url, layer.numericId]);
 
-    // 2. Initial Draw
+    useEffect(() => {
+        if (videoElement) {
+            videoElement.loop = layer.config.loop ?? true;
+        }
+    }, [videoElement, layer.config.loop]);
+
     useEffect(() => {
         if (isReady && imageRef.current) {
             requestAnimationFrame(() => imageRef.current?.getLayer()?.batchDraw());
         }
     }, [isReady]);
 
-    // 3. Direct Playback Engine Loop (Bypasses React!)
+    // Bypasses React: Listens natively to the Engine to prevent frame flashes
     useEffect(() => {
         if (!videoElement) return;
         const engine = EditorEngine.getInstance();
-        const pbRef = { current: engine.getPlayback(layer.numericId) || layer.playback };
 
         const unsubscribe = engine.subscribeToPlayback((id, pb) => {
             if (id === layer.numericId) {
-                pbRef.current = pb;
+                pbRef.current = pb; // Update the shared memory reference
                 if (pb.status === 'paused') {
                     videoElement.pause();
                     if (Math.abs(videoElement.currentTime - pb.anchorMediaTime) > 0.05) {
@@ -582,15 +553,23 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
 
         let frameId: number;
         const loop = () => {
-            const pb = pbRef.current;
-            if (pb?.status === 'playing') {
+            const currentPb = pbRef.current;
+            if (currentPb?.status === 'playing') {
                 const now = engine.getServerTime();
-                if (now >= pb.anchorServerTime) {
+                if (now >= currentPb.anchorServerTime) {
                     if (videoElement.paused) videoElement.play().catch(() => {});
-                    const expected = pb.anchorMediaTime + (now - pb.anchorServerTime) / 1000;
-                    const drift = expected - videoElement.currentTime;
 
-                    if (Math.abs(drift) > 0.5) videoElement.currentTime = expected;
+                    let expectedTime =
+                        currentPb.anchorMediaTime + (now - currentPb.anchorServerTime) / 1000;
+
+                    // Modulo math keeps the JS Engine in sync with the native HTML5 loop
+                    if ((layer.config.loop ?? true) && layer.config.duration) {
+                        expectedTime = expectedTime % layer.config.duration;
+                    }
+
+                    const drift = expectedTime - videoElement.currentTime;
+
+                    if (Math.abs(drift) > 0.5) videoElement.currentTime = expectedTime;
                     else if (drift > 0.05) videoElement.playbackRate = 1.05;
                     else if (drift < -0.05) videoElement.playbackRate = 0.95;
                     else videoElement.playbackRate = 1.0;
@@ -601,24 +580,12 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
             frameId = requestAnimationFrame(loop);
         };
         frameId = requestAnimationFrame(loop);
+
         return () => {
             unsubscribe();
             cancelAnimationFrame(frameId);
         };
     }, [videoElement, isReady, layer.numericId]);
-
-    // 4. IMPERATIVE POSITIONS (Fixes the snap-back bug)
-    useEffect(() => {
-        if (imageRef.current && !imageRef.current.isDragging() && !isPinching) {
-            imageRef.current.setAttrs({
-                x: layer.config.cx,
-                y: layer.config.cy,
-                scaleX: layer.config.scale,
-                scaleY: layer.config.scale,
-                rotation: layer.config.rotation
-            });
-        }
-    }, [layer.config, isPinching]);
 
     if (!videoElement) return null;
 
@@ -642,15 +609,15 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
     );
 }
 
-// --- SUB-COMPONENT: Contextual Controls & Scrubber ---
-export function PlaybackControls({ layer, engine }: { layer: any; engine: EditorEngine }) {
+// --- SUB-COMPONENT: Smart Playback Controls ---
+export function PlaybackControls({ layer, engine }: { layer: any; engine: any }) {
     const [status, setStatus] = useState(engine.getPlayback(layer.numericId)?.status || 'paused');
 
     useEffect(() => {
-        const unsubscribe = engine.subscribeToPlayback((id, pb) => {
+        const unsubscribe = engine.subscribeToPlayback((id: number, pb: any) => {
             if (id === layer.numericId) setStatus(pb.status);
         });
-        return unsubscribe;
+        return () => unsubscribe(); // Properly typed for void return!
     }, [layer.numericId, engine]);
 
     return (
@@ -714,7 +681,8 @@ export function PlaybackControls({ layer, engine }: { layer: any; engine: Editor
     );
 }
 
-export function VideoScrubber({ layer, engine }: { layer: any; engine: EditorEngine }) {
+// --- SUB-COMPONENT: High-Performance Contextual Video Scrubber ---
+export function VideoScrubber({ layer, engine }: { layer: any; engine: any }) {
     const inputRef = useRef<HTMLInputElement>(null);
     const spanRef = useRef<HTMLSpanElement>(null);
     const isDragging = useRef(false);
@@ -722,10 +690,10 @@ export function VideoScrubber({ layer, engine }: { layer: any; engine: EditorEng
     const pbRef = useRef(engine.getPlayback(layer.numericId) || layer.playback);
 
     useEffect(() => {
-        const unsubscribe = engine.subscribeToPlayback((id, pb) => {
+        const unsubscribe = engine.subscribeToPlayback((id: number, pb: any) => {
             if (id === layer.numericId) pbRef.current = pb;
         });
-        return unsubscribe;
+        return () => unsubscribe(); // Properly typed for void return!
     }, [layer.numericId, engine]);
 
     useEffect(() => {
@@ -737,19 +705,15 @@ export function VideoScrubber({ layer, engine }: { layer: any; engine: EditorEng
 
                 if (pb.status === 'playing') {
                     const now = engine.getServerTime();
-                    const expected =
+                    let expected =
                         pb.anchorMediaTime + Math.max(0, (now - pb.anchorServerTime) / 1000);
 
-                    // Auto-loop / End logic
-                    if (expected >= (layer.config.duration || 0) && !hasTriggeredEnd.current) {
-                        hasTriggeredEnd.current = true;
-                        if (layer.config.loop ?? true) {
-                            engine.sendJSON({
-                                type: 'video_seek',
-                                numericId: layer.numericId,
-                                mediaTime: 0
-                            });
-                        } else {
+                    if (layer.config.loop ?? true) {
+                        if (layer.config.duration) expected = expected % layer.config.duration;
+                        hasTriggeredEnd.current = false;
+                    } else if (expected >= (layer.config.duration || 0)) {
+                        if (!hasTriggeredEnd.current) {
+                            hasTriggeredEnd.current = true;
                             engine.sendJSON({ type: 'video_pause', numericId: layer.numericId });
                             engine.sendJSON({
                                 type: 'video_seek',
@@ -757,10 +721,11 @@ export function VideoScrubber({ layer, engine }: { layer: any; engine: EditorEng
                                 mediaTime: layer.config.duration
                             });
                         }
-                    } else if (expected < (layer.config.duration || 0)) {
+                        expected = layer.config.duration || 0;
+                    } else {
                         hasTriggeredEnd.current = false;
                     }
-                    currentTime = Math.min(expected, layer.config.duration || 0);
+                    currentTime = expected;
                 } else {
                     hasTriggeredEnd.current = false;
                 }
