@@ -38,12 +38,17 @@ function EditorApp() {
     const lastAngle = useRef<number | null>(null);
 
     useEffect(() => {
-        const unsubscribe = engine.subscribe((data) => {
+        // 1. JSON Slow-Path (Hydration, Playback, Z-Index)
+        const unsubscribeJSON = engine.subscribe((data) => {
             if (data.type === 'hydrate') {
                 setLayers(data.layers);
-                if (data.layers.length > 0) {
+                if (data.layers.length > 0)
                     nextId.current = Math.max(...data.layers.map((l: any) => l.numericId)) + 1;
-                }
+            } else if (data.type === 'upsert_layer') {
+                setLayers((prev) => {
+                    const filtered = prev.filter((l) => l.numericId !== data.numericId);
+                    return [...filtered, data];
+                });
             } else if (data.type === 'video_sync' || data.type === 'video_seek') {
                 setLayers((prev) =>
                     prev.map((layer) =>
@@ -54,8 +59,36 @@ function EditorApp() {
                 );
             }
         });
-        return unsubscribe;
-    }, []);
+
+        // 2. Binary Fast-Path (Real-time Multiplayer Editing)
+        const unsubscribeBinary = engine.subscribeToBinary((id, cx, cy, scale, rotation) => {
+            if (!trRef.current) return;
+
+            const stage = trRef.current.getStage();
+            const node = stage.findOne(`#${id}`);
+
+            // Safety check: Only update if THIS specific editor isn't the one actively dragging it
+            if (node && !node.isDragging() && !isPinching) {
+                node.x(cx);
+                node.y(cy);
+                node.scaleX(scale);
+                node.scaleY(scale);
+                node.rotation(rotation);
+
+                // If Editor 2 happens to have the moving video selected, force the Transformer to follow it!
+                if (selectedId === id.toString()) {
+                    trRef.current.forceUpdate();
+                }
+
+                node.getLayer().batchDraw();
+            }
+        });
+
+        return () => {
+            unsubscribeJSON();
+            unsubscribeBinary();
+        };
+    }, [selectedId, isPinching]); // Keep dependencies updated so the Transformer check works
 
     // --- ACTIONS ---
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -541,6 +574,7 @@ function KonvaVideo({
             onDragMove={onTransform}
             onTransform={onTransform}
             onDragEnd={onTransformEnd}
+            onTransformEnd={onTransformEnd}
         />
     );
 }

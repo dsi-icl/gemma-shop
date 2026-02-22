@@ -158,5 +158,11 @@ export default defineWebSocketHandler({
         for (const client of wallClients) {
             client.send(message.rawData);
         }
+        for (const client of editorClients) {
+            if (client !== peer) {
+                // Do not echo back to the sender!
+                client.send(message.rawData);
+            }
+        }
     }
 });

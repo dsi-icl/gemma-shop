@@ -5,11 +5,18 @@ import { throttle } from '@tanstack/pacer';
 const SERVER_URL = `ws://${window.location.hostname}:3000/bus`;
 
 type ServerMessageCallback = (data: any) => void;
-
+type BinaryMessageCallback = (
+    id: number,
+    cx: number,
+    cy: number,
+    scale: number,
+    rotation: number
+) => void;
 export class EditorEngine {
     private static instance: EditorEngine;
     public ws: WebSocket;
     private messageCallbacks = new Set<ServerMessageCallback>();
+    private binaryCallbacks = new Set<BinaryMessageCallback>();
     private cachedHydration: any = null;
     private clockOffset = 0;
     private bestRTT = Infinity;
@@ -25,7 +32,28 @@ export class EditorEngine {
         };
 
         this.ws.onmessage = (event) => {
-            // The Editor mostly receives JSON (like Hydration state)
+            // --- BINARY FAST-PATH PARSER ---
+            if (event.data instanceof ArrayBuffer) {
+                const view = new DataView(event.data);
+                if (view.getUint8(0) === 0x05) {
+                    // Batched Move Opcode
+                    const count = view.getUint16(1, true);
+                    let offset = 3;
+                    for (let i = 0; i < count; i++) {
+                        const id = view.getUint16(offset, true);
+                        const cx = view.getFloat32(offset + 2, true);
+                        const cy = view.getFloat32(offset + 6, true);
+                        const scale = view.getFloat32(offset + 10, true);
+                        const rotation = view.getFloat32(offset + 14, true);
+
+                        this.binaryCallbacks.forEach((cb) => cb(id, cx, cy, scale, rotation));
+                        offset += 18;
+                    }
+                }
+                return;
+            }
+
+            // --- JSON SLOW-PATH (like Hydration state) ---
             if (typeof event.data === 'string') {
                 const data = JSON.parse(event.data);
 
@@ -83,6 +111,13 @@ export class EditorEngine {
 
         return () => {
             this.messageCallbacks.delete(cb);
+        };
+    }
+
+    public subscribeToBinary(cb: BinaryMessageCallback) {
+        this.binaryCallbacks.add(cb);
+        return () => {
+            this.binaryCallbacks.delete(cb);
         };
     }
 
