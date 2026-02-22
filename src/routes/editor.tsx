@@ -496,30 +496,18 @@ function EditorApp() {
 function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }: any) {
     const imageRef = useRef<any>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
-    const [isReady, setIsReady] = useState(false);
-
-    // Use a persistent useRef so the animation loop actually receives network updates
-    const pbRef = useRef(EditorEngine.getInstance().getPlayback(layer.numericId) || layer.playback);
 
     useEffect(() => {
         const vid = document.createElement('video');
-        vid.src = layer.url;
         vid.crossOrigin = 'anonymous';
         vid.muted = true;
-        vid.preload = 'auto';
+        vid.playsInline = true;
         vid.loop = layer.config.loop ?? true;
+        vid.src = layer.url;
 
-        const pb = EditorEngine.getInstance().getPlayback(layer.numericId) || layer.playback;
-        const targetTime = pb?.anchorMediaTime || 0;
-
-        vid.addEventListener('loadeddata', () => {
-            if (targetTime > 0.05) vid.currentTime = targetTime;
-            else setIsReady(true);
-        });
-
-        vid.addEventListener('seeked', () => {
-            setIsReady(true);
-            if (vid.paused) imageRef.current?.getLayer()?.batchDraw();
+        // Force a canvas paint the exact millisecond the browser has a frame ready
+        vid.addEventListener('canplay', () => {
+            imageRef.current?.getLayer()?.batchDraw();
         });
 
         setVideoElement(vid);
@@ -530,30 +518,25 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
         };
     }, [layer.url, layer.numericId]);
 
+    // Seamlessly toggle loop without unmounting the video
     useEffect(() => {
-        if (videoElement) {
-            videoElement.loop = layer.config.loop ?? true;
-        }
-    }, [videoElement, layer.config.loop]);
+        if (videoElement) videoElement.loop = layer.config.loop ?? true;
+    }, [layer.config.loop, videoElement]);
 
-    useEffect(() => {
-        if (isReady && imageRef.current) {
-            requestAnimationFrame(() => imageRef.current?.getLayer()?.batchDraw());
-        }
-    }, [isReady]);
-
-    // Bypasses React: Listens natively to the Engine to prevent frame flashes
+    // 3. Playback Loop (Completely bypasses React state for 60fps performance)
     useEffect(() => {
         if (!videoElement) return;
         const engine = EditorEngine.getInstance();
+        const pbRef = { current: engine.getPlayback(layer.numericId) || layer.playback };
 
         const unsubscribe = engine.subscribeToPlayback((id, pb) => {
             if (id === layer.numericId) {
-                pbRef.current = pb; // Update the shared memory reference
+                pbRef.current = pb;
                 if (pb.status === 'paused') {
                     videoElement.pause();
                     if (Math.abs(videoElement.currentTime - pb.anchorMediaTime) > 0.05) {
                         videoElement.currentTime = pb.anchorMediaTime;
+                        imageRef.current?.getLayer()?.batchDraw();
                     }
                 }
             }
@@ -561,28 +544,26 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
 
         let frameId: number;
         const loop = () => {
-            const currentPb = pbRef.current;
-            if (currentPb?.status === 'playing') {
+            const pb = pbRef.current;
+            if (pb?.status === 'playing') {
                 const now = engine.getServerTime();
-                if (now >= currentPb.anchorServerTime) {
+                if (now >= pb.anchorServerTime) {
                     if (videoElement.paused) videoElement.play().catch(() => {});
 
-                    let expectedTime =
-                        currentPb.anchorMediaTime + (now - currentPb.anchorServerTime) / 1000;
+                    let expected = pb.anchorMediaTime + (now - pb.anchorServerTime) / 1000;
 
-                    // Modulo math keeps the JS Engine in sync with the native HTML5 loop
+                    // Native wrapping math to match the browser's loop
                     if ((layer.config.loop ?? true) && layer.config.duration) {
-                        expectedTime = expectedTime % layer.config.duration;
+                        expected = expected % layer.config.duration;
                     }
 
-                    const drift = expectedTime - videoElement.currentTime;
-
-                    if (Math.abs(drift) > 0.5) videoElement.currentTime = expectedTime;
+                    const drift = expected - videoElement.currentTime;
+                    if (Math.abs(drift) > 0.5) videoElement.currentTime = expected;
                     else if (drift > 0.05) videoElement.playbackRate = 1.05;
                     else if (drift < -0.05) videoElement.playbackRate = 0.95;
                     else videoElement.playbackRate = 1.0;
 
-                    if (isReady) imageRef.current?.getLayer()?.batchDraw();
+                    imageRef.current?.getLayer()?.batchDraw();
                 }
             }
             frameId = requestAnimationFrame(loop);
@@ -593,15 +574,18 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
             unsubscribe();
             cancelAnimationFrame(frameId);
         };
-    }, [videoElement, isReady, layer.numericId]);
-
-    if (!videoElement) return null;
+    }, [videoElement, layer.numericId, layer.config.loop, layer.config.duration]);
 
     return (
         <KonvaImage
             ref={imageRef}
-            image={isReady ? videoElement : undefined}
+            image={videoElement || undefined}
             id={layer.numericId.toString()}
+s            x={layer.config.cx}
+            y={layer.config.cy}
+            scaleX={layer.config.scale}
+            scaleY={layer.config.scale}
+            rotation={layer.config.rotation}
             width={layer.config.w}
             height={layer.config.h}
             offsetX={layer.config.w / 2}
