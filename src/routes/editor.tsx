@@ -39,8 +39,14 @@ function EditorApp() {
     const lastDist = useRef<number | null>(null);
     const lastAngle = useRef<number | null>(null);
 
+    // Prevents stale data from broadcasting to the server.
+    const layersRef = useRef<any[]>([]);
     useEffect(() => {
-        // 1. JSON Slow-Path (Hydration, Playback, Z-Index)
+        layersRef.current = layers;
+    }, [layers]);
+
+    useEffect(() => {
+        // 1. JSON Slow-Path (Spatial & Hydration ONLY)
         const unsubscribeJSON = engine.subscribe((data) => {
             if (data.type === 'hydrate') {
                 setLayers(data.layers);
@@ -51,14 +57,6 @@ function EditorApp() {
                     const filtered = prev.filter((l) => l.numericId !== data.numericId);
                     return [...filtered, data];
                 });
-            } else if (data.type === 'video_sync' || data.type === 'video_seek') {
-                setLayers((prev) =>
-                    prev.map((layer) =>
-                        layer.numericId === data.numericId
-                            ? { ...layer, playback: data.playback }
-                            : layer
-                    )
-                );
             }
         });
 
@@ -67,28 +65,29 @@ function EditorApp() {
             // 1. LOCK THE MUTEX
             isNetworkUpdate.current = true;
 
-            if (trRef.current) {
-                const stage = trRef.current.getStage();
-                const node = stage.findOne(`#${id}`);
+            try {
+                if (trRef.current) {
+                    const stage = trRef.current.getStage();
+                    const node = stage.findOne(`#${id}`);
 
-                if (node && !node.isDragging() && !isPinching) {
-                    node.x(cx);
-                    node.y(cy);
-                    node.scaleX(scale);
-                    node.scaleY(scale);
-                    node.rotation(rotation);
+                    if (node && !node.isDragging() && !isPinching) {
+                        node.x(cx);
+                        node.y(cy);
+                        node.scaleX(scale);
+                        node.scaleY(scale);
+                        node.rotation(rotation);
 
-                    // This programmatic update will fire native events, but our lock is active!
-                    if (selectedId === id.toString()) {
-                        trRef.current.forceUpdate();
+                        if (selectedId === id.toString()) {
+                            trRef.current.forceUpdate();
+                        }
+                        node.getLayer().batchDraw();
                     }
-
-                    node.getLayer().batchDraw();
                 }
+            } finally {
+                // ALWAYS executes, even if the code above crashes
+                // 2. UNLOCK THE MUTEX (Safely returning to user-input mode)
+                isNetworkUpdate.current = false;
             }
-
-            // 2. UNLOCK THE MUTEX (Safely returning to user-input mode)
-            isNetworkUpdate.current = false;
         });
 
         return () => {
@@ -110,14 +109,19 @@ function EditorApp() {
             if (!res.ok) throw new Error('Upload failed');
             const data = await res.json();
 
-            const { videoWidth, videoHeight } = await new Promise<{
+            const { videoWidth, videoHeight, duration } = await new Promise<{
                 videoWidth: number;
                 videoHeight: number;
+                duration: number;
             }>((resolve) => {
                 const tempVid = document.createElement('video');
                 tempVid.src = data.url;
                 tempVid.addEventListener('loadedmetadata', () => {
-                    resolve({ videoWidth: tempVid.videoWidth, videoHeight: tempVid.videoHeight });
+                    resolve({
+                        videoWidth: tempVid.videoWidth,
+                        videoHeight: tempVid.videoHeight,
+                        duration: tempVid.duration
+                    });
                 });
             });
 
@@ -130,22 +134,33 @@ function EditorApp() {
                 w: videoWidth,
                 h: videoHeight,
                 rotation: 0,
+                duration: duration,
                 scale: initialScale,
                 zIndex: highestZ
+            };
+
+            // Provide a safe default playback state so the Scrubber doesn't crash!
+            const defaultPlayback = {
+                status: 'paused',
+                anchorMediaTime: 0,
+                anchorServerTime: engine.getServerTime()
             };
 
             const newLayer /* VirtualLayerState */ = {
                 numericId,
                 layerType: 'video',
                 url: data.url,
+                playback: defaultPlayback,
                 config
             };
 
             setLayers((prev) => [...prev, newLayer]);
+            engine.setPlayback(numericId, defaultPlayback);
             engine.sendJSON({
                 type: 'upsert_layer',
                 numericId,
                 layerType: 'video',
+                playback: defaultPlayback,
                 url: data.url,
                 config
             });
@@ -188,36 +203,43 @@ function EditorApp() {
     };
 
     // --- MULTITOUCH GESTURE LOGIC ---
-    const handleTouchStart = (e: KonvaEventObject<any /* MouseEvent | TouchEvent */>) => {
-        if (e.evt.touches?.length === 1) {
+    const handleStageInteractionStart = (
+        e: KonvaEventObject<any /* MouseEvent | TouchEvent */>
+    ) => {
+        // 1. DESELECTION: Handle Desktop Click or Single Touch
+        if (e.evt.touches?.length === 1 || e.type === 'mousedown') {
             const clickedOnEmpty = e.target === e.target.getStage();
-            if (clickedOnEmpty) setSelectedId(null);
+            if (clickedOnEmpty && selectedId) {
+                flushNodeState(selectedId);
+                setSelectedId(null);
+            }
         }
 
-        // When two fingers hit, disable native dragging!
-        if (e.evt.touches?.length === 2) {
+        // 2. PINCHING: Handle 2-Finger Touch Start
+        if (e.evt.touches?.length === 2 && selectedId) {
+            flushNodeState(selectedId);
             setIsPinching(true);
 
-            if (selectedId) {
-                const t1 = e.evt.touches[0];
-                const t2 = e.evt.touches[1];
-                const p1 = { x: t1.clientX, y: t1.clientY };
-                const p2 = { x: t2.clientX, y: t2.clientY };
+            const t1 = e.evt.touches[0];
+            const t2 = e.evt.touches[1];
+            const p1 = { x: t1.clientX, y: t1.clientY };
+            const p2 = { x: t2.clientX, y: t2.clientY };
 
-                lastDist.current = getDistance(p1, p2);
-                lastAngle.current = getAngle(p1, p2);
-                lastCenter.current = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-            }
+            lastDist.current = getDistance(p1, p2);
+            lastAngle.current = getAngle(p1, p2);
+            lastCenter.current = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
         }
     };
 
-    const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
+    const handleTouchMove = (e: any) => {
         e.evt.preventDefault();
 
-        if (e.evt.touches?.length === 2 && selectedId && trRef.current) {
+        if (e.evt.touches.length === 2 && selectedId && trRef.current) {
             const stage = trRef.current.getStage();
             const node = stage.findOne(`#${selectedId}`);
             if (!node) return;
+
+            if (node.isDragging()) node.stopDrag();
 
             const t1 = e.evt.touches[0];
             const t2 = e.evt.touches[1];
@@ -226,24 +248,40 @@ function EditorApp() {
 
             const dist = getDistance(p1, p2);
             const angle = getAngle(p1, p2);
-            const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+            const screenCenter = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
 
             if (!lastDist.current || !lastAngle.current || !lastCenter.current) return;
 
+            // 1. STAGE SCALE CORRECTION (Assuming your Stage has scaleX={0.25})
+            const stageScale = stage.scaleX();
             const scaleBy = dist / lastDist.current;
             const angleDelta = angle - lastAngle.current;
-            const dx = center.x - lastCenter.current.x;
-            const dy = center.y - lastCenter.current.y;
 
+            const dx = (screenCenter.x - lastCenter.current.x) / stageScale;
+            const dy = (screenCenter.y - lastCenter.current.y) / stageScale;
+
+            let newX = node.x() + dx;
+            let newY = node.y() + dy;
+
+            // 2. CENTER-ORIGIN COMPENSATION MATH
+            // Converts the screen pinch center into logical stage coordinates
+            const logicalPinchCenterX = screenCenter.x / stageScale;
+            const logicalPinchCenterY = screenCenter.y / stageScale;
+
+            // Pushes the node back against the scale expansion to keep it glued to your fingers
+            newX -= (logicalPinchCenterX - newX) * (scaleBy - 1);
+            newY -= (logicalPinchCenterY - newY) * (scaleBy - 1);
+
+            // Apply the finalized math
             const newScale = node.scaleX() * scaleBy;
             if (newScale > 0.1 && newScale < 10) {
                 node.scaleX(newScale);
                 node.scaleY(newScale);
+                node.x(newX);
+                node.y(newY);
             }
 
             node.rotation(node.rotation() + angleDelta);
-            node.x(node.x() + dx);
-            node.y(node.y() + dy);
 
             trRef.current.getLayer().batchDraw();
             engine.broadcastBinaryMove(
@@ -256,15 +294,24 @@ function EditorApp() {
 
             lastDist.current = dist;
             lastAngle.current = angle;
-            lastCenter.current = center;
+            lastCenter.current = screenCenter;
         }
     };
 
-    const handleTouchEnd = (e: KonvaEventObject<TouchEvent>) => {
-        // If fewer than 2 fingers remain, re-enable standard single-finger dragging
-        if (e.evt.touches?.length < 2) {
+    const handleTouchEnd = (e: any) => {
+        if (e.evt.touches.length < 2) {
             setIsPinching(false);
         }
+
+        // Save the final Multitouch coordinates to the server
+        if (selectedId && trRef.current) {
+            const stage = trRef.current.getStage();
+            const node = stage.findOne(`#${selectedId}`);
+            if (node) {
+                handleTransformEnd({ target: node }, parseInt(selectedId));
+            }
+        }
+
         lastDist.current = null;
         lastAngle.current = null;
         lastCenter.current = null;
@@ -279,11 +326,11 @@ function EditorApp() {
     };
 
     const handleTransformEnd = (e: any, numericId: number) => {
-        // Drop network-triggered updates
         if (isNetworkUpdate.current) return;
 
         const node = e.target;
-        const layerToUpdate = layers.find((l) => l.numericId === numericId);
+        // THE FIX 1: Read from the mirror, not the stale state
+        const layerToUpdate = layersRef.current.find((l) => l.numericId === numericId);
         if (!layerToUpdate) return;
 
         const updatedConfig = {
@@ -298,28 +345,28 @@ function EditorApp() {
             prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
         );
 
+        // THE FIX 2: Attach the true, active playback state so the Wall doesn't freeze!
+        const truePlayback = engine.getPlayback(numericId) || layerToUpdate.playback;
+
         engine.sendJSON({
             type: 'upsert_layer',
             numericId,
             layerType: 'video',
             url: layerToUpdate.url,
             config: updatedConfig,
-            playback: layerToUpdate.playback
+            playback: truePlayback
         });
     };
 
-    const broadcastPlayback = (action: string) => {
-        // We do not await or delay these. We slam the WebSocket with the payload
-        // as fast as the JS thread can serialize them, ensuring they are processed
-        // by the Server in the same millisecond.
-        layers.forEach((layer) => {
-            if (action === 'play')
-                engine.sendJSON({ type: 'video_play', numericId: layer.numericId });
-            if (action === 'pause')
-                engine.sendJSON({ type: 'video_pause', numericId: layer.numericId });
-            if (action === 'rewind')
-                engine.sendJSON({ type: 'video_seek', numericId: layer.numericId, mediaTime: 0 });
-        });
+    // Extracts the exact current position of the node and forces a React/Server save
+    const flushNodeState = (idToFlush: string) => {
+        if (!trRef.current) return;
+        const stage = trRef.current.getStage();
+        const node = stage.findOne(`#${idToFlush}`);
+        if (node) {
+            // Forcefully trigger the save pipeline
+            handleTransformEnd({ target: node }, parseInt(idToFlush));
+        }
     };
 
     // Effect to physically attach the Transformer to the selected node
@@ -340,7 +387,7 @@ function EditorApp() {
 
     return (
         <div style={{ width: '100vw', height: '100vh', margin: 0 }}>
-            {/* Control Panel */}
+            {/* Dynamic Control Panel */}
             <div
                 style={{
                     position: 'absolute',
@@ -353,31 +400,67 @@ function EditorApp() {
                     display: 'flex',
                     gap: '10px',
                     alignItems: 'center',
-                    scale: 3,
+                    scale: 2,
                     transformOrigin: 'left bottom'
                 }}
             >
                 <input type="file" accept="video/mp4" onChange={handleUpload} />
-                <div
-                    style={{ borderLeft: '1px solid #ccc', height: '24px', margin: '0 10px' }}
-                ></div>
-                <button onClick={() => broadcastPlayback('rewind')}>⏮</button>
-                <button onClick={() => broadcastPlayback('play')}>▶</button>
-                <button onClick={() => broadcastPlayback('pause')}>⏸</button>
-                <div
-                    style={{ borderLeft: '1px solid #ccc', height: '24px', margin: '0 10px' }}
-                ></div>
-                <button onClick={handleBringToFront} disabled={!selectedId}>
-                    Bring to Front
-                </button>
-            </div>
 
-            {/* Bind checkDeselect to the Stage */}
+                {/* Only render controls if a video is actively selected */}
+                {selectedId &&
+                    (() => {
+                        const activeLayer = layers.find(
+                            (l) => l.numericId === parseInt(selectedId)
+                        );
+                        if (!activeLayer) return null;
+
+                        return (
+                            <>
+                                <div
+                                    style={{
+                                        borderLeft: '1px solid #ccc',
+                                        height: '24px',
+                                        margin: '0 10px'
+                                    }}
+                                ></div>
+
+                                <PlaybackControls
+                                    key={`pc_${activeLayer.numericId}`}
+                                    layer={activeLayer}
+                                    engine={engine}
+                                />
+
+                                <div
+                                    style={{
+                                        borderLeft: '1px solid #ccc',
+                                        height: '24px',
+                                        margin: '0 10px'
+                                    }}
+                                ></div>
+
+                                <VideoScrubber
+                                    key={`vs_${activeLayer.numericId}`}
+                                    layer={activeLayer}
+                                    engine={engine}
+                                />
+
+                                <div
+                                    style={{
+                                        borderLeft: '1px solid #ccc',
+                                        height: '24px',
+                                        margin: '0 10px'
+                                    }}
+                                ></div>
+                                <button onClick={handleBringToFront}>Bring to Front</button>
+                            </>
+                        );
+                    })()}
+            </div>
             <Stage
                 width={window.innerWidth}
                 height={window.innerHeight}
-                onMouseDown={handleTouchStart}
-                onTouchStart={handleTouchStart}
+                onMouseDown={handleStageInteractionStart}
+                onTouchStart={handleStageInteractionStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 scaleX={0.25}
@@ -417,16 +500,15 @@ function EditorApp() {
                                 layer={layer}
                                 isPinching={isPinching}
                                 onSelect={() => setSelectedId(layer.numericId.toString())}
-                                onTransform={(e) => handleTransform(e, layer.numericId)}
-                                onTransformEnd={(e) => handleTransformEnd(e, layer.numericId)}
+                                onTransform={(e: any) => handleTransform(e, layer.numericId)}
+                                onTransformEnd={(e: any) => handleTransformEnd(e, layer.numericId)}
                             />
                         ))}
 
                     <Transformer
                         ref={trRef}
-                        keepRatio={true} // Forces uniform scaling (maintains aspect ratio)
+                        keepRatio={true}
                         boundBoxFunc={(oldBox, newBox) => {
-                            // Prevent scaling the video into oblivion (min size 50px)
                             if (Math.abs(newBox.width) < 50 || Math.abs(newBox.height) < 50) {
                                 return oldBox;
                             }
@@ -440,24 +522,12 @@ function EditorApp() {
 }
 
 // --- SUB-COMPONENT: Live Video inside Konva ---
-function KonvaVideo({
-    layer,
-    isPinching,
-    onSelect,
-    onTransform,
-    onTransformEnd
-}: {
-    layer: any;
-    isPinching: boolean;
-    onSelect: () => void;
-    onTransform: (e: any) => void;
-    onTransformEnd: (e: any) => void;
-}) {
+function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }: any) {
     const imageRef = useRef<any>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
     const [isReady, setIsReady] = useState(false);
 
-    // 1. Setup the element and strictly manage the Ready state
+    // 1. Setup Video
     useEffect(() => {
         const vid = document.createElement('video');
         vid.src = layer.url;
@@ -465,117 +535,102 @@ function KonvaVideo({
         vid.muted = true;
         vid.preload = 'auto';
 
-        const targetTime = layer.playback?.anchorMediaTime || 0;
+        const pb = EditorEngine.getInstance().getPlayback(layer.numericId) || layer.playback;
+        const targetTime = pb?.anchorMediaTime || 0;
 
         vid.addEventListener('loadeddata', () => {
-            // If we need to seek, start the async seek. Do not mark as ready yet.
-            if (targetTime > 0.05) {
-                vid.currentTime = targetTime;
-            } else {
-                // If it's starting at 0, it's ready right now.
-                setIsReady(true);
-            }
+            if (targetTime > 0.05) vid.currentTime = targetTime;
+            else setIsReady(true);
         });
-
         vid.addEventListener('seeked', () => {
-            // The exact frame has been extracted by the GPU.
             setIsReady(true);
+            if (vid.paused) imageRef.current?.getLayer()?.batchDraw();
         });
 
         setVideoElement(vid);
-
         return () => {
             vid.pause();
             vid.removeAttribute('src');
             vid.load();
         };
-    }, [layer.url]);
+    }, [layer.url, layer.numericId]);
 
-    // Listen for React to actually commit the 'isReady' state to the DOM/Konva Node
+    // 2. Initial Draw
     useEffect(() => {
         if (isReady && imageRef.current) {
-            // Wait one animation frame to ensure Konva has ingested the new `image={videoElement}` prop
-            requestAnimationFrame(() => {
-                imageRef.current?.getLayer()?.batchDraw();
-            });
+            requestAnimationFrame(() => imageRef.current?.getLayer()?.batchDraw());
         }
     }, [isReady]);
 
-    // 2. Playback Controller
+    // 3. Direct Playback Engine Loop (Bypasses React!)
     useEffect(() => {
-        if (!videoElement || !layer.playback) return;
+        if (!videoElement) return;
+        const engine = EditorEngine.getInstance();
+        const pbRef = { current: engine.getPlayback(layer.numericId) || layer.playback };
 
-        let frameId: number;
-
-        if (layer.playback.status === 'paused') {
-            videoElement.pause();
-
-            if (Math.abs(videoElement.currentTime - layer.playback.anchorMediaTime) > 0.05) {
-                videoElement.currentTime = layer.playback.anchorMediaTime;
-            } else if (isReady) {
-                // If it's already at the right time and ready, just make sure it's painted
-                requestAnimationFrame(() => {
-                    imageRef.current?.getLayer()?.batchDraw();
-                });
-            }
-        } else if (layer.playback.status === 'playing') {
-            const loop = () => {
-                const engine = EditorEngine.getInstance();
-                const now = engine.getServerTime();
-
-                if (now >= layer.playback.anchorServerTime) {
-                    if (videoElement.paused) {
-                        videoElement
-                            .play()
-                            .catch((e) => console.warn('Editor autoplay blocked', e));
-                    }
-
-                    const expectedTime =
-                        layer.playback.anchorMediaTime +
-                        (now - layer.playback.anchorServerTime) / 1000;
-                    const drift = expectedTime - videoElement.currentTime;
-
-                    if (Math.abs(drift) > 0.5) {
-                        videoElement.currentTime = expectedTime;
-                    } else if (drift > 0.05) {
-                        videoElement.playbackRate = 1.05;
-                    } else if (drift < -0.05) {
-                        videoElement.playbackRate = 0.95;
-                    } else {
-                        videoElement.playbackRate = 1.0;
-                    }
-
-                    if (isReady) {
-                        imageRef.current?.getLayer()?.batchDraw();
+        const unsubscribe = engine.subscribeToPlayback((id, pb) => {
+            if (id === layer.numericId) {
+                pbRef.current = pb;
+                if (pb.status === 'paused') {
+                    videoElement.pause();
+                    if (Math.abs(videoElement.currentTime - pb.anchorMediaTime) > 0.05) {
+                        videoElement.currentTime = pb.anchorMediaTime;
                     }
                 }
-                frameId = requestAnimationFrame(loop);
-            };
-            frameId = requestAnimationFrame(loop);
-        }
+            }
+        });
 
-        return () => {
-            if (frameId) cancelAnimationFrame(frameId);
+        let frameId: number;
+        const loop = () => {
+            const pb = pbRef.current;
+            if (pb?.status === 'playing') {
+                const now = engine.getServerTime();
+                if (now >= pb.anchorServerTime) {
+                    if (videoElement.paused) videoElement.play().catch(() => {});
+                    const expected = pb.anchorMediaTime + (now - pb.anchorServerTime) / 1000;
+                    const drift = expected - videoElement.currentTime;
+
+                    if (Math.abs(drift) > 0.5) videoElement.currentTime = expected;
+                    else if (drift > 0.05) videoElement.playbackRate = 1.05;
+                    else if (drift < -0.05) videoElement.playbackRate = 0.95;
+                    else videoElement.playbackRate = 1.0;
+
+                    if (isReady) imageRef.current?.getLayer()?.batchDraw();
+                }
+            }
+            frameId = requestAnimationFrame(loop);
         };
-    }, [layer.playback, videoElement, isReady]); // Make sure isReady is in the dependency array!
+        frameId = requestAnimationFrame(loop);
+        return () => {
+            unsubscribe();
+            cancelAnimationFrame(frameId);
+        };
+    }, [videoElement, isReady, layer.numericId]);
+
+    // 4. IMPERATIVE POSITIONS (Fixes the snap-back bug)
+    useEffect(() => {
+        if (imageRef.current && !imageRef.current.isDragging() && !isPinching) {
+            imageRef.current.setAttrs({
+                x: layer.config.cx,
+                y: layer.config.cy,
+                scaleX: layer.config.scale,
+                scaleY: layer.config.scale,
+                rotation: layer.config.rotation
+            });
+        }
+    }, [layer.config, isPinching]);
 
     if (!videoElement) return null;
 
     return (
         <KonvaImage
             ref={imageRef}
-            // Konva only receives the video element AFTER the frame is confirmed ready
             image={isReady ? videoElement : undefined}
             id={layer.numericId.toString()}
-            x={layer.config.cx}
-            y={layer.config.cy}
             width={layer.config.w}
             height={layer.config.h}
             offsetX={layer.config.w / 2}
             offsetY={layer.config.h / 2}
-            scaleX={layer.config.scale}
-            scaleY={layer.config.scale}
-            rotation={layer.config.rotation}
             draggable={!isPinching}
             onClick={onSelect}
             onTap={onSelect}
@@ -584,5 +639,183 @@ function KonvaVideo({
             onDragEnd={onTransformEnd}
             onTransformEnd={onTransformEnd}
         />
+    );
+}
+
+// --- SUB-COMPONENT: Contextual Controls & Scrubber ---
+export function PlaybackControls({ layer, engine }: { layer: any; engine: EditorEngine }) {
+    const [status, setStatus] = useState(engine.getPlayback(layer.numericId)?.status || 'paused');
+
+    useEffect(() => {
+        const unsubscribe = engine.subscribeToPlayback((id, pb) => {
+            if (id === layer.numericId) setStatus(pb.status);
+        });
+        return unsubscribe;
+    }, [layer.numericId, engine]);
+
+    return (
+        <>
+            <button
+                onClick={() =>
+                    engine.sendJSON({
+                        type: 'video_seek',
+                        numericId: layer.numericId,
+                        mediaTime: 0
+                    })
+                }
+            >
+                ⏮
+            </button>
+            {status === 'paused' ? (
+                <button
+                    onClick={() =>
+                        engine.sendJSON({ type: 'video_play', numericId: layer.numericId })
+                    }
+                >
+                    ▶ Play
+                </button>
+            ) : (
+                <button
+                    onClick={() =>
+                        engine.sendJSON({ type: 'video_pause', numericId: layer.numericId })
+                    }
+                >
+                    ⏸ Pause
+                </button>
+            )}
+
+            <label
+                style={{
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    marginLeft: '10px'
+                }}
+            >
+                <input
+                    type="checkbox"
+                    checked={layer.config.loop ?? true}
+                    onChange={(e) => {
+                        const updatedConfig = { ...layer.config, loop: e.target.checked };
+                        engine.sendJSON({
+                            type: 'upsert_layer',
+                            numericId: layer.numericId,
+                            layerType: 'video',
+                            url: layer.url,
+                            config: updatedConfig,
+                            playback: engine.getPlayback(layer.numericId)
+                        });
+                    }}
+                />
+                Loop
+            </label>
+        </>
+    );
+}
+
+export function VideoScrubber({ layer, engine }: { layer: any; engine: EditorEngine }) {
+    const inputRef = useRef<HTMLInputElement>(null);
+    const spanRef = useRef<HTMLSpanElement>(null);
+    const isDragging = useRef(false);
+    const hasTriggeredEnd = useRef(false);
+    const pbRef = useRef(engine.getPlayback(layer.numericId) || layer.playback);
+
+    useEffect(() => {
+        const unsubscribe = engine.subscribeToPlayback((id, pb) => {
+            if (id === layer.numericId) pbRef.current = pb;
+        });
+        return unsubscribe;
+    }, [layer.numericId, engine]);
+
+    useEffect(() => {
+        let frameId: number;
+        const loop = () => {
+            const pb = pbRef.current;
+            if (pb && inputRef.current && spanRef.current) {
+                let currentTime = pb.anchorMediaTime || 0;
+
+                if (pb.status === 'playing') {
+                    const now = engine.getServerTime();
+                    const expected =
+                        pb.anchorMediaTime + Math.max(0, (now - pb.anchorServerTime) / 1000);
+
+                    // Auto-loop / End logic
+                    if (expected >= (layer.config.duration || 0) && !hasTriggeredEnd.current) {
+                        hasTriggeredEnd.current = true;
+                        if (layer.config.loop ?? true) {
+                            engine.sendJSON({
+                                type: 'video_seek',
+                                numericId: layer.numericId,
+                                mediaTime: 0
+                            });
+                        } else {
+                            engine.sendJSON({ type: 'video_pause', numericId: layer.numericId });
+                            engine.sendJSON({
+                                type: 'video_seek',
+                                numericId: layer.numericId,
+                                mediaTime: layer.config.duration
+                            });
+                        }
+                    } else if (expected < (layer.config.duration || 0)) {
+                        hasTriggeredEnd.current = false;
+                    }
+                    currentTime = Math.min(expected, layer.config.duration || 0);
+                } else {
+                    hasTriggeredEnd.current = false;
+                }
+
+                if (!isDragging.current) {
+                    inputRef.current.value = currentTime.toString();
+                    spanRef.current.innerText = `${currentTime.toFixed(1)}s`;
+                }
+            }
+            frameId = requestAnimationFrame(loop);
+        };
+        frameId = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(frameId);
+    }, [layer.config.duration, layer.config.loop, layer.numericId, engine]);
+
+    const handleInput = (e: React.FormEvent<HTMLInputElement>) => {
+        if (spanRef.current)
+            spanRef.current.innerText = `${parseFloat(e.currentTarget.value).toFixed(1)}s`;
+    };
+
+    const handleSeek = () => {
+        isDragging.current = false;
+        if (inputRef.current) {
+            engine.sendJSON({
+                type: 'video_seek',
+                numericId: layer.numericId,
+                mediaTime: parseFloat(inputRef.current.value)
+            });
+        }
+    };
+
+    const safeTime = pbRef.current?.anchorMediaTime || 0;
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '300px' }}>
+            <span
+                ref={spanRef}
+                style={{ fontSize: '12px', fontFamily: 'monospace', width: '40px' }}
+            >
+                {safeTime.toFixed(1)}s
+            </span>
+            <input
+                ref={inputRef}
+                type="range"
+                min="0"
+                max={layer.config.duration || 100}
+                step="0.01"
+                defaultValue={safeTime}
+                onPointerDown={() => {
+                    isDragging.current = true;
+                }}
+                onInput={handleInput}
+                onPointerUp={handleSeek}
+                style={{ flexGrow: 1, cursor: 'pointer' }}
+            />
+        </div>
     );
 }

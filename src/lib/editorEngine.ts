@@ -12,11 +12,15 @@ type BinaryMessageCallback = (
     scale: number,
     rotation: number
 ) => void;
+type PlaybackCallback = (id: number, playback: any) => void;
+
 export class EditorEngine {
     private static instance: EditorEngine;
     public ws: WebSocket;
     private messageCallbacks = new Set<ServerMessageCallback>();
     private binaryCallbacks = new Set<BinaryMessageCallback>();
+    private playbackCallbacks = new Set<PlaybackCallback>();
+    private playbackStates = new Map<number, any>();
     private cachedHydration: any = null;
     private clockOffset = 0;
     private bestRTT = Infinity;
@@ -57,15 +61,26 @@ export class EditorEngine {
             if (typeof event.data === 'string') {
                 const data = JSON.parse(event.data);
 
-                // Intercept Pong to calculate time difference
                 if (data.type === 'pong') {
                     this.handlePong(data);
                     return;
                 }
-                // Intercept and cache the hydration payload
+
+                // Intercept Playback. Save it, broadcast it, and STOP it from reaching React.
+                if (data.type === 'video_sync' || data.type === 'video_seek') {
+                    this.playbackStates.set(data.numericId, data.playback);
+                    this.playbackCallbacks.forEach((cb) => cb(data.numericId, data.playback));
+                    return;
+                }
+
                 if (data.type === 'hydrate') {
                     this.cachedHydration = data;
+                    // Populate the playback memory on refresh!
+                    data.layers.forEach((l: any) => {
+                        if (l.playback) this.playbackStates.set(l.numericId, l.playback);
+                    });
                 }
+
                 this.messageCallbacks.forEach((cb) => cb(data));
             }
         };
@@ -119,6 +134,21 @@ export class EditorEngine {
         return () => {
             this.binaryCallbacks.delete(cb);
         };
+    }
+
+    public subscribeToPlayback(cb: PlaybackCallback) {
+        this.playbackCallbacks.add(cb);
+        return () => {
+            this.playbackCallbacks.delete(cb);
+        };
+    }
+
+    public getPlayback(id: number) {
+        return this.playbackStates.get(id);
+    }
+
+    public setPlayback(id: number, playback: any) {
+        this.playbackStates.set(id, playback);
     }
 
     public sendJSON = throttle(
