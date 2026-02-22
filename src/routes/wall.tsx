@@ -37,30 +37,34 @@ function WallApp() {
 
                 const pos = engine.calculateCurrentPosition(layer);
 
-                const w = layer.config.w;
-                const h = layer.config.h;
+                // --- UPGRADED CLIENT-SIDE CULLING MATH (Rotated AABB) ---
+                // 1. Get the scaled width and height
+                const sw = layer.config.w * pos.scale;
+                const sh = layer.config.h * pos.scale;
 
-                // --- 2. CLIENT-SIDE CULLING MATH (AABB) ---
-                // Calculate the bounding box of the video (including its scale)
-                const radiusX = (w / 2) * pos.scale;
-                const radiusY = (h / 2) * pos.scale;
+                // 2. Convert degrees to radians for JS Math functions
+                const rad = pos.rotation * (Math.PI / 180);
 
+                // 3. Calculate the true dynamic bounding box of the rotated rectangle
+                const radiusX =
+                    (sw / 2) * Math.abs(Math.cos(rad)) + (sh / 2) * Math.abs(Math.sin(rad));
+                const radiusY =
+                    (sw / 2) * Math.abs(Math.sin(rad)) + (sh / 2) * Math.abs(Math.cos(rad));
+
+                // 4. Evaluate against the screen viewport
                 const isVisible =
-                    pos.cx + radiusX > myViewport.x && // Right edge is past left screen boundary
-                    pos.cx - radiusX < myViewport.x + myViewport.w && // Left edge is past right screen boundary
-                    pos.cy + radiusY > myViewport.y && // Bottom edge is past top screen boundary
-                    pos.cy - radiusY < myViewport.y + myViewport.h; // Top edge is past bottom screen boundary
+                    pos.cx + radiusX > myViewport.x &&
+                    pos.cx - radiusX < myViewport.x + myViewport.w &&
+                    pos.cy + radiusY > myViewport.y &&
+                    pos.cy - radiusY < myViewport.y + myViewport.h;
 
                 if (isVisible) {
-                    // It's on our screen! Calculate local translation and paint.
-                    const localX = pos.cx - w / 2 - myViewport.x;
-                    const localY = pos.cy - h / 2 - myViewport.y;
+                    const localX = pos.cx - layer.config.w / 2 - myViewport.x;
+                    const localY = pos.cy - layer.config.h / 2 - myViewport.y;
 
                     layer.el.style.transform = `translate3d(${localX}px, ${localY}px, 0) rotate(${pos.rotation}deg) scale(${pos.scale})`;
-                    layer.el.style.opacity = '1'; // Ensure it's visible
+                    layer.el.style.opacity = '1';
                 } else {
-                    // Off-screen. We skip the heavy transform string interpolation.
-                    // Optional: hide it to stop the browser from even trying to composite it.
                     layer.el.style.opacity = '0';
                 }
             });
