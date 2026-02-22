@@ -354,7 +354,15 @@ function EditorApp() {
                 }}
             >
                 <input type="file" accept="video/mp4" onChange={handleUpload} />
-
+                <button
+                    onClick={() => {
+                        engine.sendJSON({ type: 'clear_stage' });
+                        setSelectedId(null);
+                    }}
+                    style={{ color: 'red', fontWeight: 'bold' }}
+                >
+                    Reset Stage
+                </button>
                 {selectedId &&
                     (() => {
                         const activeLayer = layers.find(

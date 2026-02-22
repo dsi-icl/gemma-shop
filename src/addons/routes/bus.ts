@@ -73,6 +73,14 @@ export default defineWebSocketHandler({
                     return;
                 }
 
+                if (data.type === 'clear_stage') {
+                    stageState.layers.clear();
+                    const hydratePayload = JSON.stringify({ type: 'hydrate', layers: [] });
+                    wallClients.forEach((c) => c.send(hydratePayload));
+                    editorClients.forEach((c) => c.send(hydratePayload));
+                    return;
+                }
+
                 // C. Layer Setup
                 if (data.type === 'upsert_layer') {
                     if (!data.playback) {

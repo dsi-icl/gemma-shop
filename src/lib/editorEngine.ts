@@ -142,8 +142,6 @@ export class EditorEngine {
         this.playbackStates.set(id, pb);
     }
 
-    // Throttling could be good, but only for binary state update
-    // public sendJSON = throttle(
     public sendJSON = (data: any) => {
         if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(data));
         else console.warn('WebSocket not open. Cannot send JSON:', data);
@@ -163,6 +161,6 @@ export class EditorEngine {
             view.setFloat32(17, rotation, true);
             this.ws.send(buffer);
         },
-        { wait: 100 }
+        { wait: 200 }
     );
 }
