@@ -268,6 +268,9 @@ function EditorApp() {
     };
 
     const broadcastPlayback = (action: string) => {
+        // We do not await or delay these. We slam the WebSocket with the payload
+        // as fast as the JS thread can serialize them, ensuring they are processed
+        // by the Server in the same millisecond.
         layers.forEach((layer) => {
             if (action === 'play')
                 engine.sendJSON({ type: 'video_play', numericId: layer.numericId });
@@ -412,49 +415,45 @@ function KonvaVideo({
     const imageRef = useRef<any>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
 
-    // 1. Setup the element and Konva redraw loop
+    // State to prevent Konva from rendering until the exact requested frame is decoded
+    const [isReady, setIsReady] = useState(false);
+
+    // 1. Setup the element and strict frame gating
     useEffect(() => {
         const vid = document.createElement('video');
         vid.src = layer.url;
         vid.crossOrigin = 'anonymous';
         vid.muted = true;
+        vid.preload = 'auto';
 
-        vid.addEventListener('loadeddata', () => {
-            const targetTime = layer.playback?.anchorMediaTime || 0;
+        const targetTime = layer.playback?.anchorMediaTime || 0;
 
-            // Let the 'seeked' event handle the drawing once the frame is actually ready.
-            if (targetTime > 0.05) {
-                vid.currentTime = targetTime;
-            } else {
-                // If the target is basically 0, it's safe to paint the first frame instantly.
-                imageRef.current?.getLayer()?.batchDraw();
-            }
-        });
+        // Command the seek immediately, before the browser even thinks about playing
+        vid.currentTime = targetTime;
 
-        // This fires when the async seek from loadeddata (or a pause command) finishes
-        vid.addEventListener('seeked', () => {
+        const handleReady = () => {
+            setIsReady(true);
             imageRef.current?.getLayer()?.batchDraw();
-        });
+        };
+
+        // 'seeked' guarantees the exact frame we requested is in the GPU buffer
+        vid.addEventListener('seeked', handleReady, { once: true });
+
+        // Fallback: If target time is 0, some browsers (Safari) don't fire 'seeked' on load
+        if (targetTime === 0) {
+            vid.addEventListener('canplay', handleReady, { once: true });
+        }
 
         setVideoElement(vid);
 
-        const anim = new Konva.Animation(() => {
-            if (!vid.paused) {
-                imageRef.current?.getLayer()?.batchDraw();
-            }
-        }, imageRef.current?.getLayer());
-
-        anim.start();
-
         return () => {
-            anim.stop();
             vid.pause();
             vid.removeAttribute('src');
             vid.load();
         };
     }, [layer.url]);
 
-    // 2. Control Playback based on Server State
+    // 2. Playback Controller (Now heavily optimized for multiple videos)
     useEffect(() => {
         if (!videoElement || !layer.playback) return;
 
@@ -463,9 +462,18 @@ function KonvaVideo({
         if (layer.playback.status === 'paused') {
             videoElement.pause();
 
-            // Prevents floating-point mismatch thrashing while keeping visual sync perfectly tight.
             if (Math.abs(videoElement.currentTime - layer.playback.anchorMediaTime) > 0.05) {
                 videoElement.currentTime = layer.playback.anchorMediaTime;
+                // Draw the frame once the pause-seek finishes
+                videoElement.addEventListener(
+                    'seeked',
+                    () => {
+                        imageRef.current?.getLayer()?.batchDraw();
+                    },
+                    { once: true }
+                );
+            } else {
+                imageRef.current?.getLayer()?.batchDraw();
             }
         } else if (layer.playback.status === 'playing') {
             const loop = () => {
@@ -493,6 +501,10 @@ function KonvaVideo({
                     } else {
                         videoElement.playbackRate = 1.0;
                     }
+
+                    // We safely piggyback on the drift controller to tell Konva to update the canvas (i.e. without Konva.Animation).
+                    // batchDraw() is naturally debounced, so multiple videos won't crash the thread.
+                    imageRef.current?.getLayer()?.batchDraw();
                 }
                 frameId = requestAnimationFrame(loop);
             };
@@ -509,7 +521,9 @@ function KonvaVideo({
     return (
         <KonvaImage
             ref={imageRef}
-            image={videoElement}
+            // If the exact frame isn't decoded yet, pass undefined.
+            // Konva will render nothing, preventing Frame 0 flash.
+            image={isReady ? videoElement : undefined}
             id={layer.numericId.toString()}
             x={layer.config.cx}
             y={layer.config.cy}
@@ -523,7 +537,6 @@ function KonvaVideo({
             draggable={!isPinching}
             onClick={onSelect}
             onTap={onSelect}
-            // Trigger binary broadcast during drag OR transform
             onDragMove={onTransform}
             onDragEnd={onTransformEnd}
             onTransform={onTransform}
