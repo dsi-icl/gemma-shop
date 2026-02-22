@@ -83,7 +83,7 @@ export class EditorEngine {
                 console.warn('WebSocket not open. Cannot send JSON:', data);
             }
         },
-        { wait: 10 }
+        { wait: 100 }
     );
 
     // --- THE BINARY PACKER ---
@@ -107,6 +107,6 @@ export class EditorEngine {
 
             this.ws.send(buffer);
         },
-        { wait: 10 }
+        { wait: 100 }
     );
 }
