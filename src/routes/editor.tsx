@@ -30,6 +30,8 @@ function EditorApp() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [highestZ, setHighestZ] = useState(1);
     const [isPinching, setIsPinching] = useState(false);
+    // Mutex Lock : tracks if the app is currently processing incoming network data
+    const isNetworkUpdate = useRef(false);
 
     const nextId = useRef(1);
     const trRef = useRef<any>(null);
@@ -62,26 +64,31 @@ function EditorApp() {
 
         // 2. Binary Fast-Path (Real-time Multiplayer Editing)
         const unsubscribeBinary = engine.subscribeToBinary((id, cx, cy, scale, rotation) => {
-            if (!trRef.current) return;
+            // 1. LOCK THE MUTEX
+            isNetworkUpdate.current = true;
 
-            const stage = trRef.current.getStage();
-            const node = stage.findOne(`#${id}`);
+            if (trRef.current) {
+                const stage = trRef.current.getStage();
+                const node = stage.findOne(`#${id}`);
 
-            // Safety check: Only update if THIS specific editor isn't the one actively dragging it
-            if (node && !node.isDragging() && !isPinching) {
-                node.x(cx);
-                node.y(cy);
-                node.scaleX(scale);
-                node.scaleY(scale);
-                node.rotation(rotation);
+                if (node && !node.isDragging() && !isPinching) {
+                    node.x(cx);
+                    node.y(cy);
+                    node.scaleX(scale);
+                    node.scaleY(scale);
+                    node.rotation(rotation);
 
-                // If Editor 2 happens to have the moving video selected, force the Transformer to follow it!
-                if (selectedId === id.toString()) {
-                    trRef.current.forceUpdate();
+                    // This programmatic update will fire native events, but our lock is active!
+                    if (selectedId === id.toString()) {
+                        trRef.current.forceUpdate();
+                    }
+
+                    node.getLayer().batchDraw();
                 }
-
-                node.getLayer().batchDraw();
             }
+
+            // 2. UNLOCK THE MUTEX (Safely returning to user-input mode)
+            isNetworkUpdate.current = false;
         });
 
         return () => {
@@ -264,15 +271,18 @@ function EditorApp() {
     };
 
     const handleTransform = (e: any, numericId: number) => {
+        // If this event was fired programmatically by the network, drop it!
+        if (isNetworkUpdate.current) return;
+
         const node = e.target;
-        // node.scaleX() is automatically updated by the Transformer
         engine.broadcastBinaryMove(numericId, node.x(), node.y(), node.scaleX(), node.rotation());
     };
 
     const handleTransformEnd = (e: any, numericId: number) => {
-        const node = e.target;
+        // Drop network-triggered updates
+        if (isNetworkUpdate.current) return;
 
-        // Find the current layer state
+        const node = e.target;
         const layerToUpdate = layers.find((l) => l.numericId === numericId);
         if (!layerToUpdate) return;
 
@@ -284,12 +294,10 @@ function EditorApp() {
             rotation: node.rotation()
         };
 
-        // Update local React state optimistically
         setLayers((prev) =>
             prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
         );
 
-        // Update the Master Server State via JSON
         engine.sendJSON({
             type: 'upsert_layer',
             numericId,
