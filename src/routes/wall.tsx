@@ -114,6 +114,7 @@ function WallApp() {
                     src={layer.url}
                     muted
                     playsInline
+                    loop={layer.config.loop ?? true}
                     ref={(el) => {
                         if (el)
                             engine.registerLayer(layer.numericId, layer.config, layer.playback, el);

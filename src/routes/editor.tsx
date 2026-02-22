@@ -581,7 +581,7 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
             ref={imageRef}
             image={videoElement || undefined}
             id={layer.numericId.toString()}
-s            x={layer.config.cx}
+            x={layer.config.cx}
             y={layer.config.cy}
             scaleX={layer.config.scale}
             scaleY={layer.config.scale}
