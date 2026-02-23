@@ -36,6 +36,11 @@ function EditorApp() {
     const lastDist = useRef<number | null>(null);
     const lastAngle = useRef<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const layersRef = useRef<any[]>([]);
+
+    useEffect(() => {
+        layersRef.current = layers;
+    }, [layers]);
 
     useEffect(() => {
         // 1. JSON Slow-Path (Hydration and Setup ONLY. Playback has been stripped out!)
@@ -66,6 +71,16 @@ function EditorApp() {
                     node.rotation(rotation);
                     if (selectedId === id.toString()) trRef.current.forceUpdate();
                     node.getLayer().batchDraw();
+                }
+
+                // When React naturally re-renders later (like when you click the video),
+                // it will read these perfectly accurate coordinates instead of stale ones.
+                const shadowLayer = layersRef.current.find((l) => l.numericId === id);
+                if (shadowLayer) {
+                    shadowLayer.config.cx = cx;
+                    shadowLayer.config.cy = cy;
+                    shadowLayer.config.scale = scale;
+                    shadowLayer.config.rotation = rotation;
                 }
             }
         });
@@ -288,41 +303,38 @@ function EditorApp() {
         engine.broadcastBinaryMove(numericId, node.x(), node.y(), node.scaleX(), node.rotation());
     };
 
-    const handleTransformEnd = useCallback(
-        (e: any, numericId: number) => {
-            const node = e.target;
+    const handleTransformEnd = useCallback((e: any, numericId: number) => {
+        const node = e.target;
 
-            // Must use layersRef to prevent the component from saving old state when dragged
-            const layerToUpdate = layers.find((l) => l.numericId === numericId);
-            if (!layerToUpdate) return;
+        // Must use layersRef to prevent the component from saving old state when dragged
+        const layerToUpdate = layersRef.current.find((l) => l.numericId === numericId);
+        if (!layerToUpdate) return;
 
-            const updatedConfig = {
-                ...layerToUpdate.config,
-                cx: node.x(),
-                cy: node.y(),
-                scale: node.scaleX(),
-                rotation: node.rotation()
-            };
+        const updatedConfig = {
+            ...layerToUpdate.config,
+            cx: node.x(),
+            cy: node.y(),
+            scale: node.scaleX(),
+            rotation: node.rotation()
+        };
 
-            setLayers((prev) =>
-                prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
-            );
+        setLayers((prev) =>
+            prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
+        );
 
-            // Extract actual playback state so moving video doesn't accidentally rewind it for Wall screens
-            const truePlayback = engine.getPlayback(numericId) || layerToUpdate.playback;
+        // Extract actual playback state so moving video doesn't accidentally rewind it for Wall screens
+        const truePlayback = engine.getPlayback(numericId) || layerToUpdate.playback;
 
-            engine.sendJSON({
-                type: 'upsert_layer',
-                origin: 'handleTransformEnd',
-                numericId,
-                layerType: 'video',
-                url: layerToUpdate.url,
-                config: updatedConfig,
-                playback: truePlayback
-            });
-        },
-        [layers]
-    );
+        engine.sendJSON({
+            type: 'upsert_layer',
+            origin: 'handleTransformEnd',
+            numericId,
+            layerType: 'video',
+            url: layerToUpdate.url,
+            config: updatedConfig,
+            playback: truePlayback
+        });
+    }, []);
 
     const flushNodeState = (idToFlush: string) => {
         if (!trRef.current) return;
@@ -554,12 +566,20 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
                     if ((layer.config.loop ?? true) && layer.config.duration) {
                         expected = expected % layer.config.duration;
                     }
-
                     const drift = expected - videoElement.currentTime;
-                    if (Math.abs(drift) > 0.5) videoElement.currentTime = expected;
-                    else if (drift > 0.05) videoElement.playbackRate = 1.05;
-                    else if (drift < -0.05) videoElement.playbackRate = 0.95;
-                    else videoElement.playbackRate = 1.0;
+                    if (Math.abs(drift) > 0.5) {
+                        videoElement.currentTime = expected; // Hard snap for heavy desync
+                    } else if (drift > 0.3) {
+                        videoElement.playbackRate = 1.05; // Gentle catch up
+                    } else if (drift < -0.3) {
+                        videoElement.playbackRate = 0.95; // Gentle slow down
+                    } else {
+                        videoElement.playbackRate = 1.0; // Coast perfectly smoothly
+                    }
+                    // if (Math.abs(drift) > 0.5) videoElement.currentTime = expected;
+                    // else if (drift > 0.05) videoElement.playbackRate = 1.05;
+                    // else if (drift < -0.05) videoElement.playbackRate = 0.95;
+                    // else videoElement.playbackRate = 1.0;
 
                     imageRef.current?.getLayer()?.batchDraw();
                 }
@@ -703,20 +723,8 @@ export function VideoScrubber({ layer, engine }: { layer: any; engine: any }) {
 
                     if (layer.config.loop ?? true) {
                         if (layer.config.duration) expected = expected % layer.config.duration;
-                        hasTriggeredEnd.current = false;
                     } else if (expected >= (layer.config.duration || 0)) {
-                        if (!hasTriggeredEnd.current) {
-                            hasTriggeredEnd.current = true;
-                            engine.sendJSON({ type: 'video_pause', numericId: layer.numericId });
-                            engine.sendJSON({
-                                type: 'video_seek',
-                                numericId: layer.numericId,
-                                mediaTime: layer.config.duration
-                            });
-                        }
                         expected = layer.config.duration || 0;
-                    } else {
-                        hasTriggeredEnd.current = false;
                     }
                     currentTime = expected;
                 } else {

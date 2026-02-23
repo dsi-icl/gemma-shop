@@ -80,7 +80,6 @@ export class EditorEngine {
                     });
                 }
 
-                console.log('Preparing', data);
                 this.messageCallbacks.forEach((cb) => cb(data));
             }
         };
@@ -165,6 +164,6 @@ export class EditorEngine {
             view.setFloat32(17, rotation, true);
             this.ws.send(buffer);
         },
-        { wait: 200 }
+        { wait: 16 }
     );
 }
