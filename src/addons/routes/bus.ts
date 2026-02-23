@@ -203,6 +203,16 @@ export default defineWebSocketHandler({
     }
 });
 
+// --- GLOBAL BRIDGE FOR UPLOAD PROGRESS ---
+// Expose the editor broadcast function so our HTTP upload route can send FFmpeg progress
+(globalThis as any).__BROADCAST_EDITORS__ = (data: any) => {
+    const payload = JSON.stringify(data);
+    for (const client of editorClients) {
+        client.send(payload);
+    }
+};
+
+// --- VSYNC LOOP FOR PERIODIC ALIGNEMENT ---
 (process as any).__VSYNC_INTERVAL__ = setInterval(() => {
     const now = Date.now();
 

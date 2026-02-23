@@ -54,6 +54,12 @@ function EditorApp() {
                     const filtered = prev.filter((l) => l.numericId !== data.numericId);
                     return [...filtered, data];
                 });
+            } else if (data.type === 'upload_progress') {
+                setLayers((prev) =>
+                    prev.map((l) =>
+                        l.numericId === data.numericId ? { ...l, progress: data.progress } : l
+                    )
+                );
             }
         });
 
@@ -111,79 +117,118 @@ function EditorApp() {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        const numericId = nextId.current++;
+        const localUrl = URL.createObjectURL(file); // Native instant preview Blob
+
+        let mediaWidth = 800,
+            mediaHeight = 600,
+            duration = 0;
+        let previewDataUrl = localUrl;
+
+        // 1. Instantly read the dimensions and extract a poster frame locally!
+        {
+            const tempVid = document.createElement('video');
+            tempVid.muted = true;
+            tempVid.playsInline = true;
+            const p = new Promise((resolve) => (tempVid.onloadeddata = resolve));
+            if (!localUrl.startsWith('blob:') && !localUrl.startsWith('data:')) {
+                tempVid.crossOrigin = 'anonymous';
+            }
+            tempVid.src = localUrl;
+            await p;
+            mediaWidth = tempVid.videoWidth || 800;
+            mediaHeight = tempVid.videoHeight || 600;
+            duration = tempVid.duration || 0.1;
+
+            // Seek into the video to grab an interesting frame
+            tempVid.currentTime = Math.min(0.5, duration / 2);
+
+            // THE FIX 2: Wait for the seek to finish, then wait two animation frames
+            // to absolutely guarantee the hardware decoder has painted the pixels to the buffer.
+            await new Promise((resolve) => {
+                tempVid.onseeked = () => {
+                    requestAnimationFrame(() => requestAnimationFrame(resolve));
+                };
+            });
+
+            const canvas = document.createElement('canvas');
+            canvas.width = mediaWidth;
+            canvas.height = mediaHeight;
+            canvas.getContext('2d')?.drawImage(tempVid, 0, 0, mediaWidth, mediaHeight);
+            previewDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+            // Cleanup the blob memory
+            tempVid.removeAttribute('src');
+            tempVid.load();
+        }
+
+        const config = {
+            cx: 400,
+            cy: 300,
+            w: mediaWidth,
+            h: mediaHeight,
+            rotation: 0,
+            duration: duration,
+            scale: Math.min(1, 640 / mediaWidth),
+            zIndex: highestZ,
+            loop: true
+        };
+
+        const defaultPlayback = {
+            status: 'paused',
+            anchorMediaTime: 0,
+            anchorServerTime: engine.getServerTime()
+        };
+
+        // 2. OPTIMISTIC UPDATE: Mount it immediately to the local UI!
+        const optimisticLayer = {
+            numericId,
+            layerType: 'video',
+            url: previewDataUrl,
+            playback: defaultPlayback,
+            config,
+            isUploading: true,
+            progress: 0
+        };
+        setLayers((prev) => [...prev, optimisticLayer]);
+        setSelectedId(numericId.toString());
+
+        // 3. Fire the heavy background network request
         const formData = new FormData();
         formData.append('asset', file);
+        formData.append('numericId', numericId.toString());
+        formData.append('duration', duration.toString());
 
         try {
             const res = await fetch(`/upload`, { method: 'POST', body: formData });
             if (!res.ok) throw new Error('Upload failed');
             const data = await res.json();
 
-            const { videoWidth, videoHeight, duration } = await new Promise<{
-                videoWidth: number;
-                videoHeight: number;
-                duration: number;
-            }>((resolve) => {
-                const tempVid = document.createElement('video');
-                tempVid.src = data.url;
-                tempVid.addEventListener('loadedmetadata', () => {
-                    resolve({
-                        videoWidth: tempVid.videoWidth,
-                        videoHeight: tempVid.videoHeight,
-                        duration: tempVid.duration
-                    });
-                });
-            });
+            // The fetch took time. The user probably moved the preview.
+            // Grab the absolute freshest config from our Shadow State mirror!
+            const freshestLayer =
+                layersRef.current.find((l) => l.numericId === numericId) || optimisticLayer;
 
-            const numericId = nextId.current++;
-            const initialScale = Math.min(1, 640 / videoWidth);
+            // 4. Lock it in with the preserved transformations.
+            const finalizedLayer = { ...freshestLayer, url: data.url, isUploading: false };
 
-            const config = {
-                cx: 400,
-                cy: 300,
-                w: videoWidth,
-                h: videoHeight,
-                rotation: 0,
-                duration: duration,
-                scale: initialScale,
-                zIndex: highestZ,
-                loop: true // Auto-loop enabled by default
-            };
-
-            const defaultPlayback = {
-                status: 'paused',
-                anchorMediaTime: 0,
-                anchorServerTime: engine.getServerTime()
-            };
-
-            const newLayer = {
-                numericId,
-                layerType: 'video',
-                url: data.url,
-                playback: defaultPlayback,
-                config
-            };
-
-            setLayers((prev) => [...prev, newLayer]);
-
-            // Register it locally in the Engine so the UI controls work instantly
+            setLayers((prev) => prev.map((l) => (l.numericId === numericId ? finalizedLayer : l)));
             engine.setPlayback(numericId, defaultPlayback);
 
             engine.sendJSON({
                 type: 'upsert_layer',
                 origin: 'handleUpload',
                 numericId,
-                layerType: 'video',
+                layerType: finalizedLayer.layerType,
                 playback: defaultPlayback,
                 url: data.url,
-                config
+                config: freshestLayer.config
             });
-
-            setSelectedId(numericId.toString());
-            if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (err) {
-            alert('Upload failed. Check Bun server console.');
+            alert('Upload failed.');
+            setLayers((prev) => prev.filter((l) => l.numericId !== numericId)); // Rollback
         }
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const handleBringToFront = useCallback(() => {
@@ -375,7 +420,12 @@ function EditorApp() {
                     transformOrigin: 'left bottom'
                 }}
             >
-                <input ref={fileInputRef} type="file" accept="video/mp4" onChange={handleUpload} />
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="video/mp4, image/jpeg, image/png, image/webp"
+                    onChange={handleUpload}
+                />
                 <button
                     onClick={() => {
                         engine.sendJSON({ type: 'clear_stage' });
@@ -391,36 +441,38 @@ function EditorApp() {
                             (l) => l.numericId === parseInt(selectedId)
                         );
                         if (!activeLayer) return null;
-
+                        const isVideo = activeLayer.layerType === 'video';
                         return (
                             <>
-                                <div
-                                    style={{
-                                        borderLeft: '1px solid #ccc',
-                                        height: '24px',
-                                        margin: '0 10px'
-                                    }}
-                                ></div>
+                                {isVideo && (
+                                    <>
+                                        <div
+                                            style={{
+                                                borderLeft: '1px solid #ccc',
+                                                height: '24px',
+                                                margin: '0 10px'
+                                            }}
+                                        ></div>
+                                        <PlaybackControls
+                                            key={`pc_${activeLayer.numericId}`}
+                                            layer={activeLayer}
+                                            engine={engine}
+                                        />
 
-                                <PlaybackControls
-                                    key={`pc_${activeLayer.numericId}`}
-                                    layer={activeLayer}
-                                    engine={engine}
-                                />
-
-                                <div
-                                    style={{
-                                        borderLeft: '1px solid #ccc',
-                                        height: '24px',
-                                        margin: '0 10px'
-                                    }}
-                                ></div>
-
-                                <VideoScrubber
-                                    key={`vs_${activeLayer.numericId}`}
-                                    layer={activeLayer}
-                                    engine={engine}
-                                />
+                                        <div
+                                            style={{
+                                                borderLeft: '1px solid #ccc',
+                                                height: '24px',
+                                                margin: '0 10px'
+                                            }}
+                                        ></div>
+                                        <VideoScrubber
+                                            key={`vs_${activeLayer.numericId}`}
+                                            layer={activeLayer}
+                                            engine={engine}
+                                        />
+                                    </>
+                                )}
 
                                 <div
                                     style={{
@@ -474,16 +526,23 @@ function EditorApp() {
 
                     {[...layers]
                         .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
-                        .map((layer) => (
-                            <KonvaVideo
-                                key={layer.numericId}
-                                layer={layer}
-                                isPinching={isPinching}
-                                onSelect={() => setSelectedId(layer.numericId.toString())}
-                                onTransform={(e: any) => handleTransform(e, layer.numericId)}
-                                onTransformEnd={(e: any) => handleTransformEnd(e, layer.numericId)}
-                            />
-                        ))}
+                        .map((layer) => {
+                            const props = {
+                                layer,
+                                isPinching,
+                                onSelect: () => setSelectedId(layer.numericId.toString()),
+                                onTransform: (e: any) => handleTransform(e, layer.numericId),
+                                onTransformEnd: (e: any) => handleTransformEnd(e, layer.numericId)
+                            };
+
+                            // Route images and uploading previews to the Static element
+                            if (layer.layerType === 'image' || layer.isUploading) {
+                                return (
+                                    <KonvaStaticImage key={`spi_${layer.numericId}`} {...props} />
+                                );
+                            }
+                            return <KonvaVideo key={`vid_${layer.numericId}`} {...props} />;
+                        })}
 
                     <Transformer
                         ref={trRef}
@@ -507,7 +566,9 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
 
     useEffect(() => {
         const vid = document.createElement('video');
-        vid.crossOrigin = 'anonymous';
+        if (!layer.url.startsWith('blob:') && !layer.url.startsWith('data:')) {
+            vid.crossOrigin = 'anonymous';
+        }
         vid.muted = true;
         vid.preload = 'auto';
         vid.playsInline = true;
@@ -616,6 +677,83 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
             onDragEnd={onTransformEnd}
             onTransformEnd={onTransformEnd}
         />
+    );
+}
+
+// --- SUB-COMPONENT: Static Images & Upload Previews ---
+function KonvaStaticImage({ layer, isPinching, onSelect, onTransform, onTransformEnd }: any) {
+    const [img, setImg] = useState<HTMLImageElement | null>(null);
+    const imageRef = useRef<any>(null);
+
+    useEffect(() => {
+        const i = new window.Image();
+        if (!layer.url.startsWith('blob:') && !layer.url.startsWith('data:')) {
+            i.crossOrigin = 'anonymous';
+        }
+        i.onload = () => {
+            setImg(i);
+            imageRef.current?.getLayer()?.batchDraw();
+        };
+        i.src = layer.url;
+    }, [layer.url]);
+
+    return (
+        <Group
+            id={layer.numericId.toString()}
+            x={layer.config.cx}
+            y={layer.config.cy}
+            scaleX={layer.config.scale}
+            scaleY={layer.config.scale}
+            rotation={layer.config.rotation}
+            draggable={!isPinching}
+            onClick={onSelect}
+            onTap={onSelect}
+            onDragMove={onTransform}
+            onTransform={onTransform}
+            onDragEnd={onTransformEnd}
+            onTransformEnd={onTransformEnd}
+        >
+            <KonvaImage
+                ref={imageRef}
+                image={img || undefined}
+                width={layer.config.w}
+                height={layer.config.h}
+                offsetX={layer.config.w / 2}
+                offsetY={layer.config.h / 2}
+            />
+
+            {/* The Real-Time Processing Overlay */}
+            {layer.isUploading && !layer.layerType.includes('image') && (
+                <Group offsetX={layer.config.w / 2} offsetY={layer.config.h / 2}>
+                    <Rect width={layer.config.w} height={layer.config.h} fill="rgba(0,0,0,0.6)" />
+                    {/* Centered progress bar */}
+                    <Rect
+                        x={layer.config.w * 0.1}
+                        y={layer.config.h / 2 - 20}
+                        width={layer.config.w * 0.8}
+                        height={40}
+                        fill="#222"
+                        cornerRadius={20}
+                    />
+                    <Rect
+                        x={layer.config.w * 0.1}
+                        y={layer.config.h / 2 - 20}
+                        width={layer.config.w * 0.8 * ((layer.progress || 2) / 100)}
+                        height={40}
+                        fill="#4caf50"
+                        cornerRadius={20}
+                    />
+                    <Text
+                        x={layer.config.w * 0.1}
+                        y={layer.config.h / 2 + 40}
+                        text={`Optimizing Video... ${layer.progress || 0}%`}
+                        fill="white"
+                        fontSize={48}
+                        fontFamily="Arial"
+                    />
+                </Group>
+            )}
+        </Group>
     );
 }
 

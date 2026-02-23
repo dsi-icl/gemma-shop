@@ -10,39 +10,67 @@ export default defineHandler(async (event) => {
     try {
         const formData = await event.req.formData();
         const uploadedFile = formData.get('asset') as File;
+        const numericId = parseInt(formData.get('numericId') as string) || 0;
+        const duration = parseFloat(formData.get('duration') as string) || 0;
+
         if (!uploadedFile) return new Response('No file', { status: 400 });
 
-        // 1. Sanitize the filename
-        const ext = extname(uploadedFile.name);
+        const ext = extname(uploadedFile.name).toLowerCase();
         const baseName = uploadedFile.name.replace(ext, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const isImage = uploadedFile.type.startsWith('image/');
 
+        // --- FAST PATH: STATIC IMAGES ---
+        if (isImage) {
+            const finalFilename = `${baseName}_img${ext}`;
+            const finalPath = join(ASSET_DIR, finalFilename);
+            await writeFile(finalPath, Buffer.from(await uploadedFile.arrayBuffer()));
+
+            const fileUrl = `http://${new URL(event.req.url).host}/assets/${finalFilename}`;
+            return new Response(JSON.stringify({ success: true, url: fileUrl }), {
+                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+            });
+        }
+
+        // --- SLOW PATH: VIDEO TRANSCODING ---
         const rawFilename = `${baseName}_raw${ext}`;
-        const finalFilename = `${baseName}_sync.mp4`; // Always output mp4
-
+        const finalFilename = `${baseName}_sync.mp4`;
         const rawPath = join(TMP_DIR, rawFilename);
         const finalPath = join(ASSET_DIR, finalFilename);
 
-        // 2. Save the raw upload to the temporary directory
         await writeFile(rawPath, Buffer.from(await uploadedFile.arrayBuffer()));
-        console.log(`Ingested raw file: ${rawFilename}. Starting FFmpeg optimization...`);
-
-        // 3. Spawn FFmpeg with our Sync-Optimized Profile
 
         function run(cmd: string, args: string[]) {
             return new Promise<{ stdout: string; stderr: string; code: number }>((resolve) => {
                 const proc = spawn(cmd, args);
-
                 let stdout = '';
                 let stderr = '';
 
                 proc.stdout.on('data', (d) => (stdout += d));
-                proc.stderr.on('data', (d) => (stderr += d));
+                proc.stderr.on('data', (d) => {
+                    const text = d.toString();
+                    stderr += text;
 
-                proc.on('close', (code) => {
-                    resolve({ stdout, stderr, code: code ?? 0 });
+                    // Intercept FFmpeg's time output and broadcast it over WebSockets!
+                    const match = text.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+                    if (match && duration > 0 && (globalThis as any).__BROADCAST_EDITORS__) {
+                        const h = parseInt(match[1], 10);
+                        const m = parseInt(match[2], 10);
+                        const s = parseFloat(match[3]);
+                        const timeInSeconds = h * 3600 + m * 60 + s;
+
+                        const progress = Math.min(99, Math.round((timeInSeconds / duration) * 100));
+                        (globalThis as any).__BROADCAST_EDITORS__({
+                            type: 'upload_progress',
+                            numericId,
+                            progress
+                        });
+                    }
                 });
+
+                proc.on('close', (code) => resolve({ stdout, stderr, code: code ?? 0 }));
             });
         }
+
         const ffmpeg = run('ffmpeg', [
             '-y', // Overwrite output files without asking
             '-i',
@@ -67,23 +95,14 @@ export default defineHandler(async (event) => {
             finalPath // Output path
         ]);
 
-        // 4. Wait for the transcoding to finish
         const exitObject = await ffmpeg;
+        await unlink(rawPath).catch(() => {});
 
         if (exitObject.code !== 0) {
-            const errorOutput = await new Response(exitObject.stderr).text();
-            console.error('FFmpeg Error:', errorOutput);
-            // Clean up the raw file even on failure
-            await unlink(rawPath).catch(() => {});
+            console.error('FFmpeg Error:', exitObject.stderr);
             return new Response('Video processing failed', { status: 500 });
         }
 
-        console.log(`FFmpeg complete: ${finalFilename} is ready for the wall.`);
-
-        // 5. Clean up the raw temporary file to save disk space
-        await unlink(rawPath).catch(() => {});
-
-        // 6. Return the URL of the processed file to the Editor
         const fileUrl = `http://${new URL(event.req.url).host}/assets/${finalFilename}`;
         return new Response(JSON.stringify({ success: true, url: fileUrl }), {
             headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
