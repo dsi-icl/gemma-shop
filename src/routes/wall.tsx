@@ -107,7 +107,7 @@ function WallApp() {
                     fontFamily: 'monospace'
                 }}
             >
-                SCREEN C:{myViewport.x / SCREEN_W} R:{myViewport.y / SCREEN_H}
+                SCREEN&gt; C:{myViewport.x / SCREEN_W} R:{myViewport.y / SCREEN_H}
             </div>
 
             {layers.map((layer) => (

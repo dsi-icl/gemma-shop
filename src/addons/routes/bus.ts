@@ -6,7 +6,8 @@ const wallClients = new Set<Peer>();
 const editorClients = new Set<Peer>();
 
 // The Master Stage State in memory
-const stageState = { layers: new Map<number, any>() };
+const stageState = (process as any).__STAGE_STATE__ ?? { layers: new Map<number, any>() };
+(process as any).__STAGE_STATE__ = stageState;
 
 function broadcastJSON(data: any, clients: Set<Peer>) {
     const payload = JSON.stringify(data);
@@ -25,7 +26,8 @@ function broadcastOtherOnlyJSON(data: any, clients: Set<Peer>, peer: Peer) {
 export default defineWebSocketHandler({
     open(peer) {
         // We don't add them to a pool yet. We wait for the handshake.
-        console.log(`[WS] Peer connected, awaiting 'hello' handshake...`);
+        peer.websocket.binaryType = 'arraybuffer';
+        console.log(`[WS] Peer ${peer.id} connected`);
     },
 
     close(peer) {
@@ -40,7 +42,7 @@ export default defineWebSocketHandler({
     message(peer, message) {
         // --- 1. JSON SLOW-PATH & HANDSHAKE ---
         // Using your strict Buffer check to confidently intercept JSON
-        if (message.rawData instanceof Buffer && message.rawData[0] === '{'.charCodeAt(0)) {
+        if (message.rawData instanceof Buffer) {
             try {
                 // Leverage crossws native JSON parsing
                 const data = message.json() as any;
@@ -62,19 +64,6 @@ export default defineWebSocketHandler({
                         JSON.stringify({
                             type: 'hydrate',
                             layers: Array.from(stageState.layers.values())
-                        })
-                    );
-                    return;
-                }
-
-                // B. Clock Sync
-                if (data.type === 'ping') {
-                    peer.send(
-                        JSON.stringify({
-                            type: 'pong',
-                            t0: data.t0,
-                            t1: Date.now(),
-                            t2: Date.now()
                         })
                     );
                     return;
@@ -175,18 +164,94 @@ export default defineWebSocketHandler({
                 console.error('[WS] Failed to parse JSON message:', err);
             }
             return; // Exit the message handler so JSON isn't routed as binary
-        }
+        } else if (message.rawData instanceof ArrayBuffer) {
+            // --- 2. BINARY FAST-PATH (Zero-Copy Relay) ---
+            // We must extract the DataView cleanly from the crossws rawData Buffer
+            const view = new DataView(message.rawData);
+            const opcode = view.getUint8(0);
 
-        // --- 2. BINARY FAST-PATH (Zero-Copy Relay) ---
-        // If it bypassed the JSON block, we act as a dumb pipe directly to the wall screens.
-        for (const client of wallClients) {
-            client.send(message.rawData);
-        }
-        for (const client of editorClients) {
-            if (client !== peer) {
-                // Do not echo back to the sender!
-                client.send(message.rawData);
+            // A. Handle Clock Ping
+            if (opcode === 0x08) {
+                const t0 = view.getFloat64(1, true);
+                const t1 = Date.now();
+                const t2 = Date.now(); // Captured immediately after t1
+
+                // Pack the Pong: 1 byte Opcode + 24 bytes (t0, t1, t2) = 25 bytes
+                const outBuffer = new ArrayBuffer(25);
+                const outView = new DataView(outBuffer);
+                outView.setUint8(0, 0x09);
+                outView.setFloat64(1, t0, true);
+                outView.setFloat64(9, t1, true);
+                outView.setFloat64(17, t2, true);
+
+                peer.send(outBuffer);
+                return; // Return early so we don't broadcast the ping to other clients!
+            }
+
+            // B. Relay Spatial Moves (Zero-Copy)
+            if (opcode === 0x05) {
+                for (const client of wallClients) {
+                    client.send(message.rawData);
+                }
+                for (const client of editorClients) {
+                    if (client !== peer) {
+                        client.send(message.rawData);
+                    }
+                }
             }
         }
     }
 });
+
+(process as any).__VSYNC_INTERVAL__ = setInterval(() => {
+    const now = Date.now();
+
+    for (const [id, layer] of stageState.layers.entries()) {
+        if (layer.playback && layer.playback.status === 'playing') {
+            const duration = layer.config?.duration || 0;
+            if (duration <= 0) continue;
+
+            // Calculate the true server time
+            const elapsed = Math.max(0, (now - layer.playback.anchorServerTime) / 1000);
+            const expected = layer.playback.anchorMediaTime + elapsed;
+
+            if (expected >= duration) {
+                if (layer.config.loop ?? true) {
+                    // SERVER DECIDES TO LOOP
+                    layer.playback.anchorMediaTime = !duration ? 0 : expected % duration;
+                    layer.playback.anchorServerTime = now;
+
+                    const syncPayload = {
+                        type: 'video_sync',
+                        numericId: id,
+                        playback: layer.playback
+                    };
+                    broadcastJSON(syncPayload, wallClients);
+                    broadcastJSON(syncPayload, editorClients);
+                } else {
+                    // SERVER DECIDES TO PAUSE
+                    layer.playback.status = 'paused';
+                    layer.playback.anchorMediaTime = duration;
+                    layer.playback.anchorServerTime = 0;
+
+                    const syncPayload = {
+                        type: 'video_sync',
+                        numericId: id,
+                        playback: layer.playback
+                    };
+                    broadcastJSON(syncPayload, wallClients);
+                    broadcastJSON(syncPayload, editorClients);
+                }
+            }
+        }
+    }
+}, 500);
+
+// --- VITE HMR DEFENSE STRATEGY ---
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        if ((process as any).__VSYNC_INTERVAL__) {
+            clearInterval((process as any).__VSYNC_INTERVAL__);
+        }
+    });
+}

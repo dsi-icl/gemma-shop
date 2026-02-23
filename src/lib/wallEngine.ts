@@ -47,11 +47,12 @@ export class WallEngine {
 
     // --- SINGLETON ACCESSOR ---
     public static getInstance(viewport?: Viewport): WallEngine {
-        if (!WallEngine.instance) {
+        // Escape Vite's module scope by anchoring the Singleton to the Window
+        if (!(window as any).__WALL_ENGINE__) {
             if (!viewport) throw new Error('Viewport must be provided on first initialization');
-            WallEngine.instance = new WallEngine(viewport);
+            (window as any).__WALL_ENGINE__ = new WallEngine(viewport);
         }
-        return WallEngine.instance;
+        return (window as any).__WALL_ENGINE__;
     }
 
     // --- REACT INTERFACE ---
@@ -91,7 +92,12 @@ export class WallEngine {
     private startClockSync() {
         const sendPing = () => {
             if (this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ type: 'ping', t0: Date.now() }));
+                // 1 byte Opcode + 8 bytes Float64 (t0) = 9 bytes total
+                const buffer = new ArrayBuffer(9);
+                const view = new DataView(buffer);
+                view.setUint8(0, 0x08); // Opcode 0x08: Ping
+                view.setFloat64(1, Date.now(), true); // little-endian
+                this.ws.send(buffer);
             }
             setTimeout(sendPing, 2000);
         };
@@ -277,4 +283,14 @@ export class WallEngine {
             h: layer.config.h
         };
     }
+}
+
+// --- VITE HMR DEFENSE STRATEGY ---
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        if ((window as any).__WALL_ENGINE__) {
+            (window as any).__WALL_ENGINE__.destroy();
+            (window as any).__WALL_ENGINE__ = undefined;
+        }
+    });
 }
