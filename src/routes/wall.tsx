@@ -7,6 +7,8 @@ import { WallEngine, type Viewport } from '../lib/wallEngine';
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 
+export const Route = createFileRoute('/wall')({ component: WallApp });
+
 function WallApp() {
     const [layers, setLayers] = useState<any[]>([]);
 
@@ -49,9 +51,12 @@ function WallApp() {
 
                 // 3. Calculate the true dynamic bounding box of the rotated rectangle
                 const radiusX =
-                    (sw / 2) * Math.abs(Math.cos(rad)) + (sh / 2) * Math.abs(Math.sin(rad));
+                    (sw / 2) * Math.abs(Math.cos(rad)) + (sh / 2) * Math.abs(Math.sin(rad)) + 20;
                 const radiusY =
-                    (sw / 2) * Math.abs(Math.sin(rad)) + (sh / 2) * Math.abs(Math.cos(rad));
+                    (sw / 2) * Math.abs(Math.sin(rad)) + (sh / 2) * Math.abs(Math.cos(rad)) + 20;
+
+                // Protect against network NaN poisoning
+                if (isNaN(radiusX) || isNaN(radiusY)) return;
 
                 // 4. Evaluate against the screen viewport
                 const isVisible =
@@ -109,19 +114,16 @@ function WallApp() {
             >
                 SCREEN&gt; C:{myViewport.x / SCREEN_W} R:{myViewport.y / SCREEN_H}
             </div>
-
-            {layers.map((layer) => (
-                <video
-                    key={layer.numericId}
-                    src={layer.url}
-                    muted
-                    playsInline
-                    loop={layer.config.loop ?? true}
-                    ref={(el) => {
+            {layers.map((layer) => {
+                // Share the exact same spatial and registry logic across both media types
+                const commonProps = {
+                    key: layer.numericId,
+                    src: layer.url,
+                    ref: (el: HTMLElement | null) => {
                         if (el)
                             engine.registerLayer(layer.numericId, layer.config, layer.playback, el);
-                    }}
-                    style={{
+                    },
+                    style: {
                         position: 'absolute',
                         top: 0,
                         left: 0,
@@ -129,11 +131,20 @@ function WallApp() {
                         width: `${layer.config.w}px`,
                         height: `${layer.config.h}px`,
                         zIndex: layer.config.zIndex || 1
-                    }}
-                />
-            ))}
+                    } as React.CSSProperties
+                };
+
+                if (layer.layerType === 'image') {
+                    return (
+                        <img {...commonProps} alt={`Layer ${layer.numericId}`} draggable={false} />
+                    );
+                }
+
+                // Otherwise, mount the full hardware-accelerated video tag
+                return (
+                    <video {...commonProps} muted playsInline loop={layer.config.loop ?? true} />
+                );
+            })}
         </div>
     );
 }
-
-export const Route = createFileRoute('/wall')({ component: WallApp });

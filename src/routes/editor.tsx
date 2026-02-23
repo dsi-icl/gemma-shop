@@ -117,6 +117,7 @@ function EditorApp() {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        const isImage = file.type.startsWith('image/');
         const numericId = nextId.current++;
         const localUrl = URL.createObjectURL(file); // Native instant preview Blob
 
@@ -126,7 +127,20 @@ function EditorApp() {
         let previewDataUrl = localUrl;
 
         // 1. Instantly read the dimensions and extract a poster frame locally!
-        {
+        if (isImage) {
+            const img = new window.Image();
+            const p = new Promise((resolve) => {
+                img.onload = resolve;
+                img.onerror = resolve; // Failsafe against corrupt files
+            });
+            if (!localUrl.startsWith('blob:') && !localUrl.startsWith('data:')) {
+                img.crossOrigin = 'anonymous';
+            }
+            img.src = localUrl;
+            await p;
+            mediaWidth = img.width || 800;
+            mediaHeight = img.height || 600;
+        } else {
             const tempVid = document.createElement('video');
             tempVid.muted = true;
             tempVid.playsInline = true;
@@ -183,7 +197,7 @@ function EditorApp() {
         // 2. OPTIMISTIC UPDATE: Mount it immediately to the local UI!
         const optimisticLayer = {
             numericId,
-            layerType: 'video',
+            layerType: isImage ? 'image' : 'video',
             url: previewDataUrl,
             playback: defaultPlayback,
             config,
@@ -248,7 +262,7 @@ function EditorApp() {
             type: 'upsert_layer',
             origin: 'handleBringToFront',
             numericId: numericId,
-            layerType: 'video',
+            layerType: layerToUpdate.layerType,
             url: layerToUpdate.url,
             config: updatedConfig,
             playback: engine.getPlayback(numericId) || layerToUpdate.playback
@@ -374,7 +388,7 @@ function EditorApp() {
             type: 'upsert_layer',
             origin: 'handleTransformEnd',
             numericId,
-            layerType: 'video',
+            layerType: layerToUpdate.layerType,
             url: layerToUpdate.url,
             config: updatedConfig,
             playback: truePlayback
@@ -423,7 +437,7 @@ function EditorApp() {
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept="video/mp4, image/jpeg, image/png, image/webp"
+                    accept="video/mp4, image/*"
                     onChange={handleUpload}
                 />
                 <button
@@ -819,7 +833,7 @@ export function PlaybackControls({ layer, engine }: { layer: any; engine: any })
                             type: 'upsert_layer',
                             origin: 'pbcInput',
                             numericId: layer.numericId,
-                            layerType: 'video',
+                            layerType: layer.type,
                             url: layer.url,
                             config: updatedConfig,
                             playback: engine.getPlayback(layer.numericId)

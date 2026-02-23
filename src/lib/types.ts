@@ -14,7 +14,7 @@ export interface VirtualLayerState {
         scale: number;
         zIndex: number;
     };
-    layerType?: 'video';
+    layerType?: 'video' | 'image';
     startPos: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
     targetPos: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
     animStartTime: number;

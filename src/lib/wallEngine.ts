@@ -12,7 +12,6 @@ export interface Viewport {
 type LayoutUpdateCallback = (data: any) => void;
 
 export class WallEngine {
-    private static instance: WallEngine;
     public ws: WebSocket;
 
     // Clock Sync State
