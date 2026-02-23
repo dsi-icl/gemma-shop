@@ -13,18 +13,20 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
-    "@tailwindcss/vite": "^4.2.0",
+    "@tailwindcss/vite": "^4.2.1",
     "@tanstack/pacer": "^0.19.0",
     "@tanstack/react-devtools": "^0.9.6",
-    "@tanstack/react-router": "^1.162.4",
-    "@tanstack/react-router-devtools": "^1.162.4",
-    "@tanstack/react-router-ssr-query": "^1.162.4",
-    "@tanstack/react-start": "^1.162.4",
-    "@tanstack/router-plugin": "^1.162.4",
+    "@tanstack/react-router": "^1.162.8",
+    "@tanstack/react-router-devtools": "^1.162.8",
+    "@tanstack/react-router-ssr-query": "^1.162.8",
+    "@tanstack/react-start": "^1.162.8",
+    "@tanstack/router-plugin": "^1.162.8",
+    "markdown-to-jsx": "^9.7.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-konva": "^19.2.2",
-    "tailwindcss": "^4.2.0"
+    "satori": "^0.19.2",
+    "tailwindcss": "^4.2.1"
   },
   "devDependencies": {
     "@tanstack/devtools-vite": "^0.5.1",

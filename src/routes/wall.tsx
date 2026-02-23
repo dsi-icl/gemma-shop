@@ -134,7 +134,7 @@ function WallApp() {
                     } as React.CSSProperties
                 };
 
-                if (layer.layerType === 'image') {
+                if (layer.layerType === 'image' || layer.layerType === 'text') {
                     return (
                         <img {...commonProps} alt={`Layer ${layer.numericId}`} draggable={false} />
                     );

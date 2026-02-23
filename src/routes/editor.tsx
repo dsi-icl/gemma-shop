@@ -2,8 +2,10 @@
 
 import { createFileRoute } from '@tanstack/react-router';
 import type { KonvaEventObject } from 'konva/lib/Node';
+import { compiler } from 'markdown-to-jsx/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stage, Layer, Image as KonvaImage, Transformer, Group, Text, Rect } from 'react-konva';
+import satori from 'satori';
 
 import { EditorEngine } from '../lib/editorEngine';
 
@@ -14,7 +16,69 @@ const SCREEN_H = 1080;
 const COLS = 16;
 const ROWS = 4;
 
+const cachedFont: Map<string, ArrayBuffer> = new Map();
+
 export const Route = createFileRoute('/editor')({ component: EditorApp });
+
+async function getFont(file: string) {
+    const storedFont = cachedFont.get(file);
+    if (storedFont) return storedFont;
+    const res = await fetch(`/fonts/${file}`);
+    const fontData = await res.arrayBuffer();
+    cachedFont.set(file, fontData);
+    return fontData;
+}
+
+async function renderTextToSVG(
+    markdown: string
+): Promise<{ url: string; w: number; h: number } | null> {
+    try {
+        const renderedJSX = compiler(markdown, {
+            forceWrapper: true,
+            wrapper: 'div',
+            wrapperProps: {
+                style: {
+                    display: 'flex',
+                    flexDirection: 'column',
+                    color: 'green',
+                    fontFamily: 'Lato'
+                }
+            } as any
+        });
+
+        const svg = await satori(renderedJSX, {
+            width: 600,
+            height: 400,
+            fonts: [
+                {
+                    name: 'Lato',
+                    data: await getFont('Lato-Regular.ttf'),
+                    weight: 400,
+                    style: 'normal'
+                },
+                {
+                    name: 'Lato',
+                    data: await getFont('Lato-Italic.ttf'),
+                    weight: 400,
+                    style: 'italic'
+                }
+            ]
+        });
+
+        // 3. Extract the dynamic height Satori calculated from the viewBox
+        const heightMatch = svg.match(/height="(\d+)"/);
+        const calculatedHeight = heightMatch ? parseInt(heightMatch[1]) : 200;
+
+        // 4. Encode as a clean data URL (faster and safer than Blobs for rapid typing)
+        const encodedSvg = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+        // const encodedPng = `data:image/png;base64,${Buffer.from(pngBuffer).toString('base64')}`;
+
+        return { url: encodedSvg, w: 800, h: calculatedHeight };
+    } catch (err) {
+        console.error('Error rendering text to SVG:', err);
+    }
+    return null;
+}
 
 function getDistance(p1: { x: number; y: number }, p2: { x: number; y: number }) {
     return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
@@ -245,6 +309,45 @@ function EditorApp() {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    const handleAddText = async () => {
+        const initialText = '# Hello Wall\nEdit this text!';
+        const { url, w, h } = (await renderTextToSVG(initialText)) ?? {};
+        if (!url) return;
+
+        const numericId = nextId.current++;
+        const config = {
+            cx: 400,
+            cy: 300,
+            w,
+            h,
+            rotation: 0,
+            scale: 1,
+            zIndex: highestZ,
+            markdown: initialText
+        };
+
+        const newLayer = {
+            numericId,
+            layerType: 'text',
+            url,
+            config,
+            playback: { status: 'paused', anchorMediaTime: 0, anchorServerTime: 0 }
+        };
+
+        setLayers((prev) => [...prev, newLayer]);
+        setSelectedId(numericId.toString());
+
+        engine.sendJSON({
+            type: 'upsert_layer',
+            origin: 'handleAddText',
+            numericId,
+            layerType: 'text',
+            url,
+            config,
+            playback: newLayer.playback
+        });
+    };
+
     const handleBringToFront = useCallback(() => {
         if (!selectedId) return;
         const newZ = highestZ + 1;
@@ -442,6 +545,14 @@ function EditorApp() {
                 />
                 <button
                     onClick={() => {
+                        handleAddText();
+                    }}
+                    style={{ color: 'blue' }}
+                >
+                    Add Text
+                </button>
+                <button
+                    onClick={() => {
                         engine.sendJSON({ type: 'clear_stage' });
                         setSelectedId(null);
                     }}
@@ -456,6 +567,7 @@ function EditorApp() {
                         );
                         if (!activeLayer) return null;
                         const isVideo = activeLayer.layerType === 'video';
+                        const isText = activeLayer.layerType === 'text';
                         return (
                             <>
                                 {isVideo && (
@@ -482,6 +594,23 @@ function EditorApp() {
                                         ></div>
                                         <VideoScrubber
                                             key={`vs_${activeLayer.numericId}`}
+                                            layer={activeLayer}
+                                            engine={engine}
+                                        />
+                                    </>
+                                )}
+
+                                {isText && (
+                                    <>
+                                        <div
+                                            style={{
+                                                borderLeft: '1px solid #ccc',
+                                                height: '24px',
+                                                margin: '0 10px'
+                                            }}
+                                        ></div>
+                                        <TextEditor
+                                            key={`te_${activeLayer.numericId}`}
                                             layer={activeLayer}
                                             engine={engine}
                                         />
@@ -550,7 +679,11 @@ function EditorApp() {
                             };
 
                             // Route images and uploading previews to the Static element
-                            if (layer.layerType === 'image' || layer.isUploading) {
+                            if (
+                                layer.layerType === 'image' ||
+                                layer.layerType === 'text' ||
+                                layer.isUploading
+                            ) {
                                 return (
                                     <KonvaStaticImage key={`spi_${layer.numericId}`} {...props} />
                                 );
@@ -933,6 +1066,42 @@ export function VideoScrubber({ layer, engine }: { layer: any; engine: any }) {
                 }}
                 onInput={handleInput}
                 onPointerUp={handleSeek}
+                style={{ flexGrow: 1, cursor: 'pointer' }}
+            />
+        </div>
+    );
+}
+
+export function TextEditor({ layer, engine }: { layer: any; engine: EditorEngine }) {
+    const [text, setText] = useState(layer.config.markdown);
+
+    const handleTextChange = async (
+        e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
+    ) => {
+        const newText = e.target.value;
+
+        const { url, w, h } = (await renderTextToSVG(newText)) ?? {};
+        if (!url) return;
+
+        layer.config.markdown = newText;
+        layer.url = url;
+        setText(e.target.value);
+        engine.sendJSON({
+            type: 'upsert_layer',
+            origin: 'handleTextChange',
+            numericId: layer.numericId,
+            layerType: layer.layerType,
+            url: layer.url,
+            config: layer.config,
+            playback: layer.playback
+        });
+    };
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '300px' }}>
+            <textarea
+                defaultValue={text}
+                onChange={handleTextChange}
                 style={{ flexGrow: 1, cursor: 'pointer' }}
             />
         </div>
