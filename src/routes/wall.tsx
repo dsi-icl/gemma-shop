@@ -109,7 +109,7 @@ function WallApp() {
                     top: 10,
                     left: 10,
                     color: 'rgba(255,255,255,0.3)',
-                    zIndex: 9999,
+                    zIndex: 1000000,
                     border: '3px solid red',
                     width: `${SCREEN_W - 2 * 10}px`,
                     height: `${SCREEN_H - 2 * 10}px`,

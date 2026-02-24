@@ -94,10 +94,10 @@ function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
 function EditorApp() {
     const [layers, setLayers] = useState<any[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [highestZ, setHighestZ] = useState(1);
     const [isPinching, setIsPinching] = useState(false);
 
     const nextId = useRef(1);
+    const nextZIndex = useRef(10);
     const trRef = useRef<any>(null);
     const lastCenter = useRef<{ x: number; y: number } | null>(null);
     const lastDist = useRef<number | null>(null);
@@ -117,6 +117,16 @@ function EditorApp() {
                 if (data.layers.length > 0)
                     nextId.current = Math.max(...data.layers.map((l: any) => l.numericId)) + 1;
             } else if (data.type === 'upsert_layer') {
+                const newLayerId = parseInt(data.numericId);
+                if (newLayerId > nextId.current) nextId.current = newLayerId + 5;
+                // Multiple editor may interfere we build 5 degree tolerance
+                if (!layers.find((l) => l.numericId === data.numericId)) {
+                    console.log('WE DONT KNWO THIS ITEM');
+                    nextZIndex.current =
+                        (data.config.zIndex ?? 0) > nextZIndex.current
+                            ? data.config.zIndex + 5
+                            : nextZIndex.current + 5;
+                }
                 setLayers((prev) => {
                     const filtered = prev.filter((l) => l.numericId !== data.numericId);
                     return [...filtered, data];
@@ -251,7 +261,7 @@ function EditorApp() {
             rotation: 0,
             duration: duration,
             scale: Math.min(1, 640 / mediaWidth),
-            zIndex: highestZ,
+            zIndex: nextZIndex.current++,
             loop: true
         };
 
@@ -319,7 +329,15 @@ function EditorApp() {
         const h = canvasEl.height;
 
         const numericId = nextId.current++;
-        const config = { cx: 400, cy: 300, w, h, rotation: 0, scale: 1, zIndex: highestZ };
+        const config = {
+            cx: 400,
+            cy: 300,
+            w,
+            h,
+            rotation: 0,
+            scale: 1,
+            zIndex: nextZIndex.current++
+        };
 
         const newLayer = {
             numericId,
@@ -356,7 +374,7 @@ function EditorApp() {
             h,
             rotation: 0,
             scale: 1,
-            zIndex: highestZ,
+            zIndex: nextZIndex.current++,
             markdown: initialText
         };
 
@@ -384,13 +402,17 @@ function EditorApp() {
 
     const handleBringToFront = useCallback(() => {
         if (!selectedId) return;
-        const newZ = highestZ + 1;
-        setHighestZ(newZ);
         const numericId = parseInt(selectedId);
         const layerToUpdate = layers.find((l) => l.numericId === numericId);
         if (!layerToUpdate) return;
 
-        const updatedConfig = { ...layerToUpdate.config, zIndex: newZ };
+        const updatedConfig = {
+            ...layerToUpdate.config,
+            zIndex:
+                layerToUpdate.config === nextZIndex.current
+                    ? layerToUpdate.config
+                    : nextZIndex.current++
+        };
         setLayers((prev) =>
             prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
         );
@@ -404,7 +426,7 @@ function EditorApp() {
             config: updatedConfig,
             playback: engine.getPlayback(numericId) || layerToUpdate.playback
         });
-    }, [layers, selectedId, highestZ]);
+    }, [layers, selectedId]);
 
     const handleStageInteractionStart = (e: KonvaEventObject<any>) => {
         if (e.evt.touches?.length === 1 || e.type === 'mousedown') {
@@ -551,6 +573,8 @@ function EditorApp() {
             trRef.current.getLayer().batchDraw();
         }
     }, [selectedId]);
+
+    console.log(layers);
 
     return (
         <div style={{ width: '100vw', height: '100vh', margin: 0 }}>
@@ -710,7 +734,10 @@ function EditorApp() {
                     })}
 
                     {[...layers]
-                        .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
+                        .sort((a, b) => {
+                            console.log('A-B', a.config.zIndex, b.config.zIndex);
+                            return (a.config.zIndex || 0) - (b.config.zIndex || 0);
+                        })
                         .map((layer) => {
                             const props = {
                                 layer,
@@ -1185,6 +1212,8 @@ export function TextEditor({ layer, engine }: { layer: any; engine: EditorEngine
         if (!url) return;
 
         layer.config.markdown = newText;
+        layer.config.h = h;
+        layer.config.w = w;
         layer.url = url;
         setText(e.target.value);
         engine.sendJSON({
