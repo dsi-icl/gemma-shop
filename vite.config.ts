@@ -14,8 +14,6 @@ const config = defineConfig({
             features: { websocket: true },
             serveStatic: true,
             ssrRoutes: []
-            // node: false,
-            // runtimeConfig: { nitro: { envExpansion: true } }
         }),
         devtools(),
         tsconfigPaths({ projects: ['./tsconfig.json'] }),

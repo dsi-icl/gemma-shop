@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState, useMemo } from 'react';
 
+import { RoyForceGraph } from '@/components/roygraph/RoyForceGraph';
+
 import { WallEngine, type Viewport } from '../lib/wallEngine';
 
 // Define your physical screen resolution
@@ -33,11 +35,11 @@ function WallApp() {
                 setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
             }
         });
-
         let frameId: number;
         const loop = () => {
             engine.layers.forEach((layer) => {
                 if (!layer.el) return;
+                // if (!layer.visible) return;
 
                 const pos = engine.calculateCurrentPosition(layer);
 
@@ -69,9 +71,11 @@ function WallApp() {
                     const localX = pos.cx - layer.config.w / 2 - myViewport.x;
                     const localY = pos.cy - layer.config.h / 2 - myViewport.y;
 
+                    layer.visible = true;
                     layer.el.style.transform = `translate3d(${localX}px, ${localY}px, 0) rotate(${pos.rotation}deg) scale(${pos.scale})`;
                     layer.el.style.opacity = '1';
                 } else {
+                    layer.visible = false;
                     layer.el.style.opacity = '0';
                 }
             });
@@ -107,8 +111,8 @@ function WallApp() {
                     color: 'rgba(255,255,255,0.3)',
                     zIndex: 9999,
                     border: '3px solid red',
-                    width: `${SCREEN_W}px`,
-                    height: `${SCREEN_H}px`,
+                    width: `${SCREEN_W - 2 * 10}px`,
+                    height: `${SCREEN_H - 2 * 10}px`,
                     fontFamily: 'monospace'
                 }}
             >
@@ -117,7 +121,6 @@ function WallApp() {
             {layers.map((layer) => {
                 // Share the exact same spatial and registry logic across both media types
                 const commonProps = {
-                    key: layer.numericId,
                     src: layer.url,
                     ref: (el: HTMLElement | null) => {
                         if (el)
@@ -136,13 +139,28 @@ function WallApp() {
 
                 if (layer.layerType === 'image' || layer.layerType === 'text') {
                     return (
-                        <img {...commonProps} alt={`Layer ${layer.numericId}`} draggable={false} />
+                        <img
+                            key={layer.numericId}
+                            {...commonProps}
+                            alt={`Layer ${layer.numericId}`}
+                            draggable={false}
+                        />
                     );
+                }
+
+                if (layer.layerType === 'graph') {
+                    return <RoyForceGraph key={layer.numericId} {...commonProps} />;
                 }
 
                 // Otherwise, mount the full hardware-accelerated video tag
                 return (
-                    <video {...commonProps} muted playsInline loop={layer.config.loop ?? true} />
+                    <video
+                        key={layer.numericId}
+                        {...commonProps}
+                        muted
+                        playsInline
+                        loop={layer.config.loop ?? true}
+                    />
                 );
             })}
         </div>

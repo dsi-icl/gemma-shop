@@ -2,6 +2,8 @@
 
 import type { LayerState } from './types';
 
+const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
+
 export interface Viewport {
     x: number;
     y: number;
@@ -27,8 +29,7 @@ export class WallEngine {
         this.viewport = viewport;
 
         // Automatically detect HTTPS vs HTTP for the WebSocket protocol
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        this.ws = new WebSocket(`${wsProtocol}//${window.location.host}/bus`);
+        this.ws = new WebSocket(WEBSOCKET_GEMMA_BUS);
         this.ws.binaryType = 'arraybuffer';
 
         this.ws.onopen = () => {

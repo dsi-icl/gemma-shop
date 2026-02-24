@@ -2,7 +2,7 @@
 
 import { throttle } from '@tanstack/pacer';
 
-const SERVER_URL = `ws://${window.location.hostname}:3000/bus`;
+const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
 
 type ServerMessageCallback = (data: any) => void;
 type BinaryMessageCallback = (
@@ -26,7 +26,7 @@ export class EditorEngine {
     private bestRTT = Infinity;
 
     private constructor() {
-        this.ws = new WebSocket(SERVER_URL);
+        this.ws = new WebSocket(WEBSOCKET_GEMMA_BUS);
         this.ws.binaryType = 'arraybuffer';
 
         this.ws.onopen = () => {

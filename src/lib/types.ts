@@ -14,7 +14,7 @@ export interface VirtualLayerState {
         scale: number;
         zIndex: number;
     };
-    layerType?: 'video' | 'image' | 'text';
+    layerType?: 'video' | 'image' | 'graph' | 'text';
     startPos: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
     targetPos: { cx: number; cy: number; w: number; h: number; rotation: number; scale: number };
     animStartTime: number;
@@ -27,4 +27,5 @@ export interface VirtualLayerState {
 
 export interface LayerState extends VirtualLayerState {
     el: HTMLElement | HTMLVideoElement | null;
+    visible?: boolean;
 }

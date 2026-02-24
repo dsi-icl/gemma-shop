@@ -1,11 +1,14 @@
 'use client';
 
 import { createFileRoute } from '@tanstack/react-router';
+import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { compiler } from 'markdown-to-jsx/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stage, Layer, Image as KonvaImage, Transformer, Group, Text, Rect } from 'react-konva';
 import satori from 'satori';
+
+import { RoyForceGraph } from '@/components/roygraph/RoyForceGraph';
 
 import { EditorEngine } from '../lib/editorEngine';
 
@@ -309,6 +312,37 @@ function EditorApp() {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    const handleAddGraph = async () => {
+        const canvasEl = document.getElementById('roy-force-graph-host') as HTMLCanvasElement;
+        const url = canvasEl.toDataURL();
+        const w = canvasEl.width;
+        const h = canvasEl.height;
+
+        const numericId = nextId.current++;
+        const config = { cx: 400, cy: 300, w, h, rotation: 0, scale: 1, zIndex: highestZ };
+
+        const newLayer = {
+            numericId,
+            layerType: 'graph',
+            url,
+            config,
+            playback: { status: 'paused', anchorMediaTime: 0, anchorServerTime: 0 }
+        };
+
+        setLayers((prev) => [...prev, newLayer]);
+        setSelectedId(numericId.toString());
+
+        engine.sendJSON({
+            type: 'upsert_layer',
+            origin: 'handleAddGraph',
+            numericId,
+            layerType: 'graph',
+            url,
+            config,
+            playback: newLayer.playback
+        });
+    };
+
     const handleAddText = async () => {
         const initialText = '# Hello Wall\nEdit this text!';
         const { url, w, h } = (await renderTextToSVG(initialText)) ?? {};
@@ -523,7 +557,7 @@ function EditorApp() {
             {/* Dynamic Control Panel */}
             <div
                 style={{
-                    position: 'absolute',
+                    position: 'fixed',
                     bottom: 10,
                     left: 10,
                     zIndex: 10,
@@ -550,6 +584,14 @@ function EditorApp() {
                     style={{ color: 'blue' }}
                 >
                     Add Text
+                </button>
+                <button
+                    onClick={() => {
+                        handleAddGraph();
+                    }}
+                    style={{ color: 'cyan' }}
+                >
+                    Add Roy Graph
                 </button>
                 <button
                     onClick={() => {
@@ -688,6 +730,11 @@ function EditorApp() {
                                     <KonvaStaticImage key={`spi_${layer.numericId}`} {...props} />
                                 );
                             }
+                            if (layer.layerType === 'graph') {
+                                return (
+                                    <RoyStaticRenderer key={`roy_${layer.numericId}`} {...props} />
+                                );
+                            }
                             return <KonvaVideo key={`vid_${layer.numericId}`} {...props} />;
                         })}
 
@@ -702,6 +749,15 @@ function EditorApp() {
                     />
                 </Layer>
             </Stage>
+            <RoyForceGraph
+                style={{
+                    display: 'block',
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    visibility: 'hidden'
+                }}
+            />
         </div>
     );
 }
@@ -870,7 +926,7 @@ function KonvaStaticImage({ layer, isPinching, onSelect, onTransform, onTransfor
             />
 
             {/* The Real-Time Processing Overlay */}
-            {layer.isUploading && !layer.layerType.includes('image') && (
+            {layer.isUploading && layer.layerType === 'video' && (
                 <Group offsetX={layer.config.w / 2} offsetY={layer.config.h / 2}>
                     <Rect width={layer.config.w} height={layer.config.h} fill="rgba(0,0,0,0.6)" />
                     {/* Centered progress bar */}
@@ -902,6 +958,51 @@ function KonvaStaticImage({ layer, isPinching, onSelect, onTransform, onTransfor
             )}
         </Group>
     );
+}
+
+function RoyStaticRenderer({ layer, isPinching, onSelect, onTransform, onTransformEnd }: any) {
+    const imageRef = useRef<Konva.Image>(null);
+    useEffect(() => {
+        const updateTimer = setInterval(() => {
+            const royElement = document.getElementById('roy-force-graph-host') as HTMLCanvasElement;
+            const url = royElement.toDataURL();
+            royElement.style.height = layer.config.h;
+            royElement.style.width = layer.config.w;
+            royElement.style.offset = `${layer.config.h / 2 + 'px'}, ${layer.config.w / 2 + 'px'}`;
+            if (imageRef.current) {
+                const img = new window.Image(layer.config.w, layer.config.h);
+                img.src = url;
+                imageRef.current.image(img);
+                imageRef.current.draw();
+            }
+        }, 100);
+        return () => clearInterval(updateTimer);
+    }, []);
+
+    return (
+        <KonvaImage
+            id={layer.numericId.toString()}
+            ref={imageRef}
+            image={undefined}
+            width={layer.config.w}
+            height={layer.config.h}
+            offsetX={layer.config.w / 2}
+            offsetY={layer.config.h / 2}
+            x={layer.config.cx}
+            y={layer.config.cy}
+            scaleX={layer.config.scale}
+            scaleY={layer.config.scale}
+            rotation={layer.config.rotation}
+            draggable={!isPinching}
+            onClick={onSelect}
+            onTap={onSelect}
+            onDragMove={onTransform}
+            onTransform={onTransform}
+            onDragEnd={onTransformEnd}
+            onTransformEnd={onTransformEnd}
+        />
+    );
+    // return <KonvaStaticImage {...props} ref={imageRef} />;
 }
 
 // --- SUB-COMPONENT: Smart Playback Controls ---
