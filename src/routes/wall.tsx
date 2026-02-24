@@ -33,6 +33,8 @@ function WallApp() {
                 setLayers((prev) => [...prev.filter((l) => l.numericId !== data.numericId), data]);
             } else if (data.type === 'delete_layer') {
                 setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
+            } else if (data.type === 'reboot') {
+                setTimeout(() => window.location.reload(), Math.random() * 1000 + 1000);
             }
         });
         let frameId: number;

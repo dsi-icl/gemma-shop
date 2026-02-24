@@ -124,7 +124,6 @@ function EditorApp() {
                 if (newLayerId > nextId.current) nextId.current = newLayerId + 5;
                 // Multiple editor may interfere we build 5 degree tolerance
                 if (!layers.find((l) => l.numericId === data.numericId)) {
-                    console.log('WE DONT KNWO THIS ITEM');
                     nextZIndex.current =
                         (data.config.zIndex ?? 0) > nextZIndex.current
                             ? data.config.zIndex + 5
@@ -577,8 +576,6 @@ function EditorApp() {
         }
     }, [selectedId]);
 
-    console.log(layers);
-
     return (
         <div style={{ width: '100vw', height: '100vh', margin: 0 }}>
             {/* Dynamic Control Panel */}
@@ -634,6 +631,15 @@ function EditorApp() {
                             className="cursor-pointer font-bold text-red-700"
                         >
                             Reset Stage
+                        </button>
+                        <button
+                            onClick={() => {
+                                engine.sendJSON({ type: 'reboot' });
+                                setSelectedId(null);
+                            }}
+                            className="cursor-pointer font-bold text-red-700"
+                        >
+                            Refresh
                         </button>
                     </div>
                 </div>

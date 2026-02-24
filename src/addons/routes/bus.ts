@@ -102,6 +102,12 @@ export default defineWebSocketHandler({
                     return;
                 }
 
+                // C.bis Layer Setup
+                if (data.type === 'reboot') {
+                    broadcastOtherOnlyJSON(data, wallClients, peer);
+                    return;
+                }
+
                 // D. Playback Controls (The Anchor State Machine)
                 if (data.type === 'video_play') {
                     const layer = stageState.layers.get(data.numericId);

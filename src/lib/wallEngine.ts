@@ -157,7 +157,8 @@ export class WallEngine {
             } else if (
                 data.type === 'hydrate' ||
                 data.type === 'upsert_layer' ||
-                data.type === 'delete_layer'
+                data.type === 'delete_layer' ||
+                data.type === 'reboot'
             ) {
                 this.layoutCallbacks.forEach((cb) => cb(data));
             } else if (data.type === 'video_sync' || data.type === 'video_seek') {
