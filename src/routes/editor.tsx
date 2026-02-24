@@ -713,8 +713,10 @@ function EditorApp() {
             </div>
 
             <Stage
-                width={window.innerWidth}
-                height={window.innerHeight}
+                width={COLS * SCREEN_W * 0.25}
+                height={ROWS * SCREEN_H * 0.25}
+                // width={window.innerWidth}
+                // height={window.innerHeight}
                 onMouseDown={handleStageInteractionStart}
                 onTouchStart={handleStageInteractionStart}
                 onTouchMove={handleTouchMove}
