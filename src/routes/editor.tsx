@@ -114,8 +114,11 @@ function EditorApp() {
         const unsubscribeJSON = engine.subscribeToJson((data) => {
             if (data.type === 'hydrate') {
                 setLayers(data.layers);
-                if (data.layers.length > 0)
-                    nextId.current = Math.max(...data.layers.map((l: any) => l.numericId)) + 1;
+                if (data.layers.length > 0) {
+                    nextId.current = Math.max(...data.layers.map((l: any) => l.numericId)) + 5;
+                    nextZIndex.current =
+                        Math.max(...data.layers.map((l: any) => l.config.zIndex)) + 5;
+                }
             } else if (data.type === 'upsert_layer') {
                 const newLayerId = parseInt(data.numericId);
                 if (newLayerId > nextId.current) nextId.current = newLayerId + 5;
@@ -585,7 +588,8 @@ function EditorApp() {
                     bottom: 10,
                     left: 10,
                     zIndex: 10,
-                    background: 'white',
+                    background: '#333',
+                    color: '#ccc',
                     padding: 15,
                     borderRadius: 8,
                     display: 'flex',
@@ -595,37 +599,44 @@ function EditorApp() {
                     transformOrigin: 'left bottom'
                 }}
             >
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="video/mp4, image/*"
-                    onChange={handleUpload}
-                />
-                <button
-                    onClick={() => {
-                        handleAddText();
-                    }}
-                    style={{ color: 'blue' }}
-                >
-                    Add Text
-                </button>
-                <button
-                    onClick={() => {
-                        handleAddGraph();
-                    }}
-                    style={{ color: 'cyan' }}
-                >
-                    Add Roy Graph
-                </button>
-                <button
-                    onClick={() => {
-                        engine.sendJSON({ type: 'clear_stage' });
-                        setSelectedId(null);
-                    }}
-                    style={{ color: 'red', fontWeight: 'bold' }}
-                >
-                    Reset Stage
-                </button>
+                <div className="flex flex-col gap-2">
+                    <div>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="video/mp4, image/*"
+                            onChange={handleUpload}
+                            className="cursor-pointer"
+                        />
+                    </div>
+                    <div className="flex gap-4 text-blue-400">
+                        <button
+                            onClick={() => {
+                                handleAddText();
+                            }}
+                            className="cursor-pointer"
+                        >
+                            Add Text
+                        </button>
+                        <button
+                            onClick={() => {
+                                handleAddGraph();
+                            }}
+                            className="cursor-pointer"
+                        >
+                            Add Roy Graph
+                        </button>
+                        <button
+                            onClick={() => {
+                                engine.sendJSON({ type: 'clear_stage' });
+                                setSelectedId(null);
+                            }}
+                            className="cursor-pointer font-bold text-red-700"
+                        >
+                            Reset Stage
+                        </button>
+                    </div>
+                </div>
                 {selectedId &&
                     (() => {
                         const activeLayer = layers.find(
@@ -636,6 +647,14 @@ function EditorApp() {
                         const isText = activeLayer.layerType === 'text';
                         return (
                             <>
+                                <div
+                                    style={{
+                                        borderLeft: '1px solid #ccc',
+                                        height: '24px',
+                                        margin: '0 10px'
+                                    }}
+                                ></div>
+                                <button onClick={handleBringToFront}>Bring to Front</button>
                                 {isVideo && (
                                     <>
                                         <div
@@ -682,15 +701,6 @@ function EditorApp() {
                                         />
                                     </>
                                 )}
-
-                                <div
-                                    style={{
-                                        borderLeft: '1px solid #ccc',
-                                        height: '24px',
-                                        margin: '0 10px'
-                                    }}
-                                ></div>
-                                <button onClick={handleBringToFront}>Bring to Front</button>
                             </>
                         );
                     })()}
@@ -734,10 +744,7 @@ function EditorApp() {
                     })}
 
                     {[...layers]
-                        .sort((a, b) => {
-                            console.log('A-B', a.config.zIndex, b.config.zIndex);
-                            return (a.config.zIndex || 0) - (b.config.zIndex || 0);
-                        })
+                        .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
                         .map((layer) => {
                             const props = {
                                 layer,
