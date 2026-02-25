@@ -1,5 +1,6 @@
 'use client';
 
+import { DiscoBallIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
@@ -606,13 +607,17 @@ function EditorApp() {
                 }}
             >
                 <div className="flex flex-col gap-2">
+                    <div className="flex items-end">
+                        <span className="text-3xl">Gemma Shop</span>
+                        <DiscoBallIcon className="absolute right-4 p-1 text-4xl" />
+                    </div>
                     <div>
                         <input
                             ref={fileInputRef}
                             type="file"
                             accept="video/mp4, image/*"
                             onChange={handleUpload}
-                            className="cursor-pointer"
+                            className="cursor-pointer opacity-50 content-none"
                         />
                     </div>
                     <div className="flex gap-4 text-blue-400">
