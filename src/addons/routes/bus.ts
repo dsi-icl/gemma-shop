@@ -69,6 +69,14 @@ export default defineWebSocketHandler({
                     return;
                 }
 
+                if (data.type === 'rehydrate_please') {
+                    peer.send(
+                        JSON.stringify({
+                            type: 'hydrate',
+                            layers: Array.from(stageState.layers.values())
+                        }))
+                }
+
                 if (data.type === 'clear_stage') {
                     stageState.layers.clear();
                     const hydratePayload = JSON.stringify({ type: 'hydrate', layers: [] });

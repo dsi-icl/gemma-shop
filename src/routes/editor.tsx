@@ -110,6 +110,15 @@ function EditorApp() {
     }, [layers]);
 
     useEffect(() => {
+        if ((window as any).__EDITOR_RELOADING__) {
+            setTimeout(() => {
+                engine.sendJSON({ type: 'rehydrate_please' });
+            }, 500);
+            (window as any).__EDITOR_RELOADING__ = false;
+        }
+    }, []);
+
+    useEffect(() => {
         // 1. JSON Slow-Path (Hydration and Setup ONLY. Playback has been stripped out!)
         const unsubscribeJSON = engine.subscribeToJson((data) => {
             if (data.type === 'hydrate') {
@@ -532,10 +541,10 @@ function EditorApp() {
 
         const updatedConfig = {
             ...layerToUpdate.config,
-            cx: node.x(),
-            cy: node.y(),
+            cx: Math.round(node.x()),
+            cy: Math.round(node.y()),
             scale: node.scaleX(),
-            rotation: node.rotation()
+            rotation: Math.round(node.rotation())
         };
 
         setLayers((prev) =>
@@ -584,7 +593,7 @@ function EditorApp() {
                     position: 'fixed',
                     bottom: 10,
                     left: 10,
-                    zIndex: 10,
+                    zIndex: 100,
                     background: '#333',
                     color: '#ccc',
                     padding: 15,
@@ -710,6 +719,34 @@ function EditorApp() {
                             </>
                         );
                     })()}
+            </div>
+
+            {/* Layers Side Panel */}
+            <div className="fixed top-0 right-0 z-200 flex h-full w-1/4 flex-col gap-2 bg-[#333a] p-5 text-2xl text-white">
+                {[...layers]
+                    .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
+                    .map((l) => {
+                        return (
+                            <div
+                                key={l.numericId}
+                                className="w-full cursor-pointer bg-[#5556] p-5 hover:bg-[#555C]"
+                                onClick={() => {
+                                    setSelectedId(l.numericId);
+                                }}
+                            >
+                                <span>
+                                    {' '}
+                                    Layer {l.numericId} ({l.layerType})
+                                </span>
+                                <br />
+                                <span className="flex gap-10">
+                                    {/* {JSON.stringify(l.config)} */}
+                                    <span>x: {l.config.cx}</span> <span>y: {l.config.cy}</span>{' '}
+                                    <span>r: {l.config.rotation}</span>
+                                </span>
+                            </div>
+                        );
+                    })}
             </div>
 
             <Stage
@@ -1251,4 +1288,11 @@ export function TextEditor({ layer, engine }: { layer: any; engine: EditorEngine
             />
         </div>
     );
+}
+
+// --- VITE HMR DEFENSE STRATEGY ---
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        (window as any).__EDITOR_RELOADING__ = true;
+    });
 }

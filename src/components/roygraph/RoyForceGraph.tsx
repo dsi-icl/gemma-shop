@@ -96,7 +96,6 @@ export const RoyForceGraph: FC<
 
             context.clearRect(0, 0, globalCanvasRef.width, globalCanvasRef.height);
 
-            // console.log(links);
             // Draw links
             links.forEach((d: any) => {
                 const source = nodes.find((n: any) => n.id === d.source);
