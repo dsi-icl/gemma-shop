@@ -6,10 +6,22 @@ import React, {
     type CanvasHTMLAttributes,
     type FC,
     type PropsWithChildren,
-    type RefAttributes
+    type RefAttributes,
+    type RefObject
 } from 'react';
+import { z } from 'zod';
 
 import { useWS } from './useWS';
+
+const RoyGraphServerFrameSchema = z.object({
+    ids: z.array(z.number()),
+    xs: z.array(z.number()),
+    ys: z.array(z.number()),
+    srcs: z.array(z.number()),
+    tgts: z.array(z.number())
+});
+
+export type RoyGraphServerFrame = z.infer<typeof RoyGraphServerFrameSchema>;
 
 function getCameraFromURL() {
     const params = new URLSearchParams(window.location.search);
@@ -27,7 +39,6 @@ function getCameraFromURL() {
 
 let camera = getCameraFromURL();
 
-const dpr = window.devicePixelRatio || 1;
 const cssWidth = 1080;
 const cssHeight = 1080;
 
@@ -63,23 +74,24 @@ export const RoyForceGraph: FC<
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const ws = useWS();
 
-    //  Message Handler, use addEventListener
     const handleMessage = throttle(
         (event: MessageEvent) => {
             if (!event.data) return;
 
             const bytes = new Uint8Array(event.data as ArrayBuffer);
-            const packed = bytes.length >= 5 ? BSON.deserialize(bytes) : null;
+            // We do not parse here to avoid performance hit. We cast directly as blind-trust
+            const packed =
+                bytes.length >= 5 ? (BSON.deserialize(bytes) as RoyGraphServerFrame) : null;
             if (!packed) return;
 
-            const nodes = packed.ids.map((id: any, i: number) => ({
+            const nodes = packed.ids.map((id, i) => ({
                 id: String(id),
                 x: packed.xs[i] * 2 - cssWidth / 2,
                 y: packed.ys[i] * 2 - cssHeight / 2,
                 group: 1
             }));
 
-            const links = packed.srcs.map((src: any, i: number) => ({
+            const links = packed.srcs.map((src, i) => ({
                 source: String(src),
                 target: String(packed.tgts[i]),
                 value: 1
@@ -97,10 +109,18 @@ export const RoyForceGraph: FC<
             context.clearRect(0, 0, globalCanvasRef.width, globalCanvasRef.height);
 
             // Draw links
-            links.forEach((d: any) => {
-                const source = nodes.find((n: any) => n.id === d.source);
-                const target = nodes.find((n: any) => n.id === d.target);
-                if (source.x && source.y && target.x && target.y) {
+            links.forEach((d) => {
+                const source = nodes.find((n) => n.id === d.source);
+                const target = nodes.find((n) => n.id === d.target);
+                // We could also bblind-trust here and avoid the checks for performance gains
+                if (
+                    source &&
+                    target &&
+                    source.x !== undefined &&
+                    source.y !== undefined &&
+                    target.x !== undefined &&
+                    target.y !== undefined
+                ) {
                     const gradient = context.createLinearGradient(
                         source.x,
                         source.y,
@@ -120,7 +140,7 @@ export const RoyForceGraph: FC<
             });
 
             // Draw nodes
-            nodes.forEach((d: any) => {
+            nodes.forEach((d) => {
                 context.beginPath();
                 if (d.x && d.y) {
                     context.moveTo(d.x, d.y);
@@ -218,9 +238,6 @@ export const RoyForceGraph: FC<
                 canvasRef.current = node;
                 setRefs(node, ref);
             }}
-            // width={cssWidth}
-            // height={cssHeight}
-            // style={{ width: cssWidth, height: cssHeight }}
         />
     );
 };
@@ -231,7 +248,7 @@ function setRefs<T>(element: T | null, ...refs: (React.Ref<T> | undefined)[]) {
         if (typeof ref === 'function') {
             ref(element);
         } else {
-            (ref as React.MutableRefObject<T | null>).current = element;
+            (ref as RefObject<T | null>).current = element;
         }
     });
 }

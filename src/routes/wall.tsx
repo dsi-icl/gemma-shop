@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, type CSSProperties } from 'react';
 
 import { RoyForceGraph } from '@/components/roygraph/RoyForceGraph';
+import type { LayerWithWallState } from '@/lib/types';
 
 import { WallEngine, type Viewport } from '../lib/wallEngine';
 
@@ -12,7 +13,7 @@ const SCREEN_H = 1080;
 export const Route = createFileRoute('/wall')({ component: WallApp });
 
 function WallApp() {
-    const [layers, setLayers] = useState<any[]>([]);
+    const [layers, setLayers] = useState<LayerWithWallState[]>([]);
 
     // 1. Parse URL Parameters: ?c=0&r=1
     const myViewport = useMemo<Viewport>(() => {
@@ -30,7 +31,10 @@ function WallApp() {
         const unsubscribe = engine.subscribeToLayoutUpdates((data) => {
             if (data.type === 'hydrate') setLayers(data.layers);
             else if (data.type === 'upsert_layer') {
-                setLayers((prev) => [...prev.filter((l) => l.numericId !== data.numericId), data]);
+                setLayers((prev) => [
+                    ...prev.filter((l) => l.numericId !== data.layer.numericId),
+                    data.layer
+                ]);
             } else if (data.type === 'delete_layer') {
                 setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
             } else if (data.type === 'reboot') {
@@ -100,8 +104,6 @@ function WallApp() {
                 width: '100vw',
                 height: '100vh',
                 position: 'relative'
-                // scale: 0.5,
-                // transformOrigin: 'top left'
             }}
         >
             {/* Visual Debugger: Shows the Screen ID in the corner */}
@@ -125,8 +127,7 @@ function WallApp() {
                 const commonProps = {
                     src: layer.url,
                     ref: (el: HTMLElement | null) => {
-                        if (el)
-                            engine.registerLayer(layer.numericId, layer.config, layer.playback, el);
+                        if (el) engine.registerLayer(layer, el);
                     },
                     style: {
                         position: 'absolute',
@@ -136,10 +137,10 @@ function WallApp() {
                         width: `${layer.config.w}px`,
                         height: `${layer.config.h}px`,
                         zIndex: layer.config.zIndex || 1
-                    } as React.CSSProperties
+                    } as CSSProperties
                 };
 
-                if (layer.layerType === 'image' || layer.layerType === 'text') {
+                if (layer.type === 'image' || layer.type === 'text') {
                     return (
                         <img
                             key={layer.numericId}
@@ -150,7 +151,7 @@ function WallApp() {
                     );
                 }
 
-                if (layer.layerType === 'graph') {
+                if (layer.type === 'graph') {
                     return <RoyForceGraph key={layer.numericId} {...commonProps} />;
                 }
 

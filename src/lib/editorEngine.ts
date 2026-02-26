@@ -2,9 +2,11 @@
 
 import { throttle } from '@tanstack/pacer';
 
+import { GSMessageSchema, type GSMessage, type Layer } from './types';
+
 const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
 
-type ServerMessageCallback = (data: any) => void;
+type ServerMessageCallback = (data: GSMessage) => void;
 type BinaryMessageCallback = (
     id: number,
     cx: number,
@@ -12,7 +14,10 @@ type BinaryMessageCallback = (
     scale: number,
     rotation: number
 ) => void;
-type PlaybackCallback = (id: number, playback: any) => void;
+type PlaybackCallback = (
+    id: number,
+    playback: Extract<Layer, { type: 'video' }>['playback']
+) => void;
 
 export class EditorEngine {
     public ws: WebSocket;
@@ -20,8 +25,8 @@ export class EditorEngine {
     private messageCallbacks = new Set<ServerMessageCallback>();
     private binaryCallbacks = new Set<BinaryMessageCallback>();
     private playbackCallbacks = new Set<PlaybackCallback>();
-    private playbackStates = new Map<number, any>();
-    private bufferedHydration: any = null;
+    private playbackStates = new Map<number, Extract<Layer, { type: 'video' }>['playback']>();
+    private bufferedHydration: Extract<GSMessage, { type: 'hydrate' }> | null = null;
     private clockOffset = 0;
     private bestRTT = Infinity;
 
@@ -70,7 +75,7 @@ export class EditorEngine {
 
             // --- JSON SLOW-PATH ---
             if (typeof event.data === 'string') {
-                const data = JSON.parse(event.data);
+                const data = GSMessageSchema.parse(JSON.parse(event.data));
 
                 // Intercept Playback. Save it, broadcast it, and STOP it from reaching React.
                 if (data.type === 'video_sync' || data.type === 'video_seek') {
@@ -82,8 +87,9 @@ export class EditorEngine {
                 if (data.type === 'hydrate') {
                     this.bufferedHydration = data;
                     // Populate the playback memory on refresh so components have accurate data!
-                    data.layers.forEach((l: any) => {
-                        if (l.playback) this.playbackStates.set(l.numericId, l.playback);
+                    data.layers.forEach((l) => {
+                        if (l.type === 'video' && l.playback)
+                            this.playbackStates.set(l.numericId, l.playback);
                     });
                 }
 
@@ -94,10 +100,10 @@ export class EditorEngine {
 
     public static getInstance(): EditorEngine {
         // Escape Vite's module scope by anchoring the Singleton to the Window
-        if (!(window as any).__EDITOR_ENGINE__) {
-            (window as any).__EDITOR_ENGINE__ = new EditorEngine();
+        if (!window.__EDITOR_ENGINE__) {
+            window.__EDITOR_ENGINE__ = new EditorEngine();
         }
-        return (window as any).__EDITOR_ENGINE__;
+        return window.__EDITOR_ENGINE__;
     }
 
     public destroy() {
@@ -128,7 +134,7 @@ export class EditorEngine {
         sendPing();
     }
 
-    private handlePong(data: any) {
+    private handlePong(data: Omit<Extract<GSMessage, { type: 'pong' }>, 'type'>) {
         const rtt = Date.now() - data.t0 - (data.t2 - data.t1);
         if (rtt < this.bestRTT) {
             this.bestRTT = rtt;
@@ -165,11 +171,11 @@ export class EditorEngine {
         return this.playbackStates.get(id);
     }
 
-    public setPlayback(id: number, pb: any) {
+    public setPlayback(id: number, pb: Extract<Layer, { type: 'video' }>['playback']) {
         this.playbackStates.set(id, pb);
     }
 
-    public sendJSON = (data: any) => {
+    public sendJSON = (data: GSMessage) => {
         if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(data));
         else console.warn('WebSocket not open. Cannot send JSON:', data);
     };
@@ -195,9 +201,9 @@ export class EditorEngine {
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        if ((window as any).__EDITOR_ENGINE__) {
-            (window as any).__EDITOR_ENGINE__.destroy();
-            (window as any).__EDITOR_ENGINE__ = undefined;
+        if (window.__EDITOR_ENGINE__) {
+            window.__EDITOR_ENGINE__.destroy();
+            window.__EDITOR_ENGINE__ = undefined;
         }
     });
 }

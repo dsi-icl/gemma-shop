@@ -5,8 +5,9 @@ import { defineHandler } from 'nitro/h3';
 
 import { ASSET_DIR } from '@/lib/serverVariables';
 
-export default defineHandler<{ routerParams: { path: string } }>(async (event) => {
-    const { uri } = event.context.params as any;
+export default defineHandler<{ routerParams: { uri: string } }>(async (event) => {
+    const { params } = event.context;
+    const { uri } = params ?? {};
     const safeFilename = basename(decodeURIComponent(uri));
     const asset = join(ASSET_DIR, safeFilename);
     if (await exists(asset)) {

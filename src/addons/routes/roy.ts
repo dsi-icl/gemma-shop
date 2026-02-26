@@ -6,20 +6,18 @@ const sockets: Map<string, WebSocket> = new Map();
 export default defineWebSocketHandler({
     open(peer) {
         const connect = (peer: Peer) => {
-            if (!peer?.websocket?.OPEN)
-                return;
-            if (sockets.has(peer.id))
-                return;
-            console.log(`Connecting proxy to ${peer.id}`)
+            if (!peer?.websocket?.OPEN) return;
+            if (sockets.has(peer.id)) return;
+            console.log(`Connecting proxy to ${peer.id}`);
             const proxiedSocket = new WebSocket('http://127.0.0.1:3375/ws');
             proxiedSocket.onmessage = (event) => peer.send(event.data);
             proxiedSocket.onclose = () => {
-                console.log(`Proxy to ${peer.id} closed :(`)
+                console.log(`Proxy to ${peer.id} closed :(`);
                 sockets.delete(peer.id);
                 setTimeout(() => connect(peer), 1000);
             };
             proxiedSocket.onerror = () => {
-                console.log(`Proxy to ${peer.id} broken :(`)
+                console.log(`Proxy to ${peer.id} broken :(`);
                 sockets.delete(peer.id);
                 setTimeout(() => connect(peer), 1000);
             };
@@ -34,7 +32,6 @@ export default defineWebSocketHandler({
         sockets.delete(peer.id);
     }
 });
-
 
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {

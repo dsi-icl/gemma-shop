@@ -52,14 +52,14 @@ export default defineHandler(async (event) => {
 
                     // Intercept FFmpeg's time output and broadcast it over WebSockets!
                     const match = text.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
-                    if (match && duration > 0 && (globalThis as any).__BROADCAST_EDITORS__) {
+                    if (match && duration > 0 && process.__BROADCAST_EDITORS__) {
                         const h = parseInt(match[1], 10);
                         const m = parseInt(match[2], 10);
                         const s = parseFloat(match[3]);
                         const timeInSeconds = h * 3600 + m * 60 + s;
 
                         const progress = Math.min(99, Math.round((timeInSeconds / duration) * 100));
-                        (globalThis as any).__BROADCAST_EDITORS__({
+                        process.__BROADCAST_EDITORS__({
                             type: 'upload_progress',
                             numericId,
                             progress

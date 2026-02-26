@@ -1,6 +1,6 @@
 'use client';
 
-import type { LayerState } from './types';
+import { GSMessageSchema, type GSMessage, type Layer, type LayerWithWallState } from './types';
 
 const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
 
@@ -11,7 +11,7 @@ export interface Viewport {
     h: number;
 }
 
-type LayoutUpdateCallback = (data: any) => void;
+type LayoutUpdateCallback = (data: GSMessage) => void;
 
 export class WallEngine {
     public ws: WebSocket;
@@ -21,7 +21,7 @@ export class WallEngine {
     private bestRTT = Infinity;
 
     // Render State
-    public layers = new Map<number, LayerState>();
+    public layers = new Map<number, LayerWithWallState>();
     private layoutCallbacks = new Set<LayoutUpdateCallback>();
     public viewport: Viewport;
 
@@ -45,14 +45,20 @@ export class WallEngine {
         }
     }
 
+    public destroy() {
+        console.log('Wall Engine: Assassinating ghost instance...');
+        this.ws.close();
+        this.layoutCallbacks.clear();
+    }
+
     // --- SINGLETON ACCESSOR ---
     public static getInstance(viewport?: Viewport): WallEngine {
         // Escape Vite's module scope by anchoring the Singleton to the Window
-        if (!(window as any).__WALL_ENGINE__) {
+        if (!window.__WALL_ENGINE__) {
             if (!viewport) throw new Error('Viewport must be provided on first initialization');
-            (window as any).__WALL_ENGINE__ = new WallEngine(viewport);
+            window.__WALL_ENGINE__ = new WallEngine(viewport);
         }
-        return (window as any).__WALL_ENGINE__;
+        return window.__WALL_ENGINE__;
     }
 
     // --- REACT INTERFACE ---
@@ -61,27 +67,18 @@ export class WallEngine {
         return () => this.layoutCallbacks.delete(callback);
     }
 
-    public registerLayer(id: number, config: any, playback: any, el: HTMLElement) {
-        let layer = this.layers.get(id);
-        if (!layer) {
-            layer = {
-                el,
-                config,
-                numericId: id,
-                startPos: { ...config },
-                targetPos: { ...config },
-                animStartTime: 0,
-                animDuration: 100,
-                playback // Initial hydrated state
-            };
-            this.layers.set(id, layer);
-        } else {
-            layer.el = el; // Update ref if React re-rendered
-            layer.playback = playback; // Ensure we have the latest state
+    public registerLayer(layer: LayerWithWallState, el: HTMLElement) {
+        let layerPtr = this.layers.get(layer.numericId);
+        if (!layerPtr) {
+            layerPtr = { ...layer, el };
+            this.layers.set(layer.numericId, layerPtr);
         }
+        layerPtr.el = el; // Update ref if React re-rendered
+        if (layerPtr.type !== 'video' || layer.type !== 'video') return;
+        layerPtr.playback = layer.playback; // Ensure we have the latest state
 
         // Evaluate the timeline and start playing/seeking immediately
-        this.handlePlaybackStateChange(layer);
+        this.handlePlaybackStateChange(layerPtr);
     }
 
     // --- CLOCK SYNC ---
@@ -104,7 +101,7 @@ export class WallEngine {
         sendPing();
     }
 
-    private handlePong(data: any) {
+    private handlePong(data: Extract<GSMessage, { type: 'pong' }>) {
         const rtt = Date.now() - data.t0 - (data.t2 - data.t1);
         if (rtt < this.bestRTT) {
             this.bestRTT = rtt;
@@ -131,7 +128,10 @@ export class WallEngine {
 
                     if (layer) {
                         // Set current visual position as the new start, incoming data as the new target
-                        layer.startPos = { ...this.calculateCurrentPosition(layer) };
+                        layer.startPos = {
+                            ...layer.startPos,
+                            ...this.calculateCurrentPosition(layer)
+                        };
                         layer.targetPos = {
                             ...layer.targetPos,
                             cx: view.getFloat32(offset + 2, true),
@@ -150,7 +150,7 @@ export class WallEngine {
 
         // B. JSON SLOW-PATH (Low-Frequency Events)
         if (typeof event.data === 'string') {
-            const data = JSON.parse(event.data);
+            const data = GSMessageSchema.parse(JSON.parse(event.data));
 
             if (data.type === 'pong') {
                 this.handlePong(data);
@@ -163,7 +163,7 @@ export class WallEngine {
                 this.layoutCallbacks.forEach((cb) => cb(data));
             } else if (data.type === 'video_sync' || data.type === 'video_seek') {
                 const layer = this.layers.get(data.numericId);
-                if (layer) {
+                if (layer?.type === 'video') {
                     layer.playback = data.playback;
                     this.handlePlaybackStateChange(layer);
                 }
@@ -172,7 +172,7 @@ export class WallEngine {
     }
 
     // --- PLAYBACK & SYNC LOGIC ---
-    private handlePlaybackStateChange(layer: LayerState) {
+    private handlePlaybackStateChange(layer: Extract<LayerWithWallState, { type: 'video' }>) {
         const video = layer.el as HTMLVideoElement;
         if (!video || typeof video.play !== 'function') return;
 
@@ -237,7 +237,10 @@ export class WallEngine {
         }
     }
 
-    private driftController(metadata: any, layer: LayerState) {
+    private driftController(
+        metadata: VideoFrameCallbackMetadata,
+        layer: Extract<LayerWithWallState, { type: 'video' }>
+    ) {
         if (layer.playback.status !== 'playing' || !layer.el) return;
 
         const video = layer.el as HTMLVideoElement;
@@ -269,11 +272,11 @@ export class WallEngine {
         return start + (end - start) * t;
     }
 
-    public calculateCurrentPosition(layer: LayerState) {
+    public calculateCurrentPosition(layer: LayerWithWallState) {
         if (!layer.animStartTime) return layer.targetPos;
 
         let t = (this.getServerTime() - layer.animStartTime) / layer.animDuration;
-        t = Math.max(0, Math.min(1, t)); // Clamp t between 0 and 1
+        t = Math.max(0, Math.min(1, t));
 
         return {
             cx: this.lerp(layer.startPos.cx, layer.targetPos.cx, t),
@@ -281,7 +284,8 @@ export class WallEngine {
             scale: this.lerp(layer.startPos.scale, layer.targetPos.scale, t),
             rotation: this.lerp(layer.startPos.rotation, layer.targetPos.rotation, t),
             w: layer.config.w,
-            h: layer.config.h
+            h: layer.config.h,
+            zIndex: layer.config.zIndex
         };
     }
 }
@@ -289,9 +293,9 @@ export class WallEngine {
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        if ((window as any).__WALL_ENGINE__) {
-            (window as any).__WALL_ENGINE__.destroy();
-            (window as any).__WALL_ENGINE__ = undefined;
+        if (window.__WALL_ENGINE__) {
+            window.__WALL_ENGINE__.destroy();
+            window.__WALL_ENGINE__ = undefined;
         }
     });
 }

@@ -6,9 +6,7 @@
     "useTabs": false,
     "objectWrap": "collapse",
     "experimentalSortPackageJson": true,
-    "experimentalSortImports": {
-        "sortSideEffects": true
-    },
+    "experimentalSortImports": { "sortSideEffects": true },
     "arrowParens": "always",
     "jsxSingleQuote": false,
     "semi": true,

@@ -1,22 +1,24 @@
 import type { Peer } from 'crossws';
 import { defineWebSocketHandler } from 'nitro/h3';
 
+import { GSMessageSchema, type GSMessage, type StageState } from '@/lib/types';
+
 // Client connection pools
 const wallClients = new Set<Peer>();
 const editorClients = new Set<Peer>();
 
 // The Master Stage State in memory
-const stageState = (process as any).__STAGE_STATE__ ?? { layers: new Map<number, any>() };
-(process as any).__STAGE_STATE__ = stageState;
+const stageState = process.__STAGE_STATE__ ?? ({ layers: new Map() } as StageState);
+process.__STAGE_STATE__ = stageState;
 
-function broadcastJSON(data: any, clients: Set<Peer>) {
+function broadcastJSON(data: GSMessage, clients: Set<Peer>) {
     const payload = JSON.stringify(data);
     for (const client of clients) {
         client.send(payload);
     }
 }
 
-function broadcastOtherOnlyJSON(data: any, clients: Set<Peer>, peer: Peer) {
+function broadcastOtherOnlyJSON(data: GSMessage, clients: Set<Peer>, peer: Peer) {
     const payload = JSON.stringify(data);
     for (const client of clients) {
         if (client !== peer) client.send(payload);
@@ -45,7 +47,7 @@ export default defineWebSocketHandler({
         if (message.rawData instanceof Buffer) {
             try {
                 // Leverage crossws native JSON parsing
-                const data = message.json() as any;
+                const data = GSMessageSchema.parse(message.json());
 
                 // A. Handshake & Hydration
                 if (data.type === 'hello') {
@@ -74,7 +76,8 @@ export default defineWebSocketHandler({
                         JSON.stringify({
                             type: 'hydrate',
                             layers: Array.from(stageState.layers.values())
-                        }))
+                        })
+                    );
                 }
 
                 if (data.type === 'clear_stage') {
@@ -87,14 +90,15 @@ export default defineWebSocketHandler({
 
                 // C. Layer Setup
                 if (data.type === 'upsert_layer') {
-                    if (!data.playback) {
-                        data.playback = {
+                    const { layer } = data;
+                    if (layer.type === 'video' && !layer.playback) {
+                        layer.playback = {
                             status: 'paused',
                             anchorMediaTime: 0,
                             anchorServerTime: 0
                         };
                     }
-                    stageState.layers.set(data.numericId, data);
+                    stageState.layers.set(layer.numericId, layer);
 
                     broadcastOtherOnlyJSON(data, wallClients, peer);
                     broadcastOtherOnlyJSON(data, editorClients, peer);
@@ -119,12 +123,12 @@ export default defineWebSocketHandler({
                 // D. Playback Controls (The Anchor State Machine)
                 if (data.type === 'video_play') {
                     const layer = stageState.layers.get(data.numericId);
-                    if (layer) {
+                    if (layer?.type === 'video') {
                         layer.playback.status = 'playing';
                         // 500ms delay to neutralize network travel time before frames start rolling
                         layer.playback.anchorServerTime = Date.now() + 500;
 
-                        const syncPayload = {
+                        const syncPayload: GSMessage = {
                             type: 'video_sync',
                             numericId: data.numericId,
                             playback: layer.playback
@@ -137,7 +141,7 @@ export default defineWebSocketHandler({
 
                 if (data.type === 'video_pause') {
                     const layer = stageState.layers.get(data.numericId);
-                    if (layer && layer.playback.status === 'playing') {
+                    if (layer?.type === 'video' && layer.playback.status === 'playing') {
                         // Calculate exactly where the video should be at the moment of pause
                         const elapsed = (Date.now() - layer.playback.anchorServerTime) / 1000;
 
@@ -145,7 +149,7 @@ export default defineWebSocketHandler({
                         layer.playback.anchorMediaTime += elapsed;
                         layer.playback.anchorServerTime = 0;
 
-                        const syncPayload = {
+                        const syncPayload: GSMessage = {
                             type: 'video_sync',
                             numericId: data.numericId,
                             playback: layer.playback
@@ -158,13 +162,13 @@ export default defineWebSocketHandler({
 
                 if (data.type === 'video_seek') {
                     const layer = stageState.layers.get(data.numericId);
-                    if (layer) {
+                    if (layer?.type === 'video') {
                         layer.playback.status = 'paused';
                         layer.playback.anchorMediaTime = data.mediaTime;
                         layer.playback.anchorServerTime = 0;
 
                         // Broadcast the seek so clients jump to the frame
-                        const syncPayload = {
+                        const syncPayload: GSMessage = {
                             type: 'video_sync',
                             numericId: data.numericId,
                             playback: layer.playback
@@ -219,7 +223,7 @@ export default defineWebSocketHandler({
 
 // --- GLOBAL BRIDGE FOR UPLOAD PROGRESS ---
 // Expose the editor broadcast function so our HTTP upload route can send FFmpeg progress
-(globalThis as any).__BROADCAST_EDITORS__ = (data: any) => {
+process.__BROADCAST_EDITORS__ = (data) => {
     const payload = JSON.stringify(data);
     for (const client of editorClients) {
         client.send(payload);
@@ -227,11 +231,11 @@ export default defineWebSocketHandler({
 };
 
 // --- VSYNC LOOP FOR PERIODIC ALIGNEMENT ---
-(process as any).__VSYNC_INTERVAL__ = setInterval(() => {
+process.__VSYNC_INTERVAL__ = setInterval(() => {
     const now = Date.now();
 
     for (const [id, layer] of stageState.layers.entries()) {
-        if (layer.playback && layer.playback.status === 'playing') {
+        if (layer?.type === 'video' && layer.playback && layer.playback.status === 'playing') {
             const duration = layer.config?.duration || 0;
             if (duration <= 0) continue;
 
@@ -245,7 +249,7 @@ export default defineWebSocketHandler({
                     layer.playback.anchorMediaTime = !duration ? 0 : expected % duration;
                     layer.playback.anchorServerTime = now;
 
-                    const syncPayload = {
+                    const syncPayload: GSMessage = {
                         type: 'video_sync',
                         numericId: id,
                         playback: layer.playback
@@ -258,7 +262,7 @@ export default defineWebSocketHandler({
                     layer.playback.anchorMediaTime = duration;
                     layer.playback.anchorServerTime = 0;
 
-                    const syncPayload = {
+                    const syncPayload: GSMessage = {
                         type: 'video_sync',
                         numericId: id,
                         playback: layer.playback
@@ -274,8 +278,8 @@ export default defineWebSocketHandler({
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        if ((process as any).__VSYNC_INTERVAL__) {
-            clearInterval((process as any).__VSYNC_INTERVAL__);
+        if (process.__VSYNC_INTERVAL__) {
+            clearInterval(process.__VSYNC_INTERVAL__);
         }
     });
 }

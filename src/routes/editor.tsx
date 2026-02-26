@@ -5,11 +5,20 @@ import { createFileRoute } from '@tanstack/react-router';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { compiler } from 'markdown-to-jsx/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Image as KonvaImage, Transformer, Group, Text, Rect } from 'react-konva';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import {
+    Stage,
+    Layer as KonvaLayer,
+    Image as KonvaImage,
+    Transformer,
+    Group,
+    Text,
+    Rect
+} from 'react-konva';
 import satori from 'satori';
 
 import { RoyForceGraph } from '@/components/roygraph/RoyForceGraph';
+import type { Layer, LayerWithEditorState } from '@/lib/types';
 
 import { EditorEngine } from '../lib/editorEngine';
 
@@ -47,7 +56,7 @@ async function renderTextToSVG(
                     color: 'green',
                     fontFamily: 'Lato'
                 }
-            } as any
+            } as unknown as JSX.IntrinsicAttributes // The type of wrapperProps is wrong
         });
 
         const svg = await satori(renderedJSX, {
@@ -93,29 +102,29 @@ function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
 }
 
 function EditorApp() {
-    const [layers, setLayers] = useState<any[]>([]);
+    const [layers, setLayers] = useState<LayerWithEditorState[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isPinching, setIsPinching] = useState(false);
 
     const nextId = useRef(1);
     const nextZIndex = useRef(10);
-    const trRef = useRef<any>(null);
+    const trRef = useRef<Konva.Transformer>(null);
     const lastCenter = useRef<{ x: number; y: number } | null>(null);
     const lastDist = useRef<number | null>(null);
     const lastAngle = useRef<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const layersRef = useRef<any[]>([]);
+    const layersRef = useRef<LayerWithEditorState[]>([]);
 
     useEffect(() => {
         layersRef.current = layers;
     }, [layers]);
 
     useEffect(() => {
-        if ((window as any).__EDITOR_RELOADING__) {
+        if (window.__EDITOR_RELOADING__) {
             setTimeout(() => {
                 engine.sendJSON({ type: 'rehydrate_please' });
             }, 500);
-            (window as any).__EDITOR_RELOADING__ = false;
+            window.__EDITOR_RELOADING__ = false;
         }
     }, []);
 
@@ -125,23 +134,23 @@ function EditorApp() {
             if (data.type === 'hydrate') {
                 setLayers(data.layers);
                 if (data.layers.length > 0) {
-                    nextId.current = Math.max(...data.layers.map((l: any) => l.numericId)) + 5;
-                    nextZIndex.current =
-                        Math.max(...data.layers.map((l: any) => l.config.zIndex)) + 5;
+                    nextId.current = Math.max(...data.layers.map((l) => l.numericId)) + 5;
+                    nextZIndex.current = Math.max(...data.layers.map((l) => l.config.zIndex)) + 5;
                 }
             } else if (data.type === 'upsert_layer') {
-                const newLayerId = parseInt(data.numericId);
+                const { layer } = data;
+                const newLayerId = layer.numericId;
                 if (newLayerId > nextId.current) nextId.current = newLayerId + 5;
                 // Multiple editor may interfere we build 5 degree tolerance
-                if (!layers.find((l) => l.numericId === data.numericId)) {
+                if (!layers.find((l) => l.numericId === layer.numericId)) {
                     nextZIndex.current =
-                        (data.config.zIndex ?? 0) > nextZIndex.current
-                            ? data.config.zIndex + 5
+                        (layer.config.zIndex ?? 0) > nextZIndex.current
+                            ? layer.config.zIndex + 5
                             : nextZIndex.current + 5;
                 }
                 setLayers((prev) => {
-                    const filtered = prev.filter((l) => l.numericId !== data.numericId);
-                    return [...filtered, data];
+                    const filtered = prev.filter((l) => l.numericId !== layer.numericId);
+                    return [...filtered, layer];
                 });
             } else if (data.type === 'upload_progress') {
                 setLayers((prev) =>
@@ -156,7 +165,7 @@ function EditorApp() {
         const unsubscribeBinary = engine.subscribeToBinary((id, cx, cy, scale, rotation) => {
             if (trRef.current) {
                 const stage = trRef.current.getStage();
-                const node = stage.findOne(`#${id}`);
+                const node = stage?.findOne(`#${id}`);
 
                 if (node && !node.isDragging() && !isPinching) {
                     node.x(cx);
@@ -165,7 +174,7 @@ function EditorApp() {
                     node.scaleY(scale);
                     node.rotation(rotation);
                     if (selectedId === id.toString()) trRef.current.forceUpdate();
-                    node.getLayer().batchDraw();
+                    node.getLayer()?.batchDraw();
                 }
 
                 // When React naturally re-renders later (like when you click the video),
@@ -265,33 +274,36 @@ function EditorApp() {
             tempVid.load();
         }
 
-        const config = {
-            cx: 400,
-            cy: 300,
+        const positions = { cx: 400, cy: 300, rotation: 0, scale: Math.min(1, 640 / mediaWidth) };
+        const config: Layer['config'] = {
             w: mediaWidth,
             h: mediaHeight,
-            rotation: 0,
+            ...positions,
             duration: duration,
-            scale: Math.min(1, 640 / mediaWidth),
             zIndex: nextZIndex.current++,
             loop: true
         };
 
-        const defaultPlayback = {
+        const defaultPlayback: Extract<Layer, { type: 'video' }>['playback'] = {
             status: 'paused',
             anchorMediaTime: 0,
             anchorServerTime: engine.getServerTime()
         };
 
         // 2. OPTIMISTIC UPDATE: Mount it immediately to the local UI!
-        const optimisticLayer = {
+        const optimisticLayer: LayerWithEditorState = {
             numericId,
-            layerType: isImage ? 'image' : 'video',
+            type: isImage ? 'image' : 'video',
             url: previewDataUrl,
             playback: defaultPlayback,
             config,
             isUploading: true,
-            progress: 0
+            progress: 0,
+            startPos: positions,
+            targetPos: positions,
+            rvfcActive: false,
+            animStartTime: 0,
+            animDuration: 100
         };
         setLayers((prev) => [...prev, optimisticLayer]);
         setSelectedId(numericId.toString());
@@ -321,11 +333,13 @@ function EditorApp() {
             engine.sendJSON({
                 type: 'upsert_layer',
                 origin: 'handleUpload',
-                numericId,
-                layerType: finalizedLayer.layerType,
-                playback: defaultPlayback,
-                url: data.url,
-                config: freshestLayer.config
+                layer: {
+                    numericId,
+                    type: finalizedLayer.type,
+                    playback: defaultPlayback,
+                    url: data.url,
+                    config: freshestLayer.config
+                } as LayerWithEditorState
             });
         } catch (err) {
             alert('Upload failed.');
@@ -341,36 +355,24 @@ function EditorApp() {
         const h = canvasEl.height;
 
         const numericId = nextId.current++;
-        const config = {
-            cx: 400,
-            cy: 300,
-            w,
-            h,
-            rotation: 0,
-            scale: 1,
-            zIndex: nextZIndex.current++
-        };
+        const positionState = { cx: 400, cy: 300, rotation: 0, scale: 1 };
+        const config: Layer['config'] = { w, h, ...positionState, zIndex: nextZIndex.current++ };
 
-        const newLayer = {
+        const newLayer: Layer = {
             numericId,
-            layerType: 'graph',
+            type: 'graph',
             url,
             config,
-            playback: { status: 'paused', anchorMediaTime: 0, anchorServerTime: 0 }
+            startPos: positionState,
+            targetPos: positionState,
+            animStartTime: 0,
+            animDuration: 100
         };
 
         setLayers((prev) => [...prev, newLayer]);
         setSelectedId(numericId.toString());
 
-        engine.sendJSON({
-            type: 'upsert_layer',
-            origin: 'handleAddGraph',
-            numericId,
-            layerType: 'graph',
-            url,
-            config,
-            playback: newLayer.playback
-        });
+        engine.sendJSON({ type: 'upsert_layer', origin: 'handleAddGraph', layer: newLayer });
     };
 
     const handleAddText = async () => {
@@ -379,37 +381,30 @@ function EditorApp() {
         if (!url) return;
 
         const numericId = nextId.current++;
-        const config = {
-            cx: 400,
-            cy: 300,
-            w,
-            h,
-            rotation: 0,
-            scale: 1,
+        const positionState = { cx: 400, cy: 300, rotation: 0, scale: 1 };
+        const config: Layer['config'] = {
+            w: w ?? 100,
+            h: h ?? 100,
+            ...positionState,
             zIndex: nextZIndex.current++,
             markdown: initialText
         };
 
-        const newLayer = {
+        const newLayer: Extract<Layer, { type: 'text' }> = {
             numericId,
-            layerType: 'text',
+            type: 'text',
             url,
             config,
-            playback: { status: 'paused', anchorMediaTime: 0, anchorServerTime: 0 }
+            startPos: positionState,
+            targetPos: positionState,
+            animStartTime: 0,
+            animDuration: 100
         };
 
         setLayers((prev) => [...prev, newLayer]);
         setSelectedId(numericId.toString());
 
-        engine.sendJSON({
-            type: 'upsert_layer',
-            origin: 'handleAddText',
-            numericId,
-            layerType: 'text',
-            url,
-            config,
-            playback: newLayer.playback
-        });
+        engine.sendJSON({ type: 'upsert_layer', origin: 'handleAddText', layer: newLayer });
     };
 
     const handleBringToFront = useCallback(() => {
@@ -421,34 +416,44 @@ function EditorApp() {
         const updatedConfig = {
             ...layerToUpdate.config,
             zIndex:
-                layerToUpdate.config === nextZIndex.current
-                    ? layerToUpdate.config
+                layerToUpdate.config.zIndex === nextZIndex.current
+                    ? layerToUpdate.config.zIndex
                     : nextZIndex.current++
         };
         setLayers((prev) =>
             prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
         );
 
-        engine.sendJSON({
-            type: 'upsert_layer',
-            origin: 'handleBringToFront',
-            numericId: numericId,
-            layerType: layerToUpdate.layerType,
-            url: layerToUpdate.url,
-            config: updatedConfig,
-            playback: engine.getPlayback(numericId) || layerToUpdate.playback
-        });
+        if (layerToUpdate.type === 'video')
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'handleBringToFront',
+                layer: {
+                    ...layerToUpdate,
+                    config: updatedConfig,
+                    playback: engine.getPlayback(numericId) || layerToUpdate.playback
+                }
+            });
+        else
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'handleBringToFront',
+                layer: { ...layerToUpdate, config: updatedConfig }
+            });
     }, [layers, selectedId]);
 
-    const handleStageInteractionStart = (e: KonvaEventObject<any>) => {
-        if (e.evt.touches?.length === 1 || e.type === 'mousedown') {
+    const handleStageInteractionStart = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
+        if (
+            (e.evt instanceof TouchEvent && e.evt.touches?.length === 1) ||
+            e.type === 'mousedown'
+        ) {
             const clickedOnEmpty = e.target === e.target.getStage();
             if (clickedOnEmpty && selectedId) {
                 flushNodeState(selectedId);
                 setSelectedId(null);
             }
         }
-        if (e.evt.touches?.length === 2 && selectedId) {
+        if (e.evt instanceof TouchEvent && e.evt.touches?.length === 2 && selectedId) {
             flushNodeState(selectedId);
             setIsPinching(true);
             const t1 = e.evt.touches[0];
@@ -461,11 +466,11 @@ function EditorApp() {
         }
     };
 
-    const handleTouchMove = (e: any) => {
+    const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
         e.evt.preventDefault();
         if (e.evt.touches.length === 2 && selectedId && trRef.current) {
             const stage = trRef.current.getStage();
-            const node = stage.findOne(`#${selectedId}`);
+            const node = stage?.findOne(`#${selectedId}`);
             if (!node) return;
             if (node.isDragging()) node.stopDrag();
 
@@ -479,9 +484,11 @@ function EditorApp() {
 
             if (!lastDist.current || !lastAngle.current || !lastCenter.current) return;
 
-            const stageScale = stage.scaleX();
+            const stageScale = stage?.scaleX();
             const scaleBy = dist / lastDist.current;
             const angleDelta = angle - lastAngle.current;
+
+            if (!stageScale) return;
 
             const dx = (screenCenter.x - lastCenter.current.x) / stageScale;
             const dy = (screenCenter.y - lastCenter.current.y) / stageScale;
@@ -501,7 +508,7 @@ function EditorApp() {
                 node.y(newY);
             }
             node.rotation(node.rotation() + angleDelta);
-            trRef.current.getLayer().batchDraw();
+            trRef.current.getLayer()?.batchDraw();
             engine.broadcastBinaryMove(
                 parseInt(selectedId),
                 node.x(),
@@ -516,11 +523,11 @@ function EditorApp() {
         }
     };
 
-    const handleTouchEnd = (e: any) => {
+    const handleTouchEnd = (e: KonvaEventObject<TouchEvent>) => {
         if (e.evt.touches.length < 2) setIsPinching(false);
         if (selectedId && trRef.current) {
             const stage = trRef.current.getStage();
-            const node = stage.findOne(`#${selectedId}`);
+            const node = stage?.findOne<Konva.Shape>(`#${selectedId}`);
             if (node) handleTransformEnd({ target: node }, parseInt(selectedId));
         }
         lastDist.current = null;
@@ -528,61 +535,76 @@ function EditorApp() {
         lastCenter.current = null;
     };
 
-    const handleTransform = (e: any, numericId: number) => {
+    const handleTransform = (e: Pick<KonvaEventObject<Event>, 'target'>, numericId: number) => {
         const node = e.target;
         engine.broadcastBinaryMove(numericId, node.x(), node.y(), node.scaleX(), node.rotation());
     };
 
-    const handleTransformEnd = useCallback((e: any, numericId: number) => {
-        const node = e.target;
+    const handleTransformEnd = useCallback(
+        (e: Pick<KonvaEventObject<Event>, 'target'>, numericId: number) => {
+            const node = e.target;
 
-        // Must use layersRef to prevent the component from saving old state when dragged
-        const layerToUpdate = layersRef.current.find((l) => l.numericId === numericId);
-        if (!layerToUpdate) return;
+            // Must use layersRef to prevent the component from saving old state when dragged
+            const layerToUpdate = layersRef.current.find((l) => l.numericId === numericId);
+            if (!layerToUpdate) return;
 
-        const updatedConfig = {
-            ...layerToUpdate.config,
-            cx: Math.round(node.x()),
-            cy: Math.round(node.y()),
-            scale: node.scaleX(),
-            rotation: Math.round(node.rotation())
-        };
+            const updatedConfig = {
+                ...layerToUpdate.config,
+                cx: Math.round(node.x()),
+                cy: Math.round(node.y()),
+                scale: node.scaleX(),
+                rotation: Math.round(node.rotation())
+            };
 
-        setLayers((prev) =>
-            prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
-        );
+            if (layerToUpdate.type === 'video') {
+                // Extract actual playback state so moving video doesn't accidentally rewind it for Wall screens
+                const truePlayback = engine.getPlayback(numericId) || layerToUpdate.playback;
 
-        // Extract actual playback state so moving video doesn't accidentally rewind it for Wall screens
-        const truePlayback = engine.getPlayback(numericId) || layerToUpdate.playback;
+                setLayers((prev) =>
+                    prev.map((l) =>
+                        l.numericId === numericId ? { ...l, config: updatedConfig } : l
+                    )
+                );
 
-        engine.sendJSON({
-            type: 'upsert_layer',
-            origin: 'handleTransformEnd',
-            numericId,
-            layerType: layerToUpdate.layerType,
-            url: layerToUpdate.url,
-            config: updatedConfig,
-            playback: truePlayback
-        });
-    }, []);
+                engine.sendJSON({
+                    type: 'upsert_layer',
+                    origin: 'handleTransformEnd',
+                    layer: { ...layerToUpdate, config: updatedConfig, playback: truePlayback }
+                });
+            } else {
+                setLayers((prev) =>
+                    prev.map((l) =>
+                        l.numericId === numericId ? { ...l, config: updatedConfig } : l
+                    )
+                );
+
+                engine.sendJSON({
+                    type: 'upsert_layer',
+                    origin: 'handleTransformEnd',
+                    layer: { ...layerToUpdate, config: updatedConfig }
+                });
+            }
+        },
+        []
+    );
 
     const flushNodeState = (idToFlush: string) => {
         if (!trRef.current) return;
         const stage = trRef.current.getStage();
-        const node = stage.findOne(`#${idToFlush}`);
+        const node = stage?.findOne<Konva.Shape>(`#${idToFlush}`);
         if (node) handleTransformEnd({ target: node }, parseInt(idToFlush));
     };
 
     useEffect(() => {
         if (selectedId && trRef.current) {
-            const node = trRef.current.getStage().findOne(`#${selectedId}`);
+            const node = trRef.current.getStage()?.findOne(`#${selectedId}`);
             if (node) {
                 trRef.current.nodes([node]);
-                trRef.current.getLayer().batchDraw();
+                trRef.current.getLayer()?.batchDraw();
             }
         } else if (trRef.current) {
             trRef.current.nodes([]);
-            trRef.current.getLayer().batchDraw();
+            trRef.current.getLayer()?.batchDraw();
         }
     }, [selectedId]);
 
@@ -663,8 +685,8 @@ function EditorApp() {
                             (l) => l.numericId === parseInt(selectedId)
                         );
                         if (!activeLayer) return null;
-                        const isVideo = activeLayer.layerType === 'video';
-                        const isText = activeLayer.layerType === 'text';
+                        const isVideo = activeLayer.type === 'video';
+                        const isText = activeLayer.type === 'text';
                         return (
                             <>
                                 <div
@@ -736,12 +758,12 @@ function EditorApp() {
                                 key={l.numericId}
                                 className="w-full cursor-pointer bg-[#5556] p-5 hover:bg-[#555C]"
                                 onClick={() => {
-                                    setSelectedId(l.numericId);
+                                    setSelectedId(l.numericId.toString());
                                 }}
                             >
                                 <span>
                                     {' '}
-                                    Layer {l.numericId} ({l.layerType})
+                                    Layer {l.numericId} ({l.type})
                                 </span>
                                 <br />
                                 <span className="flex gap-10">
@@ -766,7 +788,7 @@ function EditorApp() {
                 scaleX={0.25}
                 scaleY={0.25}
             >
-                <Layer>
+                <KonvaLayer>
                     {Array.from({ length: COLS * ROWS }).map((_, i) => {
                         const col = i % COLS;
                         const row = Math.floor(i / COLS);
@@ -797,29 +819,46 @@ function EditorApp() {
                         .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
                         .map((layer) => {
                             const props = {
-                                layer,
                                 isPinching,
                                 onSelect: () => setSelectedId(layer.numericId.toString()),
-                                onTransform: (e: any) => handleTransform(e, layer.numericId),
-                                onTransformEnd: (e: any) => handleTransformEnd(e, layer.numericId)
+                                onTransform: (e: KonvaEventObject<Event>) =>
+                                    handleTransform(e, layer.numericId),
+                                onTransformEnd: (e: KonvaEventObject<Event>) =>
+                                    handleTransformEnd(e, layer.numericId)
                             };
 
                             // Route images and uploading previews to the Static element
                             if (
-                                layer.layerType === 'image' ||
-                                layer.layerType === 'text' ||
+                                layer.type === 'image' ||
+                                layer.type === 'text' ||
                                 layer.isUploading
                             ) {
                                 return (
-                                    <KonvaStaticImage key={`spi_${layer.numericId}`} {...props} />
+                                    <KonvaStaticImage
+                                        key={`spi_${layer.numericId}`}
+                                        layer={layer}
+                                        {...props}
+                                    />
                                 );
                             }
-                            if (layer.layerType === 'graph') {
+                            if (layer.type === 'graph') {
                                 return (
-                                    <RoyStaticRenderer key={`roy_${layer.numericId}`} {...props} />
+                                    <RoyStaticRenderer
+                                        key={`roy_${layer.numericId}`}
+                                        layer={layer}
+                                        {...props}
+                                    />
                                 );
                             }
-                            return <KonvaVideo key={`vid_${layer.numericId}`} {...props} />;
+                            if (layer.type === 'video')
+                                return (
+                                    <KonvaVideo
+                                        key={`vid_${layer.numericId}`}
+                                        layer={layer}
+                                        {...props}
+                                    />
+                                );
+                            return null;
                         })}
 
                     <Transformer
@@ -831,7 +870,7 @@ function EditorApp() {
                             return newBox;
                         }}
                     />
-                </Layer>
+                </KonvaLayer>
             </Stage>
             <RoyForceGraph
                 style={{
@@ -847,8 +886,20 @@ function EditorApp() {
 }
 
 // --- SUB-COMPONENT: Live Video inside Konva ---
-function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }: any) {
-    const imageRef = useRef<any>(null);
+function KonvaVideo({
+    layer,
+    isPinching,
+    onSelect,
+    onTransform,
+    onTransformEnd
+}: {
+    layer: Extract<LayerWithEditorState, { type: 'video' }>;
+    isPinching: boolean;
+    onSelect: () => void;
+    onTransform: (e: KonvaEventObject<Event>) => void;
+    onTransformEnd: (e: KonvaEventObject<Event>) => void;
+}) {
+    const imageRef = useRef<Konva.Image>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
 
     useEffect(() => {
@@ -968,9 +1019,21 @@ function KonvaVideo({ layer, isPinching, onSelect, onTransform, onTransformEnd }
 }
 
 // --- SUB-COMPONENT: Static Images & Upload Previews ---
-function KonvaStaticImage({ layer, isPinching, onSelect, onTransform, onTransformEnd }: any) {
+function KonvaStaticImage({
+    layer,
+    isPinching,
+    onSelect,
+    onTransform,
+    onTransformEnd
+}: {
+    layer: LayerWithEditorState;
+    isPinching: boolean;
+    onSelect: () => void;
+    onTransform: (e: KonvaEventObject<Event>) => void;
+    onTransformEnd: (e: KonvaEventObject<Event>) => void;
+}) {
     const [img, setImg] = useState<HTMLImageElement | null>(null);
-    const imageRef = useRef<any>(null);
+    const imageRef = useRef<Konva.Image>(null);
 
     useEffect(() => {
         const i = new window.Image();
@@ -1010,7 +1073,7 @@ function KonvaStaticImage({ layer, isPinching, onSelect, onTransform, onTransfor
             />
 
             {/* The Real-Time Processing Overlay */}
-            {layer.isUploading && layer.layerType === 'video' && (
+            {layer.isUploading && layer.type === 'video' && (
                 <Group offsetX={layer.config.w / 2} offsetY={layer.config.h / 2}>
                     <Rect width={layer.config.w} height={layer.config.h} fill="rgba(0,0,0,0.6)" />
                     {/* Centered progress bar */}
@@ -1044,14 +1107,26 @@ function KonvaStaticImage({ layer, isPinching, onSelect, onTransform, onTransfor
     );
 }
 
-function RoyStaticRenderer({ layer, isPinching, onSelect, onTransform, onTransformEnd }: any) {
+function RoyStaticRenderer({
+    layer,
+    isPinching,
+    onSelect,
+    onTransform,
+    onTransformEnd
+}: {
+    layer: LayerWithEditorState;
+    isPinching: boolean;
+    onSelect: () => void;
+    onTransform: (e: KonvaEventObject<Event>) => void;
+    onTransformEnd: (e: KonvaEventObject<Event>) => void;
+}) {
     const imageRef = useRef<Konva.Image>(null);
     useEffect(() => {
         const updateTimer = setInterval(() => {
             const royElement = document.getElementById('roy-force-graph-host') as HTMLCanvasElement;
             const url = royElement.toDataURL();
-            royElement.style.height = layer.config.h;
-            royElement.style.width = layer.config.w;
+            royElement.style.height = `${layer.config.h}px`;
+            royElement.style.width = `${layer.config.w}px`;
             royElement.style.offset = `${layer.config.h / 2 + 'px'}, ${layer.config.w / 2 + 'px'}`;
             if (imageRef.current) {
                 const img = new window.Image(layer.config.w, layer.config.h);
@@ -1090,11 +1165,17 @@ function RoyStaticRenderer({ layer, isPinching, onSelect, onTransform, onTransfo
 }
 
 // --- SUB-COMPONENT: Smart Playback Controls ---
-export function PlaybackControls({ layer, engine }: { layer: any; engine: any }) {
+export function PlaybackControls({
+    layer,
+    engine
+}: {
+    layer: Extract<LayerWithEditorState, { type: 'video' }>;
+    engine: EditorEngine;
+}) {
     const [status, setStatus] = useState(engine.getPlayback(layer.numericId)?.status || 'paused');
 
     useEffect(() => {
-        const unsubscribe = engine.subscribeToPlayback((id: number, pb: any) => {
+        const unsubscribe = engine.subscribeToPlayback((id: number, pb) => {
             if (id === layer.numericId) setStatus(pb.status);
         });
         return () => unsubscribe(); // Properly typed for void return!
@@ -1103,13 +1184,16 @@ export function PlaybackControls({ layer, engine }: { layer: any; engine: any })
     return (
         <>
             <button
-                onClick={() =>
-                    engine.sendJSON({
-                        type: 'video_seek',
-                        numericId: layer.numericId,
-                        mediaTime: 0
-                    })
-                }
+                onClick={() => {
+                    const playback = engine.getPlayback(layer.numericId);
+                    if (playback)
+                        engine.sendJSON({
+                            type: 'video_seek',
+                            numericId: layer.numericId,
+                            mediaTime: 0,
+                            playback
+                        });
+                }}
             >
                 ⏮
             </button>
@@ -1147,15 +1231,13 @@ export function PlaybackControls({ layer, engine }: { layer: any; engine: any })
                     checked={layer.config.loop ?? true}
                     onChange={(e) => {
                         const updatedConfig = { ...layer.config, loop: e.target.checked };
-                        engine.sendJSON({
-                            type: 'upsert_layer',
-                            origin: 'pbcInput',
-                            numericId: layer.numericId,
-                            layerType: layer.type,
-                            url: layer.url,
-                            config: updatedConfig,
-                            playback: engine.getPlayback(layer.numericId)
-                        });
+                        const playback = engine.getPlayback(layer.numericId);
+                        if (playback)
+                            engine.sendJSON({
+                                type: 'upsert_layer',
+                                origin: 'pbcInput',
+                                layer: { ...layer, config: updatedConfig, playback }
+                            });
                     }}
                 />
                 Loop
@@ -1165,7 +1247,13 @@ export function PlaybackControls({ layer, engine }: { layer: any; engine: any })
 }
 
 // --- SUB-COMPONENT: High-Performance Contextual Video Scrubber ---
-export function VideoScrubber({ layer, engine }: { layer: any; engine: any }) {
+export function VideoScrubber({
+    layer,
+    engine
+}: {
+    layer: Extract<LayerWithEditorState, { type: 'video' }>;
+    engine: EditorEngine;
+}) {
     const seekInputRef = useRef<HTMLInputElement>(null);
     const spanRef = useRef<HTMLSpanElement>(null);
     const isDragging = useRef(false);
@@ -1173,7 +1261,7 @@ export function VideoScrubber({ layer, engine }: { layer: any; engine: any }) {
     const pbRef = useRef(engine.getPlayback(layer.numericId) || layer.playback);
 
     useEffect(() => {
-        const unsubscribe = engine.subscribeToPlayback((id: number, pb: any) => {
+        const unsubscribe = engine.subscribeToPlayback((id: number, pb) => {
             if (id === layer.numericId) pbRef.current = pb;
         });
         return () => unsubscribe(); // Properly typed for void return!
@@ -1221,11 +1309,14 @@ export function VideoScrubber({ layer, engine }: { layer: any; engine: any }) {
     const handleSeek = () => {
         isDragging.current = false;
         if (seekInputRef.current) {
-            engine.sendJSON({
-                type: 'video_seek',
-                numericId: layer.numericId,
-                mediaTime: parseFloat(seekInputRef.current.value)
-            });
+            const playback = engine.getPlayback(layer.numericId);
+            if (playback)
+                engine.sendJSON({
+                    type: 'video_seek',
+                    numericId: layer.numericId,
+                    mediaTime: parseFloat(seekInputRef.current.value),
+                    playback
+                });
         }
     };
 
@@ -1257,7 +1348,7 @@ export function VideoScrubber({ layer, engine }: { layer: any; engine: any }) {
     );
 }
 
-export function TextEditor({ layer, engine }: { layer: any; engine: EditorEngine }) {
+export function TextEditor({ layer, engine }: { layer: Layer; engine: EditorEngine }) {
     const [text, setText] = useState(layer.config.markdown);
 
     const handleTextChange = async (
@@ -1269,18 +1360,14 @@ export function TextEditor({ layer, engine }: { layer: any; engine: EditorEngine
         if (!url) return;
 
         layer.config.markdown = newText;
-        layer.config.h = h;
-        layer.config.w = w;
+        layer.config.h = h ?? 100;
+        layer.config.w = w ?? 100;
         layer.url = url;
         setText(e.target.value);
         engine.sendJSON({
             type: 'upsert_layer',
             origin: 'handleTextChange',
-            numericId: layer.numericId,
-            layerType: layer.layerType,
-            url: layer.url,
-            config: layer.config,
-            playback: layer.playback
+            layer: { ...layer, url, config: { ...layer.config, markdown: newText } }
         });
     };
 
@@ -1298,6 +1385,6 @@ export function TextEditor({ layer, engine }: { layer: any; engine: EditorEngine
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        (window as any).__EDITOR_RELOADING__ = true;
+        window.__EDITOR_RELOADING__ = true;
     });
 }
