@@ -1,8 +1,18 @@
+'use client';
+
 import { EraserIcon } from '@phosphor-icons/react';
 import { useLiveQuery } from '@tanstack/react-db';
 import { useThrottledCallback } from '@tanstack/react-pacer';
 import Konva from 'konva';
-import { ClassAttributes, DOMAttributes, FC, useEffect, useRef, useState } from 'react';
+import {
+    ClassAttributes,
+    DOMAttributes,
+    FC,
+    useCallback,
+    useEffect,
+    useRef,
+    useState
+} from 'react';
 import { Stage, Layer, Rect, Line, Transformer, KonvaNodeEvents } from 'react-konva';
 
 // import { useThrottledCallback } from '@tanstack/react-pacer';
@@ -11,6 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { Toggle } from '@/components/ui/toggle';
 import { inkCollection } from '@/db/inkCollection';
 import { shapesCollection } from '@/db/shapesCollection';
+import { addRectangleShape, updateShape } from '@/lib/stageTools';
 
 const DO_WIDTH = 3072;
 const DO_HEIGHT = 432;
@@ -39,8 +50,11 @@ const getDOGridLines = () => {
 };
 
 const StageEditor = () => {
-    const { data: shapes } = useLiveQuery((q) => q.from({ shapes: shapesCollection }));
-    const { data: inks, state } = useLiveQuery((q) => q.from({ inks: inkCollection }));
+    const [renderStateCounter, setRenderStateCounter] = useState(0);
+    const { data: shapes, collection: sCol } = useLiveQuery((q) =>
+        q.from({ shapes: shapesCollection })
+    );
+    const { data: inks, collection: iCol } = useLiveQuery((q) => q.from({ inks: inkCollection }));
     const stageSlot = useRef<HTMLDivElement>(null);
     const [tool, setTool] = useState('brush');
     const lastX = useRef(0);
@@ -52,26 +66,18 @@ const StageEditor = () => {
     const [showInk, setShowInk] = useState(true);
     const selectedId = shapes?.find((s) => s.selected)?.id ?? null;
 
-    const addShape = (shape: Omit<(typeof shapes)[number], 'id' | 'order'>) => {
-        shapesCollection.insert({
-            id: `s-${Date.now()}`,
-            ...shape,
-            order: shapes?.length ?? 0
+    useEffect(() => {
+        const sSub = sCol.subscribeChanges(() => {
+            setRenderStateCounter((c) => c + 1);
         });
-    };
-
-    const updateShape = useThrottledCallback(
-        (shape: (typeof shapes)[number]) => {
-            shapesCollection.update(shape.id, (attrs) => {
-                Object.entries(shape).forEach(([key, value]) => {
-                    (attrs as any)[key] = value;
-                });
-            });
-        },
-        {
-            wait: 100
-        }
-    );
+        const iSub = iCol.subscribeChanges(() => {
+            setRenderStateCounter((c) => c + 1);
+        });
+        return () => {
+            sSub.unsubscribe();
+            iSub.unsubscribe();
+        };
+    }, []);
 
     const addInk = (line: Omit<(typeof inks)[number], 'id'>) => {
         inkCollection.insert({
@@ -79,12 +85,15 @@ const StageEditor = () => {
             ...line
         });
     };
-
     const updateInk = useThrottledCallback(
         (line: (typeof inks)[number]) => {
+            console.log('UPDATING...');
             inkCollection.update(line.id, (attrs) => {
-                line.points = Array.from(attrs.points);
+                line.points = new Array(...attrs.points);
+                line.iteration = Math.random();
             });
+            // TO-DO: Not good to update the whole line on every point change, need to optimize this
+            setRenderStateCounter((c) => c + 1);
         },
         {
             wait: 100
@@ -110,7 +119,7 @@ const StageEditor = () => {
         });
     };
 
-    const handleDrawMouseStart: KonvaNodeEvents['onTouchStart'] = (e) => {
+    const handleDrawTouchStart: KonvaNodeEvents['onTouchStart'] = (e) => {
         if (e.evt.targetTouches && e.evt.targetTouches.length > 1) {
             lastX.current = e.evt.touches[0].clientX;
             if (stageSlot.current) {
@@ -120,7 +129,7 @@ const StageEditor = () => {
         }
     };
 
-    const handleDrawMouseMove: KonvaNodeEvents['onTouchMove'] = (e) => {
+    const handleDrawTouchMove: KonvaNodeEvents['onTouchMove'] = (e) => {
         if (e.evt.targetTouches && e.evt.targetTouches.length > 1) {
             const currentX = e.evt.touches[0].screenX;
             const deltaX = currentX - lastX.current;
@@ -156,10 +165,12 @@ const StageEditor = () => {
 
         // replace last
         updateInk(lastLine);
+        setRenderStateCounter((c) => c + 1);
     };
 
-    const handleDrawMouseUp = () => {
+    const handleDrawTouchUp = () => {
         isDrawing.current = false;
+        inkCollection.createIndex((doc) => doc.points);
     };
 
     const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -167,18 +178,13 @@ const StageEditor = () => {
         if (!stage) return;
         const pos = stage.getPointerPosition();
         if (!pos) return;
-        const newShape = {
-            type: 'rect',
-            x: pos.x,
-            y: pos.y,
-            rotation: 0,
-            height: Math.random() * 30 + 20,
-            width: Math.random() * 30 + 20,
-            fill: getRandomColor(),
-            visible: true,
-            selected: false
-        };
-        addShape(newShape);
+
+        addRectangleShape({
+            x: pos.x - 50,
+            y: pos.y - 50,
+            width: 100,
+            height: 100
+        });
     };
 
     const handleScroll: DOMAttributes<HTMLDivElement>['onScroll'] = (e) => {
@@ -203,6 +209,7 @@ const StageEditor = () => {
         <>
             <div
                 ref={stageSlot}
+                id="main-stage-editor-slot"
                 className="relative block touch-pan-x touch-pan-y overflow-auto overscroll-none"
                 onScroll={handleScroll}
                 onScrollEnd={handleScroll}
@@ -212,9 +219,9 @@ const StageEditor = () => {
                     height={DO_HEIGHT}
                     onDblClick={handleDblClick}
                     onMouseDown={checkDeselect}
-                    onTouchStart={handleDrawMouseStart}
-                    onTouchMove={handleDrawMouseMove}
-                    onTouchEnd={handleDrawMouseUp}
+                    onTouchStart={handleDrawTouchStart}
+                    onTouchMove={handleDrawTouchMove}
+                    onTouchEnd={handleDrawTouchUp}
                 >
                     <Layer>
                         <Rect
@@ -236,7 +243,7 @@ const StageEditor = () => {
                                             key={shape.id}
                                             {...shape}
                                             shapeProps={shape}
-                                            isSelected={shape.selected}
+                                            // isSelected={shape.selected}
                                             onSelect={() => {
                                                 selectShape(shape.id);
                                             }}
@@ -375,17 +382,20 @@ const StageEditor = () => {
 
 type RectangleNode<P = Konva.RectConfig> = FC<
     P & {
-        shapeProps: Partial<P>;
-        isSelected: boolean;
+        shapeProps: Partial<P & ReturnType<(typeof shapesCollection)['get']>>;
+        // isSelected: boolean;
         onSelect: () => void;
         onChange: (newAttrs: Partial<P>) => void;
     } & KonvaNodeEvents &
         ClassAttributes<Konva.Rect>
 >;
 
-const Rectangle: RectangleNode = ({ shapeProps, isSelected, onSelect, onChange }) => {
+const Rectangle: RectangleNode = ({ shapeProps, onSelect, onChange }) => {
     const shapeRef = useRef<Konva.Rect>(null);
     const trRef = useRef<Konva.Transformer>(null);
+    const [shadowShape, setShadowShape] = useState(shapeProps);
+    const [shouldCenterTransform, setShouldCenterTransform] = useState(false);
+    const [shouldMaintainAspectRatio, setShouldMaintainAspectRatio] = useState(false);
 
     // const handleResize = useThrottledCallback((newProps: any) => {
     //     shapeProps = {
@@ -397,12 +407,45 @@ const Rectangle: RectangleNode = ({ shapeProps, isSelected, onSelect, onChange }
     // });
 
     useEffect(() => {
-        if (isSelected && shapeRef.current) {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Delete' && shapeProps.id && shapeProps.selected) {
+                shapesCollection.delete(shapeProps.id);
+            }
+            if (!shouldCenterTransform && e.ctrlKey) setShouldCenterTransform(true);
+            if (!shouldMaintainAspectRatio && e.shiftKey) setShouldMaintainAspectRatio(true);
+        };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (shouldCenterTransform) {
+                onChange({
+                    ...shapeProps,
+                    x: shadowShape.x,
+                    y: shadowShape.y
+                });
+                setShouldCenterTransform(false);
+            }
+            if (shouldMaintainAspectRatio) setShouldMaintainAspectRatio(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, [
+        shapeProps,
+        setShouldCenterTransform,
+        setShouldMaintainAspectRatio,
+        shouldCenterTransform,
+        shouldMaintainAspectRatio
+    ]);
+
+    useEffect(() => {
+        if (shapeProps.selected && shapeRef.current) {
             // we need to attach transformer manually
             trRef.current?.nodes([shapeRef.current]);
             trRef.current?.moveToTop();
         }
-    }, [isSelected]);
+    }, [shapeProps.selected]);
 
     return (
         <>
@@ -444,7 +487,7 @@ const Rectangle: RectangleNode = ({ shapeProps, isSelected, onSelect, onChange }
                     // we will reset it back
                     node.scaleX(1);
                     node.scaleY(1);
-                    onChange({
+                    const newShapeData = {
                         ...shapeProps,
                         x: node.x(),
                         y: node.y(),
@@ -452,13 +495,17 @@ const Rectangle: RectangleNode = ({ shapeProps, isSelected, onSelect, onChange }
                         // set minimal value
                         width: Math.max(5, node.width() * scaleX),
                         height: Math.max(node.height() * scaleY)
-                    });
+                    };
+                    onChange(newShapeData);
+                    setShadowShape(newShapeData);
                 }}
             />
-            {isSelected && (
+            {shapeProps.selected && (
                 <Transformer
                     ref={trRef}
                     flipEnabled={false}
+                    keepRatio={shouldMaintainAspectRatio}
+                    centeredScaling={shouldCenterTransform}
                     boundBoxFunc={(oldBox, newBox) => {
                         // limit resize
                         if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) {
@@ -470,15 +517,6 @@ const Rectangle: RectangleNode = ({ shapeProps, isSelected, onSelect, onChange }
             )}
         </>
     );
-};
-
-const getRandomColor = () => {
-    const letters = '0123456789ABCDEF';
-    let color = '#';
-    for (let i = 0; i < 6; i++) {
-        color += letters[Math.floor(Math.random() * 16)];
-    }
-    return color;
 };
 
 export default StageEditor;

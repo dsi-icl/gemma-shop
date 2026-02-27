@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import StageEditor from '@/components/StageEditor';
+// import { StageEditorOptions } from '@/components/StageEditorOptions';
 import { StageSidebar } from '@/components/StageSidebar';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 
@@ -13,6 +14,7 @@ function RouteComponent() {
         <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
             <ResizablePanel>
                 <StageEditor />
+                {/* <StageEditorOptions /> */}
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize="25%">

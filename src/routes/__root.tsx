@@ -1,13 +1,14 @@
-import type { QueryClient } from '@tanstack/react-query';
-
 import { TanStackDevtools } from '@tanstack/react-devtools';
-import { HeadContent, Scripts, createRootRouteWithContext, redirect } from '@tanstack/react-router';
+import type { QueryClient } from '@tanstack/react-query';
+import { HeadContent, Scripts, createRootRouteWithContext } from '@tanstack/react-router';
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 
-import { getLocale, shouldRedirect } from '@/paraglide/runtime.js';
+import { getSocket } from '@/lib/websocketHandler';
+import { getLocale } from '@/paraglide/runtime.js';
 
 import Header from '../components/Header';
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools';
+
 import appCss from '../styles.css?url';
 
 interface MyRouterContext {
@@ -61,6 +62,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+    getSocket();
     return (
         <html lang={getLocale()} suppressHydrationWarning className="dark h-full">
             <head>

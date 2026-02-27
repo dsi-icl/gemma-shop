@@ -22,9 +22,8 @@ import { CSS } from '@dnd-kit/utilities';
 import {
     EyeClosedIcon,
     EyeIcon,
-    CheckCircleIcon as IconCircleCheckFilled,
-    DotsThreeVerticalIcon as IconDotsVertical,
-    DotsSixVerticalIcon as IconGripVertical
+    DotsSixVerticalIcon as IconGripVertical,
+    TrashIcon
 } from '@phosphor-icons/react';
 import { useLiveQuery } from '@tanstack/react-db';
 import {
@@ -51,6 +50,8 @@ import { ShapeSchema, shapesCollection } from '@/db/shapesCollection';
 import { cn } from '@/lib/utils';
 
 import { ColorPicker } from './ColourPicker';
+import { ButtonGroup } from './ui/button-group';
+import { Input } from './ui/input';
 import { Toggle } from './ui/toggle';
 
 // Create a separate component for the drag handle
@@ -102,11 +103,19 @@ const columns: ColumnDef<z.infer<typeof ShapeSchema>>[] = [
         cell: ({ row }) => {
             return (
                 <div className="flex flex-col">
-                    <span className="flex w-full items-center gap-2">
-                        {row.original.order} &gt; {row.original.id} {row.original.type}
-                    </span>
-                    <span className="flex w-full items-center gap-2 text-xs">
-                        x:{row.original.x} y:{row.original.y} r:{row.original.rotation}°
+                    <Input
+                        className="flex h-4 w-full items-center gap-2 rounded-none border-0 bg-transparent p-0"
+                        value={row.original.name}
+                        onChange={(e) => {
+                            shapesCollection.update(row.original.id, (attrs) => {
+                                attrs.name = e.target.value;
+                            });
+                        }}
+                    />
+                    <span className="flex w-full items-center gap-3 text-xs opacity-40">
+                        <span>x:{row.original.x}</span>
+                        <span>y:{row.original.y}</span>
+                        <span>r:{row.original.rotation}°</span>
                     </span>
                 </div>
             );
@@ -117,22 +126,34 @@ const columns: ColumnDef<z.infer<typeof ShapeSchema>>[] = [
         id: 'actions',
         size: 50,
         cell: ({ row }) => (
-            <Toggle
-                aria-label="Toggle visibility"
-                size="sm"
-                variant="outline"
-                onPressedChange={() =>
-                    shapesCollection.update(row.original.id, (shape) => {
-                        shape.visible = !shape.visible;
-                    })
-                }
-            >
-                {row.original.visible ? (
-                    <EyeIcon className="h-4 w-4" />
-                ) : (
-                    <EyeClosedIcon className="h-4 w-4" />
-                )}
-            </Toggle>
+            <ButtonGroup className="hover:cursor-pointer">
+                <Toggle
+                    aria-label="Toggle visibility"
+                    size="sm"
+                    variant="outline"
+                    className="hover:cursor-pointer"
+                    onPressedChange={() =>
+                        shapesCollection.update(row.original.id, (shape) => {
+                            shape.visible = !shape.visible;
+                        })
+                    }
+                >
+                    {row.original.visible ? (
+                        <EyeIcon className="h-4 w-4" />
+                    ) : (
+                        <EyeClosedIcon className="h-4 w-4" />
+                    )}
+                </Toggle>
+                <Button
+                    aria-label="Delete shape"
+                    size="sm"
+                    variant="outline"
+                    className="hover:cursor-pointer"
+                    onClick={() => shapesCollection.delete(row.original.id)}
+                >
+                    <TrashIcon className="h-4 w-4 text-red-500" />
+                </Button>
+            </ButtonGroup>
         )
     }
 ];
@@ -164,7 +185,7 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof ShapeSchema>> }) {
             data-dragging={isDragging}
             ref={setNodeRef}
             className={cn(
-                row.original.selected && 'bg-blue-950 hover:bg-blue-900',
+                row.original.selected && 'bg-muted/20 hover:bg-muted/50',
                 'relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80'
             )}
             style={{
@@ -235,7 +256,6 @@ export function LayersTable() {
         getFacetedUniqueValues: getFacetedUniqueValues()
     });
 
-    console.log('>> >', JSON.stringify(layers.map((d) => d.order)));
     function handleDragEnd(event: DragEndEvent) {
         const { active, over } = event;
         if (active && over && active.id !== over.id) {
@@ -248,7 +268,6 @@ export function LayersTable() {
             // setData((data) => {
             // const oldIndex = dataIds.indexOf(active.id);
             // const newIndex = dataIds.indexOf(over.id);
-            console.log('DE >', JSON.stringify(layers.map((d) => d.order)));
             const oldIndex = layers.findIndex((d) => d.order === active.id);
             const newIndex = layers.findIndex((d) => d.order === over.id);
             const sortedData = arrayMove(layers, oldIndex, newIndex);
@@ -257,7 +276,6 @@ export function LayersTable() {
                 sortedData.map((d) => d.id),
                 (attrs) => {
                     attrs.forEach((attr, index) => {
-                        console.log('Updating order of', attr.order, 'to', index);
                         attrs[index].order = index;
                     });
                 }

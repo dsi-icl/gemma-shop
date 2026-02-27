@@ -1,5 +1,5 @@
-import { Link, useMatches } from '@tanstack/react-router';
 import { DiscoBallIcon } from '@phosphor-icons/react';
+import { Link, useMatches } from '@tanstack/react-router';
 
 import {
     Breadcrumb,
@@ -27,7 +27,7 @@ export default function Header() {
             <Breadcrumb className="ml-14">
                 <BreadcrumbList>
                     <BreadcrumbItem>
-                        <BreadcrumbLink>
+                        <BreadcrumbLink asChild>
                             <Link to="/">Home</Link>
                         </BreadcrumbLink>
                     </BreadcrumbItem>
@@ -39,7 +39,7 @@ export default function Header() {
           <BreadcrumbSeparator />
            */}
                     <BreadcrumbItem>
-                        <BreadcrumbLink>
+                        <BreadcrumbLink asChild>
                             <Link to="/project">Projects</Link>
                         </BreadcrumbLink>
                     </BreadcrumbItem>
@@ -49,7 +49,7 @@ export default function Header() {
                             <BreadcrumbItem>{pid}</BreadcrumbItem>
                             <BreadcrumbSeparator />
                             <BreadcrumbItem>
-                                <BreadcrumbLink>
+                                <BreadcrumbLink asChild>
                                     <Link
                                         to="/project/$pid/stage"
                                         params={{

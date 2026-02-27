@@ -1,13 +1,12 @@
 'use client';
 
 import { Pipette } from 'lucide-react';
-import * as React from 'react';
-import { HexColorPicker, HexAlphaColorPicker } from 'react-colorful';
+import { useEffect, useState } from 'react';
+import { HexAlphaColorPicker } from 'react-colorful';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 
 interface ColorPickerProps {
     value: string;
@@ -16,9 +15,9 @@ interface ColorPickerProps {
 }
 
 export function ColorPicker({ value, onChange, className }: ColorPickerProps) {
-    const [hasEyeDropper, setHasEyeDropper] = React.useState(false);
+    const [hasEyeDropper, setHasEyeDropper] = useState(false);
 
-    React.useEffect(() => {
+    useEffect(() => {
         setHasEyeDropper('EyeDropper' in window);
     }, []);
 
