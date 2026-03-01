@@ -3,6 +3,7 @@
     "ignorePatterns": [],
     "singleQuote": true,
     "tabWidth": 4,
+    "printWidth": 100,
     "useTabs": false,
     "objectWrap": "collapse",
     "experimentalSortPackageJson": true,
