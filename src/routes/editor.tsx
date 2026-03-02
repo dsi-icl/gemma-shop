@@ -647,6 +647,8 @@ function EditorApp() {
 
             layerToUpdate.config = updatedConfig;
 
+            setSelectedId(numericId.toString());
+
             if (layerToUpdate.type === 'video') {
                 // Extract actual playback state so moving video doesn't accidentally rewind it for Wall screens
                 const truePlayback = engine.getPlayback(numericId) || layerToUpdate.playback;
