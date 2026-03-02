@@ -1,8 +1,14 @@
 'use client';
 
-import { GSMessageSchema, type GSMessage, type Layer, type LayerWithWallState } from './types';
+import {
+    GSMessageSchema,
+    type GSMessage,
+    type LayerWithWallComponentState,
+    type LayerWithWallEngineState
+} from './types';
 
 const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
+const LAYER_ANIMATION_DURATION = 100;
 
 export interface Viewport {
     x: number;
@@ -21,7 +27,7 @@ export class WallEngine {
     private bestRTT = Infinity;
 
     // Render State
-    public layers = new Map<number, LayerWithWallState>();
+    public layers = new Map<number, LayerWithWallEngineState>();
     private layoutCallbacks = new Set<LayoutUpdateCallback>();
     public viewport: Viewport;
 
@@ -67,10 +73,17 @@ export class WallEngine {
         return () => this.layoutCallbacks.delete(callback);
     }
 
-    public registerLayer(layer: LayerWithWallState, el: HTMLElement) {
+    public registerLayer(layer: LayerWithWallComponentState, el: HTMLElement) {
         let layerPtr = this.layers.get(layer.numericId);
         if (!layerPtr) {
-            layerPtr = { ...layer, el };
+            layerPtr = {
+                ...layer,
+                el,
+                animDuration: LAYER_ANIMATION_DURATION,
+                animStartTime: 0,
+                startPos: { ...layer.config },
+                targetPos: { ...layer.config }
+            };
             this.layers.set(layer.numericId, layerPtr);
         }
         layerPtr.el = el; // Update ref if React re-rendered
@@ -136,13 +149,14 @@ export class WallEngine {
                             ...layer.targetPos,
                             cx: view.getFloat32(offset + 2, true),
                             cy: view.getFloat32(offset + 6, true),
-                            scale: view.getFloat32(offset + 10, true),
-                            rotation: view.getFloat32(offset + 14, true)
+                            scaleX: view.getFloat32(offset + 10, true),
+                            scaleY: view.getFloat32(offset + 14, true),
+                            rotation: view.getFloat32(offset + 18, true)
                         };
                         layer.animStartTime = this.getServerTime();
                         layer.animDuration = 100; // Matches expected editor broadcast rate
                     }
-                    offset += 18;
+                    offset += 22;
                 }
             }
             return;
@@ -172,7 +186,7 @@ export class WallEngine {
     }
 
     // --- PLAYBACK & SYNC LOGIC ---
-    private handlePlaybackStateChange(layer: Extract<LayerWithWallState, { type: 'video' }>) {
+    private handlePlaybackStateChange(layer: Extract<LayerWithWallEngineState, { type: 'video' }>) {
         const video = layer.el as HTMLVideoElement;
         if (!video || typeof video.play !== 'function') return;
 
@@ -208,7 +222,7 @@ export class WallEngine {
                 const now = this.getServerTime();
 
                 if (now >= layer.playback.anchorServerTime) {
-                    // PRE-SEEK: If we joined late, calculate exactly where we should be NOW
+                    // If we joined late, calculate exactly where we should be NOW
                     const expectedTime =
                         layer.playback.anchorMediaTime +
                         (now - layer.playback.anchorServerTime) / 1000;
@@ -239,7 +253,7 @@ export class WallEngine {
 
     private driftController(
         metadata: VideoFrameCallbackMetadata,
-        layer: Extract<LayerWithWallState, { type: 'video' }>
+        layer: Extract<LayerWithWallEngineState, { type: 'video' }>
     ) {
         if (layer.playback.status !== 'playing' || !layer.el) return;
 
@@ -272,7 +286,7 @@ export class WallEngine {
         return start + (end - start) * t;
     }
 
-    public calculateCurrentPosition(layer: LayerWithWallState) {
+    public calculateCurrentPosition(layer: LayerWithWallEngineState) {
         if (!layer.animStartTime) return layer.targetPos;
 
         let t = (this.getServerTime() - layer.animStartTime) / layer.animDuration;
@@ -281,13 +295,19 @@ export class WallEngine {
         return {
             cx: this.lerp(layer.startPos.cx, layer.targetPos.cx, t),
             cy: this.lerp(layer.startPos.cy, layer.targetPos.cy, t),
-            scale: this.lerp(layer.startPos.scale, layer.targetPos.scale, t),
+            scaleX: this.lerp(layer.startPos.scaleX, layer.targetPos.scaleX, t),
+            scaleY: this.lerp(layer.startPos.scaleY, layer.targetPos.scaleY, t),
             rotation: this.lerp(layer.startPos.rotation, layer.targetPos.rotation, t),
             w: layer.config.w,
             h: layer.config.h,
             zIndex: layer.config.zIndex
         };
     }
+
+    public sendJSON = (data: GSMessage) => {
+        if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(data));
+        else console.warn('WebSocket not open. Cannot send JSON:', data);
+    };
 }
 
 // --- VITE HMR DEFENSE STRATEGY ---

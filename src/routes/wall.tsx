@@ -1,19 +1,22 @@
+'use client';
+
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState, useMemo, type CSSProperties } from 'react';
 
-import { RoyForceGraph } from '@/components/roygraph/RoyForceGraph';
-import type { LayerWithWallState } from '@/lib/types';
+import { MapWrapper } from '@/components/MapWrapper';
+// import { RoyForceGraph } from '@/components/roygraph/RoyForceGraph';
+import type { LayerWithWallComponentState } from '@/lib/types';
 
 import { WallEngine, type Viewport } from '../lib/wallEngine';
 
-// Define your physical screen resolution
+// Define the physical screen resolution
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 
 export const Route = createFileRoute('/wall')({ component: WallApp });
 
 function WallApp() {
-    const [layers, setLayers] = useState<LayerWithWallState[]>([]);
+    const [layers, setLayers] = useState<LayerWithWallComponentState[]>([]);
 
     // 1. Parse URL Parameters: ?c=0&r=1
     const myViewport = useMemo<Viewport>(() => {
@@ -26,6 +29,15 @@ function WallApp() {
 
     // Initialize Engine with this screen's specific physical location
     const engine = useMemo(() => WallEngine.getInstance(myViewport), [myViewport]);
+
+    useEffect(() => {
+        if (window.__WALL_RELOADING__) {
+            setTimeout(() => {
+                engine.sendJSON({ type: 'rehydrate_please' });
+            }, 500);
+            window.__WALL_RELOADING__ = false;
+        }
+    }, []);
 
     useEffect(() => {
         const unsubscribe = engine.subscribeToLayoutUpdates((data) => {
@@ -51,8 +63,8 @@ function WallApp() {
 
                 // --- UPGRADED CLIENT-SIDE CULLING MATH (Rotated AABB) ---
                 // 1. Get the scaled width and height
-                const sw = layer.config.w * pos.scale;
-                const sh = layer.config.h * pos.scale;
+                const sw = layer.config.w * pos.scaleX;
+                const sh = layer.config.h * pos.scaleY;
 
                 // 2. Convert degrees to radians for JS Math functions
                 const rad = pos.rotation * (Math.PI / 180);
@@ -78,7 +90,13 @@ function WallApp() {
                     const localY = pos.cy - layer.config.h / 2 - myViewport.y;
 
                     layer.visible = true;
-                    layer.el.style.transform = `translate3d(${localX}px, ${localY}px, 0) rotate(${pos.rotation}deg) scale(${pos.scale})`;
+                    if (layer.el instanceof HTMLImageElement) {
+                        layer.el.width = layer.config.w;
+                        layer.el.height = layer.config.h;
+                    }
+                    // layer.el.style.width = `${layer.config.w}px`;
+                    // layer.el.style.height = `${layer.config.h}px`;
+                    layer.el.style.transform = `translate3d(${localX}px, ${localY}px, 0) rotate(${pos.rotation}deg) scale(${pos.scaleX}, ${pos.scaleY})`;
                     layer.el.style.opacity = '1';
                 } else {
                     layer.visible = false;
@@ -95,77 +113,80 @@ function WallApp() {
         };
     }, [engine, myViewport]);
 
+    const stage = layers.map((layer) => {
+        // Share the exact same spatial and registry logic across both media types
+        const commonProps = {
+            ref: (el: HTMLElement | null) => {
+                if (el) engine.registerLayer(layer, el);
+            },
+            style: {
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                transformOrigin: '50% 50%',
+                // transition: 'all .1s ease-out',
+                width: `${layer.config.w}px`,
+                height: `${layer.config.h}px`,
+                zIndex: layer.config.zIndex
+            } as CSSProperties
+        };
+
+        if (layer.type === 'image')
+            return (
+                <div key={layer.numericId} {...commonProps}>
+                    <img
+                        src={layer.url}
+                        alt={`Layer ${layer.numericId}`}
+                        width="100%"
+                        height="100%"
+                        className="block h-full w-full object-cover"
+                    />
+                </div>
+            );
+
+        if (layer.type === 'text') {
+            return <div>{layer.markdown}</div>;
+        }
+
+        if (layer.type === 'map') {
+            return <MapWrapper key={layer.numericId} {...commonProps} layer={layer} />;
+        }
+
+        // if (layer.type === 'graph') {
+        //     return <RoyForceGraph key={layer.numericId} {...commonProps} />;
+        // }
+
+        if (layer.type === 'video')
+            return (
+                <video
+                    key={layer.numericId}
+                    {...commonProps}
+                    src={layer.url}
+                    muted
+                    playsInline
+                    loop={layer.loop ?? true}
+                />
+            );
+        return null;
+    });
+
     return (
-        <div
-            style={{
-                margin: 0,
-                overflow: 'hidden',
-                background: '#000',
-                width: '100vw',
-                height: '100vh',
-                position: 'relative'
-            }}
-        >
+        <div className="relative m-0 block h-screen w-screen overflow-hidden">
             {/* Visual Debugger: Shows the Screen ID in the corner */}
             <div
-                style={{
-                    position: 'absolute',
-                    top: 10,
-                    left: 10,
-                    color: 'rgba(255,255,255,0.3)',
-                    zIndex: 1000000,
-                    border: '3px solid red',
-                    width: `${SCREEN_W - 2 * 10}px`,
-                    height: `${SCREEN_H - 2 * 10}px`,
-                    fontFamily: 'monospace'
-                }}
+                className="absolute top-2 left-2 z-1000000 border-2 border-red-800 p-2 font-mono text-gray-500"
+                style={{ width: `${SCREEN_W - 2 * 10}px`, height: `${SCREEN_H - 2 * 10}px` }}
             >
                 SCREEN&gt; C:{myViewport.x / SCREEN_W} R:{myViewport.y / SCREEN_H}
             </div>
-            {layers.map((layer) => {
-                // Share the exact same spatial and registry logic across both media types
-                const commonProps = {
-                    src: layer.url,
-                    ref: (el: HTMLElement | null) => {
-                        if (el) engine.registerLayer(layer, el);
-                    },
-                    style: {
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        transformOrigin: '50% 50%',
-                        width: `${layer.config.w}px`,
-                        height: `${layer.config.h}px`,
-                        zIndex: layer.config.zIndex || 1
-                    } as CSSProperties
-                };
-
-                if (layer.type === 'image' || layer.type === 'text') {
-                    return (
-                        <img
-                            key={layer.numericId}
-                            {...commonProps}
-                            alt={`Layer ${layer.numericId}`}
-                            draggable={false}
-                        />
-                    );
-                }
-
-                if (layer.type === 'graph') {
-                    return <RoyForceGraph key={layer.numericId} {...commonProps} />;
-                }
-
-                // Otherwise, mount the full hardware-accelerated video tag
-                return (
-                    <video
-                        key={layer.numericId}
-                        {...commonProps}
-                        muted
-                        playsInline
-                        loop={layer.config.loop ?? true}
-                    />
-                );
-            })}
+            {stage}
         </div>
     );
+}
+
+// --- VITE HMR DEFENSE STRATEGY ---
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        window.__WALL_RELOADING__ = true;
+    });
 }

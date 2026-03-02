@@ -4,18 +4,14 @@ const LayerPositionStateSchema = z.object({
     cx: z.number(),
     cy: z.number(),
     rotation: z.number(),
-    scale: z.number()
+    scaleX: z.number(),
+    scaleY: z.number()
 });
 
+export type LayerPositionState = z.infer<typeof LayerPositionStateSchema>;
+
 const LayerConfigStateSchema = z
-    .object({
-        w: z.number(),
-        h: z.number(),
-        zIndex: z.number(),
-        loop: z.boolean().optional(),
-        duration: z.number().optional(),
-        markdown: z.string().optional()
-    })
+    .object({ w: z.number(), h: z.number(), zIndex: z.number() })
     .extend(LayerPositionStateSchema.shape);
 
 const LayerPlaybackStateSchema = z.object({
@@ -24,27 +20,34 @@ const LayerPlaybackStateSchema = z.object({
     anchorServerTime: z.number()
 });
 
-const LayerBaseSchema = z.object({
-    numericId: z.number(),
-    url: z.string(),
-    config: LayerConfigStateSchema,
-    startPos: LayerPositionStateSchema,
-    targetPos: LayerPositionStateSchema,
-    animStartTime: z.number(),
-    animDuration: z.number()
-});
+const LayerBaseSchema = z.object({ numericId: z.number(), config: LayerConfigStateSchema });
 
 const LayerSchema = z.discriminatedUnion('type', [
     z
         .object({
             type: z.literal('video'),
+            url: z.string(),
+            loop: z.boolean(),
+            duration: z.number(),
             rvfcActive: z.boolean(),
             playback: LayerPlaybackStateSchema
         })
         .extend(LayerBaseSchema.shape),
-    z.object({ type: z.literal('image') }).extend(LayerBaseSchema.shape),
+    z.object({ type: z.literal('image'), url: z.string() }).extend(LayerBaseSchema.shape),
     z.object({ type: z.literal('graph') }).extend(LayerBaseSchema.shape),
-    z.object({ type: z.literal('text') }).extend(LayerBaseSchema.shape),
+    z.object({ type: z.literal('text'), markdown: z.string() }).extend(LayerBaseSchema.shape),
+    z
+        .object({
+            type: z.literal('map'),
+            view: z.object({
+                latitude: z.number(),
+                longitude: z.number(),
+                zoom: z.number(),
+                bearing: z.number(),
+                pitch: z.number()
+            })
+        })
+        .extend(LayerBaseSchema.shape),
     z.object({ type: z.literal('ink') }).extend(LayerBaseSchema.shape)
 ]);
 
@@ -84,7 +87,7 @@ export const GSMessageSchema = z
     )
     .or(
         z.object({
-            type: z.literal('upload_progress'),
+            type: z.literal('processing_progress'),
             numericId: z.number(),
             progress: z.number()
         })
@@ -96,9 +99,13 @@ export const GSMessageSchema = z
 
 export type GSMessage = z.infer<typeof GSMessageSchema>;
 
-export type LayerWithWallState = Layer & {
-    el?: HTMLElement | HTMLVideoElement | null;
-    visible?: boolean;
+export type LayerWithWallComponentState = Layer & { el?: HTMLElement; visible?: boolean };
+
+export type LayerWithWallEngineState = LayerWithWallComponentState & {
+    startPos: LayerPositionState;
+    targetPos: LayerPositionState;
+    animStartTime: number;
+    animDuration: number;
 };
 
 export type LayerWithEditorState = Layer & { progress?: number; isUploading?: boolean };

@@ -60,7 +60,7 @@ export default defineHandler(async (event) => {
 
                         const progress = Math.min(99, Math.round((timeInSeconds / duration) * 100));
                         process.__BROADCAST_EDITORS__({
-                            type: 'upload_progress',
+                            type: 'processing_progress',
                             numericId,
                             progress
                         });

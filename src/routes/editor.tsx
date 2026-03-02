@@ -1,6 +1,6 @@
 'use client';
 
-import { DiscoBallIcon } from '@phosphor-icons/react';
+import { DiscoBallIcon, YinYang } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
@@ -16,14 +16,16 @@ import {
     Rect
 } from 'react-konva';
 import satori from 'satori';
+import { tr } from 'zod/v4/locales/index.js';
 
-import { RoyForceGraph } from '@/components/roygraph/RoyForceGraph';
+// import { RoyForceGraph } from '@/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '@/lib/types';
 
 import { EditorEngine } from '../lib/editorEngine';
 
 const engine = EditorEngine.getInstance();
 
+const STAGE_SCALE_FACTOR = 0.25;
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 const COLS = 16;
@@ -105,6 +107,9 @@ function EditorApp() {
     const [layers, setLayers] = useState<LayerWithEditorState[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isPinching, setIsPinching] = useState(false);
+    const [shadowShape, setShadowShape] = useState<LayerWithEditorState | null>(null);
+    const [shouldCenterTransform, setShouldCenterTransform] = useState(false);
+    const [shouldMaintainAspectRatio, setShouldMaintainAspectRatio] = useState(true);
 
     const nextId = useRef(1);
     const nextZIndex = useRef(10);
@@ -117,6 +122,7 @@ function EditorApp() {
 
     useEffect(() => {
         layersRef.current = layers;
+        (window as any).__LAYERS = layersRef.current;
     }, [layers]);
 
     useEffect(() => {
@@ -152,7 +158,7 @@ function EditorApp() {
                     const filtered = prev.filter((l) => l.numericId !== layer.numericId);
                     return [...filtered, layer];
                 });
-            } else if (data.type === 'upload_progress') {
+            } else if (data.type === 'processing_progress') {
                 setLayers((prev) =>
                     prev.map((l) =>
                         l.numericId === data.numericId ? { ...l, progress: data.progress } : l
@@ -162,32 +168,35 @@ function EditorApp() {
         });
 
         // 2. Binary Fast-Path
-        const unsubscribeBinary = engine.subscribeToBinary((id, cx, cy, scale, rotation) => {
-            if (trRef.current) {
-                const stage = trRef.current.getStage();
-                const node = stage?.findOne(`#${id}`);
+        const unsubscribeBinary = engine.subscribeToBinary(
+            (id, cx, cy, scaleX, scaleY, rotation) => {
+                if (trRef.current) {
+                    const stage = trRef.current.getStage();
+                    const node = stage?.findOne(`#${id}`);
 
-                if (node && !node.isDragging() && !isPinching) {
-                    node.x(cx);
-                    node.y(cy);
-                    node.scaleX(scale);
-                    node.scaleY(scale);
-                    node.rotation(rotation);
-                    if (selectedId === id.toString()) trRef.current.forceUpdate();
-                    node.getLayer()?.batchDraw();
-                }
+                    if (node && !node.isDragging() && !isPinching) {
+                        node.x(cx);
+                        node.y(cy);
+                        node.scaleX(scaleX);
+                        node.scaleY(scaleY);
+                        node.rotation(rotation);
+                        if (selectedId === id.toString()) trRef.current.forceUpdate();
+                        node.getLayer()?.batchDraw();
+                    }
 
-                // When React naturally re-renders later (like when you click the video),
-                // it will read these perfectly accurate coordinates instead of stale ones.
-                const shadowLayer = layersRef.current.find((l) => l.numericId === id);
-                if (shadowLayer) {
-                    shadowLayer.config.cx = cx;
-                    shadowLayer.config.cy = cy;
-                    shadowLayer.config.scale = scale;
-                    shadowLayer.config.rotation = rotation;
+                    // When React naturally re-renders later (like when you click the video),
+                    // it will read these perfectly accurate coordinates instead of stale ones.
+                    const shadowLayer = layersRef.current.find((l) => l.numericId === id);
+                    if (shadowLayer) {
+                        shadowLayer.config.cx = cx;
+                        shadowLayer.config.cy = cy;
+                        shadowLayer.config.scaleX = scaleX;
+                        shadowLayer.config.scaleY = scaleY;
+                        shadowLayer.config.rotation = rotation;
+                    }
                 }
             }
-        });
+        );
 
         return () => {
             unsubscribeJSON();
@@ -196,32 +205,66 @@ function EditorApp() {
     }, [selectedId, isPinching]);
 
     useEffect(() => {
-        const deleteLayer = () => {
-            if (selectedId) {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            e.preventDefault();
+
+            if (!selectedId) return;
+            if (e.key === 'Delete') {
                 engine.sendJSON({ type: 'delete_layer', numericId: parseInt(selectedId) });
                 setLayers((prev) => prev.filter((l) => l.numericId !== parseInt(selectedId)));
                 setSelectedId(null);
             }
+            // if (!shouldCenterTransform && e.ctrlKey) {
+            //     setShadowShape(layers.find((l) => l.numericId === parseInt(selectedId)) || null);
+            //     setShouldCenterTransform(true);
+            // }
+            // console.log('handleKeyDown', e.shiftKey, shouldMaintainAspectRatio);
+            // if (e.shiftKey) if (shouldMaintainAspectRatio) setShouldMaintainAspectRatio(false);
         };
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Delete') deleteLayer();
-        });
+        // const handleKeyUp = (e: KeyboardEvent) => {
+        //     e.preventDefault();
+        //     if (!selectedId) return;
+        //     if (shouldCenterTransform) {
+        //         setShouldCenterTransform(false);
+        //         const layerToReset = layers.find((l) => l.numericId === parseInt(selectedId));
+        //         if (!layerToReset || !shadowShape) return;
+        //         layerToReset.config.cx = shadowShape.config.cx;
+        //         layerToReset.config.cy = shadowShape.config.cy;
+        //         setLayers((prev) =>
+        //             prev.map((l) => (l.numericId === parseInt(selectedId) ? layerToReset : l))
+        //         );
+        //     }
+        //     console.log('handleKeyUp', e.shiftKey, shouldMaintainAspectRatio);
+        //     if (!shouldMaintainAspectRatio) setShouldMaintainAspectRatio(true);
+        // };
+        window.addEventListener('keydown', handleKeyDown);
+        // window.addEventListener('keyup', handleKeyUp);
         return () => {
-            window.removeEventListener('keydown', deleteLayer);
+            window.removeEventListener('keydown', handleKeyDown);
+            // window.removeEventListener('keyup', handleKeyUp);
         };
-    }, [selectedId]);
+    }, [
+        engine,
+        layers,
+        setLayers,
+        selectedId,
+        setShadowShape,
+        setShouldCenterTransform,
+        setShouldMaintainAspectRatio,
+        shouldCenterTransform,
+        shouldMaintainAspectRatio
+    ]);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         const isImage = file.type.startsWith('image/');
-        const numericId = nextId.current++;
         const localUrl = URL.createObjectURL(file); // Native instant preview Blob
 
-        let mediaWidth = 800,
-            mediaHeight = 600,
-            duration = 0;
+        let mediaWidth = 800;
+        let mediaHeight = 600;
+        let duration = 0;
         let previewDataUrl = localUrl;
 
         // 1. Instantly read the dimensions and extract a poster frame locally!
@@ -236,8 +279,8 @@ function EditorApp() {
             }
             img.src = localUrl;
             await p;
-            mediaWidth = img.width || 800;
-            mediaHeight = img.height || 600;
+            mediaWidth = img.width;
+            mediaHeight = img.height;
         } else {
             const tempVid = document.createElement('video');
             tempVid.muted = true;
@@ -248,9 +291,9 @@ function EditorApp() {
             }
             tempVid.src = localUrl;
             await p;
-            mediaWidth = tempVid.videoWidth || 800;
-            mediaHeight = tempVid.videoHeight || 600;
-            duration = tempVid.duration || 0.1;
+            mediaWidth = tempVid.videoWidth;
+            mediaHeight = tempVid.videoHeight;
+            duration = tempVid.duration;
 
             // Seek into the video to grab an interesting frame
             tempVid.currentTime = Math.min(0.5, duration / 2);
@@ -274,14 +317,21 @@ function EditorApp() {
             tempVid.load();
         }
 
-        const positions = { cx: 400, cy: 300, rotation: 0, scale: Math.min(1, 640 / mediaWidth) };
+        const positions = {
+            cx: mediaWidth / 2,
+            cy: mediaHeight / 2,
+            rotation: 0,
+            scaleX: 1,
+            scaleY: 1
+            // scaleX: Math.min(1, 640 / mediaWidth),
+            // scaleY: Math.min(1, 640 / mediaHeight)
+        };
+
         const config: Layer['config'] = {
             w: mediaWidth,
             h: mediaHeight,
             ...positions,
-            duration: duration,
-            zIndex: nextZIndex.current++,
-            loop: true
+            zIndex: nextZIndex.current++
         };
 
         const defaultPlayback: Extract<Layer, { type: 'video' }>['playback'] = {
@@ -291,6 +341,7 @@ function EditorApp() {
         };
 
         // 2. OPTIMISTIC UPDATE: Mount it immediately to the local UI!
+        const numericId = nextId.current++;
         const optimisticLayer: LayerWithEditorState = {
             numericId,
             type: isImage ? 'image' : 'video',
@@ -299,13 +350,18 @@ function EditorApp() {
             config,
             isUploading: true,
             progress: 0,
-            startPos: positions,
-            targetPos: positions,
             rvfcActive: false,
-            animStartTime: 0,
-            animDuration: 100
+            duration,
+            loop: true
         };
-        setLayers((prev) => [...prev, optimisticLayer]);
+
+        // We push to our layers ref object because the setLayers migh not have been called by the time it is called a second time.
+        layersRef.current.push(optimisticLayer);
+        setLayers((prev) => {
+            if (prev.find((l) => l.numericId === optimisticLayer.numericId))
+                return prev.map((l) => (l.numericId === numericId ? optimisticLayer : l));
+            return [...prev, optimisticLayer];
+        });
         setSelectedId(numericId.toString());
 
         // 3. Fire the heavy background network request
@@ -327,7 +383,9 @@ function EditorApp() {
             // 4. Lock it in with the preserved transformations.
             const finalizedLayer = { ...freshestLayer, url: data.url, isUploading: false };
 
-            setLayers((prev) => prev.map((l) => (l.numericId === numericId ? finalizedLayer : l)));
+            setLayers((prev) => {
+                return prev.map((l) => (l.numericId === numericId ? finalizedLayer : l));
+            });
             engine.setPlayback(numericId, defaultPlayback);
 
             engine.sendJSON({
@@ -342,32 +400,45 @@ function EditorApp() {
                 } as LayerWithEditorState
             });
         } catch (err) {
-            alert('Upload failed.');
+            console.error(' Upload failure', err);
             setLayers((prev) => prev.filter((l) => l.numericId !== numericId)); // Rollback
         }
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    const handleAddMap = async () => {
+        const numericId = nextId.current++;
+        const positionState = { cx: 400, cy: 300, rotation: 0, scaleX: 1, scaleY: 1 };
+        const config: Layer['config'] = {
+            w: 300,
+            h: 200,
+            ...positionState,
+            zIndex: nextZIndex.current++
+        };
+
+        const newLayer: Layer = {
+            numericId,
+            type: 'map',
+            config,
+            view: { latitude: 37.7751, longitude: -122.4193, zoom: 11, bearing: 0, pitch: 0 }
+        };
+
+        setLayers((prev) => [...prev, newLayer]);
+        setSelectedId(numericId.toString());
+
+        engine.sendJSON({ type: 'upsert_layer', origin: 'handleAddGraph', layer: newLayer });
+    };
+
     const handleAddGraph = async () => {
         const canvasEl = document.getElementById('roy-force-graph-host') as HTMLCanvasElement;
-        const url = canvasEl.toDataURL();
         const w = canvasEl.width;
         const h = canvasEl.height;
 
         const numericId = nextId.current++;
-        const positionState = { cx: 400, cy: 300, rotation: 0, scale: 1 };
+        const positionState = { cx: 400, cy: 300, rotation: 0, scaleX: 1, scaleY: 1 };
         const config: Layer['config'] = { w, h, ...positionState, zIndex: nextZIndex.current++ };
 
-        const newLayer: Layer = {
-            numericId,
-            type: 'graph',
-            url,
-            config,
-            startPos: positionState,
-            targetPos: positionState,
-            animStartTime: 0,
-            animDuration: 100
-        };
+        const newLayer: Layer = { numericId, type: 'graph', config };
 
         setLayers((prev) => [...prev, newLayer]);
         setSelectedId(numericId.toString());
@@ -377,28 +448,23 @@ function EditorApp() {
 
     const handleAddText = async () => {
         const initialText = '# Hello Wall\nEdit this text!';
-        const { url, w, h } = (await renderTextToSVG(initialText)) ?? {};
-        if (!url) return;
+        // const { url, w, h } = (await renderTextToSVG(initialText)) ?? {};
+        // if (!url) return;
 
         const numericId = nextId.current++;
-        const positionState = { cx: 400, cy: 300, rotation: 0, scale: 1 };
+        const positionState = { cx: 400, cy: 300, rotation: 0, scaleX: 1, scaleY: 1 };
         const config: Layer['config'] = {
-            w: w ?? 100,
-            h: h ?? 100,
+            w: 100,
+            h: 100,
             ...positionState,
-            zIndex: nextZIndex.current++,
-            markdown: initialText
+            zIndex: nextZIndex.current++
         };
 
         const newLayer: Extract<Layer, { type: 'text' }> = {
             numericId,
             type: 'text',
-            url,
             config,
-            startPos: positionState,
-            targetPos: positionState,
-            animStartTime: 0,
-            animDuration: 100
+            markdown: initialText
         };
 
         setLayers((prev) => [...prev, newLayer]);
@@ -484,37 +550,42 @@ function EditorApp() {
 
             if (!lastDist.current || !lastAngle.current || !lastCenter.current) return;
 
-            const stageScale = stage?.scaleX();
+            const stageScaleX = stage?.scaleX();
+            const stageScaleY = stage?.scaleY();
             const scaleBy = dist / lastDist.current;
             const angleDelta = angle - lastAngle.current;
 
-            if (!stageScale) return;
+            if (!stageScaleX || !stageScaleY) return;
 
-            const dx = (screenCenter.x - lastCenter.current.x) / stageScale;
-            const dy = (screenCenter.y - lastCenter.current.y) / stageScale;
-            let newX = node.x() + dx;
-            let newY = node.y() + dy;
+            const dx = (screenCenter.x - lastCenter.current.x) / stageScaleX;
+            const dy = (screenCenter.y - lastCenter.current.y) / stageScaleY;
+            let newX = Math.round(node.x() + dx);
+            let newY = Math.round(node.y() + dy);
 
-            const logicalPinchCenterX = screenCenter.x / stageScale;
-            const logicalPinchCenterY = screenCenter.y / stageScale;
-            newX -= (logicalPinchCenterX - newX) * (scaleBy - 1);
-            newY -= (logicalPinchCenterY - newY) * (scaleBy - 1);
+            const logicalPinchCenterX = screenCenter.x / stageScaleX;
+            const logicalPinchCenterY = screenCenter.y / stageScaleY;
+            newX -= Math.round((logicalPinchCenterX - newX) * (scaleBy - 1));
+            newY -= Math.round((logicalPinchCenterY - newY) * (scaleBy - 1));
 
-            const newScale = node.scaleX() * scaleBy;
-            if (newScale > 0.1 && newScale < 10) {
-                node.scaleX(newScale);
-                node.scaleY(newScale);
+            const newScaleX = Math.round(node.scaleX() * scaleBy * 1000) / 1000;
+            const newScaleY = Math.round(node.scaleY() * scaleBy * 1000) / 1000;
+            if (newScaleX > 0.1 && newScaleX < 10) {
+                node.scaleX(newScaleX);
                 node.x(newX);
+            }
+            if (newScaleX > 0.1 && newScaleX < 10) {
+                node.scaleY(newScaleY);
                 node.y(newY);
             }
             node.rotation(node.rotation() + angleDelta);
             trRef.current.getLayer()?.batchDraw();
             engine.broadcastBinaryMove(
                 parseInt(selectedId),
-                node.x(),
-                node.y(),
-                node.scaleX(),
-                node.rotation()
+                Math.round(node.x()),
+                Math.round(node.y()),
+                Math.round(node.scaleX() * 1000) / 1000,
+                Math.round(node.scaleY() * 1000) / 1000,
+                Math.round(node.rotation())
             );
 
             lastDist.current = dist;
@@ -537,7 +608,15 @@ function EditorApp() {
 
     const handleTransform = (e: Pick<KonvaEventObject<Event>, 'target'>, numericId: number) => {
         const node = e.target;
-        engine.broadcastBinaryMove(numericId, node.x(), node.y(), node.scaleX(), node.rotation());
+
+        engine.broadcastBinaryMove(
+            numericId,
+            Math.round(node.x()),
+            Math.round(node.y()),
+            Math.round(node.scaleX() * 1000) / 1000,
+            Math.round(node.scaleY() * 1000) / 1000,
+            Math.round(node.rotation())
+        );
     };
 
     const handleTransformEnd = useCallback(
@@ -548,13 +627,25 @@ function EditorApp() {
             const layerToUpdate = layersRef.current.find((l) => l.numericId === numericId);
             if (!layerToUpdate) return;
 
-            const updatedConfig = {
+            const width = Math.round(node.width());
+            const height = Math.round(node.height());
+            const x = Math.round(node.x());
+            const y = Math.round(node.y());
+            const scaleX = node.scaleX();
+            const scaleY = node.scaleY();
+
+            const updatedConfig: Layer['config'] = {
                 ...layerToUpdate.config,
-                cx: Math.round(node.x()),
-                cy: Math.round(node.y()),
-                scale: node.scaleX(),
-                rotation: Math.round(node.rotation())
+                cx: x,
+                cy: y,
+                scaleX,
+                scaleY,
+                rotation: Math.round(node.rotation()),
+                w: Math.max(5, width),
+                h: Math.max(5, height)
             };
+
+            layerToUpdate.config = updatedConfig;
 
             if (layerToUpdate.type === 'video') {
                 // Extract actual playback state so moving video doesn't accidentally rewind it for Wall screens
@@ -611,23 +702,7 @@ function EditorApp() {
     return (
         <div style={{ width: '100vw', height: '100vh', margin: 0 }}>
             {/* Dynamic Control Panel */}
-            <div
-                style={{
-                    position: 'fixed',
-                    bottom: 10,
-                    left: 10,
-                    zIndex: 100,
-                    background: '#333',
-                    color: '#ccc',
-                    padding: 15,
-                    borderRadius: 8,
-                    display: 'flex',
-                    gap: '10px',
-                    alignItems: 'center',
-                    scale: 2,
-                    transformOrigin: 'left bottom'
-                }}
-            >
+            <div className="fixed bottom-10 left-10 z-100 flex origin-bottom-left scale-200 items-center gap-2 rounded-2xl bg-gray-800 p-5 text-gray-500">
                 <div className="flex flex-col gap-2">
                     <div className="flex items-end">
                         <span className="text-3xl">Gemma Shop</span>
@@ -653,12 +728,22 @@ function EditorApp() {
                         </button>
                         <button
                             onClick={() => {
+                                handleAddMap();
+                            }}
+                            className="cursor-pointer"
+                        >
+                            Add Map
+                        </button>
+                        {/* <button
+                            onClick={() => {
                                 handleAddGraph();
                             }}
                             className="cursor-pointer"
                         >
                             Add Roy Graph
-                        </button>
+                        </button> */}
+                    </div>
+                    <div className="flex gap-4 text-blue-400">
                         <button
                             onClick={() => {
                                 engine.sendJSON({ type: 'clear_stage' });
@@ -751,7 +836,7 @@ function EditorApp() {
             {/* Layers Side Panel */}
             <div className="fixed top-0 right-0 z-200 flex h-full w-1/4 flex-col gap-2 bg-[#333a] p-5 text-2xl text-white">
                 {[...layers]
-                    .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
+                    .sort((a, b) => a.config.zIndex - b.config.zIndex)
                     .map((l) => {
                         return (
                             <div
@@ -769,6 +854,7 @@ function EditorApp() {
                                 <span className="flex gap-10">
                                     {/* {JSON.stringify(l.config)} */}
                                     <span>x: {l.config.cx}</span> <span>y: {l.config.cy}</span>{' '}
+                                    <span>w: {l.config.w}</span> <span>h: {l.config.h}</span>{' '}
                                     <span>r: {l.config.rotation}</span>
                                 </span>
                             </div>
@@ -777,16 +863,16 @@ function EditorApp() {
             </div>
 
             <Stage
-                width={COLS * SCREEN_W * 0.25}
-                height={ROWS * SCREEN_H * 0.25}
+                width={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
+                height={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
                 // width={window.innerWidth}
                 // height={window.innerHeight}
                 onMouseDown={handleStageInteractionStart}
                 onTouchStart={handleStageInteractionStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
-                scaleX={0.25}
-                scaleY={0.25}
+                scaleX={STAGE_SCALE_FACTOR}
+                scaleY={STAGE_SCALE_FACTOR}
             >
                 <KonvaLayer>
                     {Array.from({ length: COLS * ROWS }).map((_, i) => {
@@ -816,7 +902,7 @@ function EditorApp() {
                     })}
 
                     {[...layers]
-                        .sort((a, b) => (a.config.zIndex || 0) - (b.config.zIndex || 0))
+                        .sort((a, b) => a.config.zIndex - b.config.zIndex)
                         .map((layer) => {
                             const props = {
                                 isPinching,
@@ -828,23 +914,10 @@ function EditorApp() {
                             };
 
                             // Route images and uploading previews to the Static element
-                            if (
-                                layer.type === 'image' ||
-                                layer.type === 'text' ||
-                                layer.isUploading
-                            ) {
+                            if (layer.type === 'image') {
                                 return (
                                     <KonvaStaticImage
                                         key={`spi_${layer.numericId}`}
-                                        layer={layer}
-                                        {...props}
-                                    />
-                                );
-                            }
-                            if (layer.type === 'graph') {
-                                return (
-                                    <RoyStaticRenderer
-                                        key={`roy_${layer.numericId}`}
                                         layer={layer}
                                         {...props}
                                     />
@@ -858,21 +931,84 @@ function EditorApp() {
                                         {...props}
                                     />
                                 );
+                            if (layer.type === 'text') {
+                                return (
+                                    <Rect
+                                        key={`txt_${layer.numericId}`}
+                                        layer={layer}
+                                        fill={'#f00'}
+                                        id={layer.numericId.toString()}
+                                        x={layer.config.cx}
+                                        y={layer.config.cy}
+                                        width={layer.config.w}
+                                        height={layer.config.h}
+                                        scaleX={layer.config.scaleX}
+                                        scaleY={layer.config.scaleY}
+                                        offsetX={layer.config.w / 2}
+                                        offsetY={layer.config.h / 2}
+                                        rotation={layer.config.rotation}
+                                        draggable={!props.isPinching}
+                                        onClick={props.onSelect}
+                                        onTap={props.onSelect}
+                                        onDragMove={props.onTransform}
+                                        onTransform={props.onTransform}
+                                        onDragEnd={props.onTransformEnd}
+                                        onTransformEnd={props.onTransformEnd}
+                                    />
+                                );
+                            }
+                            if (layer.type === 'graph') {
+                                return (
+                                    <RoyStaticRenderer
+                                        key={`roy_${layer.numericId}`}
+                                        layer={layer}
+                                        {...props}
+                                    />
+                                );
+                            }
+                            if (layer.type === 'map') {
+                                return (
+                                    <Rect
+                                        key={`map_${layer.numericId}`}
+                                        layer={layer}
+                                        fill={'#f00'}
+                                        id={layer.numericId.toString()}
+                                        x={layer.config.cx}
+                                        y={layer.config.cy}
+                                        width={layer.config.w}
+                                        height={layer.config.h}
+                                        scaleX={layer.config.scaleX}
+                                        scaleY={layer.config.scaleY}
+                                        offsetX={layer.config.w / 2}
+                                        offsetY={layer.config.h / 2}
+                                        rotation={layer.config.rotation}
+                                        draggable={!props.isPinching}
+                                        onClick={props.onSelect}
+                                        onTap={props.onSelect}
+                                        onDragMove={props.onTransform}
+                                        onTransform={props.onTransform}
+                                        onDragEnd={props.onTransformEnd}
+                                        onTransformEnd={props.onTransformEnd}
+                                    />
+                                );
+                            }
                             return null;
                         })}
 
                     <Transformer
                         ref={trRef}
-                        keepRatio={true}
+                        flipEnabled={false}
+                        anchorCornerRadius={10}
+                        anchorSize={20}
                         boundBoxFunc={(oldBox, newBox) => {
-                            if (Math.abs(newBox.width) < 50 || Math.abs(newBox.height) < 50)
+                            if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5)
                                 return oldBox;
                             return newBox;
                         }}
                     />
                 </KonvaLayer>
             </Stage>
-            <RoyForceGraph
+            {/* <RoyForceGraph
                 style={{
                     display: 'block',
                     position: 'fixed',
@@ -880,7 +1016,7 @@ function EditorApp() {
                     left: 0,
                     visibility: 'hidden'
                 }}
-            />
+            /> */}
         </div>
     );
 }
@@ -900,9 +1036,24 @@ function KonvaVideo({
     onTransformEnd: (e: KonvaEventObject<Event>) => void;
 }) {
     const imageRef = useRef<Konva.Image>(null);
+    const [imgElement, setImgElement] = useState<HTMLImageElement | null>(null);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
 
     useEffect(() => {
+        const i = new window.Image();
+        if (!layer.url.startsWith('blob:') && !layer.url.startsWith('data:')) {
+            i.crossOrigin = 'anonymous';
+        }
+        i.onload = () => {
+            setImgElement(i);
+            imageRef.current?.getLayer()?.batchDraw();
+        };
+        i.src = layer.url;
+    }, [layer.isUploading, layer.url, layer.numericId]);
+
+    useEffect(() => {
+        if (layer.isUploading) return;
+
         const vid = document.createElement('video');
         if (!layer.url.startsWith('blob:') && !layer.url.startsWith('data:')) {
             vid.crossOrigin = 'anonymous';
@@ -910,10 +1061,11 @@ function KonvaVideo({
         vid.muted = true;
         vid.preload = 'auto';
         vid.playsInline = true;
-        vid.loop = layer.config.loop ?? true;
+        vid.loop = layer.loop ?? true;
 
         // Force a canvas paint the exact millisecond the browser has a frame ready
         vid.addEventListener('canplay', () => {
+            setImgElement(null);
             imageRef.current?.getLayer()?.batchDraw();
         });
 
@@ -925,12 +1077,12 @@ function KonvaVideo({
             vid.removeAttribute('src');
             vid.load();
         };
-    }, [layer.url, layer.numericId]);
+    }, [layer.isUploading, layer.url, layer.numericId]);
 
     // Seamlessly toggle loop without unmounting the video
     useEffect(() => {
-        if (videoElement) videoElement.loop = layer.config.loop ?? true;
-    }, [layer.config.loop, videoElement]);
+        if (videoElement) videoElement.loop = layer.loop ?? true;
+    }, [layer.loop, videoElement]);
 
     // 3. Playback Loop (Completely bypasses React state for 60fps performance)
     useEffect(() => {
@@ -962,8 +1114,8 @@ function KonvaVideo({
                     let expected = pb.anchorMediaTime + (now - pb.anchorServerTime) / 1000;
 
                     // Native wrapping math to match the browser's loop
-                    if ((layer.config.loop ?? true) && layer.config.duration) {
-                        expected = expected % layer.config.duration;
+                    if ((layer.loop ?? true) && layer.duration) {
+                        expected = expected % layer.duration;
                     }
                     const drift = expected - videoElement.currentTime;
                     if (Math.abs(drift) > 0.5) {
@@ -991,17 +1143,15 @@ function KonvaVideo({
             unsubscribe();
             cancelAnimationFrame(frameId);
         };
-    }, [videoElement, layer.numericId, layer.config.loop, layer.config.duration]);
+    }, [videoElement, layer.numericId, layer.loop, layer.duration]);
 
     return (
-        <KonvaImage
-            ref={imageRef}
-            image={videoElement || undefined}
+        <Group
             id={layer.numericId.toString()}
             x={layer.config.cx}
             y={layer.config.cy}
-            scaleX={layer.config.scale}
-            scaleY={layer.config.scale}
+            scaleX={layer.config.scaleX}
+            scaleY={layer.config.scaleY}
             rotation={layer.config.rotation}
             width={layer.config.w}
             height={layer.config.h}
@@ -1014,67 +1164,15 @@ function KonvaVideo({
             onTransform={onTransform}
             onDragEnd={onTransformEnd}
             onTransformEnd={onTransformEnd}
-        />
-    );
-}
-
-// --- SUB-COMPONENT: Static Images & Upload Previews ---
-function KonvaStaticImage({
-    layer,
-    isPinching,
-    onSelect,
-    onTransform,
-    onTransformEnd
-}: {
-    layer: LayerWithEditorState;
-    isPinching: boolean;
-    onSelect: () => void;
-    onTransform: (e: KonvaEventObject<Event>) => void;
-    onTransformEnd: (e: KonvaEventObject<Event>) => void;
-}) {
-    const [img, setImg] = useState<HTMLImageElement | null>(null);
-    const imageRef = useRef<Konva.Image>(null);
-
-    useEffect(() => {
-        const i = new window.Image();
-        if (!layer.url.startsWith('blob:') && !layer.url.startsWith('data:')) {
-            i.crossOrigin = 'anonymous';
-        }
-        i.onload = () => {
-            setImg(i);
-            imageRef.current?.getLayer()?.batchDraw();
-        };
-        i.src = layer.url;
-    }, [layer.url]);
-
-    return (
-        <Group
-            id={layer.numericId.toString()}
-            x={layer.config.cx}
-            y={layer.config.cy}
-            scaleX={layer.config.scale}
-            scaleY={layer.config.scale}
-            rotation={layer.config.rotation}
-            draggable={!isPinching}
-            onClick={onSelect}
-            onTap={onSelect}
-            onDragMove={onTransform}
-            onTransform={onTransform}
-            onDragEnd={onTransformEnd}
-            onTransformEnd={onTransformEnd}
         >
             <KonvaImage
                 ref={imageRef}
-                image={img || undefined}
+                image={imgElement ?? videoElement ?? undefined}
                 width={layer.config.w}
                 height={layer.config.h}
-                offsetX={layer.config.w / 2}
-                offsetY={layer.config.h / 2}
             />
-
-            {/* The Real-Time Processing Overlay */}
-            {layer.isUploading && layer.type === 'video' && (
-                <Group offsetX={layer.config.w / 2} offsetY={layer.config.h / 2}>
+            {layer.isUploading && (
+                <>
                     <Rect width={layer.config.w} height={layer.config.h} fill="rgba(0,0,0,0.6)" />
                     {/* Centered progress bar */}
                     <Rect
@@ -1101,9 +1199,67 @@ function KonvaStaticImage({
                         fontSize={48}
                         fontFamily="Arial"
                     />
-                </Group>
+                </>
             )}
         </Group>
+    );
+}
+
+// --- SUB-COMPONENT: Static Images & Upload Previews ---
+function KonvaStaticImage({
+    layer,
+    isPinching,
+    onSelect,
+    onTransform,
+    onTransformEnd
+}: {
+    layer: Extract<LayerWithEditorState, { type: 'image' }>;
+    isPinching: boolean;
+    onSelect: () => void;
+    onTransform: (e: KonvaEventObject<Event>) => void;
+    onTransformEnd: (e: KonvaEventObject<Event>) => void;
+}) {
+    const [img, setImg] = useState<HTMLImageElement | null>(null);
+    const imageRef = useRef<Konva.Image>(null);
+
+    useEffect(() => {
+        if (layer.type !== 'image')
+            return () => {
+                setImg(null);
+            };
+        const i = new window.Image();
+        if (!layer.url.startsWith('blob:') && !layer.url.startsWith('data:')) {
+            i.crossOrigin = 'anonymous';
+        }
+        i.onload = () => {
+            setImg(i);
+            imageRef.current?.getLayer()?.batchDraw();
+        };
+        i.src = layer.url;
+    }, [`${layer.type === 'image' ? layer.url : ''}`]);
+
+    return (
+        <KonvaImage
+            id={layer.numericId.toString()}
+            ref={imageRef}
+            image={img || undefined}
+            x={layer.config.cx}
+            y={layer.config.cy}
+            width={layer.config.w}
+            height={layer.config.h}
+            scaleX={layer.config.scaleX}
+            scaleY={layer.config.scaleY}
+            offsetX={layer.config.w / 2}
+            offsetY={layer.config.h / 2}
+            rotation={layer.config.rotation}
+            draggable={!isPinching}
+            onClick={onSelect}
+            onTap={onSelect}
+            onDragMove={onTransform}
+            onTransform={onTransform}
+            onDragEnd={onTransformEnd}
+            onTransformEnd={onTransformEnd}
+        />
     );
 }
 
@@ -1149,8 +1305,8 @@ function RoyStaticRenderer({
             offsetY={layer.config.h / 2}
             x={layer.config.cx}
             y={layer.config.cy}
-            scaleX={layer.config.scale}
-            scaleY={layer.config.scale}
+            scaleX={layer.config.scaleX}
+            scaleY={layer.config.scaleY}
             rotation={layer.config.rotation}
             draggable={!isPinching}
             onClick={onSelect}
@@ -1161,7 +1317,6 @@ function RoyStaticRenderer({
             onTransformEnd={onTransformEnd}
         />
     );
-    // return <KonvaStaticImage {...props} ref={imageRef} />;
 }
 
 // --- SUB-COMPONENT: Smart Playback Controls ---
@@ -1228,7 +1383,7 @@ export function PlaybackControls({
             >
                 <input
                     type="checkbox"
-                    checked={layer.config.loop ?? true}
+                    checked={layer.loop ?? true}
                     onChange={(e) => {
                         const updatedConfig = { ...layer.config, loop: e.target.checked };
                         const playback = engine.getPlayback(layer.numericId);
@@ -1279,15 +1434,15 @@ export function VideoScrubber({
                     let expected =
                         pb.anchorMediaTime + Math.max(0, (now - pb.anchorServerTime) / 1000);
 
-                    if (layer.config.loop ?? true) {
-                        if (layer.config.duration) expected = expected % layer.config.duration;
-                    } else if (expected >= (layer.config.duration || 0)) {
-                        expected = layer.config.duration || 0;
+                    if (layer.loop ?? true) {
+                        if (layer.duration) expected = expected % layer.duration;
+                    } else if (expected >= (layer.duration || 0)) {
+                        expected = layer.duration || 0;
                     }
                     currentTime = expected;
                 } else {
                     hasTriggeredEnd.current = false;
-                    if (layer.config.duration) currentTime = currentTime % layer.config.duration;
+                    if (layer.duration) currentTime = currentTime % layer.duration;
                 }
 
                 if (!isDragging.current) {
@@ -1299,7 +1454,7 @@ export function VideoScrubber({
         };
         frameId = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(frameId);
-    }, [layer.config.duration, layer.config.loop, layer.numericId, engine]);
+    }, [layer.duration, layer.loop, layer.numericId, engine]);
 
     const handleInput = (e: React.FormEvent<HTMLInputElement>) => {
         if (spanRef.current)
@@ -1334,7 +1489,7 @@ export function VideoScrubber({
                 ref={seekInputRef}
                 type="range"
                 min="0"
-                max={layer.config.duration || 100}
+                max={layer.duration || 100}
                 step="0.01"
                 defaultValue={safeTime}
                 onPointerDown={() => {
@@ -1348,26 +1503,32 @@ export function VideoScrubber({
     );
 }
 
-export function TextEditor({ layer, engine }: { layer: Layer; engine: EditorEngine }) {
-    const [text, setText] = useState(layer.config.markdown);
+export function TextEditor({
+    layer,
+    engine
+}: {
+    layer: Extract<LayerWithEditorState, { type: 'text' }>;
+    engine: EditorEngine;
+}) {
+    const [text, setText] = useState(layer.markdown);
 
     const handleTextChange = async (
         e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>
     ) => {
         const newText = e.target.value;
 
-        const { url, w, h } = (await renderTextToSVG(newText)) ?? {};
-        if (!url) return;
+        // const { url, w, h } = (await renderTextToSVG(newText)) ?? {};
+        // if (!url) return;
 
-        layer.config.markdown = newText;
-        layer.config.h = h ?? 100;
-        layer.config.w = w ?? 100;
-        layer.url = url;
+        layer.markdown = newText;
+        // layer.config.h = h ?? 100;
+        // layer.config.w = w ?? 100;
+        // layer.url = url;
         setText(e.target.value);
         engine.sendJSON({
             type: 'upsert_layer',
             origin: 'handleTextChange',
-            layer: { ...layer, url, config: { ...layer.config, markdown: newText } }
+            layer: { ...layer, config: { ...layer.config }, markdown: newText }
         });
     };
 

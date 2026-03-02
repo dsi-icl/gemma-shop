@@ -9,6 +9,7 @@ declare global {
         __EDITOR_ENGINE__?: EditorEngine;
         __WALL_ENGINE__?: WallEngine;
         __EDITOR_RELOADING__?: boolean;
+        __WALL_RELOADING__?: boolean;
     }
 
     namespace NodeJS {

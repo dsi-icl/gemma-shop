@@ -43,7 +43,7 @@ export default defineWebSocketHandler({
 
     message(peer, message) {
         // --- 1. JSON SLOW-PATH & HANDSHAKE ---
-        // Using your strict Buffer check to confidently intercept JSON
+        // Using strict Buffer check to confidently intercept JSON
         if (message.rawData instanceof Buffer) {
             try {
                 // Leverage crossws native JSON parsing
@@ -236,7 +236,7 @@ process.__VSYNC_INTERVAL__ = setInterval(() => {
 
     for (const [id, layer] of stageState.layers.entries()) {
         if (layer?.type === 'video' && layer.playback && layer.playback.status === 'playing') {
-            const duration = layer.config?.duration || 0;
+            const duration = layer.duration;
             if (duration <= 0) continue;
 
             // Calculate the true server time
@@ -244,7 +244,7 @@ process.__VSYNC_INTERVAL__ = setInterval(() => {
             const expected = layer.playback.anchorMediaTime + elapsed;
 
             if (expected >= duration) {
-                if (layer.config.loop ?? true) {
+                if (layer.loop ?? true) {
                     // SERVER DECIDES TO LOOP
                     layer.playback.anchorMediaTime = !duration ? 0 : expected % duration;
                     layer.playback.anchorServerTime = now;

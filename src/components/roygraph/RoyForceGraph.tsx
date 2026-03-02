@@ -1,15 +1,18 @@
+'use client';
+
 import { throttle } from '@tanstack/pacer';
 import * as BSON from 'bson';
-import React, {
+import {
     useEffect,
     useRef,
     type CanvasHTMLAttributes,
     type FC,
     type PropsWithChildren,
-    type RefAttributes,
-    type RefObject
+    type RefAttributes
 } from 'react';
 import { z } from 'zod';
+
+import { setRefs } from '@/lib/setRefs';
 
 import { useWS } from './useWS';
 
@@ -71,7 +74,7 @@ export const RoyForceGraph: FC<
         RefAttributes<HTMLCanvasElement> & Partial<CanvasHTMLAttributes<HTMLCanvasElement>>
     >
 > = ({ ref, ...props }) => {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
     const ws = useWS();
 
     const handleMessage = throttle(
@@ -241,14 +244,3 @@ export const RoyForceGraph: FC<
         />
     );
 };
-
-function setRefs<T>(element: T | null, ...refs: (React.Ref<T> | undefined)[]) {
-    refs.forEach((ref) => {
-        if (!ref) return;
-        if (typeof ref === 'function') {
-            ref(element);
-        } else {
-            (ref as RefObject<T | null>).current = element;
-        }
-    });
-}
