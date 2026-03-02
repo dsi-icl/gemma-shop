@@ -1,7 +1,6 @@
 'use client';
 
-import { throttle } from '@tanstack/pacer';
-import { useEffect, useRef, type FC, type HTMLAttributes, type RefAttributes } from 'react';
+import { useRef, type FC, type HTMLAttributes, type RefAttributes } from 'react';
 import Map, { type MapRef } from 'react-map-gl/maplibre';
 
 import { setRefs } from '@/lib/setRefs';

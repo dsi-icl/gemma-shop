@@ -239,7 +239,7 @@ export class WallEngine {
                     if ('requestVideoFrameCallback' in video) {
                         if (!layer.rvfcActive) {
                             layer.rvfcActive = true; // Lock it so it doesn't duplicate
-                            video.requestVideoFrameCallback((n, m) =>
+                            video.requestVideoFrameCallback((_n, m) =>
                                 this.driftController(m, layer)
                             );
                         }
@@ -280,7 +280,7 @@ export class WallEngine {
         }
 
         // Loop exactly when the next hardware frame is presented
-        video.requestVideoFrameCallback((n, m) => this.driftController(m, layer));
+        video.requestVideoFrameCallback((_n, m) => this.driftController(m, layer));
     }
 
     // --- MATH & LERP ---
