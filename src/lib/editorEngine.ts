@@ -11,6 +11,8 @@ type BinaryMessageCallback = (
     id: number,
     cx: number,
     cy: number,
+    width: number,
+    height: number,
     scaleX: number,
     scaleY: number,
     rotation: number
@@ -64,14 +66,16 @@ export class EditorEngine {
                         const id = view.getUint16(offset, true);
                         const cx = view.getFloat32(offset + 2, true);
                         const cy = view.getFloat32(offset + 6, true);
-                        const scaleX = view.getFloat32(offset + 10, true);
-                        const scaleY = view.getFloat32(offset + 14, true);
-                        const rotation = view.getFloat32(offset + 18, true);
+                        const width = view.getFloat32(offset + 10, true);
+                        const height = view.getFloat32(offset + 14, true);
+                        const scaleX = view.getFloat32(offset + 18, true);
+                        const scaleY = view.getFloat32(offset + 22, true);
+                        const rotation = view.getFloat32(offset + 26, true);
 
                         this.binaryCallbacks.forEach((cb) =>
-                            cb(id, cx, cy, scaleX, scaleY, rotation)
+                            cb(id, cx, cy, width, height, scaleX, scaleY, rotation)
                         );
-                        offset += 18;
+                        offset += 26;
                     }
                 }
                 return;
@@ -189,21 +193,25 @@ export class EditorEngine {
             numericId: number,
             x: number,
             y: number,
+            width: number,
+            height: number,
             scaleX: number,
             scaleY: number,
             rotation: number
         ) => {
             if (this.ws.readyState !== WebSocket.OPEN) return;
-            const buffer = new ArrayBuffer(25);
+            const buffer = new ArrayBuffer(33);
             const view = new DataView(buffer);
             view.setUint8(0, 0x05);
             view.setUint16(1, 1, true);
             view.setUint16(3, numericId, true);
             view.setFloat32(5, x, true);
             view.setFloat32(9, y, true);
-            view.setFloat32(13, scaleX, true);
-            view.setFloat32(17, scaleY, true);
-            view.setFloat32(21, rotation, true);
+            view.setFloat32(13, width, true);
+            view.setFloat32(17, height, true);
+            view.setFloat32(21, scaleX, true);
+            view.setFloat32(25, scaleY, true);
+            view.setFloat32(29, rotation, true);
             this.ws.send(buffer);
         },
         { wait: 16 }

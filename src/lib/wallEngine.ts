@@ -149,14 +149,16 @@ export class WallEngine {
                             ...layer.targetPos,
                             cx: view.getFloat32(offset + 2, true),
                             cy: view.getFloat32(offset + 6, true),
-                            scaleX: view.getFloat32(offset + 10, true),
-                            scaleY: view.getFloat32(offset + 14, true),
-                            rotation: view.getFloat32(offset + 18, true)
+                            width: view.getFloat32(offset + 10, true),
+                            height: view.getFloat32(offset + 14, true),
+                            scaleX: view.getFloat32(offset + 18, true),
+                            scaleY: view.getFloat32(offset + 22, true),
+                            rotation: view.getFloat32(offset + 26, true)
                         };
                         layer.animStartTime = this.getServerTime();
                         layer.animDuration = 100; // Matches expected editor broadcast rate
                     }
-                    offset += 22;
+                    offset += 26;
                 }
             }
             return;
@@ -298,8 +300,8 @@ export class WallEngine {
             scaleX: this.lerp(layer.startPos.scaleX, layer.targetPos.scaleX, t),
             scaleY: this.lerp(layer.startPos.scaleY, layer.targetPos.scaleY, t),
             rotation: this.lerp(layer.startPos.rotation, layer.targetPos.rotation, t),
-            w: layer.config.w,
-            h: layer.config.h,
+            width: this.lerp(layer.startPos.width, layer.targetPos.width, t),
+            height: this.lerp(layer.startPos.height, layer.targetPos.height, t),
             zIndex: layer.config.zIndex
         };
     }

@@ -320,6 +320,8 @@ function EditorApp() {
         const positions = {
             cx: mediaWidth / 2,
             cy: mediaHeight / 2,
+            width: mediaWidth,
+            height: mediaHeight,
             rotation: 0,
             scaleX: 1,
             scaleY: 1
@@ -327,12 +329,7 @@ function EditorApp() {
             // scaleY: Math.min(1, 640 / mediaHeight)
         };
 
-        const config: Layer['config'] = {
-            w: mediaWidth,
-            h: mediaHeight,
-            ...positions,
-            zIndex: nextZIndex.current++
-        };
+        const config: Layer['config'] = { ...positions, zIndex: nextZIndex.current++ };
 
         const defaultPlayback: Extract<Layer, { type: 'video' }>['playback'] = {
             status: 'paused',
@@ -408,13 +405,16 @@ function EditorApp() {
 
     const handleAddMap = async () => {
         const numericId = nextId.current++;
-        const positionState = { cx: 400, cy: 300, rotation: 0, scaleX: 1, scaleY: 1 };
-        const config: Layer['config'] = {
-            w: 300,
-            h: 200,
-            ...positionState,
-            zIndex: nextZIndex.current++
+        const positionState = {
+            cx: 400,
+            cy: 300,
+            width: 300,
+            height: 200,
+            rotation: 0,
+            scaleX: 1,
+            scaleY: 1
         };
+        const config: Layer['config'] = { ...positionState, zIndex: nextZIndex.current++ };
 
         const newLayer: Layer = {
             numericId,
@@ -431,12 +431,19 @@ function EditorApp() {
 
     const handleAddGraph = async () => {
         const canvasEl = document.getElementById('roy-force-graph-host') as HTMLCanvasElement;
-        const w = canvasEl.width;
-        const h = canvasEl.height;
+        const { width, height } = canvasEl;
 
         const numericId = nextId.current++;
-        const positionState = { cx: 400, cy: 300, rotation: 0, scaleX: 1, scaleY: 1 };
-        const config: Layer['config'] = { w, h, ...positionState, zIndex: nextZIndex.current++ };
+        const positionState = {
+            cx: 400,
+            cy: 300,
+            width,
+            height,
+            rotation: 0,
+            scaleX: 1,
+            scaleY: 1
+        };
+        const config: Layer['config'] = { ...positionState, zIndex: nextZIndex.current++ };
 
         const newLayer: Layer = { numericId, type: 'graph', config };
 
@@ -452,13 +459,16 @@ function EditorApp() {
         // if (!url) return;
 
         const numericId = nextId.current++;
-        const positionState = { cx: 400, cy: 300, rotation: 0, scaleX: 1, scaleY: 1 };
-        const config: Layer['config'] = {
-            w: 100,
-            h: 100,
-            ...positionState,
-            zIndex: nextZIndex.current++
+        const positionState = {
+            cx: 400,
+            cy: 300,
+            width: 100,
+            height: 100,
+            rotation: 0,
+            scaleX: 1,
+            scaleY: 1
         };
+        const config: Layer['config'] = { ...positionState, zIndex: nextZIndex.current++ };
 
         const newLayer: Extract<Layer, { type: 'text' }> = {
             numericId,
@@ -583,6 +593,8 @@ function EditorApp() {
                 parseInt(selectedId),
                 Math.round(node.x()),
                 Math.round(node.y()),
+                Math.round(node.width()),
+                Math.round(node.height()),
                 Math.round(node.scaleX() * 1000) / 1000,
                 Math.round(node.scaleY() * 1000) / 1000,
                 Math.round(node.rotation())
@@ -607,12 +619,58 @@ function EditorApp() {
     };
 
     const handleTransform = (e: Pick<KonvaEventObject<Event>, 'target'>, numericId: number) => {
-        const node = e.target;
+        const node = e.target as Konva.Shape;
+        const layer = layers.find((l) => l.numericId === numericId);
+        if (!node || !layer) return;
+
+        // We need to tweak types for which scale baking makes sense. Perhaps make it customisable later
+        if (layer.type === 'image' || layer.type === 'map') {
+            const scaleX = node.scaleX();
+            const scaleY = node.scaleY();
+
+            // if (scaleX !== 1 || scaleY !== 1) {
+            // Save absolute transform BEFORE baking
+            const oldAbsTransform = node.getAbsoluteTransform().copy();
+
+            // Absolute world position of local origin (0,0)
+            const originWorld = oldAbsTransform.point({ x: 0, y: 0 });
+
+            // Bake size const newWidth = rect.width() * scaleX;
+            const newWidth = node.width() * scaleX;
+            const newHeight = node.height() * scaleY;
+            node.width(newWidth);
+            node.height(newHeight);
+            node.scale({ x: 1, y: 1 });
+            node.offsetX(newWidth / 2);
+            node.offsetY(newHeight / 2);
+
+            // Compute new absolute transform
+            const newAbsTransform = node.getAbsoluteTransform().copy();
+            const newOriginWorld = newAbsTransform.point({ x: 0, y: 0 });
+
+            // Compute world delta
+            const dx = originWorld.x - newOriginWorld.x;
+            const dy = originWorld.y - newOriginWorld.y;
+
+            // Apply correction in parent space
+            const parent = node.getParent();
+            if (parent) {
+                const parentTransform = parent.getAbsoluteTransform().copy();
+                parentTransform.invert();
+
+                const localDelta = parentTransform.point({ x: dx, y: dy });
+                node.position({ x: node.x() + localDelta.x, y: node.y() + localDelta.y });
+            } else {
+                node.position({ x: node.x(), y: node.y() });
+            }
+        }
 
         engine.broadcastBinaryMove(
             numericId,
             Math.round(node.x()),
             Math.round(node.y()),
+            Math.round(node.width()),
+            Math.round(node.height()),
             Math.round(node.scaleX() * 1000) / 1000,
             Math.round(node.scaleY() * 1000) / 1000,
             Math.round(node.rotation())
@@ -627,22 +685,15 @@ function EditorApp() {
             const layerToUpdate = layersRef.current.find((l) => l.numericId === numericId);
             if (!layerToUpdate) return;
 
-            const width = Math.round(node.width());
-            const height = Math.round(node.height());
-            const x = Math.round(node.x());
-            const y = Math.round(node.y());
-            const scaleX = node.scaleX();
-            const scaleY = node.scaleY();
-
             const updatedConfig: Layer['config'] = {
                 ...layerToUpdate.config,
-                cx: x,
-                cy: y,
-                scaleX,
-                scaleY,
-                rotation: Math.round(node.rotation()),
-                w: Math.max(5, width),
-                h: Math.max(5, height)
+                cx: Math.round(node.x()),
+                cy: Math.round(node.y()),
+                width: Math.round(node.width()),
+                height: Math.round(node.height()),
+                scaleX: Math.round(node.scaleX() * 1000) / 1000,
+                scaleY: Math.round(node.scaleY() * 1000) / 1000,
+                rotation: Math.round(node.rotation())
             };
 
             layerToUpdate.config = updatedConfig;
@@ -856,7 +907,8 @@ function EditorApp() {
                                 <span className="flex gap-10">
                                     {/* {JSON.stringify(l.config)} */}
                                     <span>x: {l.config.cx}</span> <span>y: {l.config.cy}</span>{' '}
-                                    <span>w: {l.config.w}</span> <span>h: {l.config.h}</span>{' '}
+                                    <span>w: {l.config.width}</span>{' '}
+                                    <span>h: {l.config.height}</span>{' '}
                                     <span>r: {l.config.rotation}</span>
                                 </span>
                             </div>
@@ -942,12 +994,12 @@ function EditorApp() {
                                         id={layer.numericId.toString()}
                                         x={layer.config.cx}
                                         y={layer.config.cy}
-                                        width={layer.config.w}
-                                        height={layer.config.h}
+                                        width={layer.config.width}
+                                        height={layer.config.height}
                                         scaleX={layer.config.scaleX}
                                         scaleY={layer.config.scaleY}
-                                        offsetX={layer.config.w / 2}
-                                        offsetY={layer.config.h / 2}
+                                        offsetX={layer.config.width / 2}
+                                        offsetY={layer.config.height / 2}
                                         rotation={layer.config.rotation}
                                         draggable={!props.isPinching}
                                         onClick={props.onSelect}
@@ -977,12 +1029,12 @@ function EditorApp() {
                                         id={layer.numericId.toString()}
                                         x={layer.config.cx}
                                         y={layer.config.cy}
-                                        width={layer.config.w}
-                                        height={layer.config.h}
+                                        width={layer.config.width}
+                                        height={layer.config.height}
                                         scaleX={layer.config.scaleX}
                                         scaleY={layer.config.scaleY}
-                                        offsetX={layer.config.w / 2}
-                                        offsetY={layer.config.h / 2}
+                                        offsetX={layer.config.width / 2}
+                                        offsetY={layer.config.height / 2}
                                         rotation={layer.config.rotation}
                                         draggable={!props.isPinching}
                                         onClick={props.onSelect}
@@ -1155,10 +1207,10 @@ function KonvaVideo({
             scaleX={layer.config.scaleX}
             scaleY={layer.config.scaleY}
             rotation={layer.config.rotation}
-            width={layer.config.w}
-            height={layer.config.h}
-            offsetX={layer.config.w / 2}
-            offsetY={layer.config.h / 2}
+            width={layer.config.width}
+            height={layer.config.height}
+            offsetX={layer.config.width / 2}
+            offsetY={layer.config.height / 2}
             draggable={!isPinching}
             onClick={onSelect}
             onTap={onSelect}
@@ -1170,32 +1222,36 @@ function KonvaVideo({
             <KonvaImage
                 ref={imageRef}
                 image={imgElement ?? videoElement ?? undefined}
-                width={layer.config.w}
-                height={layer.config.h}
+                width={layer.config.width}
+                height={layer.config.height}
             />
             {layer.isUploading && (
                 <>
-                    <Rect width={layer.config.w} height={layer.config.h} fill="rgba(0,0,0,0.6)" />
+                    <Rect
+                        width={layer.config.width}
+                        height={layer.config.height}
+                        fill="rgba(0,0,0,0.6)"
+                    />
                     {/* Centered progress bar */}
                     <Rect
-                        x={layer.config.w * 0.1}
-                        y={layer.config.h / 2 - 20}
-                        width={layer.config.w * 0.8}
+                        x={layer.config.width * 0.1}
+                        y={layer.config.height / 2 - 20}
+                        width={layer.config.width * 0.8}
                         height={40}
                         fill="#222"
                         cornerRadius={20}
                     />
                     <Rect
-                        x={layer.config.w * 0.1}
-                        y={layer.config.h / 2 - 20}
-                        width={layer.config.w * 0.8 * ((layer.progress || 2) / 100)}
+                        x={layer.config.width * 0.1}
+                        y={layer.config.height / 2 - 20}
+                        width={layer.config.width * 0.8 * ((layer.progress || 2) / 100)}
                         height={40}
                         fill="#4caf50"
                         cornerRadius={20}
                     />
                     <Text
-                        x={layer.config.w * 0.1}
-                        y={layer.config.h / 2 + 40}
+                        x={layer.config.width * 0.1}
+                        y={layer.config.height / 2 + 40}
                         text={`Optimizing Video... ${layer.progress || 0}%`}
                         fill="white"
                         fontSize={48}
@@ -1247,12 +1303,12 @@ function KonvaStaticImage({
             image={img || undefined}
             x={layer.config.cx}
             y={layer.config.cy}
-            width={layer.config.w}
-            height={layer.config.h}
+            width={layer.config.width}
+            height={layer.config.height}
             scaleX={layer.config.scaleX}
             scaleY={layer.config.scaleY}
-            offsetX={layer.config.w / 2}
-            offsetY={layer.config.h / 2}
+            offsetX={layer.config.width / 2}
+            offsetY={layer.config.height / 2}
             rotation={layer.config.rotation}
             draggable={!isPinching}
             onClick={onSelect}
@@ -1283,11 +1339,11 @@ function RoyStaticRenderer({
         const updateTimer = setInterval(() => {
             const royElement = document.getElementById('roy-force-graph-host') as HTMLCanvasElement;
             const url = royElement.toDataURL();
-            royElement.style.height = `${layer.config.h}px`;
-            royElement.style.width = `${layer.config.w}px`;
-            royElement.style.offset = `${layer.config.h / 2 + 'px'}, ${layer.config.w / 2 + 'px'}`;
+            royElement.style.height = `${layer.config.height}px`;
+            royElement.style.width = `${layer.config.width}px`;
+            royElement.style.offset = `${layer.config.height / 2 + 'px'}, ${layer.config.width / 2 + 'px'}`;
             if (imageRef.current) {
-                const img = new window.Image(layer.config.w, layer.config.h);
+                const img = new window.Image(layer.config.width, layer.config.height);
                 img.src = url;
                 imageRef.current.image(img);
                 imageRef.current.draw();
@@ -1301,10 +1357,10 @@ function RoyStaticRenderer({
             id={layer.numericId.toString()}
             ref={imageRef}
             image={undefined}
-            width={layer.config.w}
-            height={layer.config.h}
-            offsetX={layer.config.w / 2}
-            offsetY={layer.config.h / 2}
+            width={layer.config.width}
+            height={layer.config.height}
+            offsetX={layer.config.width / 2}
+            offsetY={layer.config.height / 2}
             x={layer.config.cx}
             y={layer.config.cy}
             scaleX={layer.config.scaleX}

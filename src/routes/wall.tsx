@@ -63,8 +63,8 @@ function WallApp() {
 
                 // --- UPGRADED CLIENT-SIDE CULLING MATH (Rotated AABB) ---
                 // 1. Get the scaled width and height
-                const sw = layer.config.w * pos.scaleX;
-                const sh = layer.config.h * pos.scaleY;
+                const sw = pos.width * pos.scaleX;
+                const sh = pos.height * pos.scaleY;
 
                 // 2. Convert degrees to radians for JS Math functions
                 const rad = pos.rotation * (Math.PI / 180);
@@ -86,16 +86,12 @@ function WallApp() {
                     pos.cy - radiusY < myViewport.y + myViewport.h;
 
                 if (isVisible) {
-                    const localX = pos.cx - layer.config.w / 2 - myViewport.x;
-                    const localY = pos.cy - layer.config.h / 2 - myViewport.y;
+                    const localX = pos.cx - pos.width / 2 - myViewport.x;
+                    const localY = pos.cy - pos.height / 2 - myViewport.y;
 
                     layer.visible = true;
-                    if (layer.el instanceof HTMLImageElement) {
-                        layer.el.width = layer.config.w;
-                        layer.el.height = layer.config.h;
-                    }
-                    // layer.el.style.width = `${layer.config.w}px`;
-                    // layer.el.style.height = `${layer.config.h}px`;
+                    layer.el.style.width = `${pos.width}px`;
+                    layer.el.style.height = `${pos.height}px`;
                     layer.el.style.transform = `translate3d(${localX}px, ${localY}px, 0) rotate(${pos.rotation}deg) scale(${pos.scaleX}, ${pos.scaleY})`;
                     layer.el.style.opacity = '1';
                 } else {
@@ -125,8 +121,8 @@ function WallApp() {
                 left: 0,
                 transformOrigin: '50% 50%',
                 // transition: 'all .1s ease-out',
-                width: `${layer.config.w}px`,
-                height: `${layer.config.h}px`,
+                width: `${layer.config.width}px`,
+                height: `${layer.config.height}px`,
                 zIndex: layer.config.zIndex
             } as CSSProperties
         };
@@ -139,7 +135,7 @@ function WallApp() {
                         alt={`Layer ${layer.numericId}`}
                         width="100%"
                         height="100%"
-                        className="block h-full w-full object-cover"
+                        className="block h-full w-full object-fill"
                     />
                 </div>
             );

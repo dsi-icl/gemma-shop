@@ -3,6 +3,8 @@ import { z } from 'zod';
 const LayerPositionStateSchema = z.object({
     cx: z.number(),
     cy: z.number(),
+    width: z.number(),
+    height: z.number(),
     rotation: z.number(),
     scaleX: z.number(),
     scaleY: z.number()
@@ -11,7 +13,7 @@ const LayerPositionStateSchema = z.object({
 export type LayerPositionState = z.infer<typeof LayerPositionStateSchema>;
 
 const LayerConfigStateSchema = z
-    .object({ w: z.number(), h: z.number(), zIndex: z.number() })
+    .object({ zIndex: z.number() })
     .extend(LayerPositionStateSchema.shape);
 
 const LayerPlaybackStateSchema = z.object({
