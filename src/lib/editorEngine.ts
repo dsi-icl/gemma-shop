@@ -75,7 +75,7 @@ export class EditorEngine {
                         this.binaryCallbacks.forEach((cb) =>
                             cb(id, cx, cy, width, height, scaleX, scaleY, rotation)
                         );
-                        offset += 26;
+                        offset += 30;
                     }
                 }
                 return;

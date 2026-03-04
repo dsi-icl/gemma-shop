@@ -141,7 +141,7 @@ function WallApp() {
             );
 
         if (layer.type === 'text') {
-            return <div>{layer.markdown}</div>;
+            return <div key={layer.numericId}>{layer.markdown}</div>;
         }
 
         if (layer.type === 'map') {

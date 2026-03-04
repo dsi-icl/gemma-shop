@@ -21,6 +21,7 @@ type LayoutUpdateCallback = (data: GSMessage) => void;
 
 export class WallEngine {
     public ws: WebSocket;
+    private pingTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Clock Sync State
     private clockOffset = 0;
@@ -45,14 +46,11 @@ export class WallEngine {
         };
 
         this.ws.onmessage = (event) => this.handleMessage(event);
-
-        if (this.ws.readyState === WebSocket.OPEN) {
-            this.startClockSync();
-        }
     }
 
     public destroy() {
         console.log('Wall Engine: Assassinating ghost instance...');
+        if (this.pingTimer) clearTimeout(this.pingTimer);
         this.ws.close();
         this.layoutCallbacks.clear();
     }
@@ -109,12 +107,12 @@ export class WallEngine {
                 view.setFloat64(1, Date.now(), true); // little-endian
                 this.ws.send(buffer);
             }
-            setTimeout(sendPing, 2000);
+            this.pingTimer = setTimeout(sendPing, 2000);
         };
         sendPing();
     }
 
-    private handlePong(data: Extract<GSMessage, { type: 'pong' }>) {
+    private handlePong(data: Omit<Extract<GSMessage, { type: 'pong' }>, 'type'>) {
         const rtt = Date.now() - data.t0 - (data.t2 - data.t1);
         if (rtt < this.bestRTT) {
             this.bestRTT = rtt;
@@ -123,7 +121,7 @@ export class WallEngine {
         // Periodically reset bestRTT to allow for network environment changes
         setTimeout(() => {
             this.bestRTT = Infinity;
-        }, 60000);
+        }, 10000);
     }
 
     // --- MESSAGE ROUTING ---
@@ -131,7 +129,17 @@ export class WallEngine {
         // A. BINARY FAST-PATH (High-Frequency Movement)
         if (event.data instanceof ArrayBuffer) {
             const view = new DataView(event.data);
-            if (view.getUint8(0) === 0x05) {
+            const opcode = view.getUint8(0);
+
+            if (opcode === 0x09) {
+                const t0 = view.getFloat64(1, true);
+                const t1 = view.getFloat64(9, true);
+                const t2 = view.getFloat64(17, true);
+                this.handlePong({ t0, t1, t2 });
+                return;
+            }
+
+            if (opcode === 0x05) {
                 // Opcode: Batched Move
                 const count = view.getUint16(1, true);
                 let offset = 3;
@@ -158,7 +166,7 @@ export class WallEngine {
                         layer.animStartTime = this.getServerTime();
                         layer.animDuration = 100; // Matches expected editor broadcast rate
                     }
-                    offset += 26;
+                    offset += 30;
                 }
             }
             return;
@@ -168,9 +176,7 @@ export class WallEngine {
         if (typeof event.data === 'string') {
             const data = GSMessageSchema.parse(JSON.parse(event.data));
 
-            if (data.type === 'pong') {
-                this.handlePong(data);
-            } else if (
+            if (
                 data.type === 'hydrate' ||
                 data.type === 'upsert_layer' ||
                 data.type === 'delete_layer' ||

@@ -119,7 +119,6 @@ function EditorApp() {
 
     useEffect(() => {
         layersRef.current = layers;
-        (window as any).__LAYERS = layersRef.current;
     }, [layers]);
 
     useEffect(() => {
@@ -166,7 +165,7 @@ function EditorApp() {
 
         // 2. Binary Fast-Path
         const unsubscribeBinary = engine.subscribeToBinary(
-            (id, cx, cy, scaleX, scaleY, rotation) => {
+            (id, cx, cy, width, height, scaleX, scaleY, rotation) => {
                 if (trRef.current) {
                     const stage = trRef.current.getStage();
                     const node = stage?.findOne(`#${id}`);
@@ -174,6 +173,8 @@ function EditorApp() {
                     if (node && !node.isDragging() && !isPinching) {
                         node.x(cx);
                         node.y(cy);
+                        node.width(width);
+                        node.height(height);
                         node.scaleX(scaleX);
                         node.scaleY(scaleY);
                         node.rotation(rotation);
@@ -187,6 +188,8 @@ function EditorApp() {
                     if (shadowLayer) {
                         shadowLayer.config.cx = cx;
                         shadowLayer.config.cy = cy;
+                        shadowLayer.config.width = width;
+                        shadowLayer.config.height = height;
                         shadowLayer.config.scaleX = scaleX;
                         shadowLayer.config.scaleY = scaleY;
                         shadowLayer.config.rotation = rotation;
@@ -203,8 +206,6 @@ function EditorApp() {
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            e.preventDefault();
-
             if (!selectedId) return;
             if (e.key === 'Delete') {
                 engine.sendJSON({ type: 'delete_layer', numericId: parseInt(selectedId) });
@@ -393,6 +394,7 @@ function EditorApp() {
                     config: freshestLayer.config
                 } as LayerWithEditorState
             });
+            URL.revokeObjectURL(localUrl);
         } catch (err) {
             console.error(' Upload failure', err);
             setLayers((prev) => prev.filter((l) => l.numericId !== numericId)); // Rollback
@@ -580,7 +582,7 @@ function EditorApp() {
                 node.scaleX(newScaleX);
                 node.x(newX);
             }
-            if (newScaleX > 0.1 && newScaleX < 10) {
+            if (newScaleY > 0.1 && newScaleY < 10) {
                 node.scaleY(newScaleY);
                 node.y(newY);
             }

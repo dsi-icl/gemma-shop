@@ -7,6 +7,7 @@ import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 const config = defineConfig({
+    resolve: { tsconfigPaths: true },
     plugins: [
         nitro({
             serverDir: './src/addons',

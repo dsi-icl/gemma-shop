@@ -80,7 +80,7 @@ export const MapWrapper: FC<
         >
             <Map
                 ref={mapRef}
-                id={`map_in_${layer.numericId}}`}
+                id={`map_in_${layer.numericId}`}
                 initialViewState={layer.view}
                 interactive={false}
                 workerCount={5}

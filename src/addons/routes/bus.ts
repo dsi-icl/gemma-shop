@@ -143,7 +143,8 @@ export default defineWebSocketHandler({
                     const layer = stageState.layers.get(data.numericId);
                     if (layer?.type === 'video' && layer.playback.status === 'playing') {
                         // Calculate exactly where the video should be at the moment of pause
-                        const elapsed = (Date.now() - layer.playback.anchorServerTime) / 1000;
+                        let elapsed = (Date.now() - layer.playback.anchorServerTime) / 1000;
+                        if (elapsed < 0) elapsed = 0;
 
                         layer.playback.status = 'paused';
                         layer.playback.anchorMediaTime += elapsed;
