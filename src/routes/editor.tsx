@@ -103,6 +103,7 @@ function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
 function EditorApp() {
     const [layers, setLayers] = useState<LayerWithEditorState[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [isModifying, setIsModifying] = useState(false);
     const [isPinching, setIsPinching] = useState(false);
     const [shadowShape, setShadowShape] = useState<LayerWithEditorState | null>(null);
     const [shouldCenterTransform, setShouldCenterTransform] = useState(false);
@@ -166,10 +167,10 @@ function EditorApp() {
         // 2. Binary Fast-Path
         const unsubscribeBinary = engine.subscribeToBinary(
             (id, cx, cy, width, height, scaleX, scaleY, rotation) => {
+                if (selectedId === id.toString() && isModifying) return;
                 if (trRef.current) {
                     const stage = trRef.current.getStage();
                     const node = stage?.findOne(`#${id}`);
-
                     if (node && !node.isDragging() && !isPinching) {
                         node.x(cx);
                         node.y(cy);
@@ -181,7 +182,6 @@ function EditorApp() {
                         if (selectedId === id.toString()) trRef.current.forceUpdate();
                         node.getLayer()?.batchDraw();
                     }
-
                     // When React naturally re-renders later (like when you click the video),
                     // it will read these perfectly accurate coordinates instead of stale ones.
                     const shadowLayer = layersRef.current.find((l) => l.numericId === id);
@@ -607,6 +607,7 @@ function EditorApp() {
 
     const handleTouchEnd = (e: KonvaEventObject<TouchEvent>) => {
         if (e.evt.touches.length < 2) setIsPinching(false);
+        setIsModifying(false);
         if (selectedId && trRef.current) {
             const stage = trRef.current.getStage();
             const node = stage?.findOne<Konva.Shape>(`#${selectedId}`);
@@ -697,6 +698,7 @@ function EditorApp() {
 
             layerToUpdate.config = updatedConfig;
 
+            setIsModifying(false);
             setSelectedId(numericId.toString());
 
             if (layerToUpdate.type === 'video') {
@@ -960,6 +962,9 @@ function EditorApp() {
                             const props = {
                                 isPinching,
                                 onSelect: () => setSelectedId(layer.numericId.toString()),
+                                onTransformStart: () => {
+                                    setIsModifying(true);
+                                },
                                 onTransform: (e: KonvaEventObject<Event>) =>
                                     handleTransform(e, layer.numericId),
                                 onTransformEnd: (e: KonvaEventObject<Event>) =>
@@ -1004,6 +1009,7 @@ function EditorApp() {
                                         onClick={props.onSelect}
                                         onTap={props.onSelect}
                                         onDragMove={props.onTransform}
+                                        onTransformStart={props.onTransformStart}
                                         onTransform={props.onTransform}
                                         onDragEnd={props.onTransformEnd}
                                         onTransformEnd={props.onTransformEnd}
@@ -1039,6 +1045,7 @@ function EditorApp() {
                                         onClick={props.onSelect}
                                         onTap={props.onSelect}
                                         onDragMove={props.onTransform}
+                                        onTransformStart={props.onTransformStart}
                                         onTransform={props.onTransform}
                                         onDragEnd={props.onTransformEnd}
                                         onTransformEnd={props.onTransformEnd}

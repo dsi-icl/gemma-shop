@@ -12,12 +12,14 @@ export function KonvaVideo({
     layer,
     isPinching,
     onSelect,
+    onTransformStart,
     onTransform,
     onTransformEnd
 }: {
     layer: Extract<LayerWithEditorState, { type: 'video' }>;
     isPinching: boolean;
     onSelect: () => void;
+    onTransformStart: (e: KonvaEventObject<Event>) => void;
     onTransform: (e: KonvaEventObject<Event>) => void;
     onTransformEnd: (e: KonvaEventObject<Event>) => void;
 }) {
@@ -146,9 +148,11 @@ export function KonvaVideo({
             draggable={!isPinching}
             onClick={onSelect}
             onTap={onSelect}
+            onDragStart={onTransformStart}
             onDragMove={onTransform}
-            onTransform={onTransform}
             onDragEnd={onTransformEnd}
+            onTransformStart={onTransformStart}
+            onTransform={onTransform}
             onTransformEnd={onTransformEnd}
         >
             <Image

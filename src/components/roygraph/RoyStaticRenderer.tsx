@@ -11,12 +11,14 @@ export function RoyStaticRenderer({
     layer,
     isPinching,
     onSelect,
+    onTransformStart,
     onTransform,
     onTransformEnd
 }: {
     layer: LayerWithEditorState;
     isPinching: boolean;
     onSelect: () => void;
+    onTransformStart: (e: KonvaEventObject<Event>) => void;
     onTransform: (e: KonvaEventObject<Event>) => void;
     onTransformEnd: (e: KonvaEventObject<Event>) => void;
 }) {
@@ -55,9 +57,11 @@ export function RoyStaticRenderer({
             draggable={!isPinching}
             onClick={onSelect}
             onTap={onSelect}
+            onDragStart={onTransformStart}
             onDragMove={onTransform}
-            onTransform={onTransform}
             onDragEnd={onTransformEnd}
+            onTransformStart={onTransformStart}
+            onTransform={onTransform}
             onTransformEnd={onTransformEnd}
         />
     );
