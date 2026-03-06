@@ -7,7 +7,6 @@
         "./*": "./src/*.ts"
     },
     "dependencies": {
-        "@better-auth/drizzle-adapter": "catalog:",
         "better-auth": "catalog:"
     },
     "devDependencies": {

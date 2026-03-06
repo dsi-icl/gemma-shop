@@ -7,7 +7,7 @@ A monorepo for GemmaShop MVP
 - TanStack [Start](https://tanstack.com/start/latest) + [Router](https://tanstack.com/router/latest) + [Query](https://tanstack.com/query/latest) + [Form](https://tanstack.com/form/latest)
 - [Vite 8](https://vite.dev/) + [Nitro v3](https://v3.nitro.build/)
 - [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) + [Base UI](https://base-ui.com/) (base-maia)
-- [Drizzle ORM](https://orm.drizzle.team/) + PostgreSQL
+- [MongoDB](https://www.mongodb.com/)
 - [Better Auth](https://www.better-auth.com/)
 - [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) + [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html)
 
@@ -16,7 +16,7 @@ A monorepo for GemmaShop MVP
 │    ├── web                    # TanStack Start web app
 ├── packages
 │    ├── auth                   # Better Auth
-│    ├── db                     # Drizzle ORM + Drizzle Kit + PostgreSQL
+│    ├── db                     # MongoDB
 │    └── ui                     # shadcn/ui primitives & utils
 ├── tooling
 │    └── tsconfig               # Shared TypeScript configuration

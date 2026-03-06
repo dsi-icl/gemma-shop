@@ -38,7 +38,7 @@ function UserAction() {
 
     return user ? (
         <div className="flex flex-col items-center gap-2">
-            <p>Welcome back, {user.name}!</p>
+            <p>Welcome back, {user.email}!</p>
             <Button
                 render={<Link to="/app" />}
                 className="mb-2 w-fit"
