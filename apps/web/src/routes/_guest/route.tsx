@@ -1,9 +1,5 @@
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
-import { Clock } from '@repo/ui/components/clock';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
-
-import { KeyboardToggle } from '~/components/keyboard-toggle';
-import { ThemeToggle } from '~/components/theme-toggle';
 
 export const Route = createFileRoute('/_guest')({
     component: RouteComponent,
@@ -28,8 +24,8 @@ export const Route = createFileRoute('/_guest')({
 
 function RouteComponent() {
     return (
-        <div className="flex min-h-svh flex-col bg-background">
-            <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6 md:p-10">
+        <div className="absolute top-0 left-0 flex min-h-svh min-w-svw flex-col bg-background">
+            <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6 md:p-16">
                 <div className="w-full max-w-sm">
                     <Outlet />
                 </div>

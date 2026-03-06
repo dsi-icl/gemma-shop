@@ -73,7 +73,7 @@ function LoginForm() {
     };
 
     return (
-        <div className="grid h-[520px] px-1">
+        <div className="grid h-[70vh] px-1">
             <AnimatePresence mode="sync" custom={direction}>
                 {view === 'email' && (
                     <SlidePanel key="email" direction={direction}>

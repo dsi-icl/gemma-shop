@@ -10,7 +10,7 @@ import { ThemeToggle } from './theme-toggle';
 export function Header() {
     const { user } = useAuthSuspense();
     return (
-        <header className="flex items-center justify-end gap-2 p-4">
+        <header className="absolute top-0 left-0 flex min-w-screen items-center justify-end gap-2 p-4">
             <div className="grow">
                 <Clock />
             </div>

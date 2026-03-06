@@ -77,10 +77,10 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
                 </ScriptOnce>
 
                 <ThemeProvider>
-                    <Header />
                     {children}
-                    <Toaster richColors />
+                    <Header />
                     <Footer />
+                    <Toaster richColors />
                 </ThemeProvider>
 
                 <TanStackDevtools
