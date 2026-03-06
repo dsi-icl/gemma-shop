@@ -26,7 +26,7 @@
             "@tanstack/react-router-devtools": "^1.166.2",
             "@tanstack/react-router-ssr-query": "^1.166.2",
             "@tanstack/react-start": "^1.166.2",
-            "@types/node": "^24.12.0",
+            "@types/node": "^25.3.5",
             "@types/react": "^19.2.14",
             "@types/react-dom": "^19.2.3",
             "@vitejs/plugin-react": "^5.1.4",
@@ -37,10 +37,10 @@
             "date-fns": "^4.1.0",
             "eslint-plugin-react-hooks": "^7.0.1",
             "eslint-plugin-turbo": "^2.8.14",
-            "@better-auth/mongo-adapter": "^1.5.4",
             "husky": "^9.1.7",
             "lint-staged": "^16.3.2",
             "motion": "^12.35.0",
+            "react-use-measure": "^2.1.7",
             "nanoid": "^5.1.6",
             "nitro": "^3.0.1-alpha.2",
             "oxfmt": "^0.36.0",
@@ -77,12 +77,6 @@
         "auth:secret": "bunx @better-auth/cli@latest secret",
         "skills": "bunx skills@latest"
     },
-    "dependencies": {
-        "@better-auth/mongo-adapter": "catalog:",
-        "@phosphor-icons/react": "catalog:",
-        "mongodb": "catalog:",
-        "motion": "catalog:"
-    },
     "devDependencies": {
         "@commitlint/cli": "catalog:",
         "@commitlint/config-conventional": "catalog:",
@@ -107,7 +101,7 @@
     "engines": {
         "node": ">=24"
     },
-    "packageManager": "bun@1.3.10+",
+    "packageManager": "bun@1.3.10",
     "patchedDependencies": {
         "nitro@3.0.1-alpha.2": "patches/nitro@3.0.1-alpha.2.patch"
     }
