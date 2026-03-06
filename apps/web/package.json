@@ -11,7 +11,7 @@
     },
     "dependencies": {
         "@fontsource-variable/inter": "catalog:",
-        "@remixicon/react": "catalog:",
+        "@phosphor-icons/react": "catalog:",
         "@repo/auth": "workspace:*",
         "@repo/db": "workspace:*",
         "@repo/ui": "workspace:*",

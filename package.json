@@ -13,7 +13,7 @@
             "@commitlint/cli": "^20.4.3",
             "@commitlint/config-conventional": "^20.4.3",
             "@fontsource-variable/inter": "^5.2.8",
-            "@remixicon/react": "^4.9.0",
+            "@phosphor-icons/react": "^2.1.10",
             "@tailwindcss/vite": "^4.2.1",
             "@tanstack/devtools-vite": "^0.5.3",
             "@tanstack/eslint-plugin-query": "^5.91.4",
@@ -82,6 +82,7 @@
         "skills": "bunx skills@latest"
     },
     "dependencies": {
+        "@phosphor-icons/react": "^2.1.10",
         "motion": "^12.35.0"
     },
     "devDependencies": {

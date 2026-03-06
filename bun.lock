@@ -5,6 +5,7 @@
     "": {
       "name": "tanstarter",
       "dependencies": {
+        "@phosphor-icons/react": "^2.1.10",
         "motion": "^12.35.0",
       },
       "devDependencies": {
@@ -26,7 +27,7 @@
       "name": "@repo/web",
       "dependencies": {
         "@fontsource-variable/inter": "catalog:",
-        "@remixicon/react": "catalog:",
+        "@phosphor-icons/react": "catalog:",
         "@repo/auth": "workspace:*",
         "@repo/db": "workspace:*",
         "@repo/ui": "workspace:*",
@@ -104,7 +105,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@base-ui/react": "catalog:",
-        "@remixicon/react": "catalog:",
+        "@phosphor-icons/react": "catalog:",
         "@tanstack/react-form-start": "catalog:",
         "class-variance-authority": "catalog:",
         "clsx": "catalog:",
@@ -147,7 +148,7 @@
     "@commitlint/cli": "^20.4.3",
     "@commitlint/config-conventional": "^20.4.3",
     "@fontsource-variable/inter": "^5.2.8",
-    "@remixicon/react": "^4.9.0",
+    "@phosphor-icons/react": "^2.1.10",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/devtools-vite": "^0.5.3",
     "@tanstack/eslint-plugin-query": "^5.91.4",
@@ -676,7 +677,7 @@
 
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.51.0", "", { "os": "win32", "cpu": "x64" }, "sha512-Q14+fOGb9T28nWF/0EUsYqERiRA7cl1oy4TJrGmLaqhm+aO2cV+JttboHI3CbdeMCAyDI1+NoSlrM7Melhp/cw=="],
 
-    "@remixicon/react": ["@remixicon/react@4.9.0", "", { "peerDependencies": { "react": ">=18.2.0" } }, "sha512-5/jLDD4DtKxH2B4QVXTobvV1C2uL8ab9D5yAYNtFt+w80O0Ys1xFOrspqROL3fjrZi+7ElFUWE37hBfaAl6U+Q=="],
+    "@phosphor-icons/react": ["@phosphor-icons/react@2.1.10", "", { "peerDependencies": { "react": ">= 16.8", "react-dom": ">= 16.8" } }, "sha512-vt8Tvq8GLjheAZZYa+YG/pW7HDbov8El/MANW8pOAz4eGxrwhnbfrQZq0Cp4q8zBEu8NIhHdnr+r8thnfRSNYA=="],
 
     "@repo/auth": ["@repo/auth@workspace:packages/auth"],
 
