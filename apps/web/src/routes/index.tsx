@@ -4,7 +4,6 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { Suspense } from 'react';
 
 import { SignOutButton } from '~/components/sign-out-button';
-import { ThemeToggle } from '~/components/theme-toggle';
 
 export const Route = createFileRoute('/')({
     component: HomePage
@@ -26,9 +25,6 @@ function HomePage() {
             <Suspense fallback={<div className="py-6">Loading user...</div>}>
                 <UserAction />
             </Suspense>
-            <div className="flex flex-col items-center gap-4">
-                <ThemeToggle />
-            </div>
         </div>
     );
 }

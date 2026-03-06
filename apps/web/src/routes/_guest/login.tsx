@@ -164,9 +164,9 @@ function EmailView({ onSubmit }: { onSubmit: (email: string) => void }) {
     };
 
     return (
-        <div className="flex flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-4">
             <form onSubmit={handleSubmit} className="w-full">
-                <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-4">
                     <div className="flex flex-col items-center gap-2">
                         <Link to="/" className="flex flex-col items-center gap-2 font-medium">
                             <div className="flex h-12 w-12 items-center justify-center rounded-md">
@@ -185,7 +185,7 @@ function EmailView({ onSubmit }: { onSubmit: (email: string) => void }) {
                                 id="email"
                                 name="email"
                                 type="email"
-                                placeholder="hello@example.com"
+                                placeholder="hello@imperial.ac.uk"
                                 value={value}
                                 onChange={(e) => setValue(e.target.value)}
                                 required
@@ -194,6 +194,12 @@ function EmailView({ onSubmit }: { onSubmit: (email: string) => void }) {
                         <Button type="submit" className="w-full" size="lg">
                             Continue
                         </Button>
+
+                        <Link to="/">
+                            <Button type="button" variant="secondary" className="w-full" size="lg">
+                                Cancel
+                            </Button>
+                        </Link>
                     </div>
                 </div>
             </form>
@@ -246,7 +252,7 @@ function OtpView({ email, onBack }: { email: string; onBack: () => void }) {
     }, [isPending]);
 
     return (
-        <div className="flex flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-4">
             <Link to="/" className="flex flex-col items-center gap-2 font-medium">
                 <div className="flex h-12 w-12 items-center justify-center rounded-md">
                     <DiscoBallIcon className="size-12" />

@@ -1,7 +1,10 @@
+'use client';
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 export function useLocalStorageToggle(key: string, defaultValue = false) {
     const [value, setValue] = useState(() => {
+        if (typeof window === 'undefined') return false;
         const saved = localStorage.getItem(key);
         return saved !== null ? (JSON.parse(saved) as boolean) : defaultValue;
     });
@@ -10,6 +13,7 @@ export function useLocalStorageToggle(key: string, defaultValue = false) {
     const isBroadcasting = useRef(false);
 
     const toggle = useCallback(() => {
+        if (typeof window === 'undefined') return;
         setValue((prev) => {
             const newValue = !prev;
             localStorage.setItem(key, JSON.stringify(newValue));
@@ -24,6 +28,7 @@ export function useLocalStorageToggle(key: string, defaultValue = false) {
     }, [key]);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
         const updateState = (e: Event) => {
             // If THIS instance triggered the change, don't update state again
             if (isBroadcasting.current) return;

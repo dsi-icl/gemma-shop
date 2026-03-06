@@ -16,6 +16,9 @@ import {
 } from '@tanstack/react-router';
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 
+import { Footer } from '~/components/footer';
+import { Header } from '~/components/header';
+
 import appCss from '~/styles.css?url';
 
 export const Route = createRootRouteWithContext<{
@@ -74,8 +77,10 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
                 </ScriptOnce>
 
                 <ThemeProvider>
+                    <Header />
                     {children}
                     <Toaster richColors />
+                    <Footer />
                 </ThemeProvider>
 
                 <TanStackDevtools
