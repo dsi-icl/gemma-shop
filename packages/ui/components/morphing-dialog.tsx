@@ -1,8 +1,8 @@
 'use client';
 
-import useClickOutside from '@repo/hooks/useClickOutside';
+import { XIcon } from '@phosphor-icons/react';
+import useClickOutside from '@repo/ui/hooks/use-click-outside';
 import { cn } from '@repo/ui/lib/utils';
-import { XIcon } from 'lucide-react';
 import { motion, AnimatePresence, MotionConfig, Transition, Variant } from 'motion/react';
 import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
