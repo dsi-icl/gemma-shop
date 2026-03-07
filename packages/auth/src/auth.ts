@@ -1,5 +1,8 @@
 import '@tanstack/react-start/server-only';
+import { render } from '@react-email/render';
 import { db } from '@repo/db';
+import { MagicLinkEmail } from '@repo/emails/MagicLinkEmail';
+import { OtpEmail } from '@repo/emails/OtpEmail';
 import { mongodbAdapter } from 'better-auth/adapters/mongodb';
 import { betterAuth } from 'better-auth/minimal';
 import { emailOTP, magicLink } from 'better-auth/plugins';
@@ -17,12 +20,14 @@ export const auth = betterAuth({
     plugins: [
         tanstackStartCookies(),
         magicLink({
-            sendMagicLink: async ({ email, token, url }, ctx) => {
+            sendMagicLink: async ({ email, token, url }) => {
+                const _html = await render(MagicLinkEmail({ url }));
                 console.log(`Magic Link to ${email} : (${token}) : ${url}`);
             }
         }),
         emailOTP({
             sendVerificationOTP: async ({ email, otp, type }) => {
+                const _html = await render(OtpEmail({ otp }));
                 console.log(`OTP to ${email} : ${otp} (${type})`);
             }
         })

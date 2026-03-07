@@ -7,10 +7,13 @@
         "./*": "./src/*.ts"
     },
     "dependencies": {
+        "@react-email/render": "catalog:",
+        "@repo/emails": "workspace:*",
         "better-auth": "catalog:"
     },
     "devDependencies": {
         "@repo/tsconfig": "workspace:*",
+        "@types/bun": "catalog:",
         "@types/node": "catalog:",
         "typescript": "catalog:"
     },
