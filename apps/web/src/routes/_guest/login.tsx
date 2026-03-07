@@ -98,7 +98,7 @@ function LoginForm() {
                             <p className="text-sm text-muted-foreground">
                                 Signing in as <strong>{email}</strong>
                             </p>
-                            <div className="flex w-full flex-col gap-3">
+                            <div className="flex w-full flex-col gap-4">
                                 <Button
                                     className="w-full"
                                     size="lg"
@@ -237,7 +237,7 @@ function EmailView({ onSubmit }: { onSubmit: (email: string) => void }) {
                         <h1 className="text-xl font-bold">Welcome to GemmaShop</h1>
                         <p className="text-sm text-muted-foreground">Enter your email to sign in</p>
                     </div>
-                    <div className="flex flex-col gap-5">
+                    <div className="flex flex-col gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="email">Email</Label>
                             <Input
