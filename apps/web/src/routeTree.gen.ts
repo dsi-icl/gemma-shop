@@ -13,8 +13,8 @@ import { Route as GuestRouteRouteImport } from './routes/_guest/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
-import { Route as AuthAppRouteRouteImport } from './routes/_auth/app/route'
-import { Route as AuthAppIndexRouteImport } from './routes/_auth/app/index'
+import { Route as AuthQuarryRouteRouteImport } from './routes/_auth/quarry/route'
+import { Route as AuthQuarryIndexRouteImport } from './routes/_auth/quarry/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const GuestRouteRoute = GuestRouteRouteImport.update({
@@ -35,15 +35,15 @@ const GuestLoginRoute = GuestLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => GuestRouteRoute,
 } as any)
-const AuthAppRouteRoute = AuthAppRouteRouteImport.update({
-  id: '/app',
-  path: '/app',
+const AuthQuarryRouteRoute = AuthQuarryRouteRouteImport.update({
+  id: '/quarry',
+  path: '/quarry',
   getParentRoute: () => AuthRouteRoute,
 } as any)
-const AuthAppIndexRoute = AuthAppIndexRouteImport.update({
+const AuthQuarryIndexRoute = AuthQuarryIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AuthAppRouteRoute,
+  getParentRoute: () => AuthQuarryRouteRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
@@ -53,41 +53,41 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/app': typeof AuthAppRouteRouteWithChildren
+  '/quarry': typeof AuthQuarryRouteRouteWithChildren
   '/login': typeof GuestLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/app/': typeof AuthAppIndexRoute
+  '/quarry/': typeof AuthQuarryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof GuestLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/app': typeof AuthAppIndexRoute
+  '/quarry': typeof AuthQuarryIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_guest': typeof GuestRouteRouteWithChildren
-  '/_auth/app': typeof AuthAppRouteRouteWithChildren
+  '/_auth/quarry': typeof AuthQuarryRouteRouteWithChildren
   '/_guest/login': typeof GuestLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/_auth/app/': typeof AuthAppIndexRoute
+  '/_auth/quarry/': typeof AuthQuarryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/login' | '/api/auth/$' | '/app/'
+  fullPaths: '/' | '/quarry' | '/login' | '/api/auth/$' | '/quarry/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/api/auth/$' | '/app'
+  to: '/' | '/login' | '/api/auth/$' | '/quarry'
   id:
     | '__root__'
     | '/'
     | '/_auth'
     | '/_guest'
-    | '/_auth/app'
+    | '/_auth/quarry'
     | '/_guest/login'
     | '/api/auth/$'
-    | '/_auth/app/'
+    | '/_auth/quarry/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -127,19 +127,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GuestLoginRouteImport
       parentRoute: typeof GuestRouteRoute
     }
-    '/_auth/app': {
-      id: '/_auth/app'
-      path: '/app'
-      fullPath: '/app'
-      preLoaderRoute: typeof AuthAppRouteRouteImport
+    '/_auth/quarry': {
+      id: '/_auth/quarry'
+      path: '/quarry'
+      fullPath: '/quarry'
+      preLoaderRoute: typeof AuthQuarryRouteRouteImport
       parentRoute: typeof AuthRouteRoute
     }
-    '/_auth/app/': {
-      id: '/_auth/app/'
+    '/_auth/quarry/': {
+      id: '/_auth/quarry/'
       path: '/'
-      fullPath: '/app/'
-      preLoaderRoute: typeof AuthAppIndexRouteImport
-      parentRoute: typeof AuthAppRouteRoute
+      fullPath: '/quarry/'
+      preLoaderRoute: typeof AuthQuarryIndexRouteImport
+      parentRoute: typeof AuthQuarryRouteRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -151,24 +151,24 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AuthAppRouteRouteChildren {
-  AuthAppIndexRoute: typeof AuthAppIndexRoute
+interface AuthQuarryRouteRouteChildren {
+  AuthQuarryIndexRoute: typeof AuthQuarryIndexRoute
 }
 
-const AuthAppRouteRouteChildren: AuthAppRouteRouteChildren = {
-  AuthAppIndexRoute: AuthAppIndexRoute,
+const AuthQuarryRouteRouteChildren: AuthQuarryRouteRouteChildren = {
+  AuthQuarryIndexRoute: AuthQuarryIndexRoute,
 }
 
-const AuthAppRouteRouteWithChildren = AuthAppRouteRoute._addFileChildren(
-  AuthAppRouteRouteChildren,
+const AuthQuarryRouteRouteWithChildren = AuthQuarryRouteRoute._addFileChildren(
+  AuthQuarryRouteRouteChildren,
 )
 
 interface AuthRouteRouteChildren {
-  AuthAppRouteRoute: typeof AuthAppRouteRouteWithChildren
+  AuthQuarryRouteRoute: typeof AuthQuarryRouteRouteWithChildren
 }
 
 const AuthRouteRouteChildren: AuthRouteRouteChildren = {
-  AuthAppRouteRoute: AuthAppRouteRouteWithChildren,
+  AuthQuarryRouteRoute: AuthQuarryRouteRouteWithChildren,
 }
 
 const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(

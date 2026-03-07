@@ -4,7 +4,7 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 export const Route = createFileRoute('/_guest')({
     component: RouteComponent,
     beforeLoad: async ({ context }) => {
-        const REDIRECT_URL = '/app';
+        const REDIRECT_URL = '/quarry';
 
         const user = await context.queryClient.ensureQueryData({
             ...authQueryOptions(),

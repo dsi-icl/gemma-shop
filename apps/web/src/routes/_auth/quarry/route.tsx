@@ -1,7 +1,7 @@
 import { Button } from '@repo/ui/components/button';
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
 
-export const Route = createFileRoute('/_auth/app')({
+export const Route = createFileRoute('/_auth/quarry')({
     component: AppLayout
 });
 
@@ -11,7 +11,7 @@ function AppLayout() {
             <div className="flex flex-col items-center gap-2">
                 <h1 className="text-3xl font-bold sm:text-4xl">App Layout</h1>
                 <pre className="mb-4 rounded-md border bg-card p-1 text-xs text-card-foreground">
-                    routes/_auth/app/route.tsx
+                    routes/_auth/quarry/route.tsx
                 </pre>
                 <div className="mb-4 flex flex-col items-center gap-2 text-sm text-foreground/80">
                     This is a protected layout from the _auth pathless layout route:
