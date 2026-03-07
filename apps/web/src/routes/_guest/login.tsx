@@ -9,7 +9,7 @@ import { VirtualNumericKeypad } from '@repo/ui/components/virtual-numeric-keypad
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 
 export const Route = createFileRoute('/_guest/login')({
@@ -37,7 +37,7 @@ function LoginForm() {
     const { mutate: sendMagicLink, isPending: isMagicLinkPending } = useMutation({
         mutationFn: async (addr: string) =>
             await authClient.signIn.magicLink(
-                { email: addr, callbackURL: '/app' },
+                { email: addr, callbackURL: '/quarry' },
                 {
                     onError: ({ error }) => {
                         toast.error(error.message || 'An error occurred while sending the link.');
@@ -285,7 +285,7 @@ function OtpView({ email, onBack }: { email: string; onBack: () => void }) {
                     },
                     onSuccess: async () => {
                         queryClient.removeQueries({ queryKey: authQueryOptions().queryKey });
-                        await navigate({ to: '/app' });
+                        await navigate({ to: '/quarry' });
                     }
                 }
             )
@@ -310,6 +310,28 @@ function OtpView({ email, onBack }: { email: string; onBack: () => void }) {
         if (isPending) return;
         setDigits((prev) => prev.slice(0, -1));
     }, [isPending]);
+
+    useEffect(() => {
+        const handlePaste = (e: ClipboardEvent) => {
+            if (isPending) return;
+            const pasted = e.clipboardData?.getData('text');
+            if (!pasted) return;
+
+            e.preventDefault();
+            const newDigits = pasted.replace(/\D/g, '').slice(0, OTP_LENGTH);
+            if (newDigits) {
+                setDigits(newDigits);
+                if (newDigits.length === OTP_LENGTH) {
+                    verifyOtp(newDigits);
+                }
+            }
+        };
+
+        document.addEventListener('paste', handlePaste);
+        return () => {
+            document.removeEventListener('paste', handlePaste);
+        };
+    }, [isPending, verifyOtp]);
 
     return (
         <div className="flex flex-col items-center gap-4">
