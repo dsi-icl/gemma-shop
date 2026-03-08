@@ -1,0 +1,13 @@
+diff --git a/dist/runtime/internal/vite/node-runner.mjs b/dist/runtime/internal/vite/node-runner.mjs
+index 2b16155602686bb46cca956e947b722941f6ecfe..1935b20fd23346572d201fd77c3fe2204ef277dc 100644
+--- a/dist/runtime/internal/vite/node-runner.mjs
++++ b/dist/runtime/internal/vite/node-runner.mjs
+@@ -289,7 +289,7 @@ async function renderError(req, error) {
+ // ----- Internal Utils -----
+ 
+ async function listen(server) {
+-  const listenAddr = (await isSocketSupported())
++  const listenAddr = (await isSocketSupported() && process.platform !== 'win32')
+     ? getSocketAddress({
+         name: `nitro-vite-${threadId}`,
+         pid: true,

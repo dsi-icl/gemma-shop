@@ -1,0 +1,11 @@
+[install]
+linker = "hoisted"
+frozen-lockfile = false
+
+[performance]
+threads = 8
+cache = true
+
+[security]
+restrict-file-access = false
+restrict-network = false
