@@ -1,5 +1,9 @@
 {
     "permissions": {
-        "allow": ["Bash(bun install)"]
+        "allow": [
+            "Bash(bun install)",
+            "Bash(bunx tsc --noEmit -p apps/web/tsconfig.json)",
+            "Bash(npx tsr generate)"
+        ]
     }
 }

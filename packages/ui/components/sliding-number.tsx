@@ -1,10 +1,16 @@
 'use client';
-import { MotionValue, motion, useSpring, useTransform, motionValue } from 'motion/react';
+import {
+    MotionValue,
+    motion,
+    useSpring,
+    useTransform,
+    motionValue,
+    SpringOptions
+} from 'motion/react';
 import { useEffect, useId } from 'react';
 import useMeasure from 'react-use-measure';
 
-const TRANSITION = {
-    type: 'spring',
+const TRANSITION: SpringOptions = {
     stiffness: 280,
     damping: 18,
     mass: 0.3

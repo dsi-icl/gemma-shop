@@ -9,7 +9,6 @@
     },
     "dependencies": {
         "mongodb": "catalog:",
-        "nanoid": "catalog:",
         "zod": "catalog:"
     },
     "devDependencies": {

@@ -6,11 +6,13 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { VirtualEmailKeyboard } from '@repo/ui/components/virtual-email-keyboard';
 import { VirtualNumericKeypad } from '@repo/ui/components/virtual-numeric-keypad';
+import { useForm } from '@tanstack/react-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 
 export const Route = createFileRoute('/_guest/login')({
     component: LoginForm
@@ -203,29 +205,40 @@ function SlidePanel({ children, direction }: { children: React.ReactNode; direct
 }
 
 function EmailView({ onSubmit }: { onSubmit: (email: string) => void }) {
-    const [value, setValue] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
 
-    const handleVirtualKey = useCallback((key: string) => {
-        setValue((prev) => prev + key);
-        inputRef.current?.focus();
-    }, []);
+    const form = useForm({
+        defaultValues: {
+            email: ''
+        },
+        onSubmit: ({ value }) => {
+            onSubmit(value.email);
+        }
+    });
+
+    const handleVirtualKey = useCallback(
+        (key: string) => {
+            form.setFieldValue('email', form.getFieldValue('email') + key);
+            inputRef.current?.focus();
+        },
+        [form]
+    );
 
     const handleVirtualDelete = useCallback(() => {
-        setValue((prev) => prev.slice(0, -1));
+        form.setFieldValue('email', form.getFieldValue('email').slice(0, -1));
         inputRef.current?.focus();
-    }, []);
-
-    const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const trimmed = value.trim();
-        if (!trimmed) return;
-        onSubmit(trimmed);
-    };
+    }, [form]);
 
     return (
         <div className="flex flex-col items-center gap-4">
-            <form onSubmit={handleSubmit} className="w-full">
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    form.handleSubmit();
+                }}
+                className="w-full"
+            >
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col items-center gap-2">
                         <Link to="/" className="flex flex-col items-center gap-2 font-medium">
@@ -238,20 +251,41 @@ function EmailView({ onSubmit }: { onSubmit: (email: string) => void }) {
                         <p className="text-sm text-muted-foreground">Enter your email to sign in</p>
                     </div>
                     <div className="flex flex-col gap-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input
-                                ref={inputRef}
-                                id="email"
-                                name="email"
-                                type="email"
-                                placeholder="hello@imperial.ac.uk"
-                                value={value}
-                                onChange={(e) => setValue(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <Button type="submit" className="w-full" size="lg">
+                        <form.Field
+                            name="email"
+                            validators={{
+                                onChange: z
+                                    .string()
+                                    .regex(/.+@.+\..+/, 'Please enter a valid email address.')
+                            }}
+                        >
+                            {(field) => (
+                                <div className="grid gap-2">
+                                    <Label htmlFor={field.name}>Email</Label>
+                                    <Input
+                                        ref={inputRef}
+                                        id={field.name}
+                                        name={field.name}
+                                        type="email"
+                                        placeholder="hello@imperial.ac.uk"
+                                        value={field.state.value}
+                                        onBlur={field.handleBlur}
+                                        onChange={(e) => field.handleChange(e.target.value)}
+                                    />
+                                    {field.state.meta.errors ? (
+                                        <em className="text-xs text-red-500">
+                                            {field.state.meta.errors.join(', ')}
+                                        </em>
+                                    ) : null}
+                                </div>
+                            )}
+                        </form.Field>
+                        <Button
+                            type="submit"
+                            className="w-full"
+                            size="lg"
+                            disabled={!form.state.isValid}
+                        >
                             Continue
                         </Button>
 

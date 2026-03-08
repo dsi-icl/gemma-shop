@@ -20,8 +20,17 @@
         "pnpm-lock.yaml": true,
         "bun.lock": true
     },
+    "css.validate": false,
+    "tailwindCSS.emmetCompletions": true,
+    "files.associations": {
+        "*.css": "tailwindcss"
+    },
+    "editor.quickSuggestions": {
+        "strings": true
+    },
     "prettier.enable": false,
     "eslint.enable": false,
+    "biome.enabled": false,
     "oxc.enable": true,
     "oxc.typeAware": true,
     "[json][jsonc][typescript][typescriptreact][javascript][javascriptreact][html][css]": {
