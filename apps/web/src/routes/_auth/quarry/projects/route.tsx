@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router';
 
-export const Route = createFileRoute('/_auth/quarry')({
+export const Route = createFileRoute('/_auth/quarry/projects')({
     component: AppLayout
 });
 

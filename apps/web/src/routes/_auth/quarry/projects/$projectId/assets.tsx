@@ -73,8 +73,20 @@ function AssetsTab() {
                 chunkSize: 5 * 1024 * 1024
             });
 
-            for (const file of Array.from(files)) {
-                uppy.addFile({ name: file.name, type: file.type, data: file });
+            uppy.on('error', (error) => {
+                toast.error(error.message);
+                setUploading(false);
+            });
+
+            try {
+                for (const file of Array.from(files)) {
+                    uppy.addFile({ name: file.name, type: file.type, data: file });
+                }
+            } catch (e: any) {
+                toast.error(e.message);
+                setUploading(false);
+                uppy.destroy();
+                return;
             }
 
             uppy.on('upload-success', (file, response) => {

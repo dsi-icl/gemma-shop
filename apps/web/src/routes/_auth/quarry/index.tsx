@@ -235,90 +235,102 @@ function QuarryIndex() {
     });
 
     return (
-        <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2">
-                    <Input
-                        placeholder="Search projects..."
-                        value={globalFilter}
-                        onChange={(e) => setGlobalFilter(e.target.value)}
-                        className="w-64"
-                    />
-                    <Button
-                        variant={showArchived ? 'secondary' : 'outline'}
-                        size="sm"
-                        onClick={() => setShowArchived(!showArchived)}
-                    >
-                        <ArchiveIcon />
-                        {showArchived ? 'Hide archived' : 'Show archived'}
-                    </Button>
-                </div>
-                <Button render={<Link to="/quarry/projects/new" />} nativeButton={false}>
-                    <PlusIcon />
-                    New project
-                </Button>
-            </div>
-
-            {table.getRowModel().rows.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-12 text-muted-foreground">
-                    <p>No projects found</p>
-                    <Button
-                        render={<Link to="/quarry/projects/new" />}
-                        variant="outline"
-                        size="sm"
-                        nativeButton={false}
-                    >
-                        Create your first project
-                    </Button>
-                </div>
-            ) : (
-                <div className="overflow-hidden rounded-2xl border">
-                    <table className="w-full text-sm">
-                        <thead>
-                            {table.getHeaderGroups().map((headerGroup) => (
-                                <tr key={headerGroup.id} className="border-b bg-muted/50 text-left">
-                                    {headerGroup.headers.map((header) => (
-                                        <th
-                                            key={header.id}
-                                            className="px-4 py-3 font-medium text-muted-foreground"
-                                        >
-                                            {header.isPlaceholder
-                                                ? null
-                                                : flexRender(
-                                                      header.column.columnDef.header,
-                                                      header.getContext()
-                                                  )}
-                                        </th>
-                                    ))}
-                                </tr>
-                            ))}
-                        </thead>
-                        <tbody>
-                            {table.getRowModel().rows.map((row) => (
-                                <tr
-                                    key={row.id}
-                                    className="cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                                    onClick={() =>
-                                        navigate({
-                                            to: '/quarry/projects/$projectId',
-                                            params: { projectId: row.original._id }
-                                        })
-                                    }
+        <div className="container flex min-h-svh min-w-full flex-col py-18">
+            <div className="h-full w-full py-5">
+                <div className="mx-auto w-full max-w-3xl">
+                    <div className="flex flex-col gap-6">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    placeholder="Search projects..."
+                                    value={globalFilter}
+                                    onChange={(e) => setGlobalFilter(e.target.value)}
+                                    className="w-64"
+                                />
+                                <Button
+                                    variant={showArchived ? 'secondary' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setShowArchived(!showArchived)}
                                 >
-                                    {row.getVisibleCells().map((cell) => (
-                                        <td key={cell.id} className="px-4 py-3">
-                                            {flexRender(
-                                                cell.column.columnDef.cell,
-                                                cell.getContext()
-                                            )}
-                                        </td>
-                                    ))}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                    <ArchiveIcon />
+                                    {showArchived ? 'Hide archived' : 'Show archived'}
+                                </Button>
+                            </div>
+                            <Button
+                                render={<Link to="/quarry/projects/new" />}
+                                nativeButton={false}
+                            >
+                                <PlusIcon />
+                                New project
+                            </Button>
+                        </div>
+
+                        {table.getRowModel().rows.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-12 text-muted-foreground">
+                                <p>No projects found</p>
+                                <Button
+                                    render={<Link to="/quarry/projects/new" />}
+                                    variant="outline"
+                                    size="sm"
+                                    nativeButton={false}
+                                >
+                                    Create your first project
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="overflow-hidden rounded-2xl border">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        {table.getHeaderGroups().map((headerGroup) => (
+                                            <tr
+                                                key={headerGroup.id}
+                                                className="border-b bg-muted/50 text-left"
+                                            >
+                                                {headerGroup.headers.map((header) => (
+                                                    <th
+                                                        key={header.id}
+                                                        className="px-4 py-3 font-medium text-muted-foreground"
+                                                    >
+                                                        {header.isPlaceholder
+                                                            ? null
+                                                            : flexRender(
+                                                                  header.column.columnDef.header,
+                                                                  header.getContext()
+                                                              )}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </thead>
+                                    <tbody>
+                                        {table.getRowModel().rows.map((row) => (
+                                            <tr
+                                                key={row.id}
+                                                className="cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/30"
+                                                onClick={() =>
+                                                    navigate({
+                                                        to: '/quarry/projects/$projectId',
+                                                        params: { projectId: row.original._id }
+                                                    })
+                                                }
+                                            >
+                                                {row.getVisibleCells().map((cell) => (
+                                                    <td key={cell.id} className="px-4 py-3">
+                                                        {flexRender(
+                                                            cell.column.columnDef.cell,
+                                                            cell.getContext()
+                                                        )}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 }
