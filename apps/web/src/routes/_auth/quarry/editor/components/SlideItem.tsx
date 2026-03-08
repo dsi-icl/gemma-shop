@@ -1,5 +1,4 @@
-import { CopyIcon, DotsSixVerticalIcon } from '@phosphor-icons/react';
-import React from 'react';
+import { CopyIcon } from '@phosphor-icons/react';
 
 import { Slide } from '../types';
 
@@ -7,27 +6,20 @@ interface SlideItemProps {
     slide: Slide;
     isSelected: boolean;
     isActive: boolean;
-    listeners?: any;
     onCopySlide?: (slide: Slide) => void;
 }
 
-export function SlideItem({ slide, isSelected, isActive, listeners, onCopySlide }: SlideItemProps) {
+export function SlideItem({ slide, isSelected, isActive, onCopySlide }: SlideItemProps) {
     return (
         <div
-            className={`group flex cursor-pointer items-center rounded-md border p-2 transition-colors ${
+            className={`group flex items-center rounded-md border p-2 transition-colors ${
                 isSelected
-                    ? 'border-blue-500 bg-blue-100 dark:bg-blue-900'
+                    ? 'border-ring bg-accent text-accent-foreground'
                     : isActive
                       ? 'border-accent bg-accent text-accent-foreground'
                       : 'border-transparent bg-card hover:border-border hover:bg-muted'
             }`}
         >
-            <div
-                {...listeners}
-                className="mr-2 cursor-grab text-muted-foreground hover:text-foreground"
-            >
-                <DotsSixVerticalIcon size={20} weight="bold" />
-            </div>
             <div className="flex-1 truncate text-sm font-medium">{slide.description}</div>
             {onCopySlide && (
                 <button

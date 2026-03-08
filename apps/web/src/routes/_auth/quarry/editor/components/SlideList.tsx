@@ -1,12 +1,32 @@
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ClipboardTextIcon, PlusIcon, StackIcon } from '@phosphor-icons/react';
 import { ResizablePanel } from '@repo/ui/components/resizable';
-import { useEditor } from '../contexts/EditorContext';
 
-import { SortableSlideItem } from './SortableSlideItem';
+import { useEditor } from '../contexts/EditorContext';
+import { Slide } from '../types';
+import { DraggableList } from './DraggableList';
+import { SlideItem } from './SlideItem';
 
 export function SlideList() {
-    const { slides, copiedSlide, handlePasteSlide, handleAddSlide } = useEditor();
+    const {
+        slides,
+        setSlides,
+        activeSlideId,
+        setActiveSlideId,
+        copiedSlide,
+        selectedSlides,
+        toggleSlideSelection,
+        handleCopySlide,
+        handlePasteSlide,
+        handleAddSlide
+    } = useEditor();
+
+    const handleSelect = (id: string, shiftKey: boolean, ctrlKey: boolean) => {
+        toggleSlideSelection(id, shiftKey, ctrlKey);
+        if (!shiftKey && !ctrlKey) {
+            setActiveSlideId(id);
+        }
+    };
+
     return (
         <ResizablePanel defaultSize={50} minSize={20}>
             <div className="flex h-full flex-col overflow-hidden">
@@ -34,17 +54,32 @@ export function SlideList() {
                 </div>
 
                 <div className="flex-1 space-y-1 overflow-y-auto p-2">
-                    <SortableContext
-                        items={slides.map((s) => s.id)}
-                        strategy={verticalListSortingStrategy}
-                    >
-                        {slides.map((slide) => (
-                            <SortableSlideItem
-                                key={slide.id}
+                    <DraggableList
+                        items={slides}
+                        selectedIds={selectedSlides}
+                        onReorder={setSlides}
+                        onSelect={handleSelect}
+                        itemRenderer={(slide, { isSelected }) => (
+                            <SlideItem
                                 slide={slide}
+                                isSelected={isSelected}
+                                isActive={activeSlideId === slide.id}
+                                onCopySlide={handleCopySlide}
                             />
-                        ))}
-                    </SortableContext>
+                        )}
+                        overlayRenderer={(slide) => (
+                            <SlideItem
+                                slide={slide}
+                                isSelected={selectedSlides.includes(slide.id)}
+                                isActive={activeSlideId === slide.id}
+                            />
+                        )}
+                        multiDragLabel={(count) => (
+                            <div className="rounded-md bg-primary p-2 text-primary-foreground shadow-lg">
+                                {count} slides
+                            </div>
+                        )}
+                    />
                 </div>
             </div>
         </ResizablePanel>

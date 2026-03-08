@@ -4,7 +4,10 @@
             "Bash(bun install)",
             "Bash(bunx tsc --noEmit -p apps/web/tsconfig.json)",
             "Bash(npx tsr generate)",
-            "Bash(ls c:/Repos/tanstarter/node_modules/react-resizable-panels/dist/*.d.ts)"
+            "Bash(ls c:/Repos/tanstarter/node_modules/react-resizable-panels/dist/*.d.ts)",
+            "Bash(npx tsc --noEmit --project apps/web/tsconfig.json)",
+            "Bash(bun run --filter web tsc --noEmit)",
+            "Bash(bun tsc --noEmit)"
         ]
     }
 }

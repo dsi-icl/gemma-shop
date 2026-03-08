@@ -1,10 +1,12 @@
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ResizablePanel } from '@repo/ui/components/resizable';
+
 import { useEditor } from '../contexts/EditorContext';
-import { SortableLayerItem } from './SortableLayerItem';
+import { DraggableList } from './DraggableList';
+import { LayerItem } from './LayerItem';
 
 export function LayerList() {
-    const { layers } = useEditor();
+    const { layers, setLayers, selectedLayers, toggleLayerSelection } = useEditor();
+
     return (
         <ResizablePanel defaultSize={50} minSize={20}>
             <div className="flex h-full flex-col overflow-hidden bg-muted/30">
@@ -13,14 +15,26 @@ export function LayerList() {
                 </div>
 
                 <div className="flex-1 space-y-1 overflow-y-auto p-2">
-                    <SortableContext
-                        items={layers.map((l) => l.id)}
-                        strategy={verticalListSortingStrategy}
-                    >
-                        {layers.map((layer) => (
-                            <SortableLayerItem key={layer.id} layer={layer} />
-                        ))}
-                    </SortableContext>
+                    <DraggableList
+                        items={layers}
+                        selectedIds={selectedLayers}
+                        onReorder={setLayers}
+                        onSelect={toggleLayerSelection}
+                        itemRenderer={(layer, { isSelected }) => (
+                            <LayerItem layer={layer} isSelected={isSelected} />
+                        )}
+                        overlayRenderer={(layer) => (
+                            <LayerItem
+                                layer={layer}
+                                isSelected={selectedLayers.includes(layer.id)}
+                            />
+                        )}
+                        multiDragLabel={(count) => (
+                            <div className="rounded-md border border-border bg-card p-2 text-primary shadow-lg">
+                                {count} layers
+                            </div>
+                        )}
+                    />
                 </div>
             </div>
         </ResizablePanel>
