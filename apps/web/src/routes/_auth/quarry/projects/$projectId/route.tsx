@@ -9,10 +9,9 @@ import {
     Outlet,
     useLocation,
     useNavigate,
-    useRouterState
+    useRouterState,
 } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
 
 import { projectQueryOptions } from '~/server/projects.queries';
 
@@ -20,7 +19,7 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId')({
     component: ProjectLayout,
     loader: ({ context, params }) => {
         context.queryClient.ensureQueryData(projectQueryOptions(params.projectId));
-    }
+    },
 });
 
 const TAB_ORDER = { info: 0, permissions: 1, commits: 2, history: 3 } as const;
@@ -30,22 +29,22 @@ const TABS: { key: TabKey; label: string; to: string }[] = [
     { key: 'info', label: 'Project Info', to: '.' },
     { key: 'permissions', label: 'Permissions', to: './permissions' },
     { key: 'commits', label: 'Commits', to: './commits' },
-    { key: 'history', label: 'History', to: './history' }
+    { key: 'history', label: 'History', to: './history' },
 ];
 
 const slidePanelVariants = {
-    enter: (d: number) => ({
+    enter: () => ({
         opacity: 0,
-        filter: 'blur(2px)'
+        filter: 'blur(2px)',
     }),
     center: {
         opacity: 1,
-        filter: 'blur(0px)'
+        filter: 'blur(0px)',
     },
-    exit: (d: number) => ({
+    exit: () => ({
         opacity: 0,
-        filter: 'blur(2px)'
-    })
+        filter: 'blur(2px)',
+    }),
 };
 
 function getTabFromPath(pathname: string): TabKey {
@@ -63,7 +62,7 @@ function ProjectLayout() {
     const currentTab = getTabFromPath(location.pathname);
 
     const resolvedPathname = useRouterState({
-        select: (s) => s.location.pathname
+        select: (s) => s.location.pathname,
     });
 
     return (
@@ -92,7 +91,7 @@ function ProjectLayout() {
                     if (tab) {
                         navigate({
                             from: '/quarry/projects/$projectId',
-                            to: tab.to
+                            to: tab.to,
                         });
                     }
                 }}

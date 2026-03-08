@@ -29,7 +29,7 @@ export function useLocalStorageToggle(key: string, defaultValue = false) {
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        const updateState = (e: Event) => {
+        const updateState = () => {
             // If THIS instance triggered the change, don't update state again
             if (isBroadcasting.current) return;
 

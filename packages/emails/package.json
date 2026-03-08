@@ -7,7 +7,7 @@
         "./OtpEmail": "./src/OtpEmail.tsx"
     },
     "scripts": {
-        "dev": "email dev -d src",
+        "dev": "email dev -d src -p 3671",
         "export": "email export"
     },
     "dependencies": {

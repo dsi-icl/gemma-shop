@@ -6,9 +6,8 @@ import {
     Html,
     Preview,
     Section,
-    Text
+    Text,
 } from '@react-email/components';
-import * as React from 'react';
 
 interface MagicLinkEmailProps {
     url: string;
@@ -20,8 +19,8 @@ export const MagicLinkEmail = ({ url }: MagicLinkEmailProps) => (
         <Preview>Log in with this magic link</Preview>
         <Body style={main}>
             <Container style={container}>
-                <Text style={h1}>Login</Text>
-                <Text style={text}>Please click the button below to log in to your account.</Text>
+                <Text style={h1}>Login to Gemma Shop</Text>
+                <Text style={text}>Click the button below to log in !</Text>
                 <Section style={{ textAlign: 'center' }}>
                     <Button style={button} href={url}>
                         Log in
@@ -39,13 +38,13 @@ export default MagicLinkEmail;
 
 const main = {
     backgroundColor: '#f6f9fc',
-    padding: '10px 0'
+    padding: '10px 0',
 };
 
 const container = {
     backgroundColor: '#ffffff',
     border: '1px solid #f0f0f0',
-    padding: '45px'
+    padding: '45px',
 };
 
 const h1 = {
@@ -55,7 +54,7 @@ const h1 = {
     fontSize: '24px',
     fontWeight: 'bold',
     margin: '40px 0',
-    padding: '0'
+    padding: '0',
 };
 
 const text = {
@@ -63,7 +62,7 @@ const text = {
     fontFamily:
         "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
     fontSize: '14px',
-    margin: '24px 0'
+    margin: '24px 0',
 };
 
 const button = {
@@ -77,5 +76,5 @@ const button = {
     textAlign: 'center' as const,
     display: 'inline-block',
     width: '210px',
-    padding: '14px 7px'
+    padding: '14px 7px',
 };

@@ -8,7 +8,7 @@ const auditLogs = db.collection('audit_logs');
 
 export async function listProjects(userEmail: string, includeArchived = false) {
     const filter: Record<string, unknown> = {
-        $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }]
+        $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }],
     };
     if (!includeArchived) {
         filter.archived = { $ne: true };
@@ -41,7 +41,7 @@ export async function createProject(input: CreateProjectInput, userEmail: string
         archived: false,
         createdBy: userEmail,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
     };
     const result = await projects.insertOne(doc);
 
@@ -50,7 +50,7 @@ export async function createProject(input: CreateProjectInput, userEmail: string
         actorId: userEmail,
         action: 'PROJECT_CREATED',
         changes: { name: input.name },
-        createdAt: new Date()
+        createdAt: new Date(),
     });
 
     return serializeProject({ ...doc, _id: result.insertedId });
@@ -66,7 +66,7 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
     const result = await projects.findOneAndUpdate(
         { _id: new ObjectId(_id) },
         { $set: { ...updates, updatedAt: new Date().toISOString() } },
-        { returnDocument: 'after' }
+        { returnDocument: 'after' },
     );
     if (!result) throw new Error('Update failed');
 
@@ -75,7 +75,7 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
         actorId: userEmail,
         action: 'PROJECT_UPDATED',
         changes: updates,
-        createdAt: new Date()
+        createdAt: new Date(),
     });
 
     return serializeProject(result);
@@ -88,7 +88,7 @@ export async function archiveProject(id: string, userEmail: string) {
 
     await projects.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { archived: true, updatedAt: new Date().toISOString() } }
+        { $set: { archived: true, updatedAt: new Date().toISOString() } },
     );
 
     await auditLogs.insertOne({
@@ -96,7 +96,7 @@ export async function archiveProject(id: string, userEmail: string) {
         actorId: userEmail,
         action: 'PROJECT_UPDATED',
         changes: { archived: true },
-        createdAt: new Date()
+        createdAt: new Date(),
     });
 }
 
@@ -107,7 +107,7 @@ export async function restoreProject(id: string, userEmail: string) {
 
     await projects.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { archived: false, updatedAt: new Date().toISOString() } }
+        { $set: { archived: false, updatedAt: new Date().toISOString() } },
     );
 
     await auditLogs.insertOne({
@@ -115,7 +115,7 @@ export async function restoreProject(id: string, userEmail: string) {
         actorId: userEmail,
         action: 'PROJECT_UPDATED',
         changes: { archived: false },
-        createdAt: new Date()
+        createdAt: new Date(),
     });
 }
 
@@ -139,9 +139,9 @@ export async function publishCommit(projectId: string, commitId: string | null, 
             $set: {
                 publishedCommitId: commitId,
                 tags: updatedTags,
-                updatedAt: new Date().toISOString()
-            }
-        }
+                updatedAt: new Date().toISOString(),
+            },
+        },
     );
 
     await auditLogs.insertOne({
@@ -149,7 +149,7 @@ export async function publishCommit(projectId: string, commitId: string | null, 
         actorId: userEmail,
         action: 'PROJECT_UPDATED',
         changes: { publishedCommitId: commitId },
-        createdAt: new Date()
+        createdAt: new Date(),
     });
 
     return isPublishing;
@@ -175,7 +175,7 @@ export async function getAuditLogs(projectId: string): Promise<SerializedAuditLo
         actorId: String(d.actorId ?? ''),
         action: String(d.action ?? ''),
         changes: (d.changes as SerializedAuditLog['changes']) ?? null,
-        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt)
+        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
     }));
 }
 
@@ -200,7 +200,7 @@ export async function getProjectCommits(projectId: string): Promise<SerializedCo
         parentId: d.parentId?.toString() ?? null,
         authorId: d.authorId?.toString() ?? null,
         message: String(d.message ?? ''),
-        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt)
+        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
     }));
 }
 
@@ -220,6 +220,6 @@ function serializeProject(doc: Record<string, unknown>): Project {
         ...doc,
         _id: doc._id!.toString(),
         headCommitId: doc.headCommitId?.toString() ?? null,
-        publishedCommitId: doc.publishedCommitId?.toString() ?? null
+        publishedCommitId: doc.publishedCommitId?.toString() ?? null,
     } as Project;
 }

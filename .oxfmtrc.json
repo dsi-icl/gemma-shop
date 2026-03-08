@@ -4,7 +4,7 @@
     "semi": true,
     "printWidth": 100,
     "singleQuote": true,
-    "trailingComma": "none",
+    "trailingComma": "all",
     "sortImports": {},
     "sortTailwindcss": {
         "stylesheet": "./packages/ui/styles/base.css",
