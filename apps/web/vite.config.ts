@@ -5,6 +5,8 @@ import viteReact from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 import { defineConfig } from 'vite';
 
+import { ttfPlugin } from './plugins/ttf';
+
 export default defineConfig({
     resolve: {
         tsconfigPaths: true
@@ -13,6 +15,7 @@ export default defineConfig({
         port: 3670
     },
     plugins: [
+        ttfPlugin(),
         devtools(),
         tanstackStart(),
         // https://tanstack.com/start/latest/docs/framework/react/guide/hosting

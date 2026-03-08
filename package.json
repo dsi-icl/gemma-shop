@@ -63,6 +63,7 @@
             "react-dom": "^19.2.4",
             "react-email": "^5.2.9",
             "shadcn": "^4.0.2",
+            "satori": "^0.25.0",
             "sonner": "^2.0.7",
             "tailwind-merge": "^3.5.0",
             "tailwindcss": "^4.2.1",
@@ -91,7 +92,6 @@
         "auth:secret": "bunx @better-auth/cli@latest secret",
         "skills": "bunx skills@latest"
     },
-    "dependencies": {},
     "devDependencies": {
         "@commitlint/cli": "catalog:",
         "@commitlint/config-conventional": "catalog:",
