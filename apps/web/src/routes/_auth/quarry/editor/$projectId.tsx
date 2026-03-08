@@ -1,40 +1,31 @@
 import {
-    CopyIcon,
-    ClipboardTextIcon,
-    DotsSixVerticalIcon,
-    StackIcon,
-    TextTIcon,
-    ImageIcon,
-    PlusIcon
-} from '@phosphor-icons/react';
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent
+} from '@dnd-kit/core';
+import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import {
     ResizableHandle,
     ResizablePanel,
     ResizablePanelGroup
 } from '@repo/ui/components/resizable';
 import { createFileRoute } from '@tanstack/react-router';
-import React, { useState, useRef } from 'react';
+import { useState } from 'react';
 
-// --- Types & Interfaces ---
-export type LayerType = 'text' | 'image' | 'shape';
-
-export interface Slide {
-    id: string;
-    description: string;
-}
-
-export interface Layer {
-    id: string;
-    name: string;
-    type: LayerType;
-}
+import { LayerList } from './components/LayerList';
+import { MainBoard } from './components/MainBoard';
+import { SlideList } from './components/SlideList';
+import { Layer, Slide } from './types';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId')({
     component: PresentationEditor
 });
 
 function PresentationEditor() {
-    // --- State ---
     const [slides, setSlides] = useState<Slide[]>([
         { id: 's1', description: 'Title Slide' },
         { id: 's2', description: 'Agenda' },
@@ -50,52 +41,34 @@ function PresentationEditor() {
         { id: 'l4', name: 'Company Logo', type: 'image' }
     ]);
 
-    // --- Drag and Drop Handlers ---
-    const dragItem = useRef<number | null>(null);
-    const dragOverItem = useRef<number | null>(null);
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates
+        })
+    );
 
-    const handleDragStart = (
-        e: React.DragEvent<HTMLDivElement>,
-        position: number,
-        ref: React.RefObject<number | null>
-    ): void => {
-        ref.current = position;
-        if (e.currentTarget) {
-            e.currentTarget.style.opacity = '0.5';
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            if (active.data.current?.type === 'slide') {
+                setSlides((items) => {
+                    const oldIndex = items.findIndex((item) => item.id === active.id);
+                    const newIndex = items.findIndex((item) => item.id === over.id);
+                    return arrayMove(items, oldIndex, newIndex);
+                });
+            }
+            if (active.data.current?.type === 'layer') {
+                setLayers((items) => {
+                    const oldIndex = items.findIndex((item) => item.id === active.id);
+                    const newIndex = items.findIndex((item) => item.id === over.id);
+                    return arrayMove(items, oldIndex, newIndex);
+                });
+            }
         }
     };
 
-    const handleDragEnter = (
-        e: React.DragEvent<HTMLDivElement>,
-        position: number,
-        ref: React.RefObject<number | null>
-    ): void => {
-        ref.current = position;
-    };
-
-    const handleDragEnd = <T,>(
-        e: React.DragEvent<HTMLDivElement>,
-        list: T[],
-        setList: React.Dispatch<React.SetStateAction<T[]>>
-    ): void => {
-        if (e.currentTarget) {
-            e.currentTarget.style.opacity = '1';
-        }
-
-        if (dragItem.current === null || dragOverItem.current === null) return;
-
-        const newList = [...list];
-        const draggedItemContent = newList[dragItem.current];
-
-        newList.splice(dragItem.current, 1);
-        newList.splice(dragOverItem.current, 0, draggedItemContent);
-
-        dragItem.current = null;
-        dragOverItem.current = null;
-        setList(newList);
-    };
-
-    // --- Slide Actions ---
     const handleCopySlide = (slide: Slide): void => setCopiedSlide(slide);
 
     const handlePasteSlide = (): void => {
@@ -112,135 +85,34 @@ function PresentationEditor() {
         setSlides([...slides, { id: `s${Date.now()}`, description: `New Slide` }]);
     };
 
-    // --- UI Helpers ---
-    const getLayerIcon = (type: LayerType): React.ReactNode => {
-        return type === 'text' ? (
-            <TextTIcon size={16} weight="bold" />
-        ) : (
-            <ImageIcon size={16} weight="bold" />
-        );
-    };
-
     return (
-        <ResizablePanelGroup
-            orientation="horizontal"
-            className="grow overflow-hidden font-sans text-foreground"
-        >
-            {/* LEFT: Editor / Canvas Area */}
-            <ResizablePanel>
-                <main className="relative flex h-full flex-col">
-                    <div className="flex flex-1 items-center justify-center overflow-auto bg-muted/20 p-8">
-                        <div className="relative flex h-[450px] w-[800px] flex-col items-center justify-center rounded-lg bg-card shadow-lg ring-1 ring-border"></div>
-                    </div>
-                </main>
-            </ResizablePanel>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <ResizablePanelGroup
+                orientation="horizontal"
+                className="grow overflow-hidden font-sans text-foreground"
+            >
+                <MainBoard />
 
-            <ResizableHandle />
+                <ResizableHandle />
 
-            {/* RIGHT: Sidebar */}
-            <ResizablePanel defaultSize={400} minSize={200}>
-                <ResizablePanelGroup orientation="vertical" className="h-full bg-card/50">
-                    {/* Section 1: Slides */}
-                    <ResizablePanel defaultSize={50} minSize={20}>
-                        <div className="flex h-full flex-col overflow-hidden">
-                            <div className="flex h-12 items-center justify-between border-b border-border bg-muted/50 px-4">
-                                <h2 className="flex items-center gap-2 text-sm font-semibold">
-                                    <StackIcon size={18} weight="bold" /> Slides
-                                </h2>
-                                <div className="flex items-center gap-1 text-muted-foreground">
-                                    <button
-                                        onClick={handlePasteSlide}
-                                        disabled={!copiedSlide}
-                                        className="rounded-md p-1.5 transition-colors hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"
-                                        title="Paste Slide"
-                                    >
-                                        <ClipboardTextIcon size={18} weight="bold" />
-                                    </button>
-                                    <button
-                                        onClick={handleAddSlide}
-                                        className="rounded-md p-1.5 transition-colors hover:bg-muted"
-                                        title="Add Slide"
-                                    >
-                                        <PlusIcon size={18} weight="bold" />
-                                    </button>
-                                </div>
-                            </div>
+                <ResizablePanel defaultSize={400} minSize={200}>
+                    <ResizablePanelGroup orientation="vertical" className="h-full bg-card/50">
+                        <SlideList
+                            slides={slides}
+                            activeSlideId={activeSlideId}
+                            setActiveSlideId={setActiveSlideId}
+                            copiedSlide={copiedSlide}
+                            onCopySlide={handleCopySlide}
+                            onPasteSlide={handlePasteSlide}
+                            onAddSlide={handleAddSlide}
+                        />
 
-                            <div className="flex-1 space-y-1 overflow-y-auto p-2">
-                                {slides.map((slide, index) => (
-                                    <div
-                                        key={slide.id}
-                                        draggable
-                                        onDragStart={(e) => handleDragStart(e, index, dragItem)}
-                                        onDragEnter={(e) => handleDragEnter(e, index, dragOverItem)}
-                                        onDragEnd={(e) =>
-                                            handleDragEnd<Slide>(e, slides, setSlides)
-                                        }
-                                        onClick={() => setActiveSlideId(slide.id)}
-                                        className={`group flex cursor-pointer items-center rounded-md border p-2 transition-colors ${
-                                            activeSlideId === slide.id
-                                                ? 'border-accent bg-accent text-accent-foreground'
-                                                : 'border-transparent bg-card hover:border-border hover:bg-muted'
-                                        }`}
-                                    >
-                                        <div className="mr-2 cursor-grab text-muted-foreground hover:text-foreground">
-                                            <DotsSixVerticalIcon size={20} weight="bold" />
-                                        </div>
-                                        <div className="flex-1 truncate text-sm font-medium">
-                                            {slide.description}
-                                        </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleCopySlide(slide);
-                                            }}
-                                            className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground"
-                                            title="Copy Slide"
-                                        >
-                                            <CopyIcon size={16} weight="bold" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </ResizablePanel>
+                        <ResizableHandle withHandle />
 
-                    <ResizableHandle withHandle />
-
-                    <ResizablePanel defaultSize={50} minSize={20}>
-                        <div className="flex h-full flex-col overflow-hidden bg-muted/30">
-                            <div className="flex h-12 items-center border-b border-border bg-muted/50 px-4">
-                                <h2 className="text-sm font-semibold">Layers (Current Slide)</h2>
-                            </div>
-
-                            <div className="flex-1 space-y-1 overflow-y-auto p-2">
-                                {layers.map((layer, index) => (
-                                    <div
-                                        key={layer.id}
-                                        draggable
-                                        onDragStart={(e) => handleDragStart(e, index, dragItem)}
-                                        onDragEnter={(e) => handleDragEnter(e, index, dragOverItem)}
-                                        onDragEnd={(e) =>
-                                            handleDragEnd<Layer>(e, layers, setLayers)
-                                        }
-                                        className="flex cursor-grab items-center rounded-md border border-border bg-card p-2 shadow-sm transition-colors hover:border-primary"
-                                    >
-                                        <div className="mr-2 text-muted-foreground">
-                                            <DotsSixVerticalIcon size={20} weight="bold" />
-                                        </div>
-                                        <div className="mr-2 rounded bg-muted p-1.5 text-muted-foreground">
-                                            {getLayerIcon(layer.type)}
-                                        </div>
-                                        <div className="flex-1 truncate text-sm text-foreground">
-                                            {layer.name}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </ResizablePanel>
-                </ResizablePanelGroup>
-            </ResizablePanel>
-        </ResizablePanelGroup>
+                        <LayerList layers={layers} />
+                    </ResizablePanelGroup>
+                </ResizablePanel>
+            </ResizablePanelGroup>
+        </DndContext>
     );
 }

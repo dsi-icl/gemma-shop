@@ -4,9 +4,6 @@
   "workspaces": {
     "": {
       "name": "tanstarter",
-      "dependencies": {
-        "satori": "^0.25.0",
-      },
       "devDependencies": {
         "@commitlint/cli": "catalog:",
         "@commitlint/config-conventional": "catalog:",
@@ -130,6 +127,7 @@
         "motion": "catalog:",
         "react-resizable-panels": "catalog:",
         "react-use-measure": "catalog:",
+        "satori": "catalog:",
         "shadcn": "catalog:",
         "sonner": "catalog:",
         "tailwind-merge": "catalog:",
@@ -164,6 +162,8 @@
     "@base-ui/react": "^1.2.0",
     "@commitlint/cli": "^20.4.3",
     "@commitlint/config-conventional": "^20.4.3",
+    "@dnd-kit/modifiers": "^9.0.0",
+    "@dnd-kit/sortable": "^10.0.0",
     "@fontsource-variable/inter": "^5.2.8",
     "@phosphor-icons/react": "^2.1.10",
     "@react-email/components": "^1.0.8",
@@ -216,6 +216,7 @@
     "react-email": "^5.2.9",
     "react-resizable-panels": "^4.7.2",
     "react-use-measure": "^2.1.7",
+    "satori": "^0.25.0",
     "shadcn": "^4.0.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",

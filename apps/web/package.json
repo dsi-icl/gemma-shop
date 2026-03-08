@@ -10,6 +10,8 @@
         "ui": "bunx shadcn@latest"
     },
     "dependencies": {
+        "@dnd-kit/modifiers": "catalog:",
+        "@dnd-kit/sortable": "catalog:",
         "@fontsource-variable/inter": "catalog:",
         "@phosphor-icons/react": "catalog:",
         "@repo/auth": "workspace:*",
