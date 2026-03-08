@@ -1,14 +1,17 @@
 import { authMiddleware } from '@repo/auth/tanstack/middleware';
-import { CreateProjectInput, UpdateProjectInput } from '@repo/db/schema';
+import { CreateAssetInput, CreateProjectInput, UpdateProjectInput } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 
 import {
     archiveProject,
+    createAsset,
     createProject,
+    deleteAsset,
     getAuditLogs,
     getProject,
     getProjectCommits,
+    listAssets,
     listProjects,
     listPublishedProjects,
     publishCommit,
@@ -26,6 +29,13 @@ export const $listProjects = createServerFn({ method: 'GET' })
 export const $listPublishedProjects = createServerFn({ method: 'GET' }).handler(async () => {
     return listPublishedProjects();
 });
+
+export const $listAssets = createServerFn({ method: 'GET' })
+    .inputValidator(z.object({ projectId: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        return listAssets(data.projectId, context.user.email);
+    });
 
 export const $getProject = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ id: z.string() }))
@@ -48,6 +58,13 @@ export const $createProject = createServerFn({ method: 'POST' })
         return createProject(data, context.user.email);
     });
 
+export const $createAsset = createServerFn({ method: 'POST' })
+    .inputValidator(CreateAssetInput)
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        return createAsset(data, context.user.email);
+    });
+
 export const $updateProject = createServerFn({ method: 'POST' })
     .inputValidator(UpdateProjectInput)
     .middleware([authMiddleware])
@@ -60,6 +77,13 @@ export const $archiveProject = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         await archiveProject(data.id, context.user.email);
+    });
+
+export const $deleteAsset = createServerFn({ method: 'POST' })
+    .inputValidator(z.object({ id: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        await deleteAsset(data.id, context.user.email);
     });
 
 export const $restoreProject = createServerFn({ method: 'POST' })

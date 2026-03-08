@@ -9,7 +9,7 @@ import {
     Outlet,
     useLocation,
     useNavigate,
-    useRouterState,
+    useRouterState
 } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -19,10 +19,10 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId')({
     component: ProjectLayout,
     loader: ({ context, params }) => {
         context.queryClient.ensureQueryData(projectQueryOptions(params.projectId));
-    },
+    }
 });
 
-const TAB_ORDER = { info: 0, permissions: 1, commits: 2, history: 3 } as const;
+const TAB_ORDER = { info: 0, permissions: 1, commits: 2, history: 3, assets: 4 } as const;
 type TabKey = keyof typeof TAB_ORDER;
 
 const TABS: { key: TabKey; label: string; to: string }[] = [
@@ -30,27 +30,29 @@ const TABS: { key: TabKey; label: string; to: string }[] = [
     { key: 'permissions', label: 'Permissions', to: './permissions' },
     { key: 'commits', label: 'Commits', to: './commits' },
     { key: 'history', label: 'History', to: './history' },
+    { key: 'assets', label: 'Assets', to: './assets' }
 ];
 
 const slidePanelVariants = {
     enter: () => ({
         opacity: 0,
-        filter: 'blur(2px)',
+        filter: 'blur(2px)'
     }),
     center: {
         opacity: 1,
-        filter: 'blur(0px)',
+        filter: 'blur(0px)'
     },
     exit: () => ({
         opacity: 0,
-        filter: 'blur(2px)',
-    }),
+        filter: 'blur(2px)'
+    })
 };
 
 function getTabFromPath(pathname: string): TabKey {
     if (pathname.endsWith('/permissions')) return 'permissions';
     if (pathname.endsWith('/commits')) return 'commits';
     if (pathname.endsWith('/history')) return 'history';
+    if (pathname.endsWith('/assets')) return 'assets';
     return 'info';
 }
 
@@ -62,7 +64,7 @@ function ProjectLayout() {
     const currentTab = getTabFromPath(location.pathname);
 
     const resolvedPathname = useRouterState({
-        select: (s) => s.location.pathname,
+        select: (s) => s.location.pathname
     });
 
     return (
@@ -91,7 +93,7 @@ function ProjectLayout() {
                     if (tab) {
                         navigate({
                             from: '/quarry/projects/$projectId',
-                            to: tab.to,
+                            to: tab.to
                         });
                     }
                 }}

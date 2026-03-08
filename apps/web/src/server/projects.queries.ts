@@ -5,6 +5,7 @@ import {
     $getAuditLogs,
     $getProject,
     $getProjectCommits,
+    $listAssets,
     $listProjects,
     $listPublishedProjects
 } from './projects.fns';
@@ -13,6 +14,12 @@ export const projectsQueryOptions = (includeArchived = false) =>
     queryOptions({
         queryKey: ['projects', { includeArchived }],
         queryFn: () => $listProjects({ data: { includeArchived } })
+    });
+
+export const projectAssetsQueryOptions = (projectId: string) =>
+    queryOptions({
+        queryKey: ['projects', projectId, 'assets'],
+        queryFn: () => $listAssets({ data: { projectId } })
     });
 
 export const projectQueryOptions = (id: string) =>

@@ -23,7 +23,7 @@ export function ProjectForm({
     defaultValues,
     onSubmit,
     isSubmitting,
-    submitLabel = 'Create project',
+    submitLabel = 'Create project'
 }: ProjectFormProps) {
     const [tagInput, setTagInput] = useState('');
     const [uploading, setUploading] = useState(false);
@@ -37,11 +37,11 @@ export function ProjectForm({
             tags: [],
             heroImages: [],
             collaborators: [],
-            ...defaultValues,
+            ...defaultValues
         },
         onSubmit: ({ value }) => {
             onSubmit(value);
-        },
+        }
     });
 
     const handleUpload = useCallback(
@@ -49,7 +49,7 @@ export function ProjectForm({
             setUploading(true);
             const uppy = new Uppy({ restrictions: { allowedFileTypes: ['image/*'] } }).use(Tus, {
                 endpoint: '/api/uploads/',
-                chunkSize: 5 * 1024 * 1024,
+                chunkSize: 5 * 1024 * 1024
             });
 
             const newUrls: string[] = [];
@@ -73,7 +73,7 @@ export function ProjectForm({
                 uppy.destroy();
             }
         },
-        [form],
+        [form]
     );
 
     const addTag = () => {
@@ -87,14 +87,14 @@ export function ProjectForm({
     const removeTag = (tag: string) => {
         form.setFieldValue(
             'tags',
-            form.getFieldValue('tags').filter((t) => t !== tag),
+            form.getFieldValue('tags').filter((t) => t !== tag)
         );
     };
 
     const removeImage = (index: number) => {
         form.setFieldValue(
             'heroImages',
-            form.getFieldValue('heroImages').filter((_, i) => i !== index),
+            form.getFieldValue('heroImages').filter((_, i) => i !== index)
         );
     };
 
@@ -111,7 +111,7 @@ export function ProjectForm({
                 <form.Field
                     name="name"
                     validators={{
-                        onChange: z.string().min(1, 'Project name is required.'),
+                        onChange: z.string().min(1, 'Project name is required.')
                     }}
                 >
                     {(field) => (
@@ -136,7 +136,7 @@ export function ProjectForm({
                 <form.Field
                     name="authorOrganisation"
                     validators={{
-                        onChange: z.string().min(1, 'Author/Organisation is required.'),
+                        onChange: z.string().min(1, 'Author/Organisation is required.')
                     }}
                 >
                     {(field) => (
