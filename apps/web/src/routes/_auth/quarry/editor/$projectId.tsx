@@ -5,84 +5,104 @@ import {
     PointerSensor,
     useSensor,
     useSensors,
-    DragEndEvent
+    DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import {
     ResizableHandle,
     ResizablePanel,
-    ResizablePanelGroup
+    ResizablePanelGroup,
 } from '@repo/ui/components/resizable';
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
-
 import { LayerList } from './components/LayerList';
 import { MainBoard } from './components/MainBoard';
 import { SlideList } from './components/SlideList';
-import { Layer, Slide } from './types';
+import { EditorProvider, useEditor } from './contexts/EditorContext';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId')({
-    component: PresentationEditor
+    component: PresentationEditor,
 });
 
 function PresentationEditor() {
-    const [slides, setSlides] = useState<Slide[]>([
-        { id: 's1', description: 'Title Slide' },
-        { id: 's2', description: 'Agenda' },
-        { id: 's3', description: 'Financial Overview' }
-    ]);
-    const [activeSlideId, setActiveSlideId] = useState<string>('s1');
-    const [copiedSlide, setCopiedSlide] = useState<Slide | null>(null);
+    return (
+        <EditorProvider>
+            <EditorContent />
+        </EditorProvider>
+    );
+}
 
-    const [layers, setLayers] = useState<Layer[]>([
-        { id: 'l1', name: 'Background Image', type: 'image' },
-        { id: 'l2', name: 'Main Title', type: 'text' },
-        { id: 'l3', name: 'Subtitle', type: 'text' },
-        { id: 'l4', name: 'Company Logo', type: 'image' }
-    ]);
+function EditorContent() {
+    const { 
+        setSlides, 
+        setLayers,
+        selectedSlides, setSelectedSlides, 
+        selectedLayers, setSelectedLayers,
+    } = useEditor();
 
     const sensors = useSensors(
         useSensor(PointerSensor),
         useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates
+            coordinateGetter: sortableKeyboardCoordinates,
         })
     );
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
-
-        if (over && active.id !== over.id) {
-            if (active.data.current?.type === 'slide') {
-                setSlides((items) => {
-                    const oldIndex = items.findIndex((item) => item.id === active.id);
-                    const newIndex = items.findIndex((item) => item.id === over.id);
-                    return arrayMove(items, oldIndex, newIndex);
-                });
-            }
-            if (active.data.current?.type === 'layer') {
-                setLayers((items) => {
-                    const oldIndex = items.findIndex((item) => item.id === active.id);
-                    const newIndex = items.findIndex((item) => item.id === over.id);
-                    return arrayMove(items, oldIndex, newIndex);
-                });
-            }
+        if (!over) return;
+    
+        const activeId = active.id as string;
+        const overId = over.id as string;
+    
+        if (activeId === overId) return;
+    
+        const isSlideDrag = active.data.current?.type === 'slide';
+        const isLayerDrag = active.data.current?.type === 'layer';
+    
+        if (isSlideDrag) {
+            setSlides((currentSlides) => {
+                const activeIndex = currentSlides.findIndex((s) => s.id === activeId);
+                const overIndex = currentSlides.findIndex((s) => s.id === overId);
+    
+                if (selectedSlides.length > 1 && selectedSlides.includes(activeId)) {
+                    const selectedAndSorted = selectedSlides
+                        .map(id => currentSlides.find(s => s.id === id)!)
+                        .filter(Boolean)
+                        .sort((a, b) => currentSlides.indexOf(a) - currentSlides.indexOf(b));
+                    
+                    const newSlides = currentSlides.filter(s => !selectedSlides.includes(s.id));
+                    const insertIndex = newSlides.findIndex(s => s.id === overId);
+                    
+                    newSlides.splice(insertIndex >= 0 ? insertIndex : newSlides.length, 0, ...selectedAndSorted);
+                    setSelectedSlides([]);
+                    return newSlides;
+                }
+    
+                return arrayMove(currentSlides, activeIndex, overIndex);
+            });
         }
-    };
+    
+        if (isLayerDrag) {
+            setLayers((currentLayers) => {
+                const activeIndex = currentLayers.findIndex((l) => l.id === activeId);
+                const overIndex = currentLayers.findIndex((l) => l.id === overId);
 
-    const handleCopySlide = (slide: Slide): void => setCopiedSlide(slide);
+                if (selectedLayers.length > 1 && selectedLayers.includes(activeId)) {
+                    const selectedAndSorted = selectedLayers
+                        .map(id => currentLayers.find(l => l.id === id)!)
+                        .filter(Boolean)
+                        .sort((a, b) => currentLayers.indexOf(a) - currentLayers.indexOf(b));
 
-    const handlePasteSlide = (): void => {
-        if (!copiedSlide) return;
-        const newSlide: Slide = {
-            ...copiedSlide,
-            id: `s${Date.now()}`,
-            description: `${copiedSlide.description} (Copy)`
-        };
-        setSlides([...slides, newSlide]);
-    };
+                    const newLayers = currentLayers.filter(l => !selectedLayers.includes(l.id));
+                    const insertIndex = newLayers.findIndex(l => l.id === overId);
 
-    const handleAddSlide = (): void => {
-        setSlides([...slides, { id: `s${Date.now()}`, description: `New Slide` }]);
+                    newLayers.splice(insertIndex >= 0 ? insertIndex : newLayers.length, 0, ...selectedAndSorted);
+                    setSelectedLayers([]);
+                    return newLayers;
+                }
+    
+                return arrayMove(currentLayers, activeIndex, overIndex);
+            });
+        }
     };
 
     return (
@@ -92,24 +112,12 @@ function PresentationEditor() {
                 className="grow overflow-hidden font-sans text-foreground"
             >
                 <MainBoard />
-
                 <ResizableHandle />
-
                 <ResizablePanel defaultSize={400} minSize={200}>
                     <ResizablePanelGroup orientation="vertical" className="h-full bg-card/50">
-                        <SlideList
-                            slides={slides}
-                            activeSlideId={activeSlideId}
-                            setActiveSlideId={setActiveSlideId}
-                            copiedSlide={copiedSlide}
-                            onCopySlide={handleCopySlide}
-                            onPasteSlide={handlePasteSlide}
-                            onAddSlide={handleAddSlide}
-                        />
-
+                        <SlideList />
                         <ResizableHandle withHandle />
-
-                        <LayerList layers={layers} />
+                        <LayerList />
                     </ResizablePanelGroup>
                 </ResizablePanel>
             </ResizablePanelGroup>

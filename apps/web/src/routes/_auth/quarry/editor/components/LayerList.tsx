@@ -1,14 +1,10 @@
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ResizablePanel } from '@repo/ui/components/resizable';
-
-import { Layer } from '../types';
+import { useEditor } from '../contexts/EditorContext';
 import { SortableLayerItem } from './SortableLayerItem';
 
-interface LayerListProps {
-    layers: Layer[];
-}
-
-export function LayerList({ layers }: LayerListProps) {
+export function LayerList() {
+    const { layers } = useEditor();
     return (
         <ResizablePanel defaultSize={50} minSize={20}>
             <div className="flex h-full flex-col overflow-hidden bg-muted/30">

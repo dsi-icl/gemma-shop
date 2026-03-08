@@ -1,29 +1,12 @@
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ClipboardTextIcon, PlusIcon, StackIcon } from '@phosphor-icons/react';
 import { ResizablePanel } from '@repo/ui/components/resizable';
+import { useEditor } from '../contexts/EditorContext';
 
-import { Slide } from '../types';
 import { SortableSlideItem } from './SortableSlideItem';
 
-interface SlideListProps {
-    slides: Slide[];
-    activeSlideId: string;
-    setActiveSlideId: (id: string) => void;
-    copiedSlide: Slide | null;
-    onCopySlide: (slide: Slide) => void;
-    onPasteSlide: () => void;
-    onAddSlide: () => void;
-}
-
-export function SlideList({
-    slides,
-    activeSlideId,
-    setActiveSlideId,
-    copiedSlide,
-    onCopySlide,
-    onPasteSlide,
-    onAddSlide
-}: SlideListProps) {
+export function SlideList() {
+    const { slides, copiedSlide, handlePasteSlide, handleAddSlide } = useEditor();
     return (
         <ResizablePanel defaultSize={50} minSize={20}>
             <div className="flex h-full flex-col overflow-hidden">
@@ -33,7 +16,7 @@ export function SlideList({
                     </h2>
                     <div className="flex items-center gap-1 text-muted-foreground">
                         <button
-                            onClick={onPasteSlide}
+                            onClick={handlePasteSlide}
                             disabled={!copiedSlide}
                             className="rounded-md p-1.5 transition-colors hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"
                             title="Paste Slide"
@@ -41,7 +24,7 @@ export function SlideList({
                             <ClipboardTextIcon size={18} weight="bold" />
                         </button>
                         <button
-                            onClick={onAddSlide}
+                            onClick={handleAddSlide}
                             className="rounded-md p-1.5 transition-colors hover:bg-muted"
                             title="Add Slide"
                         >
@@ -59,9 +42,6 @@ export function SlideList({
                             <SortableSlideItem
                                 key={slide.id}
                                 slide={slide}
-                                activeSlideId={activeSlideId}
-                                onSlideClick={setActiveSlideId}
-                                onCopySlide={onCopySlide}
                             />
                         ))}
                     </SortableContext>

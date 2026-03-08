@@ -124,7 +124,7 @@
         @apply border-border outline-ring/50;
     }
     body {
-        @apply bg-background font-sans text-foreground;
+        @apply bg-background font-sans text-foreground select-none;
     }
     html {
         @apply font-sans;
@@ -132,5 +132,10 @@
     button:not(:disabled),
     [role='button']:not(:disabled) {
         cursor: pointer;
+    }
+    input,
+    textarea,
+    [contenteditable] {
+        @apply select-text;
     }
 }
