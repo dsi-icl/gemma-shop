@@ -26,6 +26,6 @@ hydrateRoot(
         },
         onUncaughtError: (err) => {
             console.error(err);
-        },
-    },
+        }
+    }
 );

@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 
 export const Route = createFileRoute('/_guest/login')({
-    component: LoginForm,
+    component: LoginForm
 });
 
 const OTP_LENGTH = 6;
@@ -46,9 +46,9 @@ function LoginForm() {
                     },
                     onSuccess: () => {
                         navigateTo('magic-link-sent');
-                    },
-                },
-            ),
+                    }
+                }
+            )
     });
 
     const { mutate: sendOtp, isPending: isOtpSendPending } = useMutation({
@@ -61,9 +61,9 @@ function LoginForm() {
                     },
                     onSuccess: () => {
                         navigateTo('otp');
-                    },
-                },
-            ),
+                    }
+                }
+            )
     });
 
     const isSending = isMagicLinkPending || isOtpSendPending;
@@ -174,18 +174,18 @@ const slidePanelVariants = {
     enter: (d: number) => ({
         x: d * SLIDE_OFFSET,
         opacity: 0,
-        filter: 'blur(4px)',
+        filter: 'blur(4px)'
     }),
     center: {
         x: 0,
         opacity: 1,
-        filter: 'blur(0px)',
+        filter: 'blur(0px)'
     },
     exit: (d: number) => ({
         x: d * -SLIDE_OFFSET,
         opacity: 0,
-        filter: 'blur(4px)',
-    }),
+        filter: 'blur(4px)'
+    })
 };
 
 function SlidePanel({ children, direction }: { children: React.ReactNode; direction: number }) {
@@ -209,11 +209,11 @@ function EmailView({ onSubmit }: { onSubmit: (email: string) => void }) {
 
     const form = useForm({
         defaultValues: {
-            email: '',
+            email: ''
         },
         onSubmit: ({ value }) => {
             onSubmit(value.email);
-        },
+        }
     });
 
     const handleVirtualKey = useCallback(
@@ -221,7 +221,7 @@ function EmailView({ onSubmit }: { onSubmit: (email: string) => void }) {
             form.setFieldValue('email', form.getFieldValue('email') + key);
             inputRef.current?.focus();
         },
-        [form],
+        [form]
     );
 
     const handleVirtualDelete = useCallback(() => {
@@ -256,7 +256,7 @@ function EmailView({ onSubmit }: { onSubmit: (email: string) => void }) {
                             validators={{
                                 onChange: z
                                     .string()
-                                    .regex(/.+@.+\..+/, 'Please enter a valid email address.'),
+                                    .regex(/.+@.+\..+/, 'Please enter a valid email address.')
                             }}
                         >
                             {(field) => (
@@ -322,9 +322,9 @@ function OtpView({ email, onBack }: { email: string; onBack: () => void }) {
                     onSuccess: async () => {
                         queryClient.removeQueries({ queryKey: authQueryOptions().queryKey });
                         await navigate({ to: '/quarry' });
-                    },
-                },
-            ),
+                    }
+                }
+            )
     });
 
     const appendDigit = useCallback(
@@ -339,7 +339,7 @@ function OtpView({ email, onBack }: { email: string; onBack: () => void }) {
                 return next;
             });
         },
-        [isPending, verifyOtp],
+        [isPending, verifyOtp]
     );
 
     const deleteDigit = useCallback(() => {

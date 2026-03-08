@@ -8,11 +8,11 @@ import { useMemo, useState } from 'react';
 
 import { publishedProjectsQueryOptions } from '~/server/projects.queries';
 
-export const Route = createFileRoute('/_guest/gallery/')({
+export const Route = createFileRoute('/gallery/')({
     component: HomePage,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(publishedProjectsQueryOptions());
-    },
+    }
 });
 
 function HomePage() {
@@ -26,9 +26,9 @@ function HomePage() {
                 author: p.authorOrganisation,
                 description: p.description,
                 tags: p.tags.filter((t) => t !== 'public'),
-                imageUrl: p.heroImages[0] ?? '',
+                imageUrl: p.heroImages[0] ?? ''
             })),
-        [publishedProjects],
+        [publishedProjects]
     );
 
     const allTags = useMemo(() => {
@@ -89,7 +89,7 @@ function HomePage() {
                                         transition={{
                                             type: 'spring',
                                             duration: 0.3,
-                                            bounce: 0.2,
+                                            bounce: 0.2
                                         }}
                                     >
                                         <ProjectCard project={project} />

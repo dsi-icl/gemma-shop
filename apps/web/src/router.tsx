@@ -13,9 +13,9 @@ const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
             refetchOnWindowFocus: false,
-            staleTime: 1000 * 60 * 2, // 2 minutes
-        },
-    },
+            staleTime: 1000 * 60 * 2 // 2 minutes
+        }
+    }
 });
 
 const getContext = async (): Promise<RootRouteContext> => {
@@ -39,7 +39,7 @@ const getContext = async (): Promise<RootRouteContext> => {
         origin,
         iframed,
         queryClient,
-        user: null,
+        user: null
     };
 };
 
@@ -54,14 +54,14 @@ export async function getRouter() {
         defaultErrorComponent: DefaultCatchBoundary,
         defaultNotFoundComponent: DefaultNotFound,
         scrollRestoration: true,
-        defaultStructuralSharing: true,
+        defaultStructuralSharing: true
     });
 
     setupRouterSsrQueryIntegration({
         router,
         queryClient,
         handleRedirects: true,
-        wrapQueryClient: true,
+        wrapQueryClient: true
     });
 
     return router;

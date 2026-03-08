@@ -82,11 +82,11 @@ function RootComponent() {
 function RootDocument({ children }: { readonly children: React.ReactNode }) {
     return (
         // suppress since we're updating the "dark" class in a custom script below
-        <html lang="en" suppressHydrationWarning>
+        <html lang="en" suppressHydrationWarning className="h-full min-h-full min-w-full">
             <head>
                 <HeadContent />
             </head>
-            <body>
+            <body className="relative block h-full min-h-full min-w-full">
                 <ScriptOnce>
                     {/* Apply theme early to avoid FOUC */}
                     {`

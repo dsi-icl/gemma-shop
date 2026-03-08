@@ -28,13 +28,13 @@ export default OtpEmail;
 
 const main = {
     backgroundColor: '#f6f9fc',
-    padding: '10px 0',
+    padding: '10px 0'
 };
 
 const container = {
     backgroundColor: '#ffffff',
     border: '1px solid #f0f0f0',
-    padding: '45px',
+    padding: '45px'
 };
 
 const h1 = {
@@ -44,7 +44,7 @@ const h1 = {
     fontSize: '24px',
     fontWeight: 'bold',
     margin: '40px 0',
-    padding: '0',
+    padding: '0'
 };
 
 const text = {
@@ -52,7 +52,7 @@ const text = {
     fontFamily:
         "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
     fontSize: '14px',
-    margin: '24px 0',
+    margin: '24px 0'
 };
 
 const codeBox = {
@@ -61,7 +61,7 @@ const codeBox = {
     padding: '20px',
     margin: '0 auto',
     width: '200px',
-    textAlign: 'center' as const,
+    textAlign: 'center' as const
 };
 
 const code = {
@@ -72,5 +72,5 @@ const code = {
     fontWeight: 'bold',
     letterSpacing: '0.5em',
     margin: '0',
-    padding: '0',
+    padding: '0'
 };
