@@ -1,5 +1,8 @@
 'use client';
 
+import { PauseIcon, PlayIcon, RepeatIcon, SkipBackIcon } from '@phosphor-icons/react';
+import { Button } from '@repo/ui/components/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components/tooltip';
 import { useEffect, useState } from 'react';
 
 import type { EditorEngine } from '~/lib/editorEngine';
@@ -18,70 +21,105 @@ export function PlaybackControls({
         const unsubscribe = engine.subscribeToPlayback((id: number, pb) => {
             if (id === layer.numericId) setStatus(pb.status);
         });
-        return () => unsubscribe(); // Properly typed for void return!
+        return () => unsubscribe();
     }, [layer.numericId, engine]);
 
+    const isLooping = layer.loop ?? true;
+
     return (
-        <>
-            <button
-                onClick={() => {
-                    const playback = engine.getPlayback(layer.numericId);
-                    if (playback)
-                        engine.sendJSON({
-                            type: 'video_seek',
-                            numericId: layer.numericId,
-                            mediaTime: 0,
-                            playback
-                        });
-                }}
-            >
-                ⏮
-            </button>
+        <div className="flex items-center gap-0.5">
+            <Tooltip>
+                <TooltipTrigger
+                    render={
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => {
+                                const playback = engine.getPlayback(layer.numericId);
+                                if (playback)
+                                    engine.sendJSON({
+                                        type: 'video_seek',
+                                        numericId: layer.numericId,
+                                        mediaTime: 0,
+                                        playback
+                                    });
+                            }}
+                        />
+                    }
+                >
+                    <SkipBackIcon />
+                </TooltipTrigger>
+                <TooltipContent side="top">Rewind</TooltipContent>
+            </Tooltip>
+
             {status === 'paused' ? (
-                <button
-                    style={{ width: '70px' }}
-                    onClick={() =>
-                        engine.sendJSON({ type: 'video_play', numericId: layer.numericId })
-                    }
-                >
-                    ▶ Play
-                </button>
+                <Tooltip>
+                    <TooltipTrigger
+                        render={
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() =>
+                                    engine.sendJSON({
+                                        type: 'video_play',
+                                        numericId: layer.numericId
+                                    })
+                                }
+                            />
+                        }
+                    >
+                        <PlayIcon />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Play</TooltipContent>
+                </Tooltip>
             ) : (
-                <button
-                    style={{ width: '70px' }}
-                    onClick={() =>
-                        engine.sendJSON({ type: 'video_pause', numericId: layer.numericId })
-                    }
-                >
-                    ⏸ Pause
-                </button>
+                <Tooltip>
+                    <TooltipTrigger
+                        render={
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() =>
+                                    engine.sendJSON({
+                                        type: 'video_pause',
+                                        numericId: layer.numericId
+                                    })
+                                }
+                            />
+                        }
+                    >
+                        <PauseIcon />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Pause</TooltipContent>
+                </Tooltip>
             )}
 
-            <label
-                style={{
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    marginLeft: '10px'
-                }}
-            >
-                <input
-                    type="checkbox"
-                    checked={layer.loop ?? true}
-                    onChange={(e) => {
-                        const updatedConfig = { ...layer.config, loop: e.target.checked };
-                        const playback = engine.getPlayback(layer.numericId);
-                        if (playback)
-                            engine.sendJSON({
-                                type: 'upsert_layer',
-                                origin: 'pbcInput',
-                                layer: { ...layer, config: updatedConfig, playback }
-                            });
-                    }}
-                />
-                Loop
-            </label>
-        </>
+            <Tooltip>
+                <TooltipTrigger
+                    render={
+                        <Button
+                            variant={isLooping ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => {
+                                const playback = engine.getPlayback(layer.numericId);
+                                if (playback)
+                                    engine.sendJSON({
+                                        type: 'upsert_layer',
+                                        origin: 'pbcInput',
+                                        layer: {
+                                            ...layer,
+                                            config: { ...layer.config, loop: !isLooping },
+                                            playback
+                                        }
+                                    });
+                            }}
+                        />
+                    }
+                >
+                    <RepeatIcon />
+                </TooltipTrigger>
+                <TooltipContent side="top">{isLooping ? 'Loop on' : 'Loop off'}</TooltipContent>
+            </Tooltip>
+        </div>
     );
 }

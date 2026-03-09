@@ -22,7 +22,7 @@ export function VideoScrubber({
         const unsubscribe = engine.subscribeToPlayback((id: number, pb) => {
             if (id === layer.numericId) pbRef.current = pb;
         });
-        return () => unsubscribe(); // Properly typed for void return!
+        return () => unsubscribe();
     }, [layer.numericId, engine]);
 
     useEffect(() => {
@@ -81,10 +81,10 @@ export function VideoScrubber({
     const safeTime = pbRef.current?.anchorMediaTime || 0;
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '300px' }}>
+        <div className="flex w-48 items-center gap-2">
             <span
                 ref={spanRef}
-                style={{ fontSize: '12px', fontFamily: 'monospace', width: '40px' }}
+                className="w-10 font-mono text-xs text-muted-foreground tabular-nums"
             >
                 {safeTime.toFixed(1)}s
             </span>
@@ -100,7 +100,7 @@ export function VideoScrubber({
                 }}
                 onInput={handleInput}
                 onPointerUp={handleSeek}
-                style={{ flexGrow: 1, cursor: 'pointer' }}
+                className="h-1.5 flex-1 cursor-pointer accent-primary"
             />
         </div>
     );

@@ -5,10 +5,8 @@ import { Stage, Layer as KonvaLayer, Transformer, Group, Text, Rect } from 'reac
 
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaVideo } from '~/components/KonvaVideo';
-import { PlaybackControls } from '~/components/PlaybackControls';
 import { RoyStaticRenderer } from '~/components/roygraph/RoyStaticRenderer';
-import { TextEditor } from '~/components/TextEditor';
-import { VideoScrubber } from '~/components/VideoScrubber';
+import { Toolbar } from '~/components/Toolbar';
 import { EditorEngine } from '~/lib/editorEngine';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
@@ -33,9 +31,9 @@ export function EditorSlate() {
     const [layers, setLayers] = useState<LayerWithEditorState[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isPinching, setIsPinching] = useState(false);
-    const [shadowShape, setShadowShape] = useState<LayerWithEditorState | null>(null);
-    const [shouldCenterTransform, setShouldCenterTransform] = useState(false);
-    const [shouldMaintainAspectRatio, setShouldMaintainAspectRatio] = useState(true);
+    // const [shadowShape, setShadowShape] = useState<LayerWithEditorState | null>(null);
+    // const [shouldCenterTransform, setShouldCenterTransform] = useState(false);
+    // const [shouldMaintainAspectRatio, setShouldMaintainAspectRatio] = useState(true);
 
     const nextId = useRef(1);
     const nextZIndex = useRef(10);
@@ -132,55 +130,6 @@ export function EditorSlate() {
             unsubscribeBinary();
         };
     }, [selectedId, isPinching]);
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (!selectedId) return;
-            if (e.key === 'Delete') {
-                engine.sendJSON({ type: 'delete_layer', numericId: parseInt(selectedId) });
-                setLayers((prev) => prev.filter((l) => l.numericId !== parseInt(selectedId)));
-                setSelectedId(null);
-            }
-            // if (!shouldCenterTransform && e.ctrlKey) {
-            //     setShadowShape(layers.find((l) => l.numericId === parseInt(selectedId)) || null);
-            //     setShouldCenterTransform(true);
-            // }
-            // console.log('handleKeyDown', e.shiftKey, shouldMaintainAspectRatio);
-            // if (e.shiftKey) if (shouldMaintainAspectRatio) setShouldMaintainAspectRatio(false);
-        };
-        // const handleKeyUp = (e: KeyboardEvent) => {
-        //     e.preventDefault();
-        //     if (!selectedId) return;
-        //     if (shouldCenterTransform) {
-        //         setShouldCenterTransform(false);
-        //         const layerToReset = layers.find((l) => l.numericId === parseInt(selectedId));
-        //         if (!layerToReset || !shadowShape) return;
-        //         layerToReset.config.cx = shadowShape.config.cx;
-        //         layerToReset.config.cy = shadowShape.config.cy;
-        //         setLayers((prev) =>
-        //             prev.map((l) => (l.numericId === parseInt(selectedId) ? layerToReset : l))
-        //         );
-        //     }
-        //     console.log('handleKeyUp', e.shiftKey, shouldMaintainAspectRatio);
-        //     if (!shouldMaintainAspectRatio) setShouldMaintainAspectRatio(true);
-        // };
-        window.addEventListener('keydown', handleKeyDown);
-        // window.addEventListener('keyup', handleKeyUp);
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            // window.removeEventListener('keyup', handleKeyUp);
-        };
-    }, [
-        engine,
-        layers,
-        setLayers,
-        selectedId,
-        setShadowShape,
-        setShouldCenterTransform,
-        setShouldMaintainAspectRatio,
-        shouldCenterTransform,
-        shouldMaintainAspectRatio
-    ]);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -446,6 +395,65 @@ export function EditorSlate() {
             });
     }, [layers, selectedId]);
 
+    const handleSendToBack = useCallback(() => {
+        if (!selectedId) return;
+        const numericId = parseInt(selectedId);
+        const layerToUpdate = layers.find((l) => l.numericId === numericId);
+        if (!layerToUpdate) return;
+
+        const minZIndex = Math.min(...layers.map((l) => l.config.zIndex));
+        const updatedConfig = {
+            ...layerToUpdate.config,
+            zIndex: layerToUpdate.config.zIndex === minZIndex ? minZIndex : minZIndex - 1
+        };
+        setLayers((prev) =>
+            prev.map((l) => (l.numericId === numericId ? { ...l, config: updatedConfig } : l))
+        );
+
+        if (layerToUpdate.type === 'video')
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'handleSendToBack',
+                layer: {
+                    ...layerToUpdate,
+                    config: updatedConfig,
+                    playback: engine.getPlayback(numericId) || layerToUpdate.playback
+                }
+            });
+        else
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'handleSendToBack',
+                layer: { ...layerToUpdate, config: updatedConfig }
+            });
+    }, [layers, selectedId]);
+
+    const handleDeleteLayer = useCallback(() => {
+        if (!selectedId) return;
+        engine.sendJSON({ type: 'delete_layer', numericId: parseInt(selectedId) });
+        setLayers((prev) => prev.filter((l) => l.numericId !== parseInt(selectedId)));
+        setSelectedId(null);
+    }, [selectedId]);
+
+    const handleClearStage = useCallback(() => {
+        engine.sendJSON({ type: 'clear_stage' });
+        setSelectedId(null);
+    }, []);
+
+    const handleReboot = useCallback(() => {
+        engine.sendJSON({ type: 'reboot' });
+        setSelectedId(null);
+    }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!selectedId) return;
+            if (e.key === 'Delete') handleDeleteLayer();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedId, handleDeleteLayer]);
+
     const handleStageInteractionStart = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
         if (
             (e.evt instanceof TouchEvent && e.evt.touches?.length === 1) ||
@@ -682,7 +690,7 @@ export function EditorSlate() {
 
     return (
         <>
-            <div className="h-fit overflow-auto bg-black">
+            <div id="slate" className="h-fit overflow-auto bg-black">
                 <Stage
                     width={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
                     height={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
@@ -839,132 +847,20 @@ export function EditorSlate() {
                 }}
             /> */}
             </div>
-            <div className="flex p-4">
-                <div className="flex flex-col gap-2">
-                    <div>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="video/mp4, image/*"
-                            onChange={handleUpload}
-                            className="cursor-pointer opacity-50 content-none"
-                        />
-                    </div>
-                    <div className="flex gap-4 text-blue-400">
-                        <button
-                            onClick={() => {
-                                handleAddText();
-                            }}
-                            className="cursor-pointer"
-                        >
-                            Add Text
-                        </button>
-                        <button
-                            onClick={() => {
-                                handleAddMap();
-                            }}
-                            className="cursor-pointer"
-                        >
-                            Add Map
-                        </button>
-                        {/* <button
-                            onClick={() => {
-                                handleAddGraph();
-                            }}
-                            className="cursor-pointer"
-                        >
-                            Add Roy Graph
-                        </button> */}
-                    </div>
-                    <div className="flex gap-4 text-blue-400">
-                        <button
-                            onClick={() => {
-                                engine.sendJSON({ type: 'clear_stage' });
-                                setSelectedId(null);
-                            }}
-                            className="cursor-pointer font-bold text-red-700"
-                        >
-                            Reset Stage
-                        </button>
-                        <button
-                            onClick={() => {
-                                engine.sendJSON({ type: 'reboot' });
-                                setSelectedId(null);
-                            }}
-                            className="cursor-pointer font-bold text-red-700"
-                        >
-                            Refresh
-                        </button>
-                    </div>
-                </div>
-                {selectedId &&
-                    (() => {
-                        const activeLayer = layers.find(
-                            (l) => l.numericId === parseInt(selectedId)
-                        );
-                        if (!activeLayer) return null;
-                        const isVideo = activeLayer.type === 'video';
-                        const isText = activeLayer.type === 'text';
-                        return (
-                            <>
-                                <div
-                                    style={{
-                                        borderLeft: '1px solid #ccc',
-                                        height: '24px',
-                                        margin: '0 10px'
-                                    }}
-                                ></div>
-                                <button onClick={handleBringToFront}>Bring to Front</button>
-                                {isVideo && (
-                                    <>
-                                        <div
-                                            style={{
-                                                borderLeft: '1px solid #ccc',
-                                                height: '24px',
-                                                margin: '0 10px'
-                                            }}
-                                        ></div>
-                                        <PlaybackControls
-                                            key={`pc_${activeLayer.numericId}`}
-                                            layer={activeLayer}
-                                            engine={engine}
-                                        />
-
-                                        <div
-                                            style={{
-                                                borderLeft: '1px solid #ccc',
-                                                height: '24px',
-                                                margin: '0 10px'
-                                            }}
-                                        ></div>
-                                        <VideoScrubber
-                                            key={`vs_${activeLayer.numericId}`}
-                                            layer={activeLayer}
-                                            engine={engine}
-                                        />
-                                    </>
-                                )}
-
-                                {isText && (
-                                    <>
-                                        <div
-                                            style={{
-                                                borderLeft: '1px solid #ccc',
-                                                height: '24px',
-                                                margin: '0 10px'
-                                            }}
-                                        ></div>
-                                        <TextEditor
-                                            key={`te_${activeLayer.numericId}`}
-                                            layer={activeLayer}
-                                            engine={engine}
-                                        />
-                                    </>
-                                )}
-                            </>
-                        );
-                    })()}
-            </div>
+            <Toolbar
+                selectedId={selectedId}
+                layers={layers}
+                engine={engine}
+                fileInputRef={fileInputRef}
+                onUpload={handleUpload}
+                onAddText={handleAddText}
+                onAddMap={handleAddMap}
+                onBringToFront={handleBringToFront}
+                onSendToBack={handleSendToBack}
+                onDeleteLayer={handleDeleteLayer}
+                onClearStage={handleClearStage}
+                onReboot={handleReboot}
+            />
         </>
     );
 }
