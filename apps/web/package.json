@@ -28,10 +28,13 @@
         "@uppy/react": "catalog:",
         "@uppy/tus": "catalog:",
         "date-fns": "catalog:",
+        "markdown-to-jsx": "catalog:",
         "motion": "catalog:",
         "nitro": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
+        "react-konva": "catalog:",
+        "react-map-gl": "catalog:",
         "sonner": "catalog:",
         "zod": "catalog:"
     },

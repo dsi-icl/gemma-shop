@@ -3,7 +3,7 @@ import satori from 'satori';
 
 import fontDataURI from '~/assets/NotoSans-Regular.ttf?raw-hex';
 import mathDataURI from '~/assets/NotoSansMath-Regular.ttf?raw-hex';
-import { OGCard } from '~/components/og-card';
+import { OGCard } from '~/components/OGCard';
 
 export const Route = createFileRoute('/og')({
     server: {

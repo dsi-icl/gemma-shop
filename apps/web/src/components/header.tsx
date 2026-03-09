@@ -5,8 +5,8 @@ import { Clock } from '@repo/ui/components/clock';
 import { Link } from '@tanstack/react-router';
 import { Suspense } from 'react';
 
-import { KeyboardToggle } from './keyboard-toggle';
-import { ThemeToggle } from './theme-toggle';
+import { KeyboardToggle } from './KeyboardToggle';
+import { ThemeToggle } from './ThemeToggle';
 
 export function Header() {
     const { user } = useAuthSuspense();

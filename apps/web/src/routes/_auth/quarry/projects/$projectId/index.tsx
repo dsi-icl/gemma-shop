@@ -2,7 +2,7 @@ import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-q
 import { createFileRoute } from '@tanstack/react-router';
 import { toast } from 'sonner';
 
-import { ProjectForm } from '~/components/project-form';
+import { ProjectForm } from '~/components/ProjectForm';
 import { $updateProject } from '~/server/projects.fns';
 import { projectQueryOptions } from '~/server/projects.queries';
 

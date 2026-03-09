@@ -13,14 +13,17 @@ import { Route as OgRouteImport } from './routes/og'
 import { Route as GuestRouteRouteImport } from './routes/_guest/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WallIndexRouteImport } from './routes/wall/index'
 import { Route as GalleryIndexRouteImport } from './routes/gallery/index'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as AuthQuarryIndexRouteImport } from './routes/_auth/quarry/index'
 import { Route as ApiUploadsSplatRouteImport } from './routes/api/uploads/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiAssetsUriRouteImport } from './routes/api/assets/$uri'
 import { Route as AuthQuarryProjectsRouteRouteImport } from './routes/_auth/quarry/projects/route'
 import { Route as AuthQuarryEditorRouteRouteImport } from './routes/_auth/quarry/editor/route'
 import { Route as AuthQuarryProjectsNewRouteImport } from './routes/_auth/quarry/projects/new'
+import { Route as AuthQuarryEditorEditorRouteImport } from './routes/_auth/quarry/editor/editor'
 import { Route as AuthQuarryEditorProjectIdRouteImport } from './routes/_auth/quarry/editor/$projectId'
 import { Route as AuthQuarryProjectsProjectIdRouteRouteImport } from './routes/_auth/quarry/projects/$projectId/route'
 import { Route as AuthQuarryProjectsProjectIdIndexRouteImport } from './routes/_auth/quarry/projects/$projectId/index'
@@ -45,6 +48,11 @@ const AuthRouteRoute = AuthRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WallIndexRoute = WallIndexRouteImport.update({
+  id: '/wall/',
+  path: '/wall/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GalleryIndexRoute = GalleryIndexRouteImport.update({
@@ -72,6 +80,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAssetsUriRoute = ApiAssetsUriRouteImport.update({
+  id: '/api/assets/$uri',
+  path: '/api/assets/$uri',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthQuarryProjectsRouteRoute = AuthQuarryProjectsRouteRouteImport.update({
   id: '/quarry/projects',
   path: '/quarry/projects',
@@ -86,6 +99,11 @@ const AuthQuarryProjectsNewRoute = AuthQuarryProjectsNewRouteImport.update({
   id: '/new',
   path: '/new',
   getParentRoute: () => AuthQuarryProjectsRouteRoute,
+} as any)
+const AuthQuarryEditorEditorRoute = AuthQuarryEditorEditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
+  getParentRoute: () => AuthQuarryEditorRouteRoute,
 } as any)
 const AuthQuarryEditorProjectIdRoute =
   AuthQuarryEditorProjectIdRouteImport.update({
@@ -135,13 +153,16 @@ export interface FileRoutesByFullPath {
   '/og': typeof OgRoute
   '/login': typeof GuestLoginRoute
   '/gallery/': typeof GalleryIndexRoute
+  '/wall/': typeof WallIndexRoute
   '/quarry/editor': typeof AuthQuarryEditorRouteRouteWithChildren
   '/quarry/projects': typeof AuthQuarryProjectsRouteRouteWithChildren
+  '/api/assets/$uri': typeof ApiAssetsUriRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/uploads/$': typeof ApiUploadsSplatRoute
   '/quarry/': typeof AuthQuarryIndexRoute
   '/quarry/projects/$projectId': typeof AuthQuarryProjectsProjectIdRouteRouteWithChildren
   '/quarry/editor/$projectId': typeof AuthQuarryEditorProjectIdRoute
+  '/quarry/editor/editor': typeof AuthQuarryEditorEditorRoute
   '/quarry/projects/new': typeof AuthQuarryProjectsNewRoute
   '/quarry/projects/$projectId/assets': typeof AuthQuarryProjectsProjectIdAssetsRoute
   '/quarry/projects/$projectId/commits': typeof AuthQuarryProjectsProjectIdCommitsRoute
@@ -154,12 +175,15 @@ export interface FileRoutesByTo {
   '/og': typeof OgRoute
   '/login': typeof GuestLoginRoute
   '/gallery': typeof GalleryIndexRoute
+  '/wall': typeof WallIndexRoute
   '/quarry/editor': typeof AuthQuarryEditorRouteRouteWithChildren
   '/quarry/projects': typeof AuthQuarryProjectsRouteRouteWithChildren
+  '/api/assets/$uri': typeof ApiAssetsUriRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/uploads/$': typeof ApiUploadsSplatRoute
   '/quarry': typeof AuthQuarryIndexRoute
   '/quarry/editor/$projectId': typeof AuthQuarryEditorProjectIdRoute
+  '/quarry/editor/editor': typeof AuthQuarryEditorEditorRoute
   '/quarry/projects/new': typeof AuthQuarryProjectsNewRoute
   '/quarry/projects/$projectId/assets': typeof AuthQuarryProjectsProjectIdAssetsRoute
   '/quarry/projects/$projectId/commits': typeof AuthQuarryProjectsProjectIdCommitsRoute
@@ -175,13 +199,16 @@ export interface FileRoutesById {
   '/og': typeof OgRoute
   '/_guest/login': typeof GuestLoginRoute
   '/gallery/': typeof GalleryIndexRoute
+  '/wall/': typeof WallIndexRoute
   '/_auth/quarry/editor': typeof AuthQuarryEditorRouteRouteWithChildren
   '/_auth/quarry/projects': typeof AuthQuarryProjectsRouteRouteWithChildren
+  '/api/assets/$uri': typeof ApiAssetsUriRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/uploads/$': typeof ApiUploadsSplatRoute
   '/_auth/quarry/': typeof AuthQuarryIndexRoute
   '/_auth/quarry/projects/$projectId': typeof AuthQuarryProjectsProjectIdRouteRouteWithChildren
   '/_auth/quarry/editor/$projectId': typeof AuthQuarryEditorProjectIdRoute
+  '/_auth/quarry/editor/editor': typeof AuthQuarryEditorEditorRoute
   '/_auth/quarry/projects/new': typeof AuthQuarryProjectsNewRoute
   '/_auth/quarry/projects/$projectId/assets': typeof AuthQuarryProjectsProjectIdAssetsRoute
   '/_auth/quarry/projects/$projectId/commits': typeof AuthQuarryProjectsProjectIdCommitsRoute
@@ -196,13 +223,16 @@ export interface FileRouteTypes {
     | '/og'
     | '/login'
     | '/gallery/'
+    | '/wall/'
     | '/quarry/editor'
     | '/quarry/projects'
+    | '/api/assets/$uri'
     | '/api/auth/$'
     | '/api/uploads/$'
     | '/quarry/'
     | '/quarry/projects/$projectId'
     | '/quarry/editor/$projectId'
+    | '/quarry/editor/editor'
     | '/quarry/projects/new'
     | '/quarry/projects/$projectId/assets'
     | '/quarry/projects/$projectId/commits'
@@ -215,12 +245,15 @@ export interface FileRouteTypes {
     | '/og'
     | '/login'
     | '/gallery'
+    | '/wall'
     | '/quarry/editor'
     | '/quarry/projects'
+    | '/api/assets/$uri'
     | '/api/auth/$'
     | '/api/uploads/$'
     | '/quarry'
     | '/quarry/editor/$projectId'
+    | '/quarry/editor/editor'
     | '/quarry/projects/new'
     | '/quarry/projects/$projectId/assets'
     | '/quarry/projects/$projectId/commits'
@@ -235,13 +268,16 @@ export interface FileRouteTypes {
     | '/og'
     | '/_guest/login'
     | '/gallery/'
+    | '/wall/'
     | '/_auth/quarry/editor'
     | '/_auth/quarry/projects'
+    | '/api/assets/$uri'
     | '/api/auth/$'
     | '/api/uploads/$'
     | '/_auth/quarry/'
     | '/_auth/quarry/projects/$projectId'
     | '/_auth/quarry/editor/$projectId'
+    | '/_auth/quarry/editor/editor'
     | '/_auth/quarry/projects/new'
     | '/_auth/quarry/projects/$projectId/assets'
     | '/_auth/quarry/projects/$projectId/commits'
@@ -256,6 +292,8 @@ export interface RootRouteChildren {
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
   OgRoute: typeof OgRoute
   GalleryIndexRoute: typeof GalleryIndexRoute
+  WallIndexRoute: typeof WallIndexRoute
+  ApiAssetsUriRoute: typeof ApiAssetsUriRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiUploadsSplatRoute: typeof ApiUploadsSplatRoute
 }
@@ -288,6 +326,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wall/': {
+      id: '/wall/'
+      path: '/wall'
+      fullPath: '/wall/'
+      preLoaderRoute: typeof WallIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gallery/': {
@@ -325,6 +370,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/assets/$uri': {
+      id: '/api/assets/$uri'
+      path: '/api/assets/$uri'
+      fullPath: '/api/assets/$uri'
+      preLoaderRoute: typeof ApiAssetsUriRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_auth/quarry/projects': {
       id: '/_auth/quarry/projects'
       path: '/quarry/projects'
@@ -345,6 +397,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/quarry/projects/new'
       preLoaderRoute: typeof AuthQuarryProjectsNewRouteImport
       parentRoute: typeof AuthQuarryProjectsRouteRoute
+    }
+    '/_auth/quarry/editor/editor': {
+      id: '/_auth/quarry/editor/editor'
+      path: '/editor'
+      fullPath: '/quarry/editor/editor'
+      preLoaderRoute: typeof AuthQuarryEditorEditorRouteImport
+      parentRoute: typeof AuthQuarryEditorRouteRoute
     }
     '/_auth/quarry/editor/$projectId': {
       id: '/_auth/quarry/editor/$projectId'
@@ -400,10 +459,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthQuarryEditorRouteRouteChildren {
   AuthQuarryEditorProjectIdRoute: typeof AuthQuarryEditorProjectIdRoute
+  AuthQuarryEditorEditorRoute: typeof AuthQuarryEditorEditorRoute
 }
 
 const AuthQuarryEditorRouteRouteChildren: AuthQuarryEditorRouteRouteChildren = {
   AuthQuarryEditorProjectIdRoute: AuthQuarryEditorProjectIdRoute,
+  AuthQuarryEditorEditorRoute: AuthQuarryEditorEditorRoute,
 }
 
 const AuthQuarryEditorRouteRouteWithChildren =
@@ -489,6 +550,8 @@ const rootRouteChildren: RootRouteChildren = {
   GuestRouteRoute: GuestRouteRouteWithChildren,
   OgRoute: OgRoute,
   GalleryIndexRoute: GalleryIndexRoute,
+  WallIndexRoute: WallIndexRoute,
+  ApiAssetsUriRoute: ApiAssetsUriRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiUploadsSplatRoute: ApiUploadsSplatRoute,
 }

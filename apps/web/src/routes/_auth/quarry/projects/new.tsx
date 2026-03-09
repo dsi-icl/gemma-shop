@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 
-import { ProjectForm } from '~/components/project-form';
+import { ProjectForm } from '~/components/ProjectForm';
 import { $createProject } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/_auth/quarry/projects/new')({

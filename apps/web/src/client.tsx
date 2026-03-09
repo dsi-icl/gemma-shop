@@ -3,7 +3,7 @@ import { StartClient } from '@tanstack/react-start/client';
 import { StrictMode } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 
-import { ErrorBoundary } from './components/error-boundary';
+import { ErrorBoundary } from '~/components/ErrorBoundary';
 
 hydrateRoot(
     document,

@@ -19,7 +19,10 @@ export default defineConfig({
         devtools(),
         tanstackStart(),
         // https://tanstack.com/start/latest/docs/framework/react/guide/hosting
-        nitro(),
+        nitro({
+            serverDir: './src/addons',
+            features: { websocket: true }
+        }),
         viteReact({
             // https://react.dev/learn/react-compiler
             babel: {

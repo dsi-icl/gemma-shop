@@ -1,6 +1,8 @@
 {
     "extends": "@repo/tsconfig/base.json",
     "compilerOptions": {
+        "moduleResolution": "bundler",
+        "module": "esnext",
         "paths": {
             "~/*": ["./src/*"],
 
