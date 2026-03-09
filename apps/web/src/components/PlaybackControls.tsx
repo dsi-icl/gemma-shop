@@ -108,7 +108,7 @@ export function PlaybackControls({
                                         origin: 'pbcInput',
                                         layer: {
                                             ...layer,
-                                            config: { ...layer.config, loop: !isLooping },
+                                            loop: !isLooping,
                                             playback
                                         }
                                     });

@@ -35,7 +35,8 @@
         "react-konva": "catalog:",
         "react-map-gl": "catalog:",
         "sonner": "catalog:",
-        "zod": "catalog:"
+        "zod": "catalog:",
+        "zustand": "catalog:"
     },
     "devDependencies": {
         "@repo/tsconfig": "workspace:*",

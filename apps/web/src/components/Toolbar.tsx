@@ -22,22 +22,13 @@ import {
 import { PlaybackControls } from '~/components/PlaybackControls';
 import { TextEditor } from '~/components/TextEditor';
 import { VideoScrubber } from '~/components/VideoScrubber';
-import type { EditorEngine } from '~/lib/editorEngine';
+import { EditorEngine } from '~/lib/editorEngine';
+import { useEditorStore } from '~/lib/editorStore';
 import type { LayerWithEditorState } from '~/lib/types';
 
 interface ToolbarProps {
-    selectedId: string | null;
-    layers: LayerWithEditorState[];
-    engine: EditorEngine;
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onAddText: () => void;
-    onAddMap: () => void;
-    onBringToFront: () => void;
-    onSendToBack: () => void;
-    onDeleteLayer: () => void;
-    onClearStage: () => void;
-    onReboot: () => void;
 }
 
 function TipButton({
@@ -55,20 +46,21 @@ function TipButton({
     );
 }
 
-export function Toolbar({
-    selectedId,
-    layers,
-    engine,
-    fileInputRef,
-    onUpload,
-    onAddText,
-    onAddMap,
-    onBringToFront,
-    onSendToBack,
-    onDeleteLayer,
-    onClearStage,
-    onReboot
-}: ToolbarProps) {
+export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
+    const {
+        selectedId,
+        layers,
+        addTextLayer,
+        addMapLayer,
+        bringToFront,
+        sendToBack,
+        deleteSelectedLayer,
+        clearStage,
+        reboot
+    } = useEditorStore();
+
+    const engine = EditorEngine.getInstance();
+
     const activeLayer = selectedId
         ? layers.find((l) => l.numericId === parseInt(selectedId))
         : null;
@@ -95,10 +87,10 @@ export function Toolbar({
                     <TipButton tip="Upload media" onClick={() => fileInputRef.current?.click()}>
                         <UploadSimpleIcon />
                     </TipButton>
-                    <TipButton tip="Add text layer" onClick={onAddText}>
+                    <TipButton tip="Add text layer" onClick={addTextLayer}>
                         <TextTIcon />
                     </TipButton>
-                    <TipButton tip="Add map layer" onClick={onAddMap}>
+                    <TipButton tip="Add map layer" onClick={addMapLayer}>
                         <MapPinIcon />
                     </TipButton>
                 </div>
@@ -108,16 +100,16 @@ export function Toolbar({
                     <>
                         <Separator orientation="vertical" className="mx-1 h-6" />
                         <div className="flex items-center gap-0.5">
-                            <TipButton tip="Bring to front" onClick={onBringToFront}>
+                            <TipButton tip="Bring to front" onClick={bringToFront}>
                                 <ArrowLineUpIcon />
                             </TipButton>
-                            <TipButton tip="Send to back" onClick={onSendToBack}>
+                            <TipButton tip="Send to back" onClick={sendToBack}>
                                 <ArrowLineDownIcon />
                             </TipButton>
                             <TipButton
                                 tip="Delete layer"
                                 variant="destructive"
-                                onClick={onDeleteLayer}
+                                onClick={deleteSelectedLayer}
                             >
                                 <TrashIcon />
                             </TipButton>
@@ -181,10 +173,10 @@ export function Toolbar({
 
                 {/* ── Danger Zone ── */}
                 <div className="flex items-center gap-0.5">
-                    <TipButton tip="Clear all layers" variant="destructive" onClick={onClearStage}>
+                    <TipButton tip="Clear all layers" variant="destructive" onClick={clearStage}>
                         <EraserIcon />
                     </TipButton>
-                    <TipButton tip="Refresh all screens" variant="destructive" onClick={onReboot}>
+                    <TipButton tip="Refresh all screens" variant="destructive" onClick={reboot}>
                         <ArrowsClockwiseIcon />
                     </TipButton>
                 </div>
