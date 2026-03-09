@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import { EditorEngine } from './editorEngine';
-import type { Layer, LayerWithEditorState } from './types';
+import type { Layer, LayerWithEditorState, Slide } from './types';
 
 /** Send a layer update to the server, preserving video playback state */
 function sendLayerUpdate(layer: LayerWithEditorState, origin: string) {
@@ -20,9 +20,15 @@ function sendLayerUpdate(layer: LayerWithEditorState, origin: string) {
 interface EditorState {
     // ── State ──
     layers: LayerWithEditorState[];
-    selectedId: string | null;
+    selectedLayerIds: string[];
     nextId: number;
     nextZIndex: number;
+    slides: Slide[];
+    activeSlideId: string | null;
+    selectedSlides: string[];
+    copiedSlide: Slide | null;
+    lastSelectedSlide: string | null;
+    lastSelectedLayerId: string | null;
 
     // ── Pure state mutations ──
     hydrate: (layers: LayerWithEditorState[]) => void;
@@ -30,7 +36,10 @@ interface EditorState {
     removeLayer: (numericId: number) => void;
     updateProgress: (numericId: number, progress: number) => void;
     updateLayerConfig: (numericId: number, config: Layer['config']) => void;
-    select: (id: string | null) => void;
+    setSlides: (slides: Slide[]) => void;
+    setActiveSlideId: (id: string | null) => void;
+    setSelectedSlides: (ids: string[]) => void;
+    setCopiedSlide: (slide: Slide | null) => void;
 
     // ── Allocators ──
     allocateId: () => number;
@@ -44,13 +53,27 @@ interface EditorState {
     addMapLayer: () => void;
     clearStage: () => void;
     reboot: () => void;
+    reorderLayers: (layers: LayerWithEditorState[]) => void;
+    addSlide: () => void;
+    copySlide: (slide: Slide) => void;
+    pasteSlide: () => void;
+    reorderSlides: (slides: Slide[]) => void;
+    deselectAllLayers: () => void;
+    toggleSlideSelection: (id: string, isShiftClick: boolean, isCtrlClick: boolean) => void;
+    toggleLayerSelection: (id: string, isShiftClick: boolean, isCtrlClick: boolean) => void;
 }
 
 export const useEditorStore = create<EditorState>()((set, get) => ({
     layers: [],
-    selectedId: null,
+    selectedLayerIds: [],
     nextId: 1,
     nextZIndex: 10,
+    slides: [{ id: 's1', description: 'Main Stage' }],
+    activeSlideId: 's1',
+    selectedSlides: [],
+    copiedSlide: null,
+    lastSelectedSlide: null,
+    lastSelectedLayerId: null,
 
     // ── Pure state mutations ──────────────────────────────────────────────
 
@@ -82,7 +105,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     removeLayer: (numericId) =>
         set((s) => ({
             layers: s.layers.filter((l) => l.numericId !== numericId),
-            selectedId: s.selectedId === numericId.toString() ? null : s.selectedId
+            selectedLayerIds: s.selectedLayerIds.filter((id) => id !== numericId.toString())
         })),
 
     updateProgress: (numericId, progress) =>
@@ -95,7 +118,52 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             layers: s.layers.map((l) => (l.numericId === numericId ? { ...l, config } : l))
         })),
 
-    select: (id) => set({ selectedId: id }),
+    deselectAllLayers: () => {
+        set(() => ({
+            selectedLayerIds: []
+        }));
+    },
+
+    toggleLayerSelection: (id, isShiftClick, isCtrlClick) => {
+        const { layers, lastSelectedLayerId } = get();
+        if (isShiftClick && lastSelectedLayerId) {
+            const lastIndex = layers.findIndex(
+                (l) => l.numericId.toString() === lastSelectedLayerId
+            );
+            const currentIndex = layers.findIndex((l) => l.numericId.toString() === id);
+            const inBetween = layers.slice(
+                Math.min(lastIndex, currentIndex),
+                Math.max(lastIndex, currentIndex) + 1
+            );
+            set((s) => ({
+                selectedLayerIds: [
+                    ...new Set([
+                        ...s.selectedLayerIds,
+                        ...inBetween.map((l) => l.numericId.toString())
+                    ])
+                ]
+            }));
+        } else if (isCtrlClick) {
+            set((s) => {
+                const newSelection = [...s.selectedLayerIds];
+                const index = newSelection.indexOf(id);
+                if (index > -1) {
+                    newSelection.splice(index, 1);
+                } else {
+                    newSelection.push(id);
+                }
+                return { selectedLayerIds: newSelection };
+            });
+        } else {
+            set({ selectedLayerIds: [id] });
+        }
+        set({ lastSelectedLayerId: id });
+    },
+
+    setSlides: (slides) => set({ slides }),
+    setActiveSlideId: (id) => set({ activeSlideId: id }),
+    setSelectedSlides: (ids) => set({ selectedSlides: ids }),
+    setCopiedSlide: (slide) => set({ copiedSlide: slide }),
 
     // ── Allocators ────────────────────────────────────────────────────────
 
@@ -114,20 +182,20 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     // ── Side-effect actions ───────────────────────────────────────────────
 
     deleteSelectedLayer: () => {
-        const { selectedId } = get();
-        if (!selectedId) return;
-        const numericId = parseInt(selectedId);
+        const { selectedLayerIds } = get();
+        if (!selectedLayerIds.length) return;
+        const numericId = parseInt(selectedLayerIds[0]);
         EditorEngine.getInstance().sendJSON({ type: 'delete_layer', numericId });
         set((s) => ({
             layers: s.layers.filter((l) => l.numericId !== numericId),
-            selectedId: null
+            selectedLayerIds: []
         }));
     },
 
     bringToFront: () => {
         const s = get();
-        if (!s.selectedId) return;
-        const numericId = parseInt(s.selectedId);
+        if (!s.selectedLayerIds.length) return;
+        const numericId = parseInt(s.selectedLayerIds[0]);
         const layer = s.layers.find((l) => l.numericId === numericId);
         if (!layer) return;
 
@@ -146,8 +214,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
 
     sendToBack: () => {
         const s = get();
-        if (!s.selectedId) return;
-        const numericId = parseInt(s.selectedId);
+        if (!s.selectedLayerIds.length) return;
+        const numericId = parseInt(s.selectedLayerIds[0]);
         const layer = s.layers.find((l) => l.numericId === numericId);
         if (!layer) return;
 
@@ -186,7 +254,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
 
         set((s) => ({
             layers: [...s.layers, newLayer],
-            selectedId: numericId.toString()
+            selectedLayerIds: [numericId.toString()]
         }));
         EditorEngine.getInstance().sendJSON({
             type: 'upsert_layer',
@@ -224,7 +292,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
 
         set((s) => ({
             layers: [...s.layers, newLayer],
-            selectedId: numericId.toString()
+            selectedLayerIds: [numericId.toString()]
         }));
         EditorEngine.getInstance().sendJSON({
             type: 'upsert_layer',
@@ -235,12 +303,81 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
 
     clearStage: () => {
         EditorEngine.getInstance().sendJSON({ type: 'clear_stage' });
-        set({ layers: [], selectedId: null });
+        set({ layers: [], selectedLayerIds: [] });
     },
 
     reboot: () => {
         EditorEngine.getInstance().sendJSON({ type: 'reboot' });
-        set({ selectedId: null });
+        set({ selectedLayerIds: [] });
+    },
+    reorderLayers: (layers) => {
+        const updatedLayers = layers.map((layer, index) => ({
+            ...layer,
+            config: {
+                ...layer.config,
+                zIndex: index
+            }
+        }));
+
+        set({ layers: updatedLayers });
+
+        updatedLayers.forEach((layer) => {
+            sendLayerUpdate(layer, 'reorderLayers');
+        });
+    },
+
+    addSlide: () => {
+        set((s) => ({
+            slides: [...s.slides, { id: `s${Date.now()}`, description: 'New Slide' }]
+        }));
+    },
+
+    copySlide: (slide) => {
+        set({ copiedSlide: slide });
+    },
+
+    pasteSlide: () => {
+        const { copiedSlide } = get();
+        if (!copiedSlide) return;
+        const newSlide: Slide = {
+            ...copiedSlide,
+            id: `s${Date.now()}`,
+            description: `${copiedSlide.description} (Copy)`
+        };
+        set((s) => ({ slides: [...s.slides, newSlide] }));
+    },
+
+    reorderSlides: (slides) => {
+        set({ slides });
+    },
+
+    toggleSlideSelection: (id, isShiftClick, isCtrlClick) => {
+        const { slides, lastSelectedSlide } = get();
+        if (isShiftClick && lastSelectedSlide) {
+            const lastIndex = slides.findIndex((s) => s.id === lastSelectedSlide);
+            const currentIndex = slides.findIndex((s) => s.id === id);
+            const inBetween = slides.slice(
+                Math.min(lastIndex, currentIndex),
+                Math.max(lastIndex, currentIndex) + 1
+            );
+            set((s) => ({
+                selectedSlides: [...new Set([...s.selectedSlides, ...inBetween.map((s) => s.id)])]
+            }));
+        } else if (isCtrlClick) {
+            set((s) => {
+                const newSelection = [...s.selectedSlides];
+                const index = newSelection.indexOf(id);
+                if (index > -1) {
+                    newSelection.splice(index, 1);
+                } else {
+                    newSelection.push(id);
+                }
+                return { selectedSlides: newSelection };
+            });
+        } else {
+            set({ selectedSlides: [id] });
+        }
+        set({ lastSelectedSlide: id });
     }
 }));
 

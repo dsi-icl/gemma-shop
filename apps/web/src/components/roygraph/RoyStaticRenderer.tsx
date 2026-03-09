@@ -16,7 +16,7 @@ export function RoyStaticRenderer({
 }: {
     layer: LayerWithEditorState;
     isPinching: boolean;
-    onSelect: () => void;
+    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
     onTransform: (e: KonvaEventObject<Event>) => void;
     onTransformEnd: (e: KonvaEventObject<Event>) => void;
 }) {

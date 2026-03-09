@@ -1,11 +1,17 @@
 import { ResizablePanel } from '@repo/ui/components/resizable';
 
-import { useEditor } from '../contexts/EditorContext';
+import { useEditorStore } from '~/lib/editorStore';
+
 import { DraggableList } from './DraggableList';
 import { LayerItem } from './LayerItem';
 
 export function LayerList() {
-    const { layers, setLayers, selectedLayers, toggleLayerSelection } = useEditor();
+    const layers = useEditorStore((s) => s.layers);
+    const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
+    const reorderLayers = useEditorStore((s) => s.reorderLayers);
+    const toggleLayerSelection = useEditorStore((s) => s.toggleLayerSelection);
+
+    const sortedLayers = [...layers].sort((a, b) => b.config.zIndex - a.config.zIndex);
 
     return (
         <ResizablePanel defaultSize={50} minSize={20}>
@@ -16,9 +22,23 @@ export function LayerList() {
 
                 <div className="flex-1 space-y-1 overflow-y-auto p-2">
                     <DraggableList
-                        items={layers}
-                        selectedIds={selectedLayers}
-                        onReorder={setLayers}
+                        items={sortedLayers.map((layer) => ({
+                            ...layer,
+                            id: layer.numericId.toString()
+                        }))}
+                        selectedIds={selectedLayerIds}
+                        onReorder={(reorderedItems) => {
+                            const newLayers = reorderedItems.map((item) => {
+                                const existingLayer = layers.find(
+                                    (l) => l.numericId.toString() === item.id
+                                );
+                                if (!existingLayer) {
+                                    throw new Error('Could not find existing layer');
+                                }
+                                return existingLayer;
+                            });
+                            reorderLayers(newLayers.reverse());
+                        }}
                         onSelect={toggleLayerSelection}
                         itemRenderer={(layer, { isSelected }) => (
                             <LayerItem layer={layer} isSelected={isSelected} />
@@ -26,7 +46,7 @@ export function LayerList() {
                         overlayRenderer={(layer) => (
                             <LayerItem
                                 layer={layer}
-                                isSelected={selectedLayers.includes(layer.id)}
+                                isSelected={selectedLayerIds.includes(layer.id)}
                             />
                         )}
                         multiDragLabel={(count) => (

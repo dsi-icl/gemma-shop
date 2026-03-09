@@ -31,8 +31,10 @@ function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
 export function EditorSlate() {
     // ── Store state (replaces useState + useRef counters) ─────────────────
     const layers = useEditorStore((s) => s.layers);
-    const selectedId = useEditorStore((s) => s.selectedId);
-    const select = useEditorStore((s) => s.select);
+    // This probably requires some attention: The Konva Stage only selects one item at a time, but we use the multi-select layer sorter here.
+    const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
+    const toggleLayerSelection = useEditorStore((s) => s.toggleLayerSelection);
+    const deselectAllLayers = useEditorStore((s) => s.deselectAllLayers);
 
     // ── Local-only state (Konva interaction, not shared) ──────────────────
     const [isPinching, setIsPinching] = useState(false);
@@ -69,7 +71,7 @@ export function EditorSlate() {
                 if (trRef.current) {
                     const stage = trRef.current.getStage();
                     const node = stage?.findOne(`#${id}`);
-                    const currentSelectedId = useEditorStore.getState().selectedId;
+                    const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
 
                     if (node && !node.isDragging() && !isPinching) {
                         node.x(cx);
@@ -79,7 +81,7 @@ export function EditorSlate() {
                         node.scaleX(scaleX);
                         node.scaleY(scaleY);
                         node.rotation(rotation);
-                        if (currentSelectedId === id.toString()) trRef.current.forceUpdate();
+                        if (currentSelectedIds[0] === id.toString()) trRef.current.forceUpdate();
                         node.getLayer()?.batchDraw();
                     }
 
@@ -104,7 +106,7 @@ export function EditorSlate() {
     // ── Keyboard shortcut ─────────────────────────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (!useEditorStore.getState().selectedId) return;
+            if (!useEditorStore.getState().selectedLayerIds.length) return;
             if (e.key === 'Delete') useEditorStore.getState().deleteSelectedLayer();
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -206,7 +208,7 @@ export function EditorSlate() {
         } as LayerWithEditorState;
 
         store.upsertLayer(optimisticLayer);
-        store.select(numericId.toString());
+        store.toggleLayerSelection(numericId.toString(), false, false);
 
         // 3. Background network upload
         const formData = new FormData();
@@ -323,7 +325,7 @@ export function EditorSlate() {
             layerToUpdate.config = updatedConfig;
 
             const store = useEditorStore.getState();
-            store.select(numericId.toString());
+            store.toggleLayerSelection(numericId.toString(), false, false);
             store.updateLayerConfig(numericId, updatedConfig);
 
             // Sync to server
@@ -355,19 +357,23 @@ export function EditorSlate() {
     // ── Stage interaction handlers ────────────────────────────────────────
 
     const handleStageInteractionStart = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
-        const currentSelectedId = useEditorStore.getState().selectedId;
+        const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
         if (
             (e.evt instanceof TouchEvent && e.evt.touches?.length === 1) ||
             e.type === 'mousedown'
         ) {
             const clickedOnEmpty = e.target === e.target.getStage();
-            if (clickedOnEmpty && currentSelectedId) {
-                flushNodeState(currentSelectedId);
-                select(null);
+            if (clickedOnEmpty && currentSelectedIds.length) {
+                flushNodeState(currentSelectedIds[0]);
+                deselectAllLayers();
             }
         }
-        if (e.evt instanceof TouchEvent && e.evt.touches?.length === 2 && currentSelectedId) {
-            flushNodeState(currentSelectedId);
+        if (
+            e.evt instanceof TouchEvent &&
+            e.evt.touches?.length === 2 &&
+            currentSelectedIds.length
+        ) {
+            flushNodeState(currentSelectedIds[0]);
             setIsPinching(true);
             const t1 = e.evt.touches[0];
             const t2 = e.evt.touches[1];
@@ -381,10 +387,10 @@ export function EditorSlate() {
 
     const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
         e.evt.preventDefault();
-        const currentSelectedId = useEditorStore.getState().selectedId;
-        if (e.evt.touches.length === 2 && currentSelectedId && trRef.current) {
+        const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
+        if (e.evt.touches.length === 2 && currentSelectedIds.length && trRef.current) {
             const stage = trRef.current.getStage();
-            const node = stage?.findOne(`#${currentSelectedId}`);
+            const node = stage?.findOne(`#${currentSelectedIds[0]}`);
             if (!node) return;
             if (node.isDragging()) node.stopDrag();
 
@@ -428,7 +434,7 @@ export function EditorSlate() {
             node.rotation(node.rotation() + angleDelta);
             trRef.current.getLayer()?.batchDraw();
             engine.broadcastBinaryMove(
-                parseInt(currentSelectedId),
+                parseInt(currentSelectedIds[0]),
                 Math.round(node.x()),
                 Math.round(node.y()),
                 Math.round(node.width()),
@@ -446,11 +452,11 @@ export function EditorSlate() {
 
     const handleTouchEnd = (e: KonvaEventObject<TouchEvent>) => {
         if (e.evt.touches.length < 2) setIsPinching(false);
-        const currentSelectedId = useEditorStore.getState().selectedId;
-        if (currentSelectedId && trRef.current) {
+        const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
+        if (currentSelectedIds.length && trRef.current) {
             const stage = trRef.current.getStage();
-            const node = stage?.findOne<Konva.Shape>(`#${currentSelectedId}`);
-            if (node) handleTransformEnd({ target: node }, parseInt(currentSelectedId));
+            const node = stage?.findOne<Konva.Shape>(`#${currentSelectedIds[0]}`);
+            if (node) handleTransformEnd({ target: node }, parseInt(currentSelectedIds[0]));
         }
         lastDist.current = null;
         lastAngle.current = null;
@@ -459,8 +465,8 @@ export function EditorSlate() {
 
     // ── Transformer selection sync ────────────────────────────────────────
     useEffect(() => {
-        if (selectedId && trRef.current) {
-            const node = trRef.current.getStage()?.findOne(`#${selectedId}`);
+        if (selectedLayerIds.length && trRef.current) {
+            const node = trRef.current.getStage()?.findOne(`#${selectedLayerIds[0]}`);
             if (node) {
                 trRef.current.nodes([node]);
                 trRef.current.getLayer()?.batchDraw();
@@ -469,7 +475,7 @@ export function EditorSlate() {
             trRef.current.nodes([]);
             trRef.current.getLayer()?.batchDraw();
         }
-    }, [selectedId]);
+    }, [selectedLayerIds]);
 
     // ── Render ────────────────────────────────────────────────────────────
     return (
@@ -517,7 +523,13 @@ export function EditorSlate() {
                             .map((layer) => {
                                 const props = {
                                     isPinching,
-                                    onSelect: () => select(layer.numericId.toString()),
+                                    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+                                        toggleLayerSelection(
+                                            layer.numericId.toString(),
+                                            e.evt.shiftKey,
+                                            e.evt.ctrlKey || e.evt.metaKey
+                                        );
+                                    },
                                     onTransform: (e: KonvaEventObject<Event>) =>
                                         handleTransform(e, layer.numericId),
                                     onTransformEnd: (e: KonvaEventObject<Event>) =>

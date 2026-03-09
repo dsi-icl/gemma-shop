@@ -1,24 +1,22 @@
 import { ClipboardTextIcon, PlusIcon, StackIcon } from '@phosphor-icons/react';
 import { ResizablePanel } from '@repo/ui/components/resizable';
 
-import { useEditor } from '../contexts/EditorContext';
-import { Slide } from '../types';
+import { useEditorStore } from '~/lib/editorStore';
+
 import { DraggableList } from './DraggableList';
 import { SlideItem } from './SlideItem';
 
 export function SlideList() {
-    const {
-        slides,
-        setSlides,
-        activeSlideId,
-        setActiveSlideId,
-        copiedSlide,
-        selectedSlides,
-        toggleSlideSelection,
-        handleCopySlide,
-        handlePasteSlide,
-        handleAddSlide
-    } = useEditor();
+    const slides = useEditorStore((s) => s.slides);
+    const activeSlideId = useEditorStore((s) => s.activeSlideId);
+    const copiedSlide = useEditorStore((s) => s.copiedSlide);
+    const selectedSlides = useEditorStore((s) => s.selectedSlides);
+    const reorderSlides = useEditorStore((s) => s.reorderSlides);
+    const toggleSlideSelection = useEditorStore((s) => s.toggleSlideSelection);
+    const setActiveSlideId = useEditorStore((s) => s.setActiveSlideId);
+    const copySlide = useEditorStore((s) => s.copySlide);
+    const pasteSlide = useEditorStore((s) => s.pasteSlide);
+    const addSlide = useEditorStore((s) => s.addSlide);
 
     const handleSelect = (id: string, shiftKey: boolean, ctrlKey: boolean) => {
         toggleSlideSelection(id, shiftKey, ctrlKey);
@@ -36,7 +34,7 @@ export function SlideList() {
                     </h2>
                     <div className="flex hidden items-center gap-1 text-muted-foreground">
                         <button
-                            onClick={handlePasteSlide}
+                            onClick={pasteSlide}
                             disabled={!copiedSlide}
                             className="rounded-md p-1.5 transition-colors hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"
                             title="Paste Slide"
@@ -44,7 +42,7 @@ export function SlideList() {
                             <ClipboardTextIcon size={18} weight="bold" />
                         </button>
                         <button
-                            onClick={handleAddSlide}
+                            onClick={addSlide}
                             className="rounded-md p-1.5 transition-colors hover:bg-muted"
                             title="Add Slide"
                         >
@@ -57,14 +55,14 @@ export function SlideList() {
                     <DraggableList
                         items={slides}
                         selectedIds={selectedSlides}
-                        onReorder={setSlides}
+                        onReorder={reorderSlides}
                         onSelect={handleSelect}
                         itemRenderer={(slide, { isSelected }) => (
                             <SlideItem
                                 slide={slide}
                                 isSelected={isSelected}
                                 isActive={activeSlideId === slide.id}
-                                onCopySlide={handleCopySlide}
+                                onCopySlide={copySlide}
                             />
                         )}
                         overlayRenderer={(slide) => (

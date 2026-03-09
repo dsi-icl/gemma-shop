@@ -1,6 +1,6 @@
 import { CopyIcon } from '@phosphor-icons/react';
 
-import { Slide } from '../types';
+import { Slide } from '~/lib/types';
 
 interface SlideItemProps {
     slide: Slide;

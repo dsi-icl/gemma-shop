@@ -115,3 +115,8 @@ export type LayerWithEditorState = Layer & { progress?: number; isUploading?: bo
 export interface StageState {
     layers: Map<number, Layer>;
 }
+
+export interface Slide {
+    id: string;
+    description: string;
+}

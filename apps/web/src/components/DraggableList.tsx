@@ -26,7 +26,7 @@ interface DraggableItem {
 interface DraggableListProps<T extends DraggableItem> {
     items: T[];
     selectedIds: string[];
-    onReorder: (updater: (items: T[]) => T[]) => void;
+    onReorder: (items: T[]) => void;
     onSelect: (id: string, shiftKey: boolean, ctrlKey: boolean) => void;
     itemRenderer: (item: T, props: { isSelected: boolean }) => React.ReactNode;
     overlayRenderer: (item: T) => React.ReactNode;
@@ -118,30 +118,28 @@ export function DraggableList<T extends DraggableItem>({
         const overId = over.id as string;
         if (activeId === overId) return;
 
-        onReorder((currentItems) => {
-            const itemsToMove =
-                selectedIds.length > 1 && selectedIds.includes(activeId) ? selectedIds : [activeId];
+        const itemsToMove =
+            selectedIds.length > 1 && selectedIds.includes(activeId) ? selectedIds : [activeId];
 
-            if (itemsToMove.some((id) => id === overId)) return currentItems;
+        if (itemsToMove.some((id) => id === overId)) return;
 
-            const activeIndex = currentItems.findIndex((item) => item.id === activeId);
-            const overIndex = currentItems.findIndex((item) => item.id === overId);
-            const draggingDown = activeIndex < overIndex;
+        const activeIndex = items.findIndex((item) => item.id === activeId);
+        const overIndex = items.findIndex((item) => item.id === overId);
+        const draggingDown = activeIndex < overIndex;
 
-            const selectedAndSorted = itemsToMove
-                .map((id) => currentItems.find((item) => item.id === id)!)
-                .filter(Boolean)
-                .sort((a, b) => currentItems.indexOf(a) - currentItems.indexOf(b));
+        const selectedAndSorted = itemsToMove
+            .map((id) => items.find((item) => item.id === id)!)
+            .filter(Boolean)
+            .sort((a, b) => items.indexOf(a) - items.indexOf(b));
 
-            const newItems = currentItems.filter((item) => !itemsToMove.includes(item.id));
-            const overItemIndex = newItems.findIndex((item) => item.id === overId);
+        const newItems = items.filter((item) => !itemsToMove.includes(item.id));
+        const overItemIndex = newItems.findIndex((item) => item.id === overId);
 
-            const slicePoint = overItemIndex + (draggingDown ? 1 : 0);
-            const part1 = newItems.slice(0, slicePoint);
-            const part2 = newItems.slice(slicePoint);
+        const slicePoint = overItemIndex + (draggingDown ? 1 : 0);
+        const part1 = newItems.slice(0, slicePoint);
+        const part2 = newItems.slice(slicePoint);
 
-            return [...part1, ...selectedAndSorted, ...part2];
-        });
+        onReorder([...part1, ...selectedAndSorted, ...part2]);
     };
 
     const isMultiDrag =

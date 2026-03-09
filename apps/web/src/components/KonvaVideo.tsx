@@ -17,7 +17,7 @@ export function KonvaVideo({
 }: {
     layer: Extract<LayerWithEditorState, { type: 'video' }>;
     isPinching: boolean;
-    onSelect: () => void;
+    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
     onTransform: (e: KonvaEventObject<Event>) => void;
     onTransformEnd: (e: KonvaEventObject<Event>) => void;
 }) {
