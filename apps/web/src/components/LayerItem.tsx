@@ -1,4 +1,11 @@
-import { BugBeetle, FilmSlate, Image, MapTrifold, TextT, Graph } from '@phosphor-icons/react';
+import {
+    BugBeetleIcon,
+    FilmSlateIcon,
+    ImageIcon,
+    MapTrifoldIcon,
+    TextTIcon,
+    GraphIcon
+} from '@phosphor-icons/react';
 import React from 'react';
 
 import { LayerWithEditorState } from '~/lib/types';
@@ -12,17 +19,17 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
     const getLayerIcon = (type: LayerWithEditorState['type']): React.ReactNode => {
         switch (type) {
             case 'text':
-                return <TextT size={16} weight="bold" />;
+                return <TextTIcon size={20} weight="bold" />;
             case 'image':
-                return <Image size={16} weight="bold" />;
+                return <ImageIcon size={20} weight="bold" />;
             case 'video':
-                return <FilmSlate size={16} weight="bold" />;
+                return <FilmSlateIcon size={20} weight="bold" />;
             case 'graph':
-                return <Graph size={16} weight="bold" />;
+                return <GraphIcon size={20} weight="bold" />;
             case 'map':
-                return <MapTrifold size={16} weight="bold" />;
+                return <MapTrifoldIcon size={20} weight="bold" />;
             default:
-                return <BugBeetle size={16} weight="bold" />;
+                return <BugBeetleIcon size={20} weight="bold" />;
         }
     };
 
@@ -54,7 +61,14 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
             <div className="mr-2 rounded bg-muted p-1.5 text-muted-foreground">
                 {getLayerIcon(layer.type)}
             </div>
-            <div className="flex-1 truncate text-sm text-foreground">{getLayerName(layer)}</div>
+            <div className="flex-1 flex-col truncate text-sm text-foreground">
+                <span>{getLayerName(layer)}</span>
+                <span className="flex w-full gap-5 text-xs opacity-45">
+                    <span>x:{layer.config.cx}</span>
+                    <span>y:{layer.config.cy}</span>
+                    <span>r:{layer.config.rotation}</span>
+                </span>
+            </div>
         </div>
     );
 }
