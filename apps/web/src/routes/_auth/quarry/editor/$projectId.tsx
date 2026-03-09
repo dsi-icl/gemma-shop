@@ -5,10 +5,10 @@ import {
 } from '@repo/ui/components/resizable';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { LayerList } from './components/LayerList';
-import { MainBoard } from './components/MainBoard';
-import { SlideList } from './components/SlideList';
-import { EditorProvider } from './contexts/EditorContext';
+import { LayerList } from '~/components/LayerList';
+import { MainBoard } from '~/components/MainBoard';
+import { SlideList } from '~/components/SlideList';
+import { EditorProvider } from '~/contexts/EditorContext';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId')({
     component: PresentationEditor

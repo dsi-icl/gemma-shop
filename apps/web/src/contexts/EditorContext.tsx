@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext } from 'react';
+
 import { Slide, Layer } from '../types';
 
 interface EditorContextType {
@@ -52,12 +53,15 @@ export const EditorProvider = ({ children }: { children: React.ReactNode }) => {
 
     const toggleSlideSelection = (id: string, isShiftClick: boolean, isCtrlClick: boolean) => {
         if (isShiftClick && lastSelectedSlide) {
-            const lastIndex = slides.findIndex(s => s.id === lastSelectedSlide);
-            const currentIndex = slides.findIndex(s => s.id === id);
-            const inBetween = slides.slice(Math.min(lastIndex, currentIndex), Math.max(lastIndex, currentIndex) + 1);
-            setSelectedSlides(prev => [...new Set([...prev, ...inBetween.map(s => s.id)])]);
+            const lastIndex = slides.findIndex((s) => s.id === lastSelectedSlide);
+            const currentIndex = slides.findIndex((s) => s.id === id);
+            const inBetween = slides.slice(
+                Math.min(lastIndex, currentIndex),
+                Math.max(lastIndex, currentIndex) + 1
+            );
+            setSelectedSlides((prev) => [...new Set([...prev, ...inBetween.map((s) => s.id)])]);
         } else if (isCtrlClick) {
-            setSelectedSlides(prev => {
+            setSelectedSlides((prev) => {
                 const newSelection = [...prev];
                 const index = newSelection.indexOf(id);
                 if (index > -1) {
@@ -75,12 +79,15 @@ export const EditorProvider = ({ children }: { children: React.ReactNode }) => {
 
     const toggleLayerSelection = (id: string, isShiftClick: boolean, isCtrlClick: boolean) => {
         if (isShiftClick && lastSelectedLayer) {
-            const lastIndex = layers.findIndex(l => l.id === lastSelectedLayer);
-            const currentIndex = layers.findIndex(l => l.id === id);
-            const inBetween = layers.slice(Math.min(lastIndex, currentIndex), Math.max(lastIndex, currentIndex) + 1);
-            setSelectedLayers(prev => [...new Set([...prev, ...inBetween.map(l => l.id)])]);
+            const lastIndex = layers.findIndex((l) => l.id === lastSelectedLayer);
+            const currentIndex = layers.findIndex((l) => l.id === id);
+            const inBetween = layers.slice(
+                Math.min(lastIndex, currentIndex),
+                Math.max(lastIndex, currentIndex) + 1
+            );
+            setSelectedLayers((prev) => [...new Set([...prev, ...inBetween.map((l) => l.id)])]);
         } else if (isCtrlClick) {
-            setSelectedLayers(prev => {
+            setSelectedLayers((prev) => {
                 const newSelection = [...prev];
                 const index = newSelection.indexOf(id);
                 if (index > -1) {
@@ -103,35 +110,37 @@ export const EditorProvider = ({ children }: { children: React.ReactNode }) => {
         const newSlide: Slide = {
             ...copiedSlide,
             id: `s${Date.now()}`,
-            description: `${copiedSlide.description} (Copy)`,
+            description: `${copiedSlide.description} (Copy)`
         };
-        setSlides(prev => [...prev, newSlide]);
+        setSlides((prev) => [...prev, newSlide]);
     };
 
     const handleAddSlide = (): void => {
-        setSlides(prev => [...prev, { id: `s${Date.now()}`, description: `New Slide` }]);
+        setSlides((prev) => [...prev, { id: `s${Date.now()}`, description: `New Slide` }]);
     };
 
     return (
-        <EditorContext.Provider value={{
-            slides,
-            setSlides,
-            layers,
-            setLayers,
-            activeSlideId,
-            setActiveSlideId,
-            copiedSlide,
-            setCopiedSlide,
-            selectedSlides,
-            setSelectedSlides,
-            toggleSlideSelection,
-            selectedLayers,
-            setSelectedLayers,
-            toggleLayerSelection,
-            handleCopySlide,
-            handlePasteSlide,
-            handleAddSlide,
-        }}>
+        <EditorContext.Provider
+            value={{
+                slides,
+                setSlides,
+                layers,
+                setLayers,
+                activeSlideId,
+                setActiveSlideId,
+                copiedSlide,
+                setCopiedSlide,
+                selectedSlides,
+                setSelectedSlides,
+                toggleSlideSelection,
+                selectedLayers,
+                setSelectedLayers,
+                toggleLayerSelection,
+                handleCopySlide,
+                handlePasteSlide,
+                handleAddSlide
+            }}
+        >
             {children}
         </EditorContext.Provider>
     );

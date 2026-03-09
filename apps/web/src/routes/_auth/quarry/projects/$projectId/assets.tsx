@@ -1,10 +1,4 @@
-import {
-    List as ListIcon,
-    Rows as RowsIcon,
-    SquaresFour as SquaresFourIcon,
-    TrashIcon,
-    UploadIcon
-} from '@phosphor-icons/react';
+import { ListIcon, RowsIcon, SquaresFourIcon, TrashIcon, UploadIcon } from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
 import {
     Table,

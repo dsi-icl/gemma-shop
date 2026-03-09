@@ -1,4 +1,3 @@
-import { DiscoBallIcon } from '@phosphor-icons/react';
 import { FC } from 'react';
 
 interface CardProps {

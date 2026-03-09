@@ -6,7 +6,7 @@ export const AssetSchema = z.object({
     _id: oid,
     projectId: oid,
     name: z.string(),
-    url: z.string().url(),
+    url: z.url(),
     size: z.number(),
     createdAt: z.iso.datetime(),
     createdBy: z.string()
@@ -16,7 +16,7 @@ export type Asset = z.infer<typeof AssetSchema>;
 export const CreateAssetInput = z.object({
     projectId: oid,
     name: z.string(),
-    url: z.string().url(),
+    url: z.url(),
     size: z.number()
 });
 export type CreateAssetInput = z.infer<typeof CreateAssetInput>;
