@@ -9,7 +9,8 @@ import {
     HeadContent,
     Outlet,
     ScriptOnce,
-    Scripts
+    Scripts,
+    useRouterState
 } from '@tanstack/react-router';
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 
@@ -80,9 +81,14 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { readonly children: React.ReactNode }) {
+    const pathname = useRouterState({
+        select: (state) => state.location.pathname
+    });
+    const isWall = pathname.startsWith('/wall');
+
     return (
         // suppress since we're updating the "dark" class in a custom script below
-        <html lang="en" suppressHydrationWarning className="h-full min-h-full min-w-full">
+        <html lang="en" suppressHydrationWarning className="h-full min-h-full min-w-full bg-black">
             <head>
                 <HeadContent />
             </head>
@@ -100,11 +106,14 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
                         oldError(...args); }
                     `}
                 </ScriptOnce>
-
                 <ThemeProvider>
                     {children}
-                    <Header />
-                    <Footer />
+                    {!isWall ? (
+                        <>
+                            <Header />
+                            <Footer />
+                        </>
+                    ) : null}
                     <Toaster richColors />
                 </ThemeProvider>
 

@@ -23,7 +23,6 @@ import { Route as ApiAssetsUriRouteImport } from './routes/api/assets/$uri'
 import { Route as AuthQuarryProjectsRouteRouteImport } from './routes/_auth/quarry/projects/route'
 import { Route as AuthQuarryEditorRouteRouteImport } from './routes/_auth/quarry/editor/route'
 import { Route as AuthQuarryProjectsNewRouteImport } from './routes/_auth/quarry/projects/new'
-import { Route as AuthQuarryEditorEditorRouteImport } from './routes/_auth/quarry/editor/editor'
 import { Route as AuthQuarryEditorProjectIdRouteImport } from './routes/_auth/quarry/editor/$projectId'
 import { Route as AuthQuarryProjectsProjectIdRouteRouteImport } from './routes/_auth/quarry/projects/$projectId/route'
 import { Route as AuthQuarryProjectsProjectIdIndexRouteImport } from './routes/_auth/quarry/projects/$projectId/index'
@@ -100,11 +99,6 @@ const AuthQuarryProjectsNewRoute = AuthQuarryProjectsNewRouteImport.update({
   path: '/new',
   getParentRoute: () => AuthQuarryProjectsRouteRoute,
 } as any)
-const AuthQuarryEditorEditorRoute = AuthQuarryEditorEditorRouteImport.update({
-  id: '/editor',
-  path: '/editor',
-  getParentRoute: () => AuthQuarryEditorRouteRoute,
-} as any)
 const AuthQuarryEditorProjectIdRoute =
   AuthQuarryEditorProjectIdRouteImport.update({
     id: '/$projectId',
@@ -162,7 +156,6 @@ export interface FileRoutesByFullPath {
   '/quarry/': typeof AuthQuarryIndexRoute
   '/quarry/projects/$projectId': typeof AuthQuarryProjectsProjectIdRouteRouteWithChildren
   '/quarry/editor/$projectId': typeof AuthQuarryEditorProjectIdRoute
-  '/quarry/editor/editor': typeof AuthQuarryEditorEditorRoute
   '/quarry/projects/new': typeof AuthQuarryProjectsNewRoute
   '/quarry/projects/$projectId/assets': typeof AuthQuarryProjectsProjectIdAssetsRoute
   '/quarry/projects/$projectId/commits': typeof AuthQuarryProjectsProjectIdCommitsRoute
@@ -183,7 +176,6 @@ export interface FileRoutesByTo {
   '/api/uploads/$': typeof ApiUploadsSplatRoute
   '/quarry': typeof AuthQuarryIndexRoute
   '/quarry/editor/$projectId': typeof AuthQuarryEditorProjectIdRoute
-  '/quarry/editor/editor': typeof AuthQuarryEditorEditorRoute
   '/quarry/projects/new': typeof AuthQuarryProjectsNewRoute
   '/quarry/projects/$projectId/assets': typeof AuthQuarryProjectsProjectIdAssetsRoute
   '/quarry/projects/$projectId/commits': typeof AuthQuarryProjectsProjectIdCommitsRoute
@@ -208,7 +200,6 @@ export interface FileRoutesById {
   '/_auth/quarry/': typeof AuthQuarryIndexRoute
   '/_auth/quarry/projects/$projectId': typeof AuthQuarryProjectsProjectIdRouteRouteWithChildren
   '/_auth/quarry/editor/$projectId': typeof AuthQuarryEditorProjectIdRoute
-  '/_auth/quarry/editor/editor': typeof AuthQuarryEditorEditorRoute
   '/_auth/quarry/projects/new': typeof AuthQuarryProjectsNewRoute
   '/_auth/quarry/projects/$projectId/assets': typeof AuthQuarryProjectsProjectIdAssetsRoute
   '/_auth/quarry/projects/$projectId/commits': typeof AuthQuarryProjectsProjectIdCommitsRoute
@@ -232,7 +223,6 @@ export interface FileRouteTypes {
     | '/quarry/'
     | '/quarry/projects/$projectId'
     | '/quarry/editor/$projectId'
-    | '/quarry/editor/editor'
     | '/quarry/projects/new'
     | '/quarry/projects/$projectId/assets'
     | '/quarry/projects/$projectId/commits'
@@ -253,7 +243,6 @@ export interface FileRouteTypes {
     | '/api/uploads/$'
     | '/quarry'
     | '/quarry/editor/$projectId'
-    | '/quarry/editor/editor'
     | '/quarry/projects/new'
     | '/quarry/projects/$projectId/assets'
     | '/quarry/projects/$projectId/commits'
@@ -277,7 +266,6 @@ export interface FileRouteTypes {
     | '/_auth/quarry/'
     | '/_auth/quarry/projects/$projectId'
     | '/_auth/quarry/editor/$projectId'
-    | '/_auth/quarry/editor/editor'
     | '/_auth/quarry/projects/new'
     | '/_auth/quarry/projects/$projectId/assets'
     | '/_auth/quarry/projects/$projectId/commits'
@@ -398,13 +386,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthQuarryProjectsNewRouteImport
       parentRoute: typeof AuthQuarryProjectsRouteRoute
     }
-    '/_auth/quarry/editor/editor': {
-      id: '/_auth/quarry/editor/editor'
-      path: '/editor'
-      fullPath: '/quarry/editor/editor'
-      preLoaderRoute: typeof AuthQuarryEditorEditorRouteImport
-      parentRoute: typeof AuthQuarryEditorRouteRoute
-    }
     '/_auth/quarry/editor/$projectId': {
       id: '/_auth/quarry/editor/$projectId'
       path: '/$projectId'
@@ -459,12 +440,10 @@ declare module '@tanstack/react-router' {
 
 interface AuthQuarryEditorRouteRouteChildren {
   AuthQuarryEditorProjectIdRoute: typeof AuthQuarryEditorProjectIdRoute
-  AuthQuarryEditorEditorRoute: typeof AuthQuarryEditorEditorRoute
 }
 
 const AuthQuarryEditorRouteRouteChildren: AuthQuarryEditorRouteRouteChildren = {
   AuthQuarryEditorProjectIdRoute: AuthQuarryEditorProjectIdRoute,
-  AuthQuarryEditorEditorRoute: AuthQuarryEditorEditorRoute,
 }
 
 const AuthQuarryEditorRouteRouteWithChildren =

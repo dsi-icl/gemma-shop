@@ -27,7 +27,7 @@ export function SlideItem({ slide, isSelected, isActive, onCopySlide }: SlideIte
                         e.stopPropagation();
                         onCopySlide(slide);
                     }}
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground"
+                    className="hidden rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground"
                     title="Copy Slide"
                 >
                     <CopyIcon size={16} weight="bold" />

@@ -33,11 +33,7 @@ export const useEditor = () => {
 };
 
 export const EditorProvider = ({ children }: { children: React.ReactNode }) => {
-    const [slides, setSlides] = useState<Slide[]>([
-        { id: 's1', description: 'Title Slide' },
-        { id: 's2', description: 'Agenda' },
-        { id: 's3', description: 'Financial Overview' }
-    ]);
+    const [slides, setSlides] = useState<Slide[]>([{ id: 's1', description: 'Main Stage' }]);
     const [layers, setLayers] = useState<Layer[]>([
         { id: 'l1', name: 'Background Image', type: 'image' },
         { id: 'l2', name: 'Main Title', type: 'text' },

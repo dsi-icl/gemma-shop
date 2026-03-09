@@ -166,10 +166,10 @@ function WallApp() {
     });
 
     return (
-        <div className="relative m-0 block h-screen w-screen overflow-hidden">
+        <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">
             {/* Visual Debugger: Shows the Screen ID in the corner */}
             <div
-                className="absolute top-2 left-2 z-1000000 border-2 border-red-800 p-2 font-mono text-gray-500"
+                className="absolute top-2 left-2 z-1000000 border-2 border-red-800 p-2 font-mono text-gray-500 mix-blend-plus-lighter"
                 style={{ width: `${SCREEN_W - 2 * 10}px`, height: `${SCREEN_H - 2 * 10}px` }}
             >
                 SCREEN&gt; C:{myViewport.x / SCREEN_W} R:{myViewport.y / SCREEN_H}

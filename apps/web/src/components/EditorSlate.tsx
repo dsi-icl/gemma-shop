@@ -1,13 +1,7 @@
-'use client';
-
-import { DiscoBallIcon } from '@phosphor-icons/react';
-import { createFileRoute } from '@tanstack/react-router';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { compiler } from 'markdown-to-jsx/react';
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stage, Layer as KonvaLayer, Transformer, Group, Text, Rect } from 'react-konva';
-import satori from 'satori';
 
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaVideo } from '~/components/KonvaVideo';
@@ -21,75 +15,11 @@ import type { Layer, LayerWithEditorState } from '~/lib/types';
 
 const engine = EditorEngine.getInstance();
 
-const STAGE_SCALE_FACTOR = 0.25;
+const STAGE_SCALE_FACTOR = 0.1;
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 const COLS = 16;
 const ROWS = 4;
-
-const cachedFont: Map<string, ArrayBuffer> = new Map();
-
-export const Route = createFileRoute('/_auth/quarry/editor/editor')({ component: EditorApp });
-
-async function getFont(file: string) {
-    const storedFont = cachedFont.get(file);
-    if (storedFont) return storedFont;
-    const res = await fetch(`/fonts/${file}`);
-    const fontData = await res.arrayBuffer();
-    cachedFont.set(file, fontData);
-    return fontData;
-}
-
-async function renderTextToSVG(
-    markdown: string
-): Promise<{ url: string; w: number; h: number } | null> {
-    try {
-        const renderedJSX = compiler(markdown, {
-            forceWrapper: true,
-            wrapper: 'div',
-            wrapperProps: {
-                style: {
-                    display: 'flex',
-                    flexDirection: 'column',
-                    color: 'green',
-                    fontFamily: 'Lato'
-                }
-            } as unknown as JSX.IntrinsicAttributes // The type of wrapperProps is wrong
-        });
-
-        const svg = await satori(renderedJSX, {
-            width: 600,
-            height: 400,
-            fonts: [
-                {
-                    name: 'Lato',
-                    data: await getFont('Lato-Regular.ttf'),
-                    weight: 400,
-                    style: 'normal'
-                },
-                {
-                    name: 'Lato',
-                    data: await getFont('Lato-Italic.ttf'),
-                    weight: 400,
-                    style: 'italic'
-                }
-            ]
-        });
-
-        // 3. Extract the dynamic height Satori calculated from the viewBox
-        const heightMatch = svg.match(/height="(\d+)"/);
-        const calculatedHeight = heightMatch ? parseInt(heightMatch[1]) : 200;
-
-        // 4. Encode as a clean data URL (faster and safer than Blobs for rapid typing)
-        const encodedSvg = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-        // const encodedPng = `data:image/png;base64,${Buffer.from(pngBuffer).toString(`base64`)}`;
-
-        return { url: encodedSvg, w: 800, h: calculatedHeight };
-    } catch (err) {
-        console.error('Error rendering text to SVG:', err);
-    }
-    return null;
-}
 
 function getDistance(p1: { x: number; y: number }, p2: { x: number; y: number }) {
     return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
@@ -99,7 +29,7 @@ function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
     return (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
 }
 
-function EditorApp() {
+export function EditorSlate() {
     const [layers, setLayers] = useState<LayerWithEditorState[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isPinching, setIsPinching] = useState(false);
@@ -751,14 +681,166 @@ function EditorApp() {
     }, [selectedId]);
 
     return (
-        <div style={{ width: '100vw', height: '100vh', margin: 0 }}>
-            {/* Dynamic Control Panel */}
-            <div className="fixed bottom-10 left-10 z-100 flex origin-bottom-left scale-200 items-center gap-2 rounded-2xl bg-gray-800 p-5 text-gray-500">
+        <>
+            <div className="h-fit overflow-auto bg-black">
+                <Stage
+                    width={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
+                    height={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
+                    // width={window.innerWidth}
+                    // height={window.innerHeight}
+                    onMouseDown={handleStageInteractionStart}
+                    onTouchStart={handleStageInteractionStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    scaleX={STAGE_SCALE_FACTOR}
+                    scaleY={STAGE_SCALE_FACTOR}
+                >
+                    <KonvaLayer>
+                        {Array.from({ length: COLS * ROWS }).map((_, i) => {
+                            const col = i % COLS;
+                            const row = Math.floor(i / COLS);
+                            return (
+                                <Group key={`screen-${i}`}>
+                                    <Rect
+                                        x={col * SCREEN_W}
+                                        y={row * SCREEN_H}
+                                        width={SCREEN_W}
+                                        height={SCREEN_H}
+                                        stroke="rgba(255, 255, 255, 0.2)"
+                                        strokeWidth={10}
+                                        listening={false}
+                                    />
+                                    <Text
+                                        x={col * SCREEN_W + 50}
+                                        y={row * SCREEN_H + 50}
+                                        text={`Screen C:${col} R:${row}`}
+                                        fontSize={100}
+                                        fill="rgba(255, 255, 255, 0.3)"
+                                        listening={false}
+                                    />
+                                </Group>
+                            );
+                        })}
+
+                        {[...layers]
+                            .sort((a, b) => a.config.zIndex - b.config.zIndex)
+                            .map((layer) => {
+                                const props = {
+                                    isPinching,
+                                    onSelect: () => setSelectedId(layer.numericId.toString()),
+                                    onTransform: (e: KonvaEventObject<Event>) =>
+                                        handleTransform(e, layer.numericId),
+                                    onTransformEnd: (e: KonvaEventObject<Event>) =>
+                                        handleTransformEnd(e, layer.numericId)
+                                };
+
+                                // Route images and uploading previews to the Static element
+                                if (layer.type === 'image') {
+                                    return (
+                                        <KonvaStaticImage
+                                            key={`spi_${layer.numericId}`}
+                                            layer={layer}
+                                            {...props}
+                                        />
+                                    );
+                                }
+                                if (layer.type === 'video')
+                                    return (
+                                        <KonvaVideo
+                                            key={`vid_${layer.numericId}`}
+                                            layer={layer}
+                                            {...props}
+                                        />
+                                    );
+                                if (layer.type === 'text') {
+                                    return (
+                                        <Rect
+                                            key={`txt_${layer.numericId}`}
+                                            layer={layer}
+                                            fill={'#f00'}
+                                            id={layer.numericId.toString()}
+                                            x={layer.config.cx}
+                                            y={layer.config.cy}
+                                            width={layer.config.width}
+                                            height={layer.config.height}
+                                            scaleX={layer.config.scaleX}
+                                            scaleY={layer.config.scaleY}
+                                            offsetX={layer.config.width / 2}
+                                            offsetY={layer.config.height / 2}
+                                            rotation={layer.config.rotation}
+                                            draggable={!props.isPinching}
+                                            onClick={props.onSelect}
+                                            onTap={props.onSelect}
+                                            onDragMove={props.onTransform}
+                                            onTransform={props.onTransform}
+                                            onDragEnd={props.onTransformEnd}
+                                            onTransformEnd={props.onTransformEnd}
+                                        />
+                                    );
+                                }
+                                if (layer.type === 'graph') {
+                                    return (
+                                        <RoyStaticRenderer
+                                            key={`roy_${layer.numericId}`}
+                                            layer={layer}
+                                            {...props}
+                                        />
+                                    );
+                                }
+                                if (layer.type === 'map') {
+                                    return (
+                                        <Rect
+                                            key={`map_${layer.numericId}`}
+                                            layer={layer}
+                                            fill={'#f00'}
+                                            id={layer.numericId.toString()}
+                                            x={layer.config.cx}
+                                            y={layer.config.cy}
+                                            width={layer.config.width}
+                                            height={layer.config.height}
+                                            scaleX={layer.config.scaleX}
+                                            scaleY={layer.config.scaleY}
+                                            offsetX={layer.config.width / 2}
+                                            offsetY={layer.config.height / 2}
+                                            rotation={layer.config.rotation}
+                                            draggable={!props.isPinching}
+                                            onClick={props.onSelect}
+                                            onTap={props.onSelect}
+                                            onDragMove={props.onTransform}
+                                            onTransform={props.onTransform}
+                                            onDragEnd={props.onTransformEnd}
+                                            onTransformEnd={props.onTransformEnd}
+                                        />
+                                    );
+                                }
+                                return null;
+                            })}
+
+                        <Transformer
+                            ref={trRef}
+                            flipEnabled={false}
+                            anchorCornerRadius={10}
+                            anchorSize={20}
+                            boundBoxFunc={(oldBox, newBox) => {
+                                if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5)
+                                    return oldBox;
+                                return newBox;
+                            }}
+                        />
+                    </KonvaLayer>
+                </Stage>
+                {/* <RoyForceGraph
+                style={{
+                    display: 'block',
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    visibility: 'hidden'
+                }}
+            /> */}
+            </div>
+            <div className="flex p-4">
                 <div className="flex flex-col gap-2">
-                    <div className="flex items-end">
-                        <span className="text-3xl">Gemma Shop</span>
-                        <DiscoBallIcon className="absolute right-4 p-1 text-4xl" />
-                    </div>
                     <div>
                         <input
                             ref={fileInputRef}
@@ -883,193 +965,7 @@ function EditorApp() {
                         );
                     })()}
             </div>
-
-            {/* Layers Side Panel */}
-            <div className="fixed top-0 right-0 z-200 flex h-full w-1/4 flex-col gap-2 bg-[#333a] p-5 text-2xl text-white">
-                {[...layers]
-                    .sort((a, b) => a.config.zIndex - b.config.zIndex)
-                    .map((l) => {
-                        return (
-                            <div
-                                key={l.numericId}
-                                className="w-full cursor-pointer bg-[#5556] p-5 hover:bg-[#555C]"
-                                onClick={() => {
-                                    setSelectedId(l.numericId.toString());
-                                }}
-                            >
-                                <span>
-                                    {' '}
-                                    Layer {l.numericId} ({l.type})
-                                </span>
-                                <br />
-                                <span className="flex gap-10">
-                                    {/* {JSON.stringify(l.config)} */}
-                                    <span>x: {l.config.cx}</span> <span>y: {l.config.cy}</span>{' '}
-                                    <span>w: {l.config.width}</span>{' '}
-                                    <span>h: {l.config.height}</span>{' '}
-                                    <span>r: {l.config.rotation}</span>
-                                </span>
-                            </div>
-                        );
-                    })}
-            </div>
-
-            <Stage
-                width={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
-                height={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
-                // width={window.innerWidth}
-                // height={window.innerHeight}
-                onMouseDown={handleStageInteractionStart}
-                onTouchStart={handleStageInteractionStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                scaleX={STAGE_SCALE_FACTOR}
-                scaleY={STAGE_SCALE_FACTOR}
-            >
-                <KonvaLayer>
-                    {Array.from({ length: COLS * ROWS }).map((_, i) => {
-                        const col = i % COLS;
-                        const row = Math.floor(i / COLS);
-                        return (
-                            <Group key={`screen-${i}`}>
-                                <Rect
-                                    x={col * SCREEN_W}
-                                    y={row * SCREEN_H}
-                                    width={SCREEN_W}
-                                    height={SCREEN_H}
-                                    stroke="rgba(255, 255, 255, 0.2)"
-                                    strokeWidth={10}
-                                    listening={false}
-                                />
-                                <Text
-                                    x={col * SCREEN_W + 50}
-                                    y={row * SCREEN_H + 50}
-                                    text={`Screen C:${col} R:${row}`}
-                                    fontSize={100}
-                                    fill="rgba(255, 255, 255, 0.3)"
-                                    listening={false}
-                                />
-                            </Group>
-                        );
-                    })}
-
-                    {[...layers]
-                        .sort((a, b) => a.config.zIndex - b.config.zIndex)
-                        .map((layer) => {
-                            const props = {
-                                isPinching,
-                                onSelect: () => setSelectedId(layer.numericId.toString()),
-                                onTransform: (e: KonvaEventObject<Event>) =>
-                                    handleTransform(e, layer.numericId),
-                                onTransformEnd: (e: KonvaEventObject<Event>) =>
-                                    handleTransformEnd(e, layer.numericId)
-                            };
-
-                            // Route images and uploading previews to the Static element
-                            if (layer.type === 'image') {
-                                return (
-                                    <KonvaStaticImage
-                                        key={`spi_${layer.numericId}`}
-                                        layer={layer}
-                                        {...props}
-                                    />
-                                );
-                            }
-                            if (layer.type === 'video')
-                                return (
-                                    <KonvaVideo
-                                        key={`vid_${layer.numericId}`}
-                                        layer={layer}
-                                        {...props}
-                                    />
-                                );
-                            if (layer.type === 'text') {
-                                return (
-                                    <Rect
-                                        key={`txt_${layer.numericId}`}
-                                        layer={layer}
-                                        fill={'#f00'}
-                                        id={layer.numericId.toString()}
-                                        x={layer.config.cx}
-                                        y={layer.config.cy}
-                                        width={layer.config.width}
-                                        height={layer.config.height}
-                                        scaleX={layer.config.scaleX}
-                                        scaleY={layer.config.scaleY}
-                                        offsetX={layer.config.width / 2}
-                                        offsetY={layer.config.height / 2}
-                                        rotation={layer.config.rotation}
-                                        draggable={!props.isPinching}
-                                        onClick={props.onSelect}
-                                        onTap={props.onSelect}
-                                        onDragMove={props.onTransform}
-                                        onTransform={props.onTransform}
-                                        onDragEnd={props.onTransformEnd}
-                                        onTransformEnd={props.onTransformEnd}
-                                    />
-                                );
-                            }
-                            if (layer.type === 'graph') {
-                                return (
-                                    <RoyStaticRenderer
-                                        key={`roy_${layer.numericId}`}
-                                        layer={layer}
-                                        {...props}
-                                    />
-                                );
-                            }
-                            if (layer.type === 'map') {
-                                return (
-                                    <Rect
-                                        key={`map_${layer.numericId}`}
-                                        layer={layer}
-                                        fill={'#f00'}
-                                        id={layer.numericId.toString()}
-                                        x={layer.config.cx}
-                                        y={layer.config.cy}
-                                        width={layer.config.width}
-                                        height={layer.config.height}
-                                        scaleX={layer.config.scaleX}
-                                        scaleY={layer.config.scaleY}
-                                        offsetX={layer.config.width / 2}
-                                        offsetY={layer.config.height / 2}
-                                        rotation={layer.config.rotation}
-                                        draggable={!props.isPinching}
-                                        onClick={props.onSelect}
-                                        onTap={props.onSelect}
-                                        onDragMove={props.onTransform}
-                                        onTransform={props.onTransform}
-                                        onDragEnd={props.onTransformEnd}
-                                        onTransformEnd={props.onTransformEnd}
-                                    />
-                                );
-                            }
-                            return null;
-                        })}
-
-                    <Transformer
-                        ref={trRef}
-                        flipEnabled={false}
-                        anchorCornerRadius={10}
-                        anchorSize={20}
-                        boundBoxFunc={(oldBox, newBox) => {
-                            if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5)
-                                return oldBox;
-                            return newBox;
-                        }}
-                    />
-                </KonvaLayer>
-            </Stage>
-            {/* <RoyForceGraph
-                style={{
-                    display: 'block',
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    visibility: 'hidden'
-                }}
-            /> */}
-        </div>
+        </>
     );
 }
 

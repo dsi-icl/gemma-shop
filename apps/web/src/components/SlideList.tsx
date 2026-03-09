@@ -34,7 +34,7 @@ export function SlideList() {
                     <h2 className="flex items-center gap-2 text-sm font-semibold">
                         <StackIcon size={18} weight="bold" /> Slides
                     </h2>
-                    <div className="flex items-center gap-1 text-muted-foreground">
+                    <div className="flex hidden items-center gap-1 text-muted-foreground">
                         <button
                             onClick={handlePasteSlide}
                             disabled={!copiedSlide}

@@ -28,7 +28,6 @@
         "@uppy/react": "catalog:",
         "@uppy/tus": "catalog:",
         "date-fns": "catalog:",
-        "markdown-to-jsx": "catalog:",
         "motion": "catalog:",
         "nitro": "catalog:",
         "react": "catalog:",
