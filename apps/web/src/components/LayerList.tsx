@@ -1,9 +1,18 @@
+import { CaretDownIcon, StackSimpleIcon } from '@phosphor-icons/react';
+
 import { useEditorStore } from '~/lib/editorStore';
 
 import { DraggableList } from './DraggableList';
 import { LayerItem } from './LayerItem';
 
-export function LayerList() {
+interface LayerListProps {
+    titleBarSize?: number;
+    collapsed?: boolean;
+    onCollapse?: () => void;
+    onExpand?: () => void;
+}
+
+export function LayerList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }: LayerListProps) {
     const layers = useEditorStore((s) => s.layers);
     const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
     const reorderLayers = useEditorStore((s) => s.reorderLayers);
@@ -11,45 +20,66 @@ export function LayerList() {
 
     const sortedLayers = [...layers].sort((a, b) => b.config.zIndex - a.config.zIndex);
 
+    const toggleCollapse = () => {
+        if (collapsed) onExpand?.();
+        else onCollapse?.();
+    };
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-muted/30">
-            <div className="flex h-12 items-center border-b border-border bg-muted/50 px-4">
-                <h2 className="text-sm font-semibold">Layers (Current Slide)</h2>
-            </div>
-
-            <div className="flex-1 space-y-1 overflow-y-auto p-2">
-                <DraggableList
-                    items={sortedLayers.map((layer) => ({
-                        ...layer,
-                        id: layer.numericId.toString()
-                    }))}
-                    selectedIds={selectedLayerIds}
-                    onReorder={(reorderedItems) => {
-                        const newLayers = reorderedItems.map((item) => {
-                            const existingLayer = layers.find(
-                                (l) => l.numericId.toString() === item.id
-                            );
-                            if (!existingLayer) {
-                                throw new Error('Could not find existing layer');
-                            }
-                            return existingLayer;
-                        });
-                        reorderLayers(newLayers.reverse());
-                    }}
-                    onSelect={toggleLayerSelection}
-                    itemRenderer={(layer, { isSelected }) => (
-                        <LayerItem layer={layer} isSelected={isSelected} />
-                    )}
-                    overlayRenderer={(layer) => (
-                        <LayerItem layer={layer} isSelected={selectedLayerIds.includes(layer.id)} />
-                    )}
-                    multiDragLabel={(count) => (
-                        <div className="rounded-md border border-border bg-card p-2 text-primary shadow-lg">
-                            {count} layers
-                        </div>
-                    )}
+            <button
+                onClick={toggleCollapse}
+                className="flex shrink-0 cursor-pointer items-center justify-between border-b border-border bg-muted/50 px-4"
+                style={{ height: titleBarSize }}
+            >
+                <h2 className="flex items-center gap-2 text-sm font-semibold">
+                    <StackSimpleIcon size={18} weight="bold" /> Layers
+                </h2>
+                <CaretDownIcon
+                    size={14}
+                    weight="bold"
+                    className={`text-muted-foreground transition-transform ${collapsed ? '' : 'rotate-180'}`}
                 />
-            </div>
+            </button>
+
+            {!collapsed && (
+                <div className="flex-1 space-y-1 overflow-y-auto p-2">
+                    <DraggableList
+                        items={sortedLayers.map((layer) => ({
+                            ...layer,
+                            id: layer.numericId.toString()
+                        }))}
+                        selectedIds={selectedLayerIds}
+                        onReorder={(reorderedItems) => {
+                            const newLayers = reorderedItems.map((item) => {
+                                const existingLayer = layers.find(
+                                    (l) => l.numericId.toString() === item.id
+                                );
+                                if (!existingLayer) {
+                                    throw new Error('Could not find existing layer');
+                                }
+                                return existingLayer;
+                            });
+                            reorderLayers(newLayers.reverse());
+                        }}
+                        onSelect={toggleLayerSelection}
+                        itemRenderer={(layer, { isSelected }) => (
+                            <LayerItem layer={layer} isSelected={isSelected} />
+                        )}
+                        overlayRenderer={(layer) => (
+                            <LayerItem
+                                layer={layer}
+                                isSelected={selectedLayerIds.includes(layer.id)}
+                            />
+                        )}
+                        multiDragLabel={(count) => (
+                            <div className="rounded-md border border-border bg-card p-2 text-primary shadow-lg">
+                                {count} layers
+                            </div>
+                        )}
+                    />
+                </div>
+            )}
         </div>
     );
 }
