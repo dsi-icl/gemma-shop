@@ -264,16 +264,16 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             numericId,
             type: 'text',
             config: {
-                cx: 400,
-                cy: 300,
-                width: 100,
-                height: 100,
+                cx: 1920 / 2,
+                cy: 1080 / 2,
+                width: 1920,
+                height: 1080,
                 rotation: 0,
                 scaleX: 1,
                 scaleY: 1,
                 zIndex
             },
-            markdown: '# Hello Wall\nEdit this text!'
+            textProto: '# Hello Wall\nEdit this text!'
         };
 
         set((s) => ({

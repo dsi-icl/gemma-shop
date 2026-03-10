@@ -48,7 +48,7 @@ function TipButton({
 
 export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     const {
-        selectedId,
+        selectedLayerIds,
         layers,
         addTextLayer,
         addMapLayer,
@@ -58,6 +58,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         clearStage,
         reboot
     } = useEditorStore();
+    const selectedId = selectedLayerIds[0];
 
     const engine = EditorEngine.getInstance();
 
@@ -135,39 +136,6 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     </>
                 )}
 
-                {/* ── Text Editor (popover) ── */}
-                {isText && activeLayer && (
-                    <>
-                        <Separator orientation="vertical" className="mx-1 h-6" />
-                        <Popover>
-                            <Tooltip>
-                                <TooltipTrigger
-                                    render={
-                                        <PopoverTrigger
-                                            render={<Button variant="ghost" size="icon-sm" />}
-                                        />
-                                    }
-                                >
-                                    <PencilSimpleIcon />
-                                </TooltipTrigger>
-                                <TooltipContent side="top">Edit text</TooltipContent>
-                            </Tooltip>
-                            <PopoverContent side="top" className="w-80">
-                                <TextEditor
-                                    key={`te_${activeLayer.numericId}`}
-                                    layer={
-                                        activeLayer as Extract<
-                                            LayerWithEditorState,
-                                            { type: 'text' }
-                                        >
-                                    }
-                                    engine={engine}
-                                />
-                            </PopoverContent>
-                        </Popover>
-                    </>
-                )}
-
                 {/* Spacer */}
                 <div className="flex-1" />
 
@@ -181,6 +149,13 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     </TipButton>
                 </div>
             </div>
+            {isText && activeLayer && (
+                <TextEditor
+                    key={`te_${activeLayer.numericId}`}
+                    layer={activeLayer as Extract<LayerWithEditorState, { type: 'text' }>}
+                    engine={engine}
+                />
+            )}
         </TooltipProvider>
     );
 }

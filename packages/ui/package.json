@@ -19,7 +19,6 @@
         "@tanstack/react-pacer": "catalog:",
         "class-variance-authority": "catalog:",
         "clsx": "catalog:",
-        "date-fns": "catalog:",
         "motion": "catalog:",
         "react-resizable-panels": "catalog:",
         "react-use-measure": "catalog:",

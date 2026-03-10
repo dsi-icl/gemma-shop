@@ -13,24 +13,17 @@ export function TextEditor({
     layer: Extract<LayerWithEditorState, { type: 'text' }>;
     engine: EditorEngine;
 }) {
-    const [text, setText] = useState(layer.markdown);
+    const [text, setText] = useState(layer.textProto);
 
     const handleTextChange = asyncDebounce(
         async (e: React.ChangeEvent<HTMLTextAreaElement, HTMLTextAreaElement>) => {
             const newText = e.target.value;
-
-            // const { url, w, h } = (await renderTextToSVG(newText)) ?? {};
-            // if (!url) return;
-
-            layer.markdown = newText;
-            // layer.config.h = h ?? 100;
-            // layer.config.w = w ?? 100;
-            // layer.url = url;
+            layer.textProto = newText;
             setText(e.target.value);
             engine.sendJSON({
                 type: 'upsert_layer',
                 origin: 'handleTextChange',
-                layer: { ...layer, config: { ...layer.config }, markdown: newText }
+                layer: { ...layer, config: { ...layer.config }, textProto: newText }
             });
         },
         { wait: 500 }
