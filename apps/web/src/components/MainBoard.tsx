@@ -1,13 +1,9 @@
-import { ResizablePanel } from '@repo/ui/components/resizable';
-
 import { EditorSlate } from './EditorSlate';
 
 export function MainBoard() {
     return (
-        <ResizablePanel>
-            <main className="relative flex h-full flex-col overflow-hidden bg-card/20">
-                <EditorSlate />
-            </main>
-        </ResizablePanel>
+        <main className="relative flex h-full flex-col overflow-hidden bg-card/20">
+            <EditorSlate />
+        </main>
     );
 }

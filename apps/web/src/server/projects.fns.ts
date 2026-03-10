@@ -9,6 +9,7 @@ import {
     createProject,
     deleteAsset,
     getAuditLogs,
+    getCommit,
     getProject,
     getProjectCommits,
     listAssets,
@@ -49,6 +50,24 @@ export const $getProject = createServerFn({ method: 'GET' })
             throw new Error('Access denied');
         }
         return project;
+    });
+
+export const $getCommit = createServerFn({ method: 'GET' })
+    .inputValidator(z.object({ id: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        const commit = await getCommit(data.id);
+        if (!commit) throw new Error('Commit not found');
+
+        const project = await getProject(commit.projectId);
+        if (!project) throw new Error('Project not found');
+
+        const isCollaborator = project.collaborators.some((c) => c.email === context.user.email);
+        if (project.createdBy !== context.user.email && !isCollaborator) {
+            throw new Error('Access denied');
+        }
+
+        return commit;
     });
 
 export const $createProject = createServerFn({ method: 'POST' })

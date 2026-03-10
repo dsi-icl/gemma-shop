@@ -19,13 +19,19 @@ function SlideEditor() {
             orientation="horizontal"
             className="grow overflow-hidden font-sans text-foreground"
         >
-            <MainBoard />
+            <ResizablePanel>
+                <MainBoard />
+            </ResizablePanel>
             <ResizableHandle />
             <ResizablePanel defaultSize={400} minSize={200}>
                 <ResizablePanelGroup orientation="vertical" className="h-full bg-card/50">
-                    <SlideList />
+                    <ResizablePanel defaultSize={80}>
+                        <SlideList />
+                    </ResizablePanel>
                     <ResizableHandle withHandle />
-                    <LayerList />
+                    <ResizablePanel>
+                        <LayerList />
+                    </ResizablePanel>
                 </ResizablePanelGroup>
             </ResizablePanel>
         </ResizablePanelGroup>

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { $getCommit, $getProject } from '../server/projects.fns';
 import { EditorEngine } from './editorEngine';
 import type { Layer, LayerWithEditorState, Slide } from './types';
 
@@ -19,6 +20,7 @@ function sendLayerUpdate(layer: LayerWithEditorState, origin: string) {
 
 interface EditorState {
     // ── State ──
+    projectId: string | null;
     layers: LayerWithEditorState[];
     selectedLayerIds: string[];
     nextId: number;
@@ -31,6 +33,7 @@ interface EditorState {
     lastSelectedLayerId: string | null;
 
     // ── Pure state mutations ──
+    loadProject: (projectId: string, slideId: string) => Promise<void>;
     hydrate: (layers: LayerWithEditorState[]) => void;
     upsertLayer: (layer: LayerWithEditorState) => void;
     removeLayer: (numericId: number) => void;
@@ -64,18 +67,39 @@ interface EditorState {
 }
 
 export const useEditorStore = create<EditorState>()((set, get) => ({
+    projectId: null,
     layers: [],
     selectedLayerIds: [],
     nextId: 1,
     nextZIndex: 10,
-    slides: [{ id: 's1', description: 'Main Stage' }],
-    activeSlideId: 's1',
+    slides: [],
+    activeSlideId: null,
     selectedSlides: [],
     copiedSlide: null,
     lastSelectedSlide: null,
     lastSelectedLayerId: null,
 
     // ── Pure state mutations ──────────────────────────────────────────────
+    loadProject: async (projectId, slideId) => {
+        set({ projectId, layers: [], slides: [], activeSlideId: null });
+        const project = await $getProject({ data: { id: projectId } });
+
+        if (project && project.headCommitId) {
+            const commit = await $getCommit({ data: { id: project.headCommitId } });
+            if (commit && commit.content && commit.content.slides) {
+                const slides = commit.content.slides.map(
+                    (s) => ({ id: s.id, description: `Slide ${s.order}` }) as Slide
+                );
+                set({ slides });
+
+                const activeSlide = commit.content.slides.find((s) => s.id === slideId);
+                if (activeSlide) {
+                    get().hydrate(activeSlide.layers as LayerWithEditorState[]);
+                    set({ activeSlideId: slideId });
+                }
+            }
+        }
+    },
 
     hydrate: (layers) => {
         const maxId = layers.length > 0 ? Math.max(...layers.map((l) => l.numericId)) : 0;

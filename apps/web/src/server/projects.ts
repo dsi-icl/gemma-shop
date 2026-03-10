@@ -12,6 +12,7 @@ import { ObjectId } from 'mongodb';
 const projects = db.collection('projects');
 const auditLogs = db.collection('audit_logs');
 const assets = db.collection('assets');
+const commits = db.collection('commits');
 
 export async function listProjects(userEmail: string, includeArchived = false) {
     const filter: Record<string, unknown> = {
@@ -50,6 +51,12 @@ export async function getProject(id: string) {
     const doc = await projects.findOne({ _id: new ObjectId(id) });
     if (!doc) return null;
     return serializeProject(doc);
+}
+
+export async function getCommit(id: string) {
+    const doc = await commits.findOne({ _id: new ObjectId(id) });
+    if (!doc) return null;
+    return serializeCommit(doc);
 }
 
 export async function createProject(input: CreateProjectInput, userEmail: string) {
@@ -240,6 +247,16 @@ export interface SerializedCommit {
     createdAt: string;
 }
 
+export interface SerializedCommitWithContent extends SerializedCommit {
+    content: {
+        slides: {
+            id: string;
+            order: number;
+            layers: any[];
+        }[];
+    };
+}
+
 export async function getProjectCommits(projectId: string): Promise<SerializedCommit[]> {
     const commits = db.collection('commits');
     const docs = await commits
@@ -293,4 +310,17 @@ function serializeProject(doc: Record<string, unknown>): Project {
         headCommitId: doc.headCommitId?.toString() ?? null,
         publishedCommitId: doc.publishedCommitId?.toString() ?? null
     } as Project;
+}
+
+function serializeCommit(doc: Record<string, unknown>): SerializedCommitWithContent {
+    return {
+        _id: doc._id!.toString(),
+        projectId: doc.projectId!.toString(),
+        parentId: doc.parentId?.toString() ?? null,
+        authorId: doc.authorId?.toString() ?? null,
+        message: String(doc.message ?? ''),
+        createdAt:
+            doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
+        content: doc.content as SerializedCommitWithContent['content']
+    };
 }
