@@ -9,11 +9,11 @@ import { LayerList } from '~/components/LayerList';
 import { MainBoard } from '~/components/MainBoard';
 import { SlideList } from '~/components/SlideList';
 
-export const Route = createFileRoute('/_auth/quarry/editor/$projectId')({
-    component: PresentationEditor
+export const Route = createFileRoute('/_auth/quarry/editor/$projectId/$slideId')({
+    component: SlideEditor
 });
 
-function PresentationEditor() {
+function SlideEditor() {
     return (
         <ResizablePanelGroup
             orientation="horizontal"
