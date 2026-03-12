@@ -31,10 +31,10 @@ export function InkToolbar() {
                                 points="0,10 5,12.7 10,14 15,13.1 20,10.6 25,7.7 30,6.1 35,6.6 40,8.9 45,11.7 50,13.7 55,13.7 60,11.6 65,8.8 70,6.5 75,6.1 80,7.8 85,10.6 90,13.1 95,13.9 100,12.6"
                                 fill="none"
                                 stroke={inkColour}
-                                stroke-width={inkWidth / 7}
-                                stroke-dasharray={inkDash.map((d) => d / 7)}
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
+                                strokeWidth={inkWidth / 7}
+                                strokeDasharray={inkDash.map((d) => d / 7).join(' ')}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
                             />
                         </svg>
                     </TipButton>

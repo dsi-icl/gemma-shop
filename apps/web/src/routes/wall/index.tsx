@@ -185,10 +185,10 @@ function WallApp() {
                             points={svgPoints.join(' ')}
                             fill="none"
                             stroke={layer.color}
-                            stroke-width={layer.width}
-                            stroke-dasharray={layer.dash}
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
+                            strokeWidth={layer.width}
+                            strokeDasharray={layer.dash.join(' ')}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
                         />
                     </svg>
                 </div>

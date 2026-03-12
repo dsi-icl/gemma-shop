@@ -2,6 +2,7 @@ import {
     ArrowLineDownIcon,
     ArrowLineUpIcon,
     ArrowsClockwiseIcon,
+    ArrowsInLineHorizontalIcon,
     CircleIcon,
     EraserIcon,
     GridNineIcon,
@@ -35,6 +36,8 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     const {
         selectedLayerIds,
         layers,
+        isSnapping,
+        toggleSnapping,
         addTextLayer,
         addMapLayer,
         addShapeLayer,
@@ -171,6 +174,13 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
 
                 {/* ── Danger Zone ── */}
                 <div className="flex items-center gap-0.5">
+                    <TipButton
+                        tip={isSnapping ? 'Disable Snap' : 'Enable Snap'}
+                        variant={isSnapping ? 'outline' : 'ghost'}
+                        onClick={toggleSnapping}
+                    >
+                        <ArrowsInLineHorizontalIcon weight={showGrid ? 'fill' : 'regular'} />
+                    </TipButton>
                     <TipButton
                         tip={showGrid ? 'Hide Grid' : 'Show Grid'}
                         variant={showGrid ? 'outline' : 'ghost'}

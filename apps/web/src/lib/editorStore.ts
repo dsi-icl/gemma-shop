@@ -39,6 +39,7 @@ interface EditorState {
     showGrid: boolean;
     showInk: boolean;
     isDrawing: boolean;
+    isSnapping: boolean;
     inkColour: string;
     inkWidth: number;
     inkDash: number[];
@@ -86,6 +87,7 @@ interface EditorState {
     toggleGrid: () => void;
     toggleInk: () => void;
     toggleDrawing: () => void;
+    toggleSnapping: () => void;
 }
 
 export const useEditorStore = create<EditorState>()((set, get) => ({
@@ -103,6 +105,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     showGrid: true,
     showInk: true,
     isDrawing: false,
+    isSnapping: false,
     inkColour: '#ff0000',
     inkWidth: 10,
     inkDash: [],
@@ -633,7 +636,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         set((s) => ({
             isDrawing: !s.isDrawing,
             selectedLayerIds: !s.isDrawing ? [] : s.selectedLayerIds
-        }))
+        })),
+    toggleSnapping: () => set((s) => ({ isSnapping: !s.isSnapping }))
 }));
 
 // ── Wire EditorEngine → Store (runs once on module load) ──────────────────
