@@ -1,4 +1,4 @@
-import { CaretDownIcon, StackIcon } from '@phosphor-icons/react';
+import { CaretDownIcon, SlideshowIcon } from '@phosphor-icons/react';
 import { useNavigate } from '@tanstack/react-router';
 
 import { useEditorStore } from '~/lib/editorStore';
@@ -53,7 +53,7 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
                     className="flex items-center gap-2 text-sm font-semibold"
                     style={{ height: titleBarSize }}
                 >
-                    <StackIcon size={18} weight="bold" /> Slides
+                    <SlideshowIcon size={18} weight="bold" /> Slides
                 </h2>
                 <CaretDownIcon
                     size={14}

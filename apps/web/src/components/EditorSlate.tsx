@@ -1,16 +1,19 @@
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stage, Layer as KonvaLayer, Transformer, Group, Text, Rect } from 'react-konva';
+import { Stage, Layer as KonvaLayer, Transformer, Group, Text, Rect, Line } from 'react-konva';
 
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaVideo } from '~/components/KonvaVideo';
 import { RoyStaticRenderer } from '~/components/roygraph/RoyStaticRenderer';
 import { Toolbar } from '~/components/Toolbar';
 import { EditorEngine } from '~/lib/editorEngine';
+import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
+
+import { SlatePreview } from './SlatePreview';
 
 const engine = EditorEngine.getInstance();
 
@@ -35,10 +38,21 @@ export function EditorSlate() {
     const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
     const toggleLayerSelection = useEditorStore((s) => s.toggleLayerSelection);
     const deselectAllLayers = useEditorStore((s) => s.deselectAllLayers);
+    const showGrid = useEditorStore((s) => s.showGrid);
+    const showInk = useEditorStore((s) => s.showInk);
+    const isDrawing = useEditorStore((s) => s.isDrawing);
+    const addInkLayer = useEditorStore((s) => s.addInkLayer);
+    const inkColour = useEditorStore((s) => s.inkColour);
+    const inkDash = useEditorStore((s) => s.inkDash);
+    const inkWidth = useEditorStore((s) => s.inkWidth);
 
     // ── Local-only state (Konva interaction, not shared) ──────────────────
     const [isPinching, setIsPinching] = useState(false);
+    const [currentInkLine, setCurrentInkLine] = useState<Array<number>>([]);
+    const lastX = useRef(0);
+    const stageLastX = useRef(0);
 
+    const stageSlot = useRef<HTMLDivElement>(null);
     const trRef = useRef<Konva.Transformer>(null);
     const lastCenter = useRef<{ x: number; y: number } | null>(null);
     const lastDist = useRef<number | null>(null);
@@ -367,11 +381,12 @@ export function EditorSlate() {
                 flushNodeState(currentSelectedIds[0]);
                 deselectAllLayers();
             }
+            return;
         }
         if (
             e.evt instanceof TouchEvent &&
             e.evt.touches?.length === 2 &&
-            currentSelectedIds.length
+            currentSelectedIds.length > 0
         ) {
             flushNodeState(currentSelectedIds[0]);
             setIsPinching(true);
@@ -382,13 +397,31 @@ export function EditorSlate() {
             lastDist.current = getDistance(p1, p2);
             lastAngle.current = getAngle(p1, p2);
             lastCenter.current = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+            return;
+        }
+        if (e.evt instanceof TouchEvent && e.evt.touches?.length === 2) {
+            lastX.current = e.evt.touches[0].clientX;
+            if (stageSlot.current) {
+                stageLastX.current = stageSlot.current.scrollLeft;
+            }
+            return;
         }
     };
 
     const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
         e.evt.preventDefault();
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
-        if (e.evt.touches.length === 2 && currentSelectedIds.length && trRef.current) {
+        console.log('currentSelectedIds.length', currentSelectedIds.length);
+        if (isDrawing) {
+            const stage = e.target.getStage();
+            const point = stage?.getPointerPosition();
+            if (!point) return;
+            setCurrentInkLine((l) =>
+                l.concat([point.x / STAGE_SCALE_FACTOR, point.y / STAGE_SCALE_FACTOR])
+            );
+            return;
+        }
+        if (e.evt.touches.length === 2 && currentSelectedIds.length > 0 && trRef.current) {
             const stage = trRef.current.getStage();
             const node = stage?.findOne(`#${currentSelectedIds[0]}`);
             if (!node) return;
@@ -447,6 +480,17 @@ export function EditorSlate() {
             lastDist.current = dist;
             lastAngle.current = angle;
             lastCenter.current = screenCenter;
+            return;
+        }
+        if (e.evt.touches.length === 2) {
+            if (e.evt.targetTouches && e.evt.targetTouches.length > 1) {
+                const currentX = e.evt.touches[0].screenX;
+                const deltaX = currentX - lastX.current;
+                if (stageSlot.current) {
+                    stageSlot.current.scrollLeft = stageLastX.current - deltaX;
+                }
+                return;
+            }
         }
     };
 
@@ -458,6 +502,11 @@ export function EditorSlate() {
             const node = stage?.findOne<Konva.Shape>(`#${currentSelectedIds[0]}`);
             if (node) handleTransformEnd({ target: node }, parseInt(currentSelectedIds[0]));
         }
+        // Without enough point this is probably a missfire
+        if (currentInkLine.length > 6) {
+            addInkLayer(currentInkLine);
+        }
+        setCurrentInkLine([]);
         lastDist.current = null;
         lastAngle.current = null;
         lastCenter.current = null;
@@ -470,6 +519,9 @@ export function EditorSlate() {
             if (node) {
                 trRef.current.nodes([node]);
                 trRef.current.getLayer()?.batchDraw();
+            } else {
+                trRef.current.nodes([]);
+                trRef.current.getLayer()?.batchDraw();
             }
         } else if (trRef.current) {
             trRef.current.nodes([]);
@@ -480,7 +532,11 @@ export function EditorSlate() {
     // ── Render ────────────────────────────────────────────────────────────
     return (
         <>
-            <div id="slate" className="h-fit overflow-auto bg-black">
+            <div
+                ref={stageSlot}
+                id="slate"
+                className="h-fit overflow-auto border-b border-border bg-black"
+            >
                 <Stage
                     width={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
                     height={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
@@ -492,7 +548,7 @@ export function EditorSlate() {
                     scaleY={STAGE_SCALE_FACTOR}
                 >
                     <KonvaLayer>
-                        {Array.from({ length: COLS * ROWS }).map((_, i) => {
+                        {/* {Array.from({ length: COLS * ROWS }).map((_, i) => {
                             const col = i % COLS;
                             const row = Math.floor(i / COLS);
                             return (
@@ -516,12 +572,13 @@ export function EditorSlate() {
                                     />
                                 </Group>
                             );
-                        })}
+                        })} */}
 
                         {[...layers]
                             .sort((a, b) => a.config.zIndex - b.config.zIndex)
                             .map((layer) => {
                                 const props = {
+                                    listening: !isDrawing,
                                     isPinching,
                                     onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
                                         toggleLayerSelection(
@@ -614,9 +671,46 @@ export function EditorSlate() {
                                         />
                                     );
                                 }
+                                if (showInk && layer.type === 'ink') {
+                                    return (
+                                        <Line
+                                            key={`ink_${layer.numericId}`}
+                                            listening={true}
+                                            points={layer.line}
+                                            stroke={layer.color}
+                                            strokeWidth={layer.width}
+                                            dash={layer.dash}
+                                            dashEnabled={true}
+                                            tension={0.4}
+                                            shadowForStrokeEnabled={
+                                                selectedLayerIds[0] === layer.numericId.toString()
+                                            }
+                                            shadowColor="#00a1ff"
+                                            shadowBlur={10}
+                                            shadowOffsetY={20}
+                                            shadowOffsetX={20}
+                                            shadowOpacity={1}
+                                            lineCap="round"
+                                            lineJoin="round"
+                                        />
+                                    );
+                                }
                                 return null;
                             })}
-
+                        {showInk && (
+                            <Line
+                                key="new-line"
+                                points={currentInkLine}
+                                stroke={inkColour}
+                                strokeWidth={inkWidth}
+                                dash={inkDash}
+                                dashEnabled={true}
+                                tension={0.5}
+                                lineCap="round"
+                                lineJoin="round"
+                            />
+                        )}
+                        {showGrid && getDOGridLines(COLS * SCREEN_W, ROWS * SCREEN_H, 20)}
                         <Transformer
                             ref={trRef}
                             flipEnabled={false}
@@ -640,6 +734,11 @@ export function EditorSlate() {
                 }}
             /> */}
             </div>
+            <SlatePreview
+                stageSlot={stageSlot}
+                stageWidth={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
+                stageHeight={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
+            />
             <Toolbar fileInputRef={fileInputRef} onUpload={handleUpload} />
         </>
     );

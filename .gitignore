@@ -36,6 +36,7 @@ yarn-error.log*
 *.pem
 .cache
 .tanstack
+.claude
 worker-configuration.d.ts
 
 apps/web/public/assets

@@ -4,10 +4,15 @@ import {
     ImageIcon,
     MapTrifoldIcon,
     TextTIcon,
-    GraphIcon
+    GraphIcon,
+    ScribbleIcon,
+    TrashIcon
 } from '@phosphor-icons/react';
+import { TipButton } from '@repo/ui/components/tip-button';
+import { cn } from '@repo/ui/lib/utils';
 import React from 'react';
 
+import { useEditorStore } from '~/lib/editorStore';
 import { LayerWithEditorState } from '~/lib/types';
 
 interface LayerItemProps {
@@ -16,6 +21,8 @@ interface LayerItemProps {
 }
 
 export function LayerItem({ layer, isSelected }: LayerItemProps) {
+    const removeLayer = useEditorStore((s) => s.removeLayer);
+
     const getLayerIcon = (type: LayerWithEditorState['type']): React.ReactNode => {
         switch (type) {
             case 'text':
@@ -28,6 +35,8 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                 return <GraphIcon size={20} weight="bold" />;
             case 'map':
                 return <MapTrifoldIcon size={20} weight="bold" />;
+            case 'ink':
+                return <ScribbleIcon size={20} weight="bold" />;
             default:
                 return <BugBeetleIcon size={20} weight="bold" />;
         }
@@ -45,6 +54,8 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                 return 'Graph';
             case 'map':
                 return 'Map';
+            case 'ink':
+                return 'Ink Line';
             default:
                 return 'Unknown Layer';
         }
@@ -52,7 +63,7 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
 
     return (
         <div
-            className={`flex items-center rounded-md border p-2 shadow-sm transition-colors ${
+            className={`group flex items-center rounded-md border p-2 shadow-sm transition-colors ${
                 isSelected
                     ? 'border-ring bg-accent text-accent-foreground'
                     : 'border-border bg-card hover:border-primary'
@@ -63,11 +74,26 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
             </div>
             <div className="flex-1 flex-col truncate text-sm text-foreground">
                 <span>{getLayerName(layer)}</span>
-                <span className="flex w-full gap-5 text-xs opacity-45">
+                <span
+                    className={cn(
+                        layer.type === 'ink' ? 'opacity-0' : 'opacity-45',
+                        'flex w-full gap-5 text-xs'
+                    )}
+                >
                     <span>x:{layer.config.cx}</span>
                     <span>y:{layer.config.cy}</span>
                     <span>r:{layer.config.rotation}</span>
                 </span>
+            </div>
+            <div>
+                <TipButton
+                    tip="Delete layer"
+                    variant="destructive"
+                    onClick={() => removeLayer(layer.numericId)}
+                    className="opacity-0 group-hover:opacity-100"
+                >
+                    <TrashIcon />
+                </TipButton>
             </div>
         </div>
     );

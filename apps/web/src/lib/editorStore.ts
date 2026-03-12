@@ -1,3 +1,5 @@
+import { throttle } from '@tanstack/pacer';
+import { s } from 'motion/react-client';
 import { create } from 'zustand';
 
 import { $getCommit, $getProject } from '../server/projects.fns';
@@ -5,18 +7,21 @@ import { EditorEngine } from './editorEngine';
 import type { Layer, LayerWithEditorState, Slide } from './types';
 
 /** Send a layer update to the server, preserving video playback state */
-function sendLayerUpdate(layer: LayerWithEditorState, origin: string) {
-    const engine = EditorEngine.getInstance();
-    if (layer.type === 'video') {
-        engine.sendJSON({
-            type: 'upsert_layer',
-            origin,
-            layer: { ...layer, playback: engine.getPlayback(layer.numericId) || layer.playback }
-        });
-    } else {
-        engine.sendJSON({ type: 'upsert_layer', origin, layer });
-    }
-}
+const sendLayerUpdate = throttle(
+    (layer: LayerWithEditorState, origin: string) => {
+        const engine = EditorEngine.getInstance();
+        if (layer.type === 'video') {
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin,
+                layer: { ...layer, playback: engine.getPlayback(layer.numericId) || layer.playback }
+            });
+        } else {
+            engine.sendJSON({ type: 'upsert_layer', origin, layer });
+        }
+    },
+    { wait: 100 }
+);
 
 interface EditorState {
     // ── State ──
@@ -31,6 +36,12 @@ interface EditorState {
     copiedSlide: Slide | null;
     lastSelectedSlide: string | null;
     lastSelectedLayerId: string | null;
+    showGrid: boolean;
+    showInk: boolean;
+    isDrawing: boolean;
+    inkColour: string;
+    inkWidth: number;
+    inkDash: number[];
 
     // ── Pure state mutations ──
     loadProject: (projectId: string, slideId: string) => Promise<void>;
@@ -43,6 +54,9 @@ interface EditorState {
     setActiveSlideId: (id: string | null) => void;
     setSelectedSlides: (ids: string[]) => void;
     setCopiedSlide: (slide: Slide | null) => void;
+    setInkColour: (color: string) => void;
+    setInkWidth: (width: number) => void;
+    setInkDash: (dash: number[]) => void;
 
     // ── Allocators ──
     allocateId: () => number;
@@ -54,6 +68,7 @@ interface EditorState {
     sendToBack: () => void;
     addTextLayer: () => void;
     addMapLayer: () => void;
+    addInkLayer: (line: Array<number>) => void;
     clearStage: () => void;
     reboot: () => void;
     reorderLayers: (layers: LayerWithEditorState[]) => void;
@@ -64,6 +79,9 @@ interface EditorState {
     deselectAllLayers: () => void;
     toggleSlideSelection: (id: string, isShiftClick: boolean, isCtrlClick: boolean) => void;
     toggleLayerSelection: (id: string, isShiftClick: boolean, isCtrlClick: boolean) => void;
+    toggleGrid: () => void;
+    toggleInk: () => void;
+    toggleDrawing: () => void;
 }
 
 export const useEditorStore = create<EditorState>()((set, get) => ({
@@ -78,6 +96,12 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     copiedSlide: null,
     lastSelectedSlide: null,
     lastSelectedLayerId: null,
+    showGrid: true,
+    showInk: true,
+    isDrawing: false,
+    inkColour: '#ff0000',
+    inkWidth: 10,
+    inkDash: [],
 
     // ── Pure state mutations ──────────────────────────────────────────────
     loadProject: async (projectId, slideId) => {
@@ -126,11 +150,14 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             return { layers: [...filtered, layer], nextId, nextZIndex };
         }),
 
-    removeLayer: (numericId) =>
+    removeLayer: (numericId) => {
         set((s) => ({
             layers: s.layers.filter((l) => l.numericId !== numericId),
             selectedLayerIds: s.selectedLayerIds.filter((id) => id !== numericId.toString())
-        })),
+        }));
+        const engine = EditorEngine.getInstance();
+        engine.sendJSON({ type: 'delete_layer', numericId });
+    },
 
     updateProgress: (numericId, progress) =>
         set((s) => ({
@@ -179,7 +206,16 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
                 return { selectedLayerIds: newSelection };
             });
         } else {
-            set({ selectedLayerIds: [id] });
+            const selectedLayer = layers.find((l) => l.numericId.toString() === id);
+            const newState: Partial<EditorState> = {
+                selectedLayerIds: [id]
+            };
+            if (selectedLayer?.type === 'ink') {
+                newState.inkColour = selectedLayer.color;
+                newState.inkDash = selectedLayer.dash;
+                newState.inkWidth = selectedLayer.width;
+            }
+            set(newState);
         }
         set({ lastSelectedLayerId: id });
     },
@@ -188,6 +224,54 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     setActiveSlideId: (id) => set({ activeSlideId: id }),
     setSelectedSlides: (ids) => set({ selectedSlides: ids }),
     setCopiedSlide: (slide) => set({ copiedSlide: slide }),
+    setInkColour: (color) => {
+        set((s) => {
+            const newState: Partial<EditorState> = { inkColour: color };
+            if (s.selectedLayerIds.length > 0) {
+                const numericId = parseInt(s.selectedLayerIds[0]);
+                newState.layers = s.layers.map((l) =>
+                    l.numericId === numericId ? { ...l, color } : l
+                );
+                const newLayerState = s.layers.find((l) => l.numericId === numericId);
+                if (newLayerState) {
+                    sendLayerUpdate(newLayerState, 'setInkColour');
+                }
+            }
+            return newState;
+        });
+    },
+    setInkWidth: (width) => {
+        set((s) => {
+            const newState: Partial<EditorState> = { inkWidth: width };
+            if (s.selectedLayerIds.length > 0) {
+                const numericId = parseInt(s.selectedLayerIds[0]);
+                newState.layers = s.layers.map((l) =>
+                    l.numericId === numericId ? { ...l, width } : l
+                );
+                const newLayerState = s.layers.find((l) => l.numericId === numericId);
+                if (newLayerState) {
+                    sendLayerUpdate(newLayerState, 'setInkWidth');
+                }
+            }
+            return newState;
+        });
+    },
+    setInkDash: (dash) => {
+        set((s) => {
+            const newState: Partial<EditorState> = { inkDash: dash };
+            if (s.selectedLayerIds.length > 0) {
+                const numericId = parseInt(s.selectedLayerIds[0]);
+                newState.layers = s.layers.map((l) =>
+                    l.numericId === numericId ? { ...l, dash } : l
+                );
+                const newLayerState = s.layers.find((l) => l.numericId === numericId);
+                if (newLayerState) {
+                    sendLayerUpdate(newLayerState, 'setInkDash');
+                }
+            }
+            return newState;
+        });
+    },
 
     // ── Allocators ────────────────────────────────────────────────────────
 
@@ -209,7 +293,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         const { selectedLayerIds } = get();
         if (!selectedLayerIds.length) return;
         const numericId = parseInt(selectedLayerIds[0]);
-        EditorEngine.getInstance().sendJSON({ type: 'delete_layer', numericId });
+        const engine = EditorEngine.getInstance();
+        engine.sendJSON({ type: 'delete_layer', numericId });
         set((s) => ({
             layers: s.layers.filter((l) => l.numericId !== numericId),
             selectedLayerIds: []
@@ -280,7 +365,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             layers: [...s.layers, newLayer],
             selectedLayerIds: [numericId.toString()]
         }));
-        EditorEngine.getInstance().sendJSON({
+        const engine = EditorEngine.getInstance();
+        engine.sendJSON({
             type: 'upsert_layer',
             origin: 'addTextLayer',
             layer: newLayer
@@ -318,20 +404,81 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             layers: [...s.layers, newLayer],
             selectedLayerIds: [numericId.toString()]
         }));
-        EditorEngine.getInstance().sendJSON({
+        const engine = EditorEngine.getInstance();
+        engine.sendJSON({
             type: 'upsert_layer',
             origin: 'addMapLayer',
             layer: newLayer
         });
     },
 
-    clearStage: () => {
-        EditorEngine.getInstance().sendJSON({ type: 'clear_stage' });
-        set({ layers: [], selectedLayerIds: [] });
+    addInkLayer: (line) => {
+        const { allocateId, allocateZIndex, inkColour, inkWidth, inkDash } = get();
+        const numericId = allocateId();
+        const zIndex = allocateZIndex();
+
+        let minX: number | null = null;
+        let minY: number | null = null;
+        let maxX: number | null = null;
+        let maxY: number | null = null;
+        let svgPoints = [];
+        for (let i = 0; i < line.length; i += 2) {
+            const x = line[i];
+            const y = line[i + 1];
+            if (minX === null || minY === null || maxX === null || maxY === null) {
+                minX = x;
+                minY = y;
+                maxX = x;
+                maxY = y;
+            }
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            svgPoints.push(`${line[i]},${line[i + 1]}`);
+        }
+        if (minX === null || minY === null || maxX === null || maxY === null) return null;
+        const width = Math.round(maxX - minX);
+        const height = Math.round(maxY - minY);
+
+        const newLayer: LayerWithEditorState = {
+            numericId,
+            type: 'ink',
+            config: {
+                cx: minX,
+                cy: minY,
+                width,
+                height,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                zIndex
+            },
+            line: line.map((p) => Math.round(p)),
+            color: inkColour,
+            width: inkWidth,
+            dash: inkDash
+        };
+        set((s) => ({
+            layers: [...s.layers, newLayer],
+            selectedLayerIds: [numericId.toString()]
+        }));
+        const engine = EditorEngine.getInstance();
+        engine.sendJSON({
+            type: 'upsert_layer',
+            origin: 'addInkLayer',
+            layer: newLayer
+        });
     },
 
+    clearStage: () => {
+        const engine = EditorEngine.getInstance();
+        engine.sendJSON({ type: 'clear_stage' });
+        set({ layers: [], selectedLayerIds: [] });
+    },
     reboot: () => {
-        EditorEngine.getInstance().sendJSON({ type: 'reboot' });
+        const engine = EditorEngine.getInstance();
+        engine.sendJSON({ type: 'reboot' });
         set({ selectedLayerIds: [] });
     },
     reorderLayers: (layers) => {
@@ -402,7 +549,14 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             set({ selectedSlides: [id] });
         }
         set({ lastSelectedSlide: id });
-    }
+    },
+    toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+    toggleInk: () => set((s) => ({ showInk: !s.showInk })),
+    toggleDrawing: () =>
+        set((s) => ({
+            isDrawing: !s.isDrawing,
+            selectedLayerIds: !s.isDrawing ? [] : s.selectedLayerIds
+        }))
 }));
 
 // ── Wire EditorEngine → Store (runs once on module load) ──────────────────

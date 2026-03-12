@@ -140,7 +140,11 @@ function WallApp() {
             );
 
         if (layer.type === 'text') {
-            return <div key={layer.numericId}>{layer.textProto}</div>;
+            return (
+                <div key={layer.numericId} {...commonProps}>
+                    {layer.textProto}
+                </div>
+            );
         }
 
         if (layer.type === 'map') {
@@ -162,6 +166,33 @@ function WallApp() {
                     loop={layer.loop ?? true}
                 />
             );
+
+        if (layer.type === 'ink') {
+            let svgPoints = [];
+            for (let i = 0; i < layer.line.length; i += 2)
+                svgPoints.push(
+                    `${Math.round(layer.line[i] - layer.config.cx + layer.config.width / 2)},${Math.round(layer.line[i + 1] - layer.config.cy + layer.config.height / 2)}`
+                );
+            return (
+                <div key={layer.numericId} {...commonProps} className="origin-top-left">
+                    <svg
+                        width={layer.config.width * 1.5}
+                        height={layer.config.height * 1.5}
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <polyline
+                            points={svgPoints.join(' ')}
+                            fill="none"
+                            stroke={layer.color}
+                            stroke-width={layer.width}
+                            stroke-dasharray={layer.dash}
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                </div>
+            );
+        }
         return null;
     });
 
@@ -169,7 +200,7 @@ function WallApp() {
         <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">
             {/* Visual Debugger: Shows the Screen ID in the corner */}
             <div
-                className="absolute top-2 left-2 z-1000000 border-2 border-red-800 p-2 font-mono text-gray-500 mix-blend-plus-lighter"
+                className="min-blend-plus-lighter absolute top-2 left-2 z-1000000 border-2 border-red-800 p-2 font-mono text-gray-500"
                 style={{ width: `${SCREEN_W - 2 * 10}px`, height: `${SCREEN_H - 2 * 10}px` }}
             >
                 SCREEN&gt; C:{myViewport.x / SCREEN_W} R:{myViewport.y / SCREEN_H}

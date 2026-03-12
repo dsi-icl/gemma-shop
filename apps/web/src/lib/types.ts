@@ -50,7 +50,15 @@ const LayerSchema = z.discriminatedUnion('type', [
             })
         })
         .extend(LayerBaseSchema.shape),
-    z.object({ type: z.literal('ink') }).extend(LayerBaseSchema.shape)
+    z
+        .object({
+            type: z.literal('ink'),
+            line: z.array(z.number()),
+            color: z.string(),
+            width: z.number(),
+            dash: z.array(z.number())
+        })
+        .extend(LayerBaseSchema.shape)
 ]);
 
 export type Layer = z.infer<typeof LayerSchema>;

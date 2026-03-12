@@ -3,22 +3,19 @@ import {
     ArrowLineUpIcon,
     ArrowsClockwiseIcon,
     EraserIcon,
+    GridNineIcon,
+    ImageIcon,
     MapPinIcon,
     PencilSimpleIcon,
+    ShapesIcon,
     TextTIcon,
-    TrashIcon,
-    UploadSimpleIcon
+    TrashIcon
 } from '@phosphor-icons/react';
-import { Button } from '@repo/ui/components/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/popover';
 import { Separator } from '@repo/ui/components/separator';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger
-} from '@repo/ui/components/tooltip';
+import { TipButton } from '@repo/ui/components/tip-button';
+import { TooltipProvider } from '@repo/ui/components/tooltip';
 
+import { InkToolbar } from '~/components/InkToolbar';
 import { PlaybackControls } from '~/components/PlaybackControls';
 import { TextEditor } from '~/components/TextEditor';
 import { VideoScrubber } from '~/components/VideoScrubber';
@@ -29,21 +26,6 @@ import type { LayerWithEditorState } from '~/lib/types';
 interface ToolbarProps {
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}
-
-function TipButton({
-    tip,
-    children,
-    ...props
-}: { tip: string } & React.ComponentProps<typeof Button>) {
-    return (
-        <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" {...props} />}>
-                {children}
-            </TooltipTrigger>
-            <TooltipContent side="top">{tip}</TooltipContent>
-        </Tooltip>
-    );
 }
 
 export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
@@ -58,6 +40,10 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         clearStage,
         reboot
     } = useEditorStore();
+    const showGrid = useEditorStore((s) => s.showGrid);
+    const toggleGrid = useEditorStore((s) => s.toggleGrid);
+    const isDrawing = useEditorStore((s) => s.isDrawing);
+    const toggleDrawing = useEditorStore((s) => s.toggleDrawing);
     const selectedId = selectedLayerIds[0];
 
     const engine = EditorEngine.getInstance();
@@ -67,6 +53,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         : null;
     const isVideo = activeLayer?.type === 'video';
     const isText = activeLayer?.type === 'text';
+    const isInk = activeLayer?.type === 'ink';
 
     return (
         <TooltipProvider>
@@ -86,7 +73,10 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                 {/* ── Add Content ── */}
                 <div className="flex items-center gap-0.5">
                     <TipButton tip="Upload media" onClick={() => fileInputRef.current?.click()}>
-                        <UploadSimpleIcon />
+                        <ImageIcon />
+                    </TipButton>
+                    <TipButton tip="Add shape">
+                        <ShapesIcon />
                     </TipButton>
                     <TipButton tip="Add text layer" onClick={addTextLayer}>
                         <TextTIcon />
@@ -94,7 +84,22 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     <TipButton tip="Add map layer" onClick={addMapLayer}>
                         <MapPinIcon />
                     </TipButton>
+                    <TipButton
+                        tip="Draw"
+                        onClick={toggleDrawing}
+                        variant={isDrawing ? 'outline' : 'ghost'}
+                    >
+                        <PencilSimpleIcon />
+                    </TipButton>
                 </div>
+
+                {/* ── Ink ── */}
+                {isDrawing || isInk ? (
+                    <>
+                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <InkToolbar />
+                    </>
+                ) : null}
 
                 {/* ── Layer Ordering ── */}
                 {activeLayer && (
@@ -107,13 +112,13 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                             <TipButton tip="Send to back" onClick={sendToBack}>
                                 <ArrowLineDownIcon />
                             </TipButton>
-                            <TipButton
+                            {/* <TipButton
                                 tip="Delete layer"
                                 variant="destructive"
                                 onClick={deleteSelectedLayer}
                             >
                                 <TrashIcon />
-                            </TipButton>
+                            </TipButton> */}
                         </div>
                     </>
                 )}
@@ -136,16 +141,25 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     </>
                 )}
 
+                <div className="grow" />
+
                 {/* Spacer */}
                 <div className="flex-1" />
 
                 {/* ── Danger Zone ── */}
                 <div className="flex items-center gap-0.5">
+                    <TipButton
+                        tip={showGrid ? 'Hide Grid' : 'Show Grid'}
+                        variant={showGrid ? 'outline' : 'ghost'}
+                        onClick={toggleGrid}
+                    >
+                        <GridNineIcon weight={showGrid ? 'fill' : 'regular'} />
+                    </TipButton>
+                    <TipButton tip="Refresh all screens" variant="ghost" onClick={reboot}>
+                        <ArrowsClockwiseIcon />
+                    </TipButton>
                     <TipButton tip="Clear all layers" variant="destructive" onClick={clearStage}>
                         <EraserIcon />
-                    </TipButton>
-                    <TipButton tip="Refresh all screens" variant="destructive" onClick={reboot}>
-                        <ArrowsClockwiseIcon />
                     </TipButton>
                 </div>
             </div>
