@@ -105,7 +105,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     showGrid: true,
     showInk: true,
     isDrawing: false,
-    isSnapping: false,
+    isSnapping: true,
     inkColour: '#ff0000',
     inkWidth: 10,
     inkDash: [],

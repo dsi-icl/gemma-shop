@@ -29,6 +29,8 @@ const engine = EditorEngine.getInstance();
 const STAGE_SCALE_FACTOR = 0.1;
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
+const BLOCKSNAP_X = SCREEN_W / 10;
+const BLOCKSNAP_Y = SCREEN_H / 5;
 const COLS = 16;
 const ROWS = 4;
 
@@ -50,6 +52,7 @@ export function EditorSlate() {
     const showGrid = useEditorStore((s) => s.showGrid);
     const showInk = useEditorStore((s) => s.showInk);
     const isDrawing = useEditorStore((s) => s.isDrawing);
+    const isSnapping = useEditorStore((s) => s.isSnapping);
     const addInkLayer = useEditorStore((s) => s.addInkLayer);
     const inkColour = useEditorStore((s) => s.inkColour);
     const inkDash = useEditorStore((s) => s.inkDash);
@@ -129,12 +132,33 @@ export function EditorSlate() {
     // ── Keyboard shortcut ─────────────────────────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (!useEditorStore.getState().selectedLayerIds.length) return;
-            if (e.key === 'Delete') useEditorStore.getState().deleteSelectedLayer();
+            const store = useEditorStore.getState();
+            if (!store.selectedLayerIds.length) return;
+            if (e.key === 'Delete') store.deleteSelectedLayer();
+            if (e.key === 'Escape') store.deselectAllLayers();
+            const currentSelected = store.layers.find(
+                (l) => l.numericId === parseInt(store.selectedLayerIds[0])
+            );
+            if (!currentSelected) return;
+            e.preventDefault();
+            const newLayerState = { ...currentSelected, config: { ...currentSelected.config } };
+            if (e.key === 'ArrowLeft') {
+                if (e.shiftKey)
+                    newLayerState.config.rotation = Math.round(newLayerState.config.rotation - 1);
+                else newLayerState.config.cx -= isSnapping ? BLOCKSNAP_X : 10;
+            }
+            if (e.key === 'ArrowRight') {
+                if (e.shiftKey)
+                    newLayerState.config.rotation = Math.round(newLayerState.config.rotation + 1);
+                else newLayerState.config.cx += isSnapping ? BLOCKSNAP_X : 10;
+            }
+            if (e.key === 'ArrowUp') newLayerState.config.cy -= isSnapping ? BLOCKSNAP_Y : 10;
+            if (e.key === 'ArrowDown') newLayerState.config.cy += isSnapping ? BLOCKSNAP_Y : 10;
+            store.updateLayerConfig(currentSelected.numericId, newLayerState.config);
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [isSnapping]);
 
     // ── Upload handler (stays here — complex async + file APIs) ───────────
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -332,6 +356,17 @@ export function EditorSlate() {
             // Must use layersRef — has binary-updated positions
             const layerToUpdate = layersRef.current.find((l) => l.numericId === numericId);
             if (!layerToUpdate) return;
+
+            if (
+                (isSnapping && layerToUpdate.type === 'image') ||
+                (layerToUpdate.type === 'shape' && layerToUpdate.shape === 'rectangle')
+            ) {
+                node.position({
+                    x: Math.round(node.x() / BLOCKSNAP_X) * BLOCKSNAP_X,
+                    y: Math.round(node.y() / BLOCKSNAP_Y) * BLOCKSNAP_Y
+                });
+                node.getLayer()?.batchDraw();
+            }
 
             const updatedConfig: Layer['config'] = {
                 ...layerToUpdate.config,

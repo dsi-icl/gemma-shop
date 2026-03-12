@@ -1,5 +1,5 @@
 import { useState, RefObject, useEffect } from 'react';
-import { KonvaNodeEvents, Layer, Line, Rect, Stage } from 'react-konva';
+import { Circle, KonvaNodeEvents, Layer, Line, Rect, Stage } from 'react-konva';
 
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
@@ -71,7 +71,7 @@ export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePrevie
                                         key={`ink_${shape.numericId}`}
                                         points={shape.line.map((p) => p / scaleFactor)}
                                         stroke={shape.color}
-                                        strokeWidth={(shape.width / scaleFactor) * 5}
+                                        strokeWidth={(shape.width / scaleFactor) * 4}
                                         dash={shape.dash.map((d) => d / scaleFactor)}
                                         dashEnabled={true}
                                         tension={0.4}
@@ -79,6 +79,42 @@ export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePrevie
                                         lineJoin="round"
                                     />
                                 );
+                            if (shape.type === 'shape') {
+                                if (shape.shape === 'circle')
+                                    return (
+                                        <Circle
+                                            key={shape.numericId}
+                                            x={shape.config.cx / scaleFactor}
+                                            y={shape.config.cy / scaleFactor}
+                                            offsetX={shape.config.width / scaleFactor / 2}
+                                            offsetY={shape.config.height / scaleFactor / 2}
+                                            radius={shape.config.width / scaleFactor / 2}
+                                            fill="transparent"
+                                            stroke={shape.strokeColor}
+                                            strokeWidth={(shape.strokeWidth / scaleFactor) * 4}
+                                            dash={shape.strokeDash.map((d) => d / scaleFactor)}
+                                            listening={false}
+                                        />
+                                    );
+                                if (shape.shape === 'rectangle')
+                                    return (
+                                        <Rect
+                                            key={shape.numericId}
+                                            x={shape.config.cx / scaleFactor}
+                                            y={shape.config.cy / scaleFactor}
+                                            width={shape.config.width / scaleFactor}
+                                            height={shape.config.height / scaleFactor}
+                                            offsetX={shape.config.width / scaleFactor / 2}
+                                            offsetY={shape.config.height / scaleFactor / 2}
+                                            rotation={shape.config.rotation}
+                                            fill="transparent"
+                                            stroke={shape.strokeColor}
+                                            strokeWidth={(shape.strokeWidth / scaleFactor) * 4}
+                                            dash={shape.strokeDash.map((d) => d / scaleFactor)}
+                                            listening={false}
+                                        />
+                                    );
+                            }
                             return (
                                 <Rect
                                     key={shape.numericId}
@@ -89,7 +125,7 @@ export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePrevie
                                     offsetX={shape.config.width / scaleFactor / 2}
                                     offsetY={shape.config.height / scaleFactor / 2}
                                     rotation={shape.config.rotation}
-                                    fill="#0f0"
+                                    fill="#555"
                                     listening={false}
                                 />
                             );
