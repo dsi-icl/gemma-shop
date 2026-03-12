@@ -2,15 +2,18 @@ import {
     ArrowLineDownIcon,
     ArrowLineUpIcon,
     ArrowsClockwiseIcon,
+    CircleIcon,
     EraserIcon,
     GridNineIcon,
     ImageIcon,
     MapPinIcon,
     PencilSimpleIcon,
+    RectangleIcon,
     ShapesIcon,
-    TextTIcon,
-    TrashIcon
+    TextTIcon
 } from '@phosphor-icons/react';
+import { Button } from '@repo/ui/components/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/popover';
 import { Separator } from '@repo/ui/components/separator';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { TooltipProvider } from '@repo/ui/components/tooltip';
@@ -34,9 +37,9 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         layers,
         addTextLayer,
         addMapLayer,
+        addShapeLayer,
         bringToFront,
         sendToBack,
-        deleteSelectedLayer,
         clearStage,
         reboot
     } = useEditorStore();
@@ -53,6 +56,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         : null;
     const isVideo = activeLayer?.type === 'video';
     const isText = activeLayer?.type === 'text';
+    const isShape = activeLayer?.type === 'shape';
     const isInk = activeLayer?.type === 'ink';
 
     return (
@@ -75,9 +79,35 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     <TipButton tip="Upload media" onClick={() => fileInputRef.current?.click()}>
                         <ImageIcon />
                     </TipButton>
-                    <TipButton tip="Add shape">
-                        <ShapesIcon />
-                    </TipButton>
+                    <Popover>
+                        <PopoverTrigger>
+                            <TipButton tip="Add shape">
+                                <ShapesIcon />
+                            </TipButton>
+                        </PopoverTrigger>
+                        <PopoverContent side="top" className="w-auto p-1">
+                            <div className="flex gap-1">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                        addShapeLayer('rectangle');
+                                    }}
+                                >
+                                    <RectangleIcon />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                        addShapeLayer('circle');
+                                    }}
+                                >
+                                    <CircleIcon />
+                                </Button>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                     <TipButton tip="Add text layer" onClick={addTextLayer}>
                         <TextTIcon />
                     </TipButton>
@@ -94,7 +124,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                 </div>
 
                 {/* ── Ink ── */}
-                {isDrawing || isInk ? (
+                {isDrawing || isInk || isShape ? (
                     <>
                         <Separator orientation="vertical" className="mx-1 h-6" />
                         <InkToolbar />
@@ -112,13 +142,6 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                             <TipButton tip="Send to back" onClick={sendToBack}>
                                 <ArrowLineDownIcon />
                             </TipButton>
-                            {/* <TipButton
-                                tip="Delete layer"
-                                variant="destructive"
-                                onClick={deleteSelectedLayer}
-                            >
-                                <TrashIcon />
-                            </TipButton> */}
                         </div>
                     </>
                 )}

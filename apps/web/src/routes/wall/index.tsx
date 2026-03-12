@@ -178,6 +178,7 @@ function WallApp() {
                     <svg
                         width={layer.config.width * 1.5}
                         height={layer.config.height * 1.5}
+                        className="overflow-visible"
                         xmlns="http://www.w3.org/2000/svg"
                     >
                         <polyline
@@ -192,6 +193,60 @@ function WallApp() {
                     </svg>
                 </div>
             );
+        }
+
+        if (layer.type === 'shape') {
+            if (layer.shape === 'rectangle')
+                return (
+                    <div key={layer.numericId} {...commonProps}>
+                        <svg
+                            width={layer.config.width}
+                            height={layer.config.height}
+                            className="overflow-visible"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <rect
+                                x={0}
+                                y={0}
+                                width={layer.config.width}
+                                height={layer.config.height}
+                                fill="none"
+                                stroke={layer.strokeColor}
+                                strokeDasharray={layer.strokeDash.join(' ')}
+                                strokeWidth={layer.strokeWidth}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                overflow="visible"
+                                //    rx=""
+                            />
+                        </svg>
+                    </div>
+                );
+
+            if (layer.shape === 'circle')
+                return (
+                    <div key={layer.numericId} {...commonProps} className="origin-top-left">
+                        <svg
+                            width={layer.config.width}
+                            height={layer.config.height}
+                            className="overflow-visible"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <circle
+                                cx={0}
+                                cy={0}
+                                r={layer.config.width / 2}
+                                fill="none"
+                                stroke={layer.strokeColor}
+                                strokeDasharray={layer.strokeDash.join(' ')}
+                                strokeWidth={layer.strokeWidth}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                overflow="visible"
+                            />
+                        </svg>
+                    </div>
+                );
         }
         return null;
     });

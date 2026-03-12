@@ -6,7 +6,10 @@ import {
     TextTIcon,
     GraphIcon,
     ScribbleIcon,
-    TrashIcon
+    TrashIcon,
+    RectangleIcon,
+    ShapesIcon,
+    CircleIcon
 } from '@phosphor-icons/react';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { cn } from '@repo/ui/lib/utils';
@@ -35,6 +38,16 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                 return <GraphIcon size={20} weight="bold" />;
             case 'map':
                 return <MapTrifoldIcon size={20} weight="bold" />;
+            case 'shape': {
+                switch ((layer as Extract<LayerWithEditorState, { type: 'shape' }>).shape) {
+                    case 'circle':
+                        return <CircleIcon size={20} weight="bold" />;
+                    case 'rectangle':
+                        return <RectangleIcon size={20} weight="bold" />;
+                    default:
+                        return <ShapesIcon size={20} weight="bold" />;
+                }
+            }
             case 'ink':
                 return <ScribbleIcon size={20} weight="bold" />;
             default:
@@ -54,6 +67,17 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                 return 'Graph';
             case 'map':
                 return 'Map';
+            case 'shape': {
+                switch ((layer as Extract<LayerWithEditorState, { type: 'shape' }>).shape) {
+                    case 'circle':
+                        return 'Circle';
+                    case 'rectangle':
+                        return 'Rectangle';
+                    default:
+                        return 'Shape';
+                }
+            }
+            case 'ink':
             case 'ink':
                 return 'Ink Line';
             default:

@@ -20,15 +20,16 @@ export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePrevie
 
     useEffect(() => {
         if (!stageSlot.current) return;
+        const currentStageSlot = stageSlot.current;
         const onScroll = () => {
             if (!stageSlot.current) return;
             setScrollLeft(stageSlot.current.scrollLeft);
         };
         stageSlot.current.addEventListener('scroll', onScroll);
         return () => {
-            stageSlot.current?.removeEventListener('scroll', onScroll);
+            currentStageSlot?.removeEventListener('scroll', onScroll);
         };
-    }, [stageSlot.current]);
+    }, [stageSlot]);
 
     const canvasWidth = stageSlot.current?.clientWidth || window.innerWidth;
     const canvasHeight = stageSlot.current?.clientHeight || window.innerHeight;

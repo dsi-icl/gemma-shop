@@ -1,7 +1,16 @@
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stage, Layer as KonvaLayer, Transformer, Group, Text, Rect, Line } from 'react-konva';
+import {
+    Stage,
+    Layer as KonvaLayer,
+    Transformer,
+    Group,
+    Text,
+    Rect,
+    Line,
+    Circle
+} from 'react-konva';
 
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaVideo } from '~/components/KonvaVideo';
@@ -272,7 +281,7 @@ export function EditorSlate() {
         if (!node || !layer) return;
 
         // Scale baking for image/map layers
-        if (layer.type === 'image' || layer.type === 'map') {
+        if (layer.type === 'image' || layer.type === 'map' || layer.type === 'shape') {
             const scaleX = node.scaleX();
             const scaleY = node.scaleY();
 
@@ -349,6 +358,12 @@ export function EditorSlate() {
                     type: 'upsert_layer',
                     origin: 'handleTransformEnd',
                     layer: { ...layerToUpdate, config: updatedConfig, playback: truePlayback }
+                });
+            } else if (layerToUpdate.type === 'shape') {
+                engine.sendJSON({
+                    type: 'upsert_layer',
+                    origin: 'handleTransformEnd',
+                    layer: { ...layerToUpdate, config: updatedConfig }
                 });
             } else {
                 engine.sendJSON({
@@ -670,6 +685,52 @@ export function EditorSlate() {
                                             onTransformEnd={props.onTransformEnd}
                                         />
                                     );
+                                }
+                                if (layer.type === 'shape') {
+                                    const commonProps = {
+                                        id: layer.numericId.toString(),
+                                        x: layer.config.cx,
+                                        y: layer.config.cy,
+                                        rotation: layer.config.rotation,
+                                        scaleX: layer.config.scaleX,
+                                        scaleY: layer.config.scaleY,
+                                        draggable: !props.isPinching,
+                                        onClick: props.onSelect,
+                                        onTap: props.onSelect,
+                                        onDragMove: props.onTransform,
+                                        onTransform: props.onTransform,
+                                        onDragEnd: props.onTransformEnd,
+                                        onTransformEnd: props.onTransformEnd,
+                                        fill: layer.fill,
+                                        stroke: layer.strokeColor,
+                                        strokeWidth: layer.strokeWidth
+                                    };
+
+                                    if (layer.shape === 'rectangle') {
+                                        return (
+                                            <Rect
+                                                key={`shape_${layer.numericId}`}
+                                                {...commonProps}
+                                                width={layer.config.width}
+                                                height={layer.config.height}
+                                                offsetX={layer.config.width / 2}
+                                                offsetY={layer.config.height / 2}
+                                                dash={layer.strokeDash}
+                                            />
+                                        );
+                                    }
+                                    if (layer.shape === 'circle') {
+                                        return (
+                                            <Circle
+                                                key={`shape_${layer.numericId}`}
+                                                {...commonProps}
+                                                offsetX={layer.config.width / 2}
+                                                offsetY={layer.config.height / 2}
+                                                radius={layer.config.width / 2}
+                                                dash={layer.strokeDash}
+                                            />
+                                        );
+                                    }
                                 }
                                 if (showInk && layer.type === 'ink') {
                                     return (

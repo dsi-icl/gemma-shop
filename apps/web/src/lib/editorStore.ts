@@ -42,6 +42,8 @@ interface EditorState {
     inkColour: string;
     inkWidth: number;
     inkDash: number[];
+    shapeFill: string;
+    shapeStroke: string;
 
     // ── Pure state mutations ──
     loadProject: (projectId: string, slideId: string) => Promise<void>;
@@ -57,6 +59,7 @@ interface EditorState {
     setInkColour: (color: string) => void;
     setInkWidth: (width: number) => void;
     setInkDash: (dash: number[]) => void;
+    setShapeFill: (fill: string) => void;
 
     // ── Allocators ──
     allocateId: () => number;
@@ -68,6 +71,7 @@ interface EditorState {
     sendToBack: () => void;
     addTextLayer: () => void;
     addMapLayer: () => void;
+    addShapeLayer: (shape: 'rectangle' | 'circle') => void;
     addInkLayer: (line: Array<number>) => void;
     clearStage: () => void;
     reboot: () => void;
@@ -102,6 +106,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     inkColour: '#ff0000',
     inkWidth: 10,
     inkDash: [],
+    shapeFill: '#ff0000',
+    shapeStroke: '#000000',
 
     // ── Pure state mutations ──────────────────────────────────────────────
     loadProject: async (projectId, slideId) => {
@@ -215,6 +221,12 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
                 newState.inkDash = selectedLayer.dash;
                 newState.inkWidth = selectedLayer.width;
             }
+            if (selectedLayer?.type === 'shape') {
+                newState.inkColour = selectedLayer.strokeColor;
+                newState.inkDash = selectedLayer.strokeDash;
+                newState.inkWidth = selectedLayer.strokeWidth;
+                newState.shapeFill = selectedLayer.fill;
+            }
             set(newState);
         }
         set({ lastSelectedLayerId: id });
@@ -229,9 +241,13 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             const newState: Partial<EditorState> = { inkColour: color };
             if (s.selectedLayerIds.length > 0) {
                 const numericId = parseInt(s.selectedLayerIds[0]);
-                newState.layers = s.layers.map((l) =>
-                    l.numericId === numericId ? { ...l, color } : l
-                );
+                newState.layers = s.layers.map((l) => {
+                    if (l.numericId === numericId) {
+                        if (l.type === 'ink') return { ...l, color };
+                        if (l.type === 'shape') return { ...l, strokeColor: color };
+                    }
+                    return l;
+                });
                 const newLayerState = s.layers.find((l) => l.numericId === numericId);
                 if (newLayerState) {
                     sendLayerUpdate(newLayerState, 'setInkColour');
@@ -245,9 +261,13 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             const newState: Partial<EditorState> = { inkWidth: width };
             if (s.selectedLayerIds.length > 0) {
                 const numericId = parseInt(s.selectedLayerIds[0]);
-                newState.layers = s.layers.map((l) =>
-                    l.numericId === numericId ? { ...l, width } : l
-                );
+                newState.layers = s.layers.map((l) => {
+                    if (l.numericId === numericId) {
+                        if (l.type === 'ink') return { ...l, width };
+                        if (l.type === 'shape') return { ...l, strokeWidth: width };
+                    }
+                    return l;
+                });
                 const newLayerState = s.layers.find((l) => l.numericId === numericId);
                 if (newLayerState) {
                     sendLayerUpdate(newLayerState, 'setInkWidth');
@@ -261,12 +281,32 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             const newState: Partial<EditorState> = { inkDash: dash };
             if (s.selectedLayerIds.length > 0) {
                 const numericId = parseInt(s.selectedLayerIds[0]);
-                newState.layers = s.layers.map((l) =>
-                    l.numericId === numericId ? { ...l, dash } : l
-                );
+                newState.layers = s.layers.map((l) => {
+                    if (l.numericId === numericId) {
+                        if (l.type === 'ink') return { ...l, dash };
+                        if (l.type === 'shape') return { ...l, strokeDash: dash };
+                    }
+                    return l;
+                });
                 const newLayerState = s.layers.find((l) => l.numericId === numericId);
                 if (newLayerState) {
                     sendLayerUpdate(newLayerState, 'setInkDash');
+                }
+            }
+            return newState;
+        });
+    },
+    setShapeFill: (fill) => {
+        set((s) => {
+            const newState: Partial<EditorState> = { shapeFill: fill };
+            if (s.selectedLayerIds.length > 0) {
+                const numericId = parseInt(s.selectedLayerIds[0]);
+                newState.layers = s.layers.map((l) =>
+                    l.numericId === numericId ? { ...l, fill } : l
+                );
+                const newLayerState = s.layers.find((l) => l.numericId === numericId);
+                if (newLayerState) {
+                    sendLayerUpdate(newLayerState, 'setShapeFill');
                 }
             }
             return newState;
@@ -408,6 +448,43 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         engine.sendJSON({
             type: 'upsert_layer',
             origin: 'addMapLayer',
+            layer: newLayer
+        });
+    },
+
+    addShapeLayer: (shape) => {
+        const { allocateId, allocateZIndex, inkColour, inkDash, inkWidth } = get();
+        const numericId = allocateId();
+        const zIndex = allocateZIndex();
+
+        const newLayer: LayerWithEditorState = {
+            numericId,
+            type: 'shape',
+            shape,
+            config: {
+                cx: 1920 / 2,
+                cy: 1080 / 2,
+                width: 200,
+                height: 200,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                zIndex
+            },
+            fill: 'transparent',
+            strokeColor: inkColour,
+            strokeDash: inkDash,
+            strokeWidth: inkWidth
+        };
+
+        set((s) => ({
+            layers: [...s.layers, newLayer],
+            selectedLayerIds: [numericId.toString()]
+        }));
+        const engine = EditorEngine.getInstance();
+        engine.sendJSON({
+            type: 'upsert_layer',
+            origin: 'addShapeLayer',
             layer: newLayer
         });
     },
