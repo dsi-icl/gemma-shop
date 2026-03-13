@@ -22,6 +22,7 @@ import { useEditorStore } from '~/lib/editorStore';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
 
+import DOPreview from './DOPreview';
 import { SlatePreview } from './SlatePreview';
 
 const engine = EditorEngine.getInstance();
@@ -65,6 +66,7 @@ export function EditorSlate() {
     const stageLastX = useRef(0);
 
     const stageSlot = useRef<HTMLDivElement>(null);
+    const stageInstance = useRef<Konva.Stage>(null);
     const trRef = useRef<Konva.Transformer>(null);
     const lastCenter = useRef<{ x: number; y: number } | null>(null);
     const lastDist = useRef<number | null>(null);
@@ -358,8 +360,9 @@ export function EditorSlate() {
             if (!layerToUpdate) return;
 
             if (
-                (isSnapping && layerToUpdate.type === 'image') ||
-                (layerToUpdate.type === 'shape' && layerToUpdate.shape === 'rectangle')
+                isSnapping &&
+                (layerToUpdate.type === 'image' ||
+                    (layerToUpdate.type === 'shape' && layerToUpdate.shape === 'rectangle'))
             ) {
                 node.position({
                     x: Math.round(node.x() / BLOCKSNAP_X) * BLOCKSNAP_X,
@@ -588,6 +591,7 @@ export function EditorSlate() {
                 className="h-fit overflow-auto border-b border-border bg-black"
             >
                 <Stage
+                    ref={stageInstance}
                     width={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
                     height={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
                     onMouseDown={handleStageInteractionStart}
@@ -836,6 +840,7 @@ export function EditorSlate() {
                 stageHeight={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
             />
             <Toolbar fileInputRef={fileInputRef} onUpload={handleUpload} />
+            {/* <DOPreview imageUrl={stageInstance.current?.toDataURL()} /> */}
         </>
     );
 }

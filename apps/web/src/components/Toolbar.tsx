@@ -83,7 +83,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                         <ImageIcon />
                     </TipButton>
                     <Popover>
-                        <PopoverTrigger>
+                        <PopoverTrigger nativeButton={false} render={<div />}>
                             <TipButton tip="Add shape">
                                 <ShapesIcon />
                             </TipButton>

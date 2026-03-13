@@ -36,6 +36,7 @@ interface EditorState {
     copiedSlide: Slide | null;
     lastSelectedSlide: string | null;
     lastSelectedLayerId: string | null;
+    showSpacePreview: boolean;
     showGrid: boolean;
     showInk: boolean;
     isDrawing: boolean;
@@ -88,6 +89,7 @@ interface EditorState {
     toggleInk: () => void;
     toggleDrawing: () => void;
     toggleSnapping: () => void;
+    toggleSpacePreview: () => void;
 }
 
 export const useEditorStore = create<EditorState>()((set, get) => ({
@@ -102,6 +104,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     copiedSlide: null,
     lastSelectedSlide: null,
     lastSelectedLayerId: null,
+    showSpacePreview: false,
     showGrid: true,
     showInk: true,
     isDrawing: false,
@@ -637,7 +640,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             isDrawing: !s.isDrawing,
             selectedLayerIds: !s.isDrawing ? [] : s.selectedLayerIds
         })),
-    toggleSnapping: () => set((s) => ({ isSnapping: !s.isSnapping }))
+    toggleSnapping: () => set((s) => ({ isSnapping: !s.isSnapping })),
+    toggleSpacePreview: () => set((s) => ({ showSpacePreview: !s.showSpacePreview }))
 }));
 
 // ── Wire EditorEngine → Store (runs once on module load) ──────────────────
