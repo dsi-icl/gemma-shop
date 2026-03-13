@@ -234,7 +234,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                 )}
 
                 {/* ── Video Playback ── */}
-                {isVideo && activeLayer && (
+                {isVideo && activeLayer && !activeLayer.isUploading && (
                     <>
                         <Separator orientation="vertical" className="mx-1 h-6" />
                         <PlaybackControls
