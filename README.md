@@ -17,6 +17,7 @@ A monorepo for GemmaShop MVP
 ├── packages
 │    ├── auth                   # Better Auth
 │    ├── db                     # MongoDB
+│    ├── emails                 # Template for emails
 │    └── ui                     # shadcn/ui primitives & utils
 ├── tooling
 │    └── tsconfig               # Shared TypeScript configuration
@@ -24,6 +25,18 @@ A monorepo for GemmaShop MVP
 ├── LICENSE
 └── README.md
 ```
+
+## Running in Development
+
+To run this software in development, make sure to have Bun installed and a running instance of MongoDB replica set.
+
+Check for environment variables to be set (.env)
+
+Run `bun run dev`
+
+## Running in Production
+
+TBD
 
 ## Entry points
 
