@@ -25,6 +25,15 @@ A monorepo for GemmaShop MVP
 └── README.md
 ```
 
+## Entry points
+
+The application has multiple entry-points which are conditionned by the target deployment. The home page will currently have links to a few :
+
+- /gallery _For the list of project_
+- /quary _For project management_
+- /quary/editor _Specifically for editing_
+- /wall _For client rendering nodes (needs to be provided with query parameters c and r)_
+
 ## License
 
 [MIT](./LICENSE)
