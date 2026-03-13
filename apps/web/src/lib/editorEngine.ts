@@ -6,6 +6,7 @@ import { GSMessageSchema, type GSMessage, type Layer } from './types';
 
 const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
 
+type SaveResponseCallback = (data: Extract<GSMessage, { type: 'stage_save_response' }>) => void;
 type ServerMessageCallback = (data: GSMessage) => void;
 type BinaryMessageCallback = (
     id: number,
@@ -29,9 +30,12 @@ export class EditorEngine {
     private binaryCallbacks = new Set<BinaryMessageCallback>();
     private playbackCallbacks = new Set<PlaybackCallback>();
     private playbackStates = new Map<number, Extract<Layer, { type: 'video' }>['playback']>();
+    private saveCallbacks = new Set<SaveResponseCallback>();
     private bufferedHydration: Extract<GSMessage, { type: 'hydrate' }> | null = null;
     private clockOffset = 0;
     private bestRTT = Infinity;
+    private currentProjectId: string | null = null;
+    private currentSlideId: string | null = null;
 
     private constructor() {
         this.ws = new WebSocket(WEBSOCKET_GEMMA_BUS);
@@ -39,7 +43,13 @@ export class EditorEngine {
 
         this.ws.onopen = () => {
             console.log('Editor Engine: Connected to Server');
-            this.ws.send(JSON.stringify({ type: 'hello', specimen: 'editor' }));
+            const hello: GSMessage = {
+                type: 'hello',
+                specimen: 'editor',
+                ...(this.currentProjectId && { projectId: this.currentProjectId }),
+                ...(this.currentSlideId && { slideId: this.currentSlideId })
+            };
+            this.ws.send(JSON.stringify(hello));
             this.startClockSync();
         };
 
@@ -89,6 +99,11 @@ export class EditorEngine {
                 if (data.type === 'video_sync' || data.type === 'video_seek') {
                     this.playbackStates.set(data.numericId, data.playback);
                     this.playbackCallbacks.forEach((cb) => cb(data.numericId, data.playback));
+                    return;
+                }
+
+                if (data.type === 'stage_save_response') {
+                    this.saveCallbacks.forEach((cb) => cb(data));
                     return;
                 }
 
@@ -181,6 +196,39 @@ export class EditorEngine {
 
     public setPlayback(id: number, pb: Extract<Layer, { type: 'video' }>['playback']) {
         this.playbackStates.set(id, pb);
+    }
+
+    /** Join a project/slide scope. Re-sends hello if already connected. */
+    public joinScope(projectId: string, slideId: string) {
+        this.currentProjectId = projectId;
+        this.currentSlideId = slideId;
+        if (this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(
+                JSON.stringify({
+                    type: 'hello',
+                    specimen: 'editor',
+                    projectId,
+                    slideId
+                })
+            );
+        }
+    }
+
+    /** Request the bus to save the current scope state */
+    public requestSave(message: string, isAutoSave = false) {
+        this.sendJSON({ type: 'stage_save', message, isAutoSave });
+    }
+
+    /** Notify the bus that the scope is dirty */
+    public sendDirty() {
+        this.sendJSON({ type: 'stage_dirty' });
+    }
+
+    public subscribeToSaveResponse(cb: SaveResponseCallback) {
+        this.saveCallbacks.add(cb);
+        return () => {
+            this.saveCallbacks.delete(cb);
+        };
     }
 
     public sendJSON = (data: GSMessage) => {

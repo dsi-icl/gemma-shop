@@ -3,21 +3,27 @@ import {
     ArrowLineUpIcon,
     ArrowsClockwiseIcon,
     ArrowsInLineHorizontalIcon,
+    CheckCircleIcon,
     CircleIcon,
+    CircleNotchIcon,
     EraserIcon,
+    FloppyDiskIcon,
     GridNineIcon,
     ImageIcon,
     MapPinIcon,
     PencilSimpleIcon,
     RectangleIcon,
     ShapesIcon,
-    TextTIcon
+    TextTIcon,
+    WarningCircleIcon
 } from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
+import { Input } from '@repo/ui/components/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/popover';
 import { Separator } from '@repo/ui/components/separator';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { TooltipProvider } from '@repo/ui/components/tooltip';
+import { useRef, useState } from 'react';
 
 import { InkToolbar } from '~/components/InkToolbar';
 import { PlaybackControls } from '~/components/PlaybackControls';
@@ -44,12 +50,14 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         bringToFront,
         sendToBack,
         clearStage,
-        reboot
+        reboot,
+        saveProject
     } = useEditorStore();
     const showGrid = useEditorStore((s) => s.showGrid);
     const toggleGrid = useEditorStore((s) => s.toggleGrid);
     const isDrawing = useEditorStore((s) => s.isDrawing);
     const toggleDrawing = useEditorStore((s) => s.toggleDrawing);
+    const saveStatus = useEditorStore((s) => s.saveStatus);
     const selectedId = selectedLayerIds[0];
 
     const engine = EditorEngine.getInstance();
@@ -61,6 +69,18 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     const isText = activeLayer?.type === 'text';
     const isShape = activeLayer?.type === 'shape';
     const isInk = activeLayer?.type === 'ink';
+
+    // Save popover state
+    const [commitMessage, setCommitMessage] = useState('');
+    const [savePopoverOpen, setSavePopoverOpen] = useState(false);
+    const commitInputRef = useRef<HTMLInputElement>(null);
+
+    const handleManualSave = () => {
+        const msg = commitMessage.trim() || 'Manual save';
+        setSavePopoverOpen(false);
+        setCommitMessage('');
+        saveProject(msg);
+    };
 
     return (
         <TooltipProvider>
@@ -76,6 +96,70 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     onChange={onUpload}
                     className="hidden"
                 />
+
+                {/* ── Save ── */}
+                <div className="flex items-center gap-0.5">
+                    <Popover open={savePopoverOpen} onOpenChange={setSavePopoverOpen}>
+                        <PopoverTrigger nativeButton={false} render={<div />}>
+                            <TipButton
+                                tip={
+                                    saveStatus === 'dirty'
+                                        ? 'Unsaved changes — click to save'
+                                        : saveStatus === 'saving'
+                                          ? 'Saving...'
+                                          : saveStatus === 'saved'
+                                            ? 'Saved'
+                                            : saveStatus === 'error'
+                                              ? 'Save failed — click to retry'
+                                              : 'Save project'
+                                }
+                                variant={
+                                    saveStatus === 'dirty' || saveStatus === 'error'
+                                        ? 'outline'
+                                        : 'ghost'
+                                }
+                                disabled={saveStatus === 'saving'}
+                            >
+                                {saveStatus === 'saving' ? (
+                                    <CircleNotchIcon className="animate-spin" />
+                                ) : saveStatus === 'saved' ? (
+                                    <CheckCircleIcon weight="fill" className="text-green-500" />
+                                ) : saveStatus === 'error' ? (
+                                    <WarningCircleIcon weight="fill" className="text-destructive" />
+                                ) : (
+                                    <FloppyDiskIcon
+                                        weight={saveStatus === 'dirty' ? 'fill' : 'regular'}
+                                    />
+                                )}
+                            </TipButton>
+                        </PopoverTrigger>
+                        <PopoverContent side="top" className="w-72 p-3">
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handleManualSave();
+                                }}
+                                className="flex flex-col gap-2"
+                            >
+                                <label className="text-xs font-medium text-muted-foreground">
+                                    Commit message
+                                </label>
+                                <Input
+                                    ref={commitInputRef}
+                                    value={commitMessage}
+                                    onChange={(e) => setCommitMessage(e.target.value)}
+                                    placeholder="Describe your changes..."
+                                    autoFocus
+                                />
+                                <Button type="submit" size="sm" disabled={saveStatus === 'saving'}>
+                                    {saveStatus === 'saving' ? 'Saving...' : 'Save version'}
+                                </Button>
+                            </form>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                <Separator orientation="vertical" className="mx-1 h-6" />
 
                 {/* ── Add Content ── */}
                 <div className="flex items-center gap-0.5">
@@ -168,6 +252,11 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                 )}
 
                 <div className="grow" />
+
+                {/* ── Save status text ── */}
+                {saveStatus === 'dirty' && (
+                    <span className="text-xs text-muted-foreground">Unsaved</span>
+                )}
 
                 {/* Spacer */}
                 <div className="flex-1" />

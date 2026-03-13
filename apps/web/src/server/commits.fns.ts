@@ -57,7 +57,8 @@ export const saveNamedVersion = createServerFn({ method: 'POST' })
         z.object({
             projectId: z.string(),
             message: z.string().min(1, 'Please provide a version name'),
-            content: z.any() // Your JSON array of layers
+            content: z.any(), // The full slides+layers content
+            isAutoSave: z.boolean().optional().default(false)
         })
     )
     .handler(async ({ data }) => {
@@ -66,14 +67,14 @@ export const saveNamedVersion = createServerFn({ method: 'POST' })
         const project = await db.collection('projects').findOne({ _id: projectId });
         if (!project) throw new Error('Project not found');
 
-        // 1. Create a brand new, permanent commit node
+        // 1. Create a brand new commit node
         const newCommit = {
             projectId,
             parentId: project.headCommitId, // Point back to the last known state
-            authorId: new ObjectId(), // Replace with your Better-Auth session user ID
-            message: data.message, // e.g., "Ready for Presentation"
-            content: data.content, // The exact JSON array from your editor
-            isAutoSave: false, // Explicitly mark as a manual save
+            authorId: new ObjectId(), // Replace with Better-Auth session user ID
+            message: data.message,
+            content: data.content,
+            isAutoSave: data.isAutoSave,
             createdAt: new Date()
         };
 

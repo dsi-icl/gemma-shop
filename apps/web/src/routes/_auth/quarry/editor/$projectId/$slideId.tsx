@@ -3,25 +3,52 @@ import {
     ResizablePanel,
     ResizablePanelGroup
 } from '@repo/ui/components/resizable';
-import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { createFileRoute, useParams } from '@tanstack/react-router';
+import { useCallback, useEffect, useState } from 'react';
 import { usePanelRef } from 'react-resizable-panels';
 
 import { LayerList } from '~/components/LayerList';
 import { MainBoard } from '~/components/MainBoard';
 import { SlideList } from '~/components/SlideList';
+import { useEditorStore } from '~/lib/editorStore';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId/$slideId')({
     component: SlideEditor
 });
 
 function SlideEditor() {
+    const { projectId, slideId } = useParams({
+        from: '/_auth/quarry/editor/$projectId/$slideId'
+    });
+    const loadProject = useEditorStore((s) => s.loadProject);
+
     const [hasInitialised, setHasInitialised] = useState(false);
     const slidePanelRef = usePanelRef();
     const layerPanelRef = usePanelRef();
     const [slidesCollapsed, setSlidesCollapsed] = useState(true);
     const [layersCollapsed, setLayersCollapsed] = useState(false);
     const titleBarSize = 40;
+
+    // Load project from commit DAG on mount
+    useEffect(() => {
+        loadProject(projectId, slideId);
+    }, [projectId, slideId, loadProject]);
+
+    // Ctrl+S keyboard shortcut for manual save
+    const handleKeyboardSave = useCallback((e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            const { saveStatus, saveProject: save } = useEditorStore.getState();
+            if (saveStatus === 'dirty') {
+                save('Manual save');
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        window.addEventListener('keydown', handleKeyboardSave);
+        return () => window.removeEventListener('keydown', handleKeyboardSave);
+    }, [handleKeyboardSave]);
 
     useEffect(() => {
         if (hasInitialised) return;

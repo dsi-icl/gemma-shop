@@ -73,7 +73,9 @@ function CommitsTab() {
                                 <TableRow key={commit._id}>
                                     <TableCell className="font-medium">{commit.message}</TableCell>
                                     <TableCell className="text-muted-foreground">
-                                        {new Date(commit.createdAt).toLocaleString()}
+                                        {commit.updatedAt
+                                            ? new Date(commit.updatedAt).toLocaleString()
+                                            : new Date(commit.createdAt).toLocaleString()}
                                     </TableCell>
                                     <TableCell>
                                         {isPublished && (

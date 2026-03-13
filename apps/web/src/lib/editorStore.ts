@@ -1,10 +1,11 @@
 import { throttle } from '@tanstack/pacer';
-import { s } from 'motion/react-client';
 import { create } from 'zustand';
 
 import { $getCommit, $getProject } from '../server/projects.fns';
 import { EditorEngine } from './editorEngine';
 import type { Layer, LayerWithEditorState, Slide } from './types';
+
+type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 /** Send a layer update to the server, preserving video playback state */
 const sendLayerUpdate = throttle(
@@ -47,6 +48,10 @@ interface EditorState {
     shapeFill: string;
     shapeStroke: string;
 
+    // ── Save pipeline state ──
+    saveStatus: SaveStatus;
+    headCommitId: string | null;
+
     // ── Pure state mutations ──
     loadProject: (projectId: string, slideId: string) => Promise<void>;
     hydrate: (layers: LayerWithEditorState[]) => void;
@@ -62,6 +67,10 @@ interface EditorState {
     setInkWidth: (width: number) => void;
     setInkDash: (dash: number[]) => void;
     setShapeFill: (fill: string) => void;
+
+    // ── Save actions ──
+    markDirty: () => void;
+    saveProject: (message: string) => void;
 
     // ── Allocators ──
     allocateId: () => number;
@@ -115,23 +124,53 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     shapeFill: '#ff0000',
     shapeStroke: '#000000',
 
+    // ── Save pipeline state ──
+    saveStatus: 'idle',
+    headCommitId: null,
+
     // ── Pure state mutations ──────────────────────────────────────────────
     loadProject: async (projectId, slideId) => {
-        set({ projectId, layers: [], slides: [], activeSlideId: null });
+        set({
+            projectId,
+            layers: [],
+            slides: [],
+            activeSlideId: null,
+            saveStatus: 'idle',
+            headCommitId: null
+        });
+
+        // Join the scope on the bus — this triggers hydration from bus state
+        const engine = EditorEngine.getInstance();
+        engine.joinScope(projectId, slideId);
+
         const project = await $getProject({ data: { id: projectId } });
 
         if (project && project.headCommitId) {
             const commit = await $getCommit({ data: { id: project.headCommitId } });
             if (commit && commit.content && commit.content.slides) {
-                const slides = commit.content.slides.map(
+                const commitSlides = commit.content.slides as Array<{
+                    id: string;
+                    order: number;
+                    layers: LayerWithEditorState[];
+                }>;
+                const slides = commitSlides.map(
                     (s) => ({ id: s.id, description: `Slide ${s.order}` }) as Slide
                 );
-                set({ slides });
+                set({ slides, headCommitId: project.headCommitId });
 
-                const activeSlide = commit.content.slides.find((s) => s.id === slideId);
+                const activeSlide = commitSlides.find((s) => s.id === slideId);
                 if (activeSlide) {
                     get().hydrate(activeSlide.layers as LayerWithEditorState[]);
                     set({ activeSlideId: slideId });
+
+                    // Push layers to the bus so it has the committed state for this scope
+                    for (const layer of activeSlide.layers) {
+                        engine.sendJSON({
+                            type: 'upsert_layer',
+                            origin: 'loadProject',
+                            layer: layer as LayerWithEditorState
+                        });
+                    }
                 }
             }
         }
@@ -169,6 +208,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         }));
         const engine = EditorEngine.getInstance();
         engine.sendJSON({ type: 'delete_layer', numericId });
+        get().markDirty();
     },
 
     updateProgress: (numericId, progress) =>
@@ -176,10 +216,12 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             layers: s.layers.map((l) => (l.numericId === numericId ? { ...l, progress } : l))
         })),
 
-    updateLayerConfig: (numericId, config) =>
+    updateLayerConfig: (numericId, config) => {
         set((s) => ({
             layers: s.layers.map((l) => (l.numericId === numericId ? { ...l, config } : l))
-        })),
+        }));
+        get().markDirty();
+    },
 
     deselectAllLayers: () => {
         set(() => ({
@@ -261,6 +303,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             }
             return newState;
         });
+        get().markDirty();
     },
     setInkWidth: (width) => {
         set((s) => {
@@ -281,6 +324,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             }
             return newState;
         });
+        get().markDirty();
     },
     setInkDash: (dash) => {
         set((s) => {
@@ -301,6 +345,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             }
             return newState;
         });
+        get().markDirty();
     },
     setShapeFill: (fill) => {
         set((s) => {
@@ -317,6 +362,25 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             }
             return newState;
         });
+        get().markDirty();
+    },
+
+    // ── Save pipeline ─────────────────────────────────────────────────────
+
+    markDirty: () => {
+        const { saveStatus } = get();
+        if (saveStatus !== 'saving') {
+            set({ saveStatus: 'dirty' });
+            // Notify bus that scope is dirty (bus handles auto-save)
+            const engine = EditorEngine.getInstance();
+            engine.sendDirty();
+        }
+    },
+
+    saveProject: (message) => {
+        set({ saveStatus: 'saving' });
+        const engine = EditorEngine.getInstance();
+        engine.requestSave(message);
     },
 
     // ── Allocators ────────────────────────────────────────────────────────
@@ -345,6 +409,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             layers: s.layers.filter((l) => l.numericId !== numericId),
             selectedLayerIds: []
         }));
+        get().markDirty();
     },
 
     bringToFront: () => {
@@ -365,6 +430,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         });
 
         sendLayerUpdate(updatedLayer, 'bringToFront');
+        get().markDirty();
     },
 
     sendToBack: () => {
@@ -384,6 +450,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         });
 
         sendLayerUpdate(updatedLayer, 'sendToBack');
+        get().markDirty();
     },
 
     addTextLayer: () => {
@@ -417,6 +484,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             origin: 'addTextLayer',
             layer: newLayer
         });
+        get().markDirty();
     },
 
     addMapLayer: () => {
@@ -456,6 +524,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             origin: 'addMapLayer',
             layer: newLayer
         });
+        get().markDirty();
     },
 
     addShapeLayer: (shape) => {
@@ -493,6 +562,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             origin: 'addShapeLayer',
             layer: newLayer
         });
+        get().markDirty();
     },
 
     addInkLayer: (line) => {
@@ -552,12 +622,14 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             origin: 'addInkLayer',
             layer: newLayer
         });
+        get().markDirty();
     },
 
     clearStage: () => {
         const engine = EditorEngine.getInstance();
         engine.sendJSON({ type: 'clear_stage' });
         set({ layers: [], selectedLayerIds: [] });
+        get().markDirty();
     },
     reboot: () => {
         const engine = EditorEngine.getInstance();
@@ -578,12 +650,14 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         updatedLayers.forEach((layer) => {
             sendLayerUpdate(layer, 'reorderLayers');
         });
+        get().markDirty();
     },
 
     addSlide: () => {
         set((s) => ({
             slides: [...s.slides, { id: `s${Date.now()}`, description: 'New Slide' }]
         }));
+        get().markDirty();
     },
 
     copySlide: (slide) => {
@@ -599,10 +673,12 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             description: `${copiedSlide.description} (Copy)`
         };
         set((s) => ({ slides: [...s.slides, newSlide] }));
+        get().markDirty();
     },
 
     reorderSlides: (slides) => {
         set({ slides });
+        get().markDirty();
     },
 
     toggleSlideSelection: (id, isShiftClick, isCtrlClick) => {
@@ -656,5 +732,31 @@ engine.subscribeToJson((data) => {
         store.upsertLayer(data.layer);
     } else if (data.type === 'processing_progress') {
         store.updateProgress(data.numericId, data.progress);
+    }
+});
+
+// Wire save responses from the bus back into the store
+engine.subscribeToSaveResponse((data) => {
+    const store = useEditorStore.getState();
+    if (data.success) {
+        useEditorStore.setState({
+            saveStatus: 'saved',
+            headCommitId: data.commitId ?? store.headCommitId
+        });
+        // Reset to idle after brief "saved" flash
+        setTimeout(() => {
+            if (useEditorStore.getState().saveStatus === 'saved') {
+                useEditorStore.setState({ saveStatus: 'idle' });
+            }
+        }, 2000);
+    } else {
+        console.error('Save failed:', data.error);
+        useEditorStore.setState({ saveStatus: 'error' });
+        // Allow retry after 3s
+        setTimeout(() => {
+            if (useEditorStore.getState().saveStatus === 'error') {
+                useEditorStore.setState({ saveStatus: 'dirty' });
+            }
+        }, 3000);
     }
 });

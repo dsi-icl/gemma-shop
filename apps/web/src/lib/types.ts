@@ -76,7 +76,9 @@ export type Layer = z.infer<typeof LayerSchema>;
 export const GSMessageSchema = z
     .object({
         type: z.literal('hello'),
-        specimen: z.literal('wall').or(z.literal('editor')).or(z.literal('roy'))
+        specimen: z.literal('wall').or(z.literal('editor')).or(z.literal('roy')),
+        projectId: z.string().optional(),
+        slideId: z.string().optional()
     })
     .or(z.object({ type: z.literal('hydrate'), layers: LayerSchema.array() }))
     .or(z.object({ type: z.literal('rehydrate_please') }))
@@ -115,7 +117,24 @@ export const GSMessageSchema = z
     .or(z.object({ type: z.literal('clear_stage') }))
     .or(z.object({ type: z.literal('ping') }))
     .or(z.object({ type: z.literal('pong'), t0: z.number(), t1: z.number(), t2: z.number() }))
-    .or(z.object({ type: z.literal('reboot') }));
+    .or(z.object({ type: z.literal('reboot') }))
+    // ── Save pipeline messages ──
+    .or(
+        z.object({
+            type: z.literal('stage_save'),
+            message: z.string(),
+            isAutoSave: z.boolean().optional()
+        })
+    )
+    .or(
+        z.object({
+            type: z.literal('stage_save_response'),
+            success: z.boolean(),
+            commitId: z.string().optional(),
+            error: z.string().optional()
+        })
+    )
+    .or(z.object({ type: z.literal('stage_dirty') }));
 
 export type GSMessage = z.infer<typeof GSMessageSchema>;
 
@@ -130,6 +149,21 @@ export type LayerWithWallEngineState = LayerWithWallComponentState & {
 
 export type LayerWithEditorState = Layer & { progress?: number; isUploading?: boolean };
 
+/** Scope key format: "e:projectId:slideId" for editor scopes */
+export type ScopeKey = string;
+
+export function makeScopeKey(projectId: string, slideId: string): ScopeKey {
+    return `e:${projectId}:${slideId}`;
+}
+
+export interface ScopeState {
+    layers: Map<number, Layer>;
+    projectId: string;
+    slideId: string;
+    dirty: boolean;
+}
+
+/** Legacy single-scope interface (for wall clients that don't use scoping yet) */
 export interface StageState {
     layers: Map<number, Layer>;
 }

@@ -261,6 +261,7 @@ export interface SerializedCommit {
     authorId: string | null;
     message: string;
     createdAt: string;
+    updatedAt: string;
 }
 
 export interface SerializedCommitWithContent extends SerializedCommit {
@@ -285,7 +286,8 @@ export async function getProjectCommits(projectId: string): Promise<SerializedCo
         parentId: d.parentId?.toString() ?? null,
         authorId: d.authorId?.toString() ?? null,
         message: String(d.message ?? ''),
-        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt)
+        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
+        updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : String(d.updatedAt)
     }));
 }
 
@@ -337,6 +339,8 @@ function serializeCommit(doc: Record<string, unknown>): SerializedCommitWithCont
         message: String(doc.message ?? ''),
         createdAt:
             doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
+        updatedAt:
+            doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : String(doc.updatedAt),
         content: doc.content as SerializedCommitWithContent['content']
     };
 }

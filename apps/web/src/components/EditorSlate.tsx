@@ -411,7 +411,7 @@ export function EditorSlate() {
                 });
             }
         },
-        []
+        [isSnapping]
     );
 
     const flushNodeState = (idToFlush: string) => {
@@ -839,7 +839,9 @@ export function EditorSlate() {
                 stageHeight={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
             />
             <Toolbar fileInputRef={fileInputRef} onUpload={handleUpload} />
-            {/* <DOPreview imageUrl={stageInstance.current?.toDataURL()} /> */}
+            {/* {stageInstance.current ? (
+                <DOPreview imageUrl={stageInstance.current.toDataURL()} />
+            ) : null} */}
         </>
     );
 }
