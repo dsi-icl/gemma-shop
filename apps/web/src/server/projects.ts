@@ -1,4 +1,7 @@
 import '@tanstack/react-start/server-only';
+import { unlink } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+
 import { db } from '@repo/db';
 import type {
     Asset,
@@ -8,6 +11,8 @@ import type {
     UpdateProjectInput
 } from '@repo/db/schema';
 import { ObjectId } from 'mongodb';
+
+import { ASSET_DIR } from '~/lib/serverVariables';
 
 const projects = db.collection('projects');
 const auditLogs = db.collection('audit_logs');
@@ -157,6 +162,17 @@ export async function deleteAsset(assetId: string, userEmail: string) {
     assertCanEdit(project, userEmail);
 
     await assets.deleteOne({ _id: new ObjectId(assetId) });
+
+    // Clean up the file from disk if it's a locally-served asset
+    if (asset.url && typeof asset.url === 'string') {
+        try {
+            const url = new URL(asset.url);
+            const filename = basename(decodeURIComponent(url.pathname));
+            await unlink(join(ASSET_DIR, filename));
+        } catch {
+            // File may already be gone or URL may be external — not critical
+        }
+    }
 }
 
 export async function restoreProject(id: string, userEmail: string) {
