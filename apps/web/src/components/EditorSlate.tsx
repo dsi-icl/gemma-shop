@@ -464,7 +464,6 @@ export function EditorSlate() {
     const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
         e.evt.preventDefault();
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
-        console.log('currentSelectedIds.length', currentSelectedIds.length);
         if (isDrawing) {
             const stage = e.target.getStage();
             const point = stage?.getPointerPosition();
