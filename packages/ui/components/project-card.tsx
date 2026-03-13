@@ -19,7 +19,7 @@ export interface Project {
     author: string;
     description: string;
     tags: string[];
-    imageUrl: string;
+    imageUrl?: string;
 }
 
 export function ProjectCard({ project }: { project: Project }) {

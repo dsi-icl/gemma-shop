@@ -7,6 +7,8 @@ import { motion, AnimatePresence, MotionConfig, Transition, Variant } from 'moti
 import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import AnimatedBlurPattern from './blur-pattern';
+
 export type MorphingDialogContextType = {
     isOpen: boolean;
     setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -308,7 +310,7 @@ function MorphingDialogDescription({
 }
 
 export type MorphingDialogImageProps = {
-    src: string;
+    src?: string;
     alt: string;
     className?: string;
     style?: React.CSSProperties;
@@ -317,6 +319,7 @@ export type MorphingDialogImageProps = {
 function MorphingDialogImage({ src, alt, className, style }: MorphingDialogImageProps) {
     const { uniqueId } = useMorphingDialog();
 
+    if (!src) return <AnimatedBlurPattern seed={alt} height={200} />;
     return (
         <motion.img
             src={src}
