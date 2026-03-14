@@ -10,6 +10,6 @@
             "@repo/ui/*": ["../../packages/ui/*"]
         }
     },
-    "include": ["**/*.ts", "**/*.tsx"],
+    "include": ["src/**/*.ts", "src/**/*.tsx", "*.ts"],
     "exclude": ["node_modules"]
 }

@@ -17,8 +17,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 import extraHead from '~/assets/extraHead.json';
 import { Footer } from '~/components/Footer';
 import { Header } from '~/components/Header';
-
-import { RootRouteContext } from '../../global';
+import { RootRouteContext } from '~/types';
 
 import appCss from '~/styles.css?url';
 
