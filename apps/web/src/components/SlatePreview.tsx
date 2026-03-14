@@ -1,5 +1,6 @@
+import { decode, isBlurhashValid } from 'blurhash';
 import { useState, RefObject, useEffect } from 'react';
-import { Circle, KonvaNodeEvents, Layer, Line, Rect, Stage } from 'react-konva';
+import { Circle, KonvaNodeEvents, Layer, Line, Rect, Stage, Image } from 'react-konva';
 
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
@@ -10,7 +11,7 @@ type SlatePreviewProps = {
     stageHeight: number;
 };
 
-const scaleFactor = 10;
+const PREVIEW_SCALE = 0.15;
 
 export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePreviewProps) {
     const [scrollLeft, setScrollLeft] = useState(0);
@@ -47,13 +48,13 @@ export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePrevie
     return (
         <div className="lineheig m-0 line-clamp-1 block overscroll-none p-0 text-center">
             <Stage
-                width={stageWidth / scaleFactor}
-                height={stageHeight / scaleFactor}
-                scaleX={1 / scaleFactor}
-                scaleY={1 / scaleFactor}
+                width={stageWidth * PREVIEW_SCALE}
+                height={stageHeight * PREVIEW_SCALE}
+                scaleX={PREVIEW_SCALE}
+                scaleY={PREVIEW_SCALE}
                 onClick={(e) => {
                     let x =
-                        (e.target.getStage()?.getPointerPosition()?.x ?? 0) * scaleFactor -
+                        (e.target.getStage()?.getPointerPosition()?.x ?? 0) * PREVIEW_SCALE -
                         canvasWidth / 2;
                     if (x < 0) x = 0;
                     if (x > stageWidth - canvasWidth) x = stageWidth - canvasWidth;
@@ -69,10 +70,10 @@ export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePrevie
                                 return (
                                     <Line
                                         key={`ink_${shape.numericId}`}
-                                        points={shape.line.map((p) => p / scaleFactor)}
+                                        points={shape.line.map((p) => p * PREVIEW_SCALE)}
                                         stroke={shape.color}
-                                        strokeWidth={(shape.width / scaleFactor) * 4}
-                                        dash={shape.dash.map((d) => d / scaleFactor)}
+                                        strokeWidth={shape.width * PREVIEW_SCALE * 4}
+                                        dash={shape.dash.map((d) => d * PREVIEW_SCALE)}
                                         dashEnabled={true}
                                         tension={0.4}
                                         lineCap="round"
@@ -84,15 +85,15 @@ export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePrevie
                                     return (
                                         <Circle
                                             key={shape.numericId}
-                                            x={shape.config.cx / scaleFactor}
-                                            y={shape.config.cy / scaleFactor}
-                                            offsetX={shape.config.width / scaleFactor / 2}
-                                            offsetY={shape.config.height / scaleFactor / 2}
-                                            radius={shape.config.width / scaleFactor / 2}
+                                            x={shape.config.cx * PREVIEW_SCALE}
+                                            y={shape.config.cy * PREVIEW_SCALE}
+                                            offsetX={(shape.config.width * PREVIEW_SCALE) / 2}
+                                            offsetY={(shape.config.height * PREVIEW_SCALE) / 2}
+                                            radius={(shape.config.width * PREVIEW_SCALE) / 2}
                                             fill="transparent"
                                             stroke={shape.strokeColor}
-                                            strokeWidth={(shape.strokeWidth / scaleFactor) * 4}
-                                            dash={shape.strokeDash.map((d) => d / scaleFactor)}
+                                            strokeWidth={shape.strokeWidth * PREVIEW_SCALE * 4}
+                                            dash={shape.strokeDash.map((d) => d * PREVIEW_SCALE)}
                                             listening={false}
                                         />
                                     );
@@ -100,30 +101,61 @@ export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePrevie
                                     return (
                                         <Rect
                                             key={shape.numericId}
-                                            x={shape.config.cx / scaleFactor}
-                                            y={shape.config.cy / scaleFactor}
-                                            width={shape.config.width / scaleFactor}
-                                            height={shape.config.height / scaleFactor}
-                                            offsetX={shape.config.width / scaleFactor / 2}
-                                            offsetY={shape.config.height / scaleFactor / 2}
+                                            x={shape.config.cx * PREVIEW_SCALE}
+                                            y={shape.config.cy * PREVIEW_SCALE}
+                                            width={shape.config.width * PREVIEW_SCALE}
+                                            height={shape.config.height * PREVIEW_SCALE}
+                                            offsetX={(shape.config.width * PREVIEW_SCALE) / 2}
+                                            offsetY={(shape.config.height * PREVIEW_SCALE) / 2}
                                             rotation={shape.config.rotation}
                                             fill="transparent"
                                             stroke={shape.strokeColor}
-                                            strokeWidth={(shape.strokeWidth / scaleFactor) * 4}
-                                            dash={shape.strokeDash.map((d) => d / scaleFactor)}
+                                            strokeWidth={shape.strokeWidth * PREVIEW_SCALE * 4}
+                                            dash={shape.strokeDash.map((d) => d * PREVIEW_SCALE)}
                                             listening={false}
                                         />
                                     );
                             }
+                            if (
+                                shape.type === 'image' &&
+                                shape.blurhash &&
+                                isBlurhashValid(shape.blurhash)
+                            ) {
+                                const pixels = decode(
+                                    shape.blurhash,
+                                    100,
+                                    100
+                                ) as Uint8ClampedArray<ArrayBuffer>;
+                                const imageData = new ImageData(pixels, 100, 100);
+                                const offscreenCanvas = document.createElement('canvas');
+                                offscreenCanvas.width = 100;
+                                offscreenCanvas.height = 100;
+                                const ctx = offscreenCanvas.getContext('2d');
+                                ctx?.putImageData(imageData, 0, 0);
+                                return (
+                                    <Image
+                                        key={shape.numericId}
+                                        image={offscreenCanvas}
+                                        x={shape.config.cx * PREVIEW_SCALE}
+                                        y={shape.config.cy * PREVIEW_SCALE}
+                                        width={shape.config.width * PREVIEW_SCALE}
+                                        height={shape.config.height * PREVIEW_SCALE}
+                                        offsetX={(shape.config.width * PREVIEW_SCALE) / 2}
+                                        offsetY={(shape.config.height * PREVIEW_SCALE) / 2}
+                                        rotation={shape.config.rotation}
+                                        listening={false}
+                                    />
+                                );
+                            }
                             return (
                                 <Rect
                                     key={shape.numericId}
-                                    x={shape.config.cx / scaleFactor}
-                                    y={shape.config.cy / scaleFactor}
-                                    width={shape.config.width / scaleFactor}
-                                    height={shape.config.height / scaleFactor}
-                                    offsetX={shape.config.width / scaleFactor / 2}
-                                    offsetY={shape.config.height / scaleFactor / 2}
+                                    x={shape.config.cx * PREVIEW_SCALE}
+                                    y={shape.config.cy * PREVIEW_SCALE}
+                                    width={shape.config.width * PREVIEW_SCALE}
+                                    height={shape.config.height * PREVIEW_SCALE}
+                                    offsetX={(shape.config.width * PREVIEW_SCALE) / 2}
+                                    offsetY={(shape.config.height * PREVIEW_SCALE) / 2}
                                     rotation={shape.config.rotation}
                                     fill="#555"
                                     listening={false}
