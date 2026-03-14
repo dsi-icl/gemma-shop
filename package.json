@@ -1,5 +1,5 @@
 {
-    "name": "tanstarter",
+    "name": "@gemma/shop",
     "private": true,
     "workspaces": {
         "packages": [
@@ -48,13 +48,16 @@
             "@vitejs/plugin-react": "^6.0.0",
             "babel-plugin-react-compiler": "^1.0.0",
             "better-auth": "^1.5.5",
+            "blurhash": "^2.0.5",
             "class-variance-authority": "^0.7.1",
             "clsx": "^2.1.1",
+            "date-fns": "^4.1.0",
             "eslint-plugin-react-hooks": "^7.0.1",
             "eslint-plugin-turbo": "^2.8.16",
             "husky": "^9.1.7",
             "lint-staged": "^16.3.3",
             "motion": "^12.36.0",
+            "react-blurhash": "^0.3.0",
             "react-map-gl": "^8.1.0",
             "react-resizable-panels": "^4.7.2",
             "react-use-measure": "^2.1.7",
@@ -71,6 +74,7 @@
             "react-colorful": "^5.6.1",
             "three": "^0.183.2",
             "shadcn": "^4.0.6",
+            "sharp": "^0.34.5",
             "satori": "^0.25.0",
             "sonner": "^2.0.7",
             "tailwind-merge": "^3.5.0",
@@ -126,8 +130,5 @@
     "engines": {
         "node": ">=24"
     },
-    "packageManager": "bun@1.3.10",
-    "patchedDependencies": {
-        "nitro@3.0.1-alpha.2": "patches/nitro@3.0.1-alpha.2.patch"
-    }
+    "packageManager": "bun@1.3.10"
 }

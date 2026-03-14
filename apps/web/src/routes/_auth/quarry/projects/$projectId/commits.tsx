@@ -11,6 +11,7 @@ import {
 } from '@repo/ui/components/table';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
+import { format, formatDistanceToNow, isBefore, subMonths, differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
 
 import { $publishCommit } from '~/server/projects.fns';
@@ -37,6 +38,33 @@ function CommitsTab() {
         },
         onError: (e) => toast.error(e.message)
     });
+
+    const formatRelativeDate = (date: Date): string => {
+        const now = new Date();
+        const oneMonthAgo = subMonths(now, 1);
+
+        if (isBefore(date, oneMonthAgo)) {
+            return format(date, 'd MMM yyyy, HH:mm');
+        }
+
+        const daysDifference = differenceInDays(now, date);
+
+        if (daysDifference >= 7) {
+            const weeksDifference = Math.round(daysDifference / 7);
+            if (weeksDifference === 1) {
+                return `a week ago`;
+            }
+            return `${weeksDifference} weeks ago`;
+        }
+
+        if (daysDifference > 0) {
+            const distance = formatDistanceToNow(date, { addSuffix: true });
+            return `${distance} at ${format(date, 'HH:mm')}`;
+        }
+
+        // It's today
+        return formatDistanceToNow(date, { addSuffix: true });
+    };
 
     if (commits.length === 0) {
         return (
@@ -69,13 +97,16 @@ function CommitsTab() {
                     <TableBody>
                         {commits.map((commit) => {
                             const isPublished = commit._id === project.publishedCommitId;
+                            let displayDate = '-';
+                            try {
+                                const commitDate = new Date(commit.updatedAt ?? commit.createdAt);
+                                displayDate = formatRelativeDate(commitDate);
+                            } catch (_e) {}
                             return (
                                 <TableRow key={commit._id}>
                                     <TableCell className="font-medium">{commit.message}</TableCell>
                                     <TableCell className="text-muted-foreground">
-                                        {commit.updatedAt
-                                            ? new Date(commit.updatedAt).toLocaleString()
-                                            : new Date(commit.createdAt).toLocaleString()}
+                                        {displayDate}
                                     </TableCell>
                                     <TableCell>
                                         {isPublished && (
