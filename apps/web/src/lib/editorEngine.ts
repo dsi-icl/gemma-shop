@@ -34,8 +34,8 @@ export class EditorEngine {
     private bufferedHydration: Extract<GSMessage, { type: 'hydrate' }> | null = null;
     private clockOffset = 0;
     private bestRTT = Infinity;
-    private currentProjectId: string | null = null;
-    private currentSlideId: string | null = null;
+    // private currentProjectId: string | null = null;
+    // private currentSlideId: string | null = null;
 
     private constructor() {
         this.ws = new WebSocket(WEBSOCKET_GEMMA_BUS);
@@ -43,13 +43,14 @@ export class EditorEngine {
 
         this.ws.onopen = () => {
             console.log('Editor Engine: Connected to Server');
-            const hello: GSMessage = {
-                type: 'hello',
-                specimen: 'editor',
-                ...(this.currentProjectId && { projectId: this.currentProjectId }),
-                ...(this.currentSlideId && { slideId: this.currentSlideId })
-            };
-            this.ws.send(JSON.stringify(hello));
+            // Waiting for the editor UI to join a scope
+            // const hello: GSMessage = {
+            //     type: 'hello',
+            //     specimen: 'editor',
+            //     ...(this.currentProjectId && { projectId: this.currentProjectId }),
+            //     ...(this.currentSlideId && { slideId: this.currentSlideId })
+            // };
+            // this.ws.send(JSON.stringify(hello));
             this.startClockSync();
         };
 
@@ -198,19 +199,48 @@ export class EditorEngine {
         this.playbackStates.set(id, pb);
     }
 
+    /** Wall currently bound to this editor session (if any) */
+    public boundWallId: string | null = null;
+
     /** Join a project/slide scope. Re-sends hello if already connected. */
     public joinScope(projectId: string, slideId: string) {
-        this.currentProjectId = projectId;
-        this.currentSlideId = slideId;
-        if (this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(
-                JSON.stringify({
-                    type: 'hello',
-                    specimen: 'editor',
-                    projectId,
-                    slideId
-                })
-            );
+        this.sendJSON({
+            type: 'hello',
+            specimen: 'editor',
+            projectId,
+            slideId
+        });
+
+        // Auto-rebind the wall to the new slide when navigating
+        if (this.boundWallId) {
+            this.sendJSON({
+                type: 'bind_wall',
+                wallId: this.boundWallId,
+                projectId,
+                slideId
+            });
+        }
+    }
+
+    /** Bind a wall to follow this editor's current scope */
+    public bindWall(wallId: string, projectId: string, slideId: string) {
+        this.boundWallId = wallId;
+        this.sendJSON({
+            type: 'bind_wall',
+            wallId,
+            projectId,
+            slideId
+        });
+    }
+
+    /** Unbind the currently bound wall */
+    public unbindWall() {
+        if (this.boundWallId) {
+            this.sendJSON({
+                type: 'unbind_wall',
+                wallId: this.boundWallId
+            });
+            this.boundWallId = null;
         }
     }
 

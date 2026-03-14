@@ -11,6 +11,7 @@ import {
     GridNineIcon,
     ImageIcon,
     MapPinIcon,
+    MonitorIcon,
     PencilSimpleIcon,
     RectangleIcon,
     ShapesIcon,
@@ -29,6 +30,7 @@ import { InkToolbar } from '~/components/InkToolbar';
 import { PlaybackControls } from '~/components/PlaybackControls';
 import { TextEditor } from '~/components/TextEditor';
 import { VideoScrubber } from '~/components/VideoScrubber';
+import { WallPickerPopover } from '~/components/WallPicker';
 import { EditorEngine } from '~/lib/editorEngine';
 import { useEditorStore } from '~/lib/editorStore';
 import type { LayerWithEditorState } from '~/lib/types';
@@ -40,6 +42,8 @@ interface ToolbarProps {
 
 export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     const {
+        projectId,
+        activeSlideId,
         selectedLayerIds,
         layers,
         isSnapping,
@@ -53,6 +57,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         reboot,
         saveProject
     } = useEditorStore();
+    const boundWallId = useEditorStore((s) => s.boundWallId);
     const showGrid = useEditorStore((s) => s.showGrid);
     const toggleGrid = useEditorStore((s) => s.toggleGrid);
     const isDrawing = useEditorStore((s) => s.isDrawing);
@@ -82,6 +87,17 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         saveProject(msg);
     };
 
+    const handleWallSelect = (wallId: string) => {
+        if (!projectId || !activeSlideId) return;
+        engine.bindWall(wallId, projectId, activeSlideId);
+        useEditorStore.setState({ boundWallId: wallId });
+    };
+
+    const handleWallUnbind = () => {
+        engine.unbindWall();
+        useEditorStore.setState({ boundWallId: null });
+    };
+
     return (
         <TooltipProvider>
             <div
@@ -96,70 +112,6 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     onChange={onUpload}
                     className="hidden"
                 />
-
-                {/* ── Save ── */}
-                <div className="flex items-center gap-0.5">
-                    <Popover open={savePopoverOpen} onOpenChange={setSavePopoverOpen}>
-                        <PopoverTrigger nativeButton={false} render={<div />}>
-                            <TipButton
-                                tip={
-                                    saveStatus === 'dirty'
-                                        ? 'Unsaved changes — click to save'
-                                        : saveStatus === 'saving'
-                                          ? 'Saving...'
-                                          : saveStatus === 'saved'
-                                            ? 'Saved'
-                                            : saveStatus === 'error'
-                                              ? 'Save failed — click to retry'
-                                              : 'Save project'
-                                }
-                                variant={
-                                    saveStatus === 'dirty' || saveStatus === 'error'
-                                        ? 'outline'
-                                        : 'ghost'
-                                }
-                                disabled={saveStatus === 'saving'}
-                            >
-                                {saveStatus === 'saving' ? (
-                                    <CircleNotchIcon className="animate-spin" />
-                                ) : saveStatus === 'saved' ? (
-                                    <CheckCircleIcon weight="fill" className="text-green-500" />
-                                ) : saveStatus === 'error' ? (
-                                    <WarningCircleIcon weight="fill" className="text-destructive" />
-                                ) : (
-                                    <FloppyDiskIcon
-                                        weight={saveStatus === 'dirty' ? 'fill' : 'regular'}
-                                    />
-                                )}
-                            </TipButton>
-                        </PopoverTrigger>
-                        <PopoverContent side="top" className="w-72 p-3">
-                            <form
-                                onSubmit={(e) => {
-                                    e.preventDefault();
-                                    handleManualSave();
-                                }}
-                                className="flex flex-col gap-2"
-                            >
-                                <label className="text-xs font-medium text-muted-foreground">
-                                    Commit message
-                                </label>
-                                <Input
-                                    ref={commitInputRef}
-                                    value={commitMessage}
-                                    onChange={(e) => setCommitMessage(e.target.value)}
-                                    placeholder="Describe your changes..."
-                                    autoFocus
-                                />
-                                <Button type="submit" size="sm" disabled={saveStatus === 'saving'}>
-                                    {saveStatus === 'saving' ? 'Saving...' : 'Save version'}
-                                </Button>
-                            </form>
-                        </PopoverContent>
-                    </Popover>
-                </div>
-
-                <Separator orientation="vertical" className="mx-1 h-6" />
 
                 {/* ── Add Content ── */}
                 <div className="flex items-center gap-0.5">
@@ -260,6 +212,84 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
 
                 {/* Spacer */}
                 <div className="flex-1" />
+
+                {/* ── Live Preview ── */}
+                {boundWallId ? (
+                    <TipButton tip="Disconnect wall" variant="outline" onClick={handleWallUnbind}>
+                        <MonitorIcon weight="fill" className="text-green-500" />
+                    </TipButton>
+                ) : (
+                    <WallPickerPopover
+                        onSelect={handleWallSelect}
+                        trigger={
+                            <TipButton tip="Launch live preview">
+                                <MonitorIcon />
+                            </TipButton>
+                        }
+                    />
+                )}
+                {/* ── Save ── */}
+                <div className="flex items-center gap-0.5">
+                    <Popover open={savePopoverOpen} onOpenChange={setSavePopoverOpen}>
+                        <PopoverTrigger nativeButton={false} render={<div />}>
+                            <TipButton
+                                tip={
+                                    saveStatus === 'dirty'
+                                        ? 'Unsaved changes — click to save'
+                                        : saveStatus === 'saving'
+                                          ? 'Saving...'
+                                          : saveStatus === 'saved'
+                                            ? 'Saved'
+                                            : saveStatus === 'error'
+                                              ? 'Save failed — click to retry'
+                                              : 'Save project'
+                                }
+                                variant={
+                                    saveStatus === 'dirty' || saveStatus === 'error'
+                                        ? 'outline'
+                                        : 'ghost'
+                                }
+                                disabled={saveStatus === 'saving'}
+                            >
+                                {saveStatus === 'saving' ? (
+                                    <CircleNotchIcon className="animate-spin" />
+                                ) : saveStatus === 'saved' ? (
+                                    <CheckCircleIcon weight="fill" className="text-green-500" />
+                                ) : saveStatus === 'error' ? (
+                                    <WarningCircleIcon weight="fill" className="text-destructive" />
+                                ) : (
+                                    <FloppyDiskIcon
+                                        weight={saveStatus === 'dirty' ? 'fill' : 'regular'}
+                                    />
+                                )}
+                            </TipButton>
+                        </PopoverTrigger>
+                        <PopoverContent side="top" className="w-72 p-3">
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handleManualSave();
+                                }}
+                                className="flex flex-col gap-2"
+                            >
+                                <label className="text-xs font-medium text-muted-foreground">
+                                    Commit message
+                                </label>
+                                <Input
+                                    ref={commitInputRef}
+                                    value={commitMessage}
+                                    onChange={(e) => setCommitMessage(e.target.value)}
+                                    placeholder="Describe your changes..."
+                                    autoFocus
+                                />
+                                <Button type="submit" size="sm" disabled={saveStatus === 'saving'}>
+                                    {saveStatus === 'saving' ? 'Saving...' : 'Save version'}
+                                </Button>
+                            </form>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+                <Separator orientation="vertical" className="mx-1 h-6" />
 
                 {/* ── Danger Zone ── */}
                 <div className="flex items-center gap-0.5">

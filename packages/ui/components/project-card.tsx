@@ -22,7 +22,12 @@ export interface Project {
     imageUrl?: string;
 }
 
-export function ProjectCard({ project }: { project: Project }) {
+interface ProjectCardProps {
+    project: Project;
+    onLoadProject?: () => void;
+}
+
+export function ProjectCard({ project, onLoadProject }: ProjectCardProps) {
     return (
         <MorphingDialog
             transition={{
@@ -111,7 +116,7 @@ export function ProjectCard({ project }: { project: Project }) {
                                 {project.description}
                             </p>
 
-                            <Button className="mt-5 w-full">
+                            <Button className="mt-5 w-full" onClick={onLoadProject}>
                                 Load project <ArrowRightIcon />
                             </Button>
                         </MorphingDialogDescription>

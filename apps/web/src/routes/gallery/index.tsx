@@ -5,8 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
+import { WallPicker } from '~/components/WallPicker';
 import { publishedProjectsQueryOptions } from '~/server/projects.queries';
+import { $bindWall } from '~/server/walls.fns';
 
 export const Route = createFileRoute('/gallery/')({
     component: HomePage,
@@ -15,13 +18,17 @@ export const Route = createFileRoute('/gallery/')({
     }
 });
 
+type ProjectWithId = Project & { _id: string };
+
 function HomePage() {
     const [activeTag, setActiveTag] = useState<string | null>(null);
+    const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
     const { data: publishedProjects = [] } = useQuery(publishedProjectsQueryOptions());
 
-    const projectsData: Project[] = useMemo(
+    const projectsData: ProjectWithId[] = useMemo(
         () =>
             publishedProjects.map((p) => ({
+                _id: p._id,
                 name: p.name,
                 author: p.authorOrganisation,
                 description: p.description,
@@ -45,6 +52,19 @@ function HomePage() {
         if (!activeTag) return projectsData;
         return projectsData.filter((p) => p.tags.includes(activeTag));
     }, [activeTag, projectsData]);
+
+    const handleWallSelected = async (wallId: string) => {
+        if (!pendingProjectId) return;
+        try {
+            // Use 'default' as the first slide — the bus will create the scope
+            await $bindWall({ data: { wallId, projectId: pendingProjectId, slideId: 'default' } });
+            toast.success('Project loaded on wall');
+        } catch (e: any) {
+            toast.error(e.message);
+        } finally {
+            setPendingProjectId(null);
+        }
+    };
 
     return (
         <div className="container mx-auto p-4 pt-24">
@@ -92,7 +112,10 @@ function HomePage() {
                                             bounce: 0.2
                                         }}
                                     >
-                                        <ProjectCard project={project} />
+                                        <ProjectCard
+                                            project={project}
+                                            onLoadProject={() => setPendingProjectId(project._id)}
+                                        />
                                     </motion.div>
                                 ))}
                             </AnimatePresence>
@@ -100,6 +123,13 @@ function HomePage() {
                     )}
                 </main>
             </div>
+
+            {pendingProjectId && (
+                <WallPicker
+                    onSelect={handleWallSelected}
+                    onClose={() => setPendingProjectId(null)}
+                />
+            )}
         </div>
     );
 }

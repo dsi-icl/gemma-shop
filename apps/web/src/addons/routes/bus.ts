@@ -1,211 +1,30 @@
-import { db } from '@repo/db';
-import type { Peer } from 'crossws';
-import { ObjectId } from 'mongodb';
 import { defineWebSocketHandler } from 'nitro/h3';
 
 import {
-    GSMessageSchema,
-    makeScopeKey,
-    type GSMessage,
-    type Layer,
-    type ScopeKey,
-    type ScopeState
-} from '~/lib/types';
+    peers,
+    scopedState,
+    wallBindings,
+    editorsByScope,
+    registerPeer,
+    unregisterPeer,
+    getOrCreateScope,
+    bindWall,
+    unbindWall,
+    sendJSON,
+    broadcastToEditors,
+    broadcastToWalls,
+    broadcastToWallsBinary,
+    broadcastToScope,
+    hydrateWallNodes,
+    notifyControllers,
+    logPeerCounts,
+    saveScope,
+    resolveScopeKey
+} from '~/lib/busState';
+import { GSMessageSchema, makeScopeKey, type GSMessage } from '~/lib/types';
+import { upsertWallConnection, decrementWallConnection } from '~/server/walls';
 
-// ── Peer metadata ────────────────────────────────────────────────────────────
-interface PeerMeta {
-    specimen: 'wall' | 'editor' | 'roy';
-    scopeKey: ScopeKey | null;
-    projectId: string | null;
-    slideId: string | null;
-}
-
-const peerMeta = new Map<string, PeerMeta>();
-
-// ── Client connection pools ──────────────────────────────────────────────────
-const wallClients = new Set<Peer>();
-const editorClients = new Set<Peer>();
-
-// ── Scope-keyed stage state (HMR-safe) ───────────────────────────────────────
-const scopedState: Map<ScopeKey, ScopeState> =
-    process.__SCOPED_STAGE_STATE__ ?? new Map<ScopeKey, ScopeState>();
-process.__SCOPED_STAGE_STATE__ = scopedState;
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function getOrCreateScope(scopeKey: ScopeKey, projectId: string, slideId: string): ScopeState {
-    let scope = scopedState.get(scopeKey);
-    if (!scope) {
-        scope = { layers: new Map(), projectId, slideId, dirty: false };
-        scopedState.set(scopeKey, scope);
-    }
-    return scope;
-}
-
-function editorsInScope(scopeKey: ScopeKey): Peer[] {
-    const peers: Peer[] = [];
-    for (const client of editorClients) {
-        const meta = peerMeta.get(client.id);
-        if (meta?.scopeKey === scopeKey) peers.push(client);
-    }
-    return peers;
-}
-
-function broadcastJSON(data: GSMessage, clients: Set<Peer>) {
-    const payload = JSON.stringify(data);
-    for (const client of clients) {
-        client.send(payload);
-    }
-}
-
-function broadcastOtherOnlyJSON(data: GSMessage, clients: Iterable<Peer>, peer: Peer) {
-    const payload = JSON.stringify(data);
-    for (const client of clients) {
-        if (client !== peer) client.send(payload);
-    }
-}
-
-function broadcastToScope(data: GSMessage, scopeKey: ScopeKey, excludePeer?: Peer) {
-    const payload = JSON.stringify(data);
-    // Editors in this scope
-    for (const client of editorClients) {
-        if (client === excludePeer) continue;
-        const meta = peerMeta.get(client.id);
-        if (meta?.scopeKey === scopeKey) client.send(payload);
-    }
-    // All wall clients (walls are unscoped for now)
-    for (const client of wallClients) {
-        if (client === excludePeer) continue;
-        client.send(payload);
-    }
-}
-
-// ── Save to MongoDB ──────────────────────────────────────────────────────────
-
-async function buildSlidesSnapshot(
-    scope: ScopeState,
-    headCommitId: ObjectId | string | null
-): Promise<Array<{ id: string; order: number; layers: Layer[] }>> {
-    let existingSlides: Array<{ id: string; order: number; layers: Layer[] }> = [];
-
-    if (headCommitId) {
-        const headCommit = await db
-            .collection('commits')
-            .findOne({ _id: new ObjectId(headCommitId) });
-        if (headCommit?.content?.slides) {
-            existingSlides = headCommit.content.slides;
-        }
-    }
-
-    const currentLayers = Array.from(scope.layers.values());
-    let slideFound = false;
-    const updatedSlides = existingSlides.map((slide) => {
-        if (slide.id === scope.slideId) {
-            slideFound = true;
-            return { ...slide, layers: currentLayers };
-        }
-        return slide;
-    });
-
-    if (!slideFound) {
-        updatedSlides.push({
-            id: scope.slideId,
-            order: updatedSlides.length,
-            layers: currentLayers
-        });
-    }
-
-    return updatedSlides;
-}
-
-async function saveScope(
-    scopeKey: ScopeKey,
-    message: string,
-    isAutoSave: boolean
-): Promise<{ success: boolean; commitId?: string; error?: string }> {
-    const scope = scopedState.get(scopeKey);
-    if (!scope) return { success: false, error: 'Scope not found' };
-
-    const projectId = new ObjectId(scope.projectId);
-
-    try {
-        const project = await db.collection('projects').findOne({ _id: projectId });
-        if (!project) return { success: false, error: 'Project not found' };
-
-        const headId = project.headCommitId ? new ObjectId(project.headCommitId) : null;
-        const updatedSlides = await buildSlidesSnapshot(scope, headId);
-
-        if (isAutoSave) {
-            // Auto-save: upsert a single draft commit sitting on top of head.
-            // This never moves headCommitId — it's a recoverable working snapshot.
-            const filter = {
-                projectId,
-                isAutoSave: true,
-                ...(headId ? { parentId: headId } : { parentId: null })
-            };
-
-            await db.collection('commits').updateOne(
-                filter,
-                {
-                    $set: {
-                        message,
-                        content: { slides: updatedSlides },
-                        isAutoSave: true,
-                        updatedAt: new Date()
-                    },
-                    $setOnInsert: {
-                        projectId,
-                        parentId: headId,
-                        authorId: new ObjectId(), // TODO: session user
-                        createdAt: new Date()
-                    }
-                },
-                { upsert: true }
-            );
-
-            scope.dirty = false;
-            return { success: true };
-        }
-
-        // Manual save: create a new commit node and advance headCommitId.
-        const newCommit = {
-            projectId,
-            parentId: headId,
-            authorId: new ObjectId(), // TODO: session user
-            message,
-            content: { slides: updatedSlides },
-            isAutoSave: false,
-            createdAt: new Date()
-        };
-
-        const result = await db.collection('commits').insertOne(newCommit);
-
-        await db
-            .collection('projects')
-            .updateOne(
-                { _id: projectId },
-                { $set: { headCommitId: result.insertedId, updatedAt: new Date() } }
-            );
-
-        // Clean up the auto-save draft that was sitting on the old head — it's
-        // now superseded by this manual commit.
-        if (headId) {
-            await db.collection('commits').deleteMany({
-                projectId,
-                isAutoSave: true,
-                parentId: headId
-            });
-        }
-
-        scope.dirty = false;
-        return { success: true, commitId: result.insertedId.toHexString() };
-    } catch (err) {
-        console.error('[Bus] saveScope failed:', err);
-        return { success: false, error: String(err) };
-    }
-}
-
-// ── WebSocket Handler ────────────────────────────────────────────────────────
+// ── WebSocket Handler ───────────────────────────────────────────────────────
 
 export default defineWebSocketHandler({
     open(peer) {
@@ -214,12 +33,11 @@ export default defineWebSocketHandler({
     },
 
     close(peer) {
-        wallClients.delete(peer);
-        editorClients.delete(peer);
-        peerMeta.delete(peer.id);
-        console.log(
-            `[WS] Peer disconnected. Walls: ${wallClients.size} | Editors: ${editorClients.size}`
-        );
+        const meta = unregisterPeer(peer.id);
+        if (meta && (meta.specimen === 'wall' || meta.specimen === 'controller')) {
+            decrementWallConnection(meta.wallId).catch(() => {});
+        }
+        logPeerCounts();
     },
 
     message(peer, message) {
@@ -227,55 +45,112 @@ export default defineWebSocketHandler({
         if (message.rawData instanceof Buffer) {
             try {
                 const data = GSMessageSchema.parse(message.json());
-                const meta = peerMeta.get(peer.id);
-                const scopeKey = meta?.scopeKey ?? null;
+                const entry = peers.get(peer.id);
+                const meta = entry?.meta;
 
-                // A. Handshake & Hydration
+                // ── Hello / Handshake ────────────────────────────────────
                 if (data.type === 'hello') {
-                    const newMeta: PeerMeta = {
-                        specimen: data.specimen,
-                        scopeKey: null,
-                        projectId: data.projectId ?? null,
-                        slideId: data.slideId ?? null
-                    };
+                    if (entry) unregisterPeer(peer.id);
 
-                    if (data.specimen === 'wall') {
-                        wallClients.add(peer);
-                    } else if (data.specimen === 'editor') {
-                        editorClients.add(peer);
+                    if (data.specimen === 'editor') {
+                        const scopeKey = makeScopeKey(data.projectId, data.slideId);
+                        const scope = getOrCreateScope(scopeKey, data.projectId, data.slideId);
 
-                        // Join scope if projectId and slideId provided
-                        if (data.projectId && data.slideId) {
-                            const sk = makeScopeKey(data.projectId, data.slideId);
-                            newMeta.scopeKey = sk;
-                            const scope = getOrCreateScope(sk, data.projectId, data.slideId);
+                        registerPeer(peer, {
+                            specimen: 'editor',
+                            projectId: data.projectId,
+                            slideId: data.slideId,
+                            scopeKey
+                        });
 
-                            // Hydrate the editor with scope state
-                            peer.send(
-                                JSON.stringify({
-                                    type: 'hydrate',
-                                    layers: Array.from(scope.layers.values())
-                                })
-                            );
-                        }
+                        peer.send(
+                            JSON.stringify({
+                                type: 'hydrate',
+                                layers: Array.from(scope.layers.values())
+                            })
+                        );
+
+                        console.log(`[WS] Editor joined scope=${scopeKey}`);
+                        logPeerCounts();
+                        return;
                     }
 
-                    peerMeta.set(peer.id, newMeta);
-
-                    console.log(
-                        `[WS] Handshake complete (${data.specimen}${newMeta.scopeKey ? ` scope=${newMeta.scopeKey}` : ''}). Walls: ${wallClients.size} | Editors: ${editorClients.size}`
-                    );
-
-                    // Walls get hydrated with... nothing for now (they'll get layers when assigned)
                     if (data.specimen === 'wall') {
-                        peer.send(JSON.stringify({ type: 'hydrate', layers: [] }));
+                        registerPeer(peer, { specimen: 'wall', wallId: data.wallId });
+                        upsertWallConnection(data.wallId).catch(() => {});
+
+                        const boundScope = wallBindings.get(data.wallId);
+                        const layers = boundScope
+                            ? Array.from(scopedState.get(boundScope)?.layers.values() ?? [])
+                            : [];
+
+                        peer.send(JSON.stringify({ type: 'hydrate', layers }));
+
+                        console.log(
+                            `[WS] Wall joined wallId=${data.wallId} (bound=${boundScope ?? 'none'})`
+                        );
+                        logPeerCounts();
+                        return;
                     }
+
+                    if (data.specimen === 'controller') {
+                        registerPeer(peer, { specimen: 'controller', wallId: data.wallId });
+                        upsertWallConnection(data.wallId).catch(() => {});
+
+                        const boundScope = wallBindings.get(data.wallId);
+                        const scope = boundScope ? scopedState.get(boundScope) : null;
+                        sendJSON(peer, {
+                            type: 'wall_binding_status',
+                            wallId: data.wallId,
+                            bound: !!boundScope,
+                            ...(scope ? { projectId: scope.projectId, slideId: scope.slideId } : {})
+                        });
+
+                        console.log(`[WS] Controller joined wallId=${data.wallId}`);
+                        logPeerCounts();
+                        return;
+                    }
+
+                    if (data.specimen === 'roy') {
+                        registerPeer(peer, { specimen: 'roy' });
+                        console.log('[WS] Roy client joined');
+                        logPeerCounts();
+                        return;
+                    }
+
                     return;
                 }
 
+                if (!meta) {
+                    console.warn(`[WS] Message from unregistered peer ${peer.id}, ignoring`);
+                    return;
+                }
+
+                const senderScopeKey = resolveScopeKey(meta);
+
+                // ── Bind / Unbind wall ───────────────────────────────────
+                if (data.type === 'bind_wall') {
+                    const scopeKey = makeScopeKey(data.projectId, data.slideId);
+                    getOrCreateScope(scopeKey, data.projectId, data.slideId);
+                    bindWall(data.wallId, scopeKey);
+                    hydrateWallNodes(data.wallId);
+                    notifyControllers(data.wallId, true, data.projectId, data.slideId);
+                    console.log(`[WS] Wall ${data.wallId} bound to scope=${scopeKey}`);
+                    return;
+                }
+
+                if (data.type === 'unbind_wall') {
+                    unbindWall(data.wallId);
+                    hydrateWallNodes(data.wallId);
+                    notifyControllers(data.wallId, false);
+                    console.log(`[WS] Wall ${data.wallId} unbound`);
+                    return;
+                }
+
+                // ── Rehydrate ────────────────────────────────────────────
                 if (data.type === 'rehydrate_please') {
-                    if (scopeKey) {
-                        const scope = scopedState.get(scopeKey);
+                    if (meta.specimen === 'editor') {
+                        const scope = scopedState.get(meta.scopeKey);
                         if (scope) {
                             peer.send(
                                 JSON.stringify({
@@ -284,27 +159,30 @@ export default defineWebSocketHandler({
                                 })
                             );
                         }
+                    } else if (meta.specimen === 'wall') {
+                        const boundScope = wallBindings.get(meta.wallId);
+                        const layers = boundScope
+                            ? Array.from(scopedState.get(boundScope)?.layers.values() ?? [])
+                            : [];
+                        peer.send(JSON.stringify({ type: 'hydrate', layers }));
                     }
                     return;
                 }
 
+                // ── Clear stage ──────────────────────────────────────────
                 if (data.type === 'clear_stage') {
-                    if (scopeKey) {
-                        const scope = scopedState.get(scopeKey);
+                    if (senderScopeKey) {
+                        const scope = scopedState.get(senderScopeKey);
                         if (scope) {
                             scope.layers.clear();
                             scope.dirty = true;
                         }
-                        broadcastToScope({ type: 'hydrate', layers: [] }, scopeKey, peer);
-                    } else {
-                        // Legacy: wall-originated clear (clear all scopes? or no-op)
-                        const hydratePayload = JSON.stringify({ type: 'hydrate', layers: [] });
-                        wallClients.forEach((c) => c.send(hydratePayload));
+                        broadcastToScope(senderScopeKey, { type: 'hydrate', layers: [] }, peer.id);
                     }
                     return;
                 }
 
-                // C. Layer Upsert
+                // ── Layer upsert ─────────────────────────────────────────
                 if (data.type === 'upsert_layer') {
                     const { layer } = data;
                     if (layer.type === 'video' && !layer.playback) {
@@ -315,113 +193,95 @@ export default defineWebSocketHandler({
                         };
                     }
 
-                    // Update scoped state
-                    if (scopeKey) {
-                        const scope = scopedState.get(scopeKey);
+                    if (senderScopeKey) {
+                        const scope = scopedState.get(senderScopeKey);
                         if (scope) {
                             scope.layers.set(layer.numericId, layer);
                             scope.dirty = true;
                         }
-                        broadcastToScope(data, scopeKey, peer);
-                    } else {
-                        // Legacy unscoped relay (wall clients)
-                        broadcastOtherOnlyJSON(data, wallClients, peer);
-                        broadcastOtherOnlyJSON(data, editorClients, peer);
+                        broadcastToScope(senderScopeKey, data, peer.id);
                     }
                     return;
                 }
 
-                // C.bis Delete Layer
+                // ── Layer delete ─────────────────────────────────────────
                 if (data.type === 'delete_layer') {
-                    if (scopeKey) {
-                        const scope = scopedState.get(scopeKey);
+                    if (senderScopeKey) {
+                        const scope = scopedState.get(senderScopeKey);
                         if (scope) {
                             scope.layers.delete(data.numericId);
                             scope.dirty = true;
                         }
-                        broadcastToScope(data, scopeKey, peer);
-                    } else {
-                        broadcastOtherOnlyJSON(data, wallClients, peer);
-                        broadcastOtherOnlyJSON(data, editorClients, peer);
+                        broadcastToScope(senderScopeKey, data, peer.id);
                     }
                     return;
                 }
 
+                // ── Reboot ───────────────────────────────────────────────
                 if (data.type === 'reboot') {
-                    broadcastOtherOnlyJSON(data, wallClients, peer);
+                    if (senderScopeKey) {
+                        broadcastToWalls(senderScopeKey, data);
+                    }
                     return;
                 }
 
-                // ── Save pipeline ────────────────────────────────────────────
+                // ── Save pipeline ────────────────────────────────────────
                 if (data.type === 'stage_dirty') {
-                    if (scopeKey) {
-                        const scope = scopedState.get(scopeKey);
+                    if (senderScopeKey) {
+                        const scope = scopedState.get(senderScopeKey);
                         if (scope) scope.dirty = true;
                     }
                     return;
                 }
 
                 if (data.type === 'stage_save') {
-                    if (!scopeKey) {
-                        peer.send(
-                            JSON.stringify({
-                                type: 'stage_save_response',
-                                success: false,
-                                error: 'Not in a scope'
-                            })
-                        );
+                    if (!senderScopeKey) {
+                        sendJSON(peer, {
+                            type: 'stage_save_response',
+                            success: false,
+                            error: 'Not in a scope'
+                        });
                         return;
                     }
 
-                    // Async save — respond when done
-                    saveScope(scopeKey, data.message, data.isAutoSave ?? false).then((result) => {
+                    const sk = senderScopeKey;
+                    saveScope(sk, data.message, data.isAutoSave ?? false).then((result) => {
                         const response: GSMessage = {
                             type: 'stage_save_response',
                             success: result.success,
                             commitId: result.commitId,
                             error: result.error
                         };
-                        peer.send(JSON.stringify(response));
+                        sendJSON(peer, response);
 
-                        // Notify other editors in scope
                         if (result.success) {
-                            for (const other of editorsInScope(scopeKey)) {
-                                if (other !== peer) {
-                                    other.send(JSON.stringify(response));
-                                }
-                            }
+                            broadcastToEditors(sk, response, peer.id);
                         }
                     });
                     return;
                 }
 
-                // D. Playback Controls (The Anchor State Machine)
+                // ── Video playback ───────────────────────────────────────
                 if (data.type === 'video_play') {
-                    const layer = scopeKey
-                        ? scopedState.get(scopeKey)?.layers.get(data.numericId)
+                    const layer = senderScopeKey
+                        ? scopedState.get(senderScopeKey)?.layers.get(data.numericId)
                         : undefined;
                     if (layer?.type === 'video') {
                         layer.playback.status = 'playing';
                         layer.playback.anchorServerTime = Date.now() + 500;
 
-                        const syncPayload: GSMessage = {
+                        broadcastToScope(senderScopeKey!, {
                             type: 'video_sync',
                             numericId: data.numericId,
                             playback: layer.playback
-                        };
-                        if (scopeKey) {
-                            broadcastToScope(syncPayload, scopeKey);
-                        } else {
-                            broadcastJSON(syncPayload, wallClients);
-                            broadcastJSON(syncPayload, editorClients);
-                        }
+                        });
                     }
                     return;
                 }
 
                 if (data.type === 'video_pause') {
-                    const layer = scopeKey
-                        ? scopedState.get(scopeKey)?.layers.get(data.numericId)
+                    const layer = senderScopeKey
+                        ? scopedState.get(senderScopeKey)?.layers.get(data.numericId)
                         : undefined;
                     if (layer?.type === 'video' && layer.playback.status === 'playing') {
                         let elapsed = (Date.now() - layer.playback.anchorServerTime) / 1000;
@@ -431,41 +291,29 @@ export default defineWebSocketHandler({
                         layer.playback.anchorMediaTime += elapsed;
                         layer.playback.anchorServerTime = 0;
 
-                        const syncPayload: GSMessage = {
+                        broadcastToScope(senderScopeKey!, {
                             type: 'video_sync',
                             numericId: data.numericId,
                             playback: layer.playback
-                        };
-                        if (scopeKey) {
-                            broadcastToScope(syncPayload, scopeKey);
-                        } else {
-                            broadcastJSON(syncPayload, wallClients);
-                            broadcastJSON(syncPayload, editorClients);
-                        }
+                        });
                     }
                     return;
                 }
 
                 if (data.type === 'video_seek') {
-                    const layer = scopeKey
-                        ? scopedState.get(scopeKey)?.layers.get(data.numericId)
+                    const layer = senderScopeKey
+                        ? scopedState.get(senderScopeKey)?.layers.get(data.numericId)
                         : undefined;
                     if (layer?.type === 'video') {
                         layer.playback.status = 'paused';
                         layer.playback.anchorMediaTime = data.mediaTime;
                         layer.playback.anchorServerTime = 0;
 
-                        const syncPayload: GSMessage = {
+                        broadcastToScope(senderScopeKey!, {
                             type: 'video_sync',
                             numericId: data.numericId,
                             playback: layer.playback
-                        };
-                        if (scopeKey) {
-                            broadcastToScope(syncPayload, scopeKey);
-                        } else {
-                            broadcastJSON(syncPayload, wallClients);
-                            broadcastJSON(syncPayload, editorClients);
-                        }
+                        });
                     }
                     return;
                 }
@@ -495,34 +343,24 @@ export default defineWebSocketHandler({
                 return;
             }
 
-            // B. Relay Spatial Moves — scoped to same-scope editors + all walls
+            // B. Relay Spatial Moves — scoped
             if (opcode === 0x05) {
-                const senderMeta = peerMeta.get(peer.id);
-                const senderScope = senderMeta?.scopeKey;
+                const senderMeta = peers.get(peer.id)?.meta;
+                if (!senderMeta) return;
 
-                // Send to all wall clients
-                for (const client of wallClients) {
-                    client.send(message.rawData);
-                }
+                const senderScopeKey = resolveScopeKey(senderMeta);
+                if (!senderScopeKey) return;
 
-                // Send to editors in same scope only
-                if (senderScope) {
-                    for (const client of editorClients) {
-                        if (client !== peer) {
-                            const clientMeta = peerMeta.get(client.id);
-                            if (clientMeta?.scopeKey === senderScope) {
-                                client.send(message.rawData);
-                            }
-                        }
-                    }
-                } else {
-                    // Legacy: broadcast to all editors
-                    for (const client of editorClients) {
-                        if (client !== peer) {
-                            client.send(message.rawData);
+                const editorIds = editorsByScope.get(senderScopeKey);
+                if (editorIds) {
+                    for (const id of editorIds) {
+                        if (id !== peer.id) {
+                            peers.get(id)?.peer.send(message.rawData);
                         }
                     }
                 }
+
+                broadcastToWallsBinary(senderScopeKey, message.rawData);
             }
         }
     }
@@ -531,8 +369,10 @@ export default defineWebSocketHandler({
 // --- GLOBAL BRIDGE FOR UPLOAD PROGRESS ---
 process.__BROADCAST_EDITORS__ = (data) => {
     const payload = JSON.stringify(data);
-    for (const client of editorClients) {
-        client.send(payload);
+    for (const { peer: p, meta } of peers.values()) {
+        if (meta.specimen === 'editor') {
+            p.send(payload);
+        }
     }
 };
 
@@ -555,25 +395,17 @@ process.__VSYNC_INTERVAL__ = setInterval(() => {
                     if (layer.loop ?? true) {
                         layer.playback.anchorMediaTime = !duration ? 0 : expected % duration;
                         layer.playback.anchorServerTime = now;
-
-                        const syncPayload: GSMessage = {
-                            type: 'video_sync',
-                            numericId: id,
-                            playback: layer.playback
-                        };
-                        broadcastToScope(syncPayload, scopeKey);
                     } else {
                         layer.playback.status = 'paused';
                         layer.playback.anchorMediaTime = duration;
                         layer.playback.anchorServerTime = 0;
-
-                        const syncPayload: GSMessage = {
-                            type: 'video_sync',
-                            numericId: id,
-                            playback: layer.playback
-                        };
-                        broadcastToScope(syncPayload, scopeKey);
                     }
+
+                    broadcastToScope(scopeKey, {
+                        type: 'video_sync',
+                        numericId: id,
+                        playback: layer.playback
+                    });
                 }
             }
         }
@@ -585,22 +417,16 @@ const AUTO_SAVE_INTERVAL = 30_000;
 
 if (process.__AUTO_SAVE_INTERVAL__) clearInterval(process.__AUTO_SAVE_INTERVAL__);
 process.__AUTO_SAVE_INTERVAL__ = setInterval(() => {
-    console.log('[Bus] Auto-save triggered', scopedState);
     for (const [scopeKey, scope] of scopedState) {
         if (scope.dirty) {
             console.log(`[Bus] Auto-saving scope ${scopeKey}`);
             saveScope(scopeKey, 'Auto-save', true).then((result) => {
                 if (result.success) {
-                    // Notify editors in this scope about the auto-save
-                    const response: GSMessage = {
+                    broadcastToEditors(scopeKey, {
                         type: 'stage_save_response',
                         success: true,
                         commitId: result.commitId
-                    };
-                    const payload = JSON.stringify(response);
-                    for (const client of editorsInScope(scopeKey)) {
-                        client.send(payload);
-                    }
+                    });
                 } else {
                     console.error(`[Bus] Auto-save failed for scope ${scopeKey}:`, result.error);
                 }

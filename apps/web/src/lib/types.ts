@@ -32,10 +32,17 @@ const LayerSchema = z.discriminatedUnion('type', [
             loop: z.boolean(),
             duration: z.number(),
             rvfcActive: z.boolean(),
+            blurhash: z.string(),
             playback: LayerPlaybackStateSchema
         })
         .extend(LayerBaseSchema.shape),
-    z.object({ type: z.literal('image'), url: z.string() }).extend(LayerBaseSchema.shape),
+    z
+        .object({
+            type: z.literal('image'),
+            url: z.string(),
+            blurhash: z.string()
+        })
+        .extend(LayerBaseSchema.shape),
     z.object({ type: z.literal('graph') }).extend(LayerBaseSchema.shape),
     z.object({ type: z.literal('text'), textProto: z.string() }).extend(LayerBaseSchema.shape),
     z
@@ -73,68 +80,90 @@ const LayerSchema = z.discriminatedUnion('type', [
 
 export type Layer = z.infer<typeof LayerSchema>;
 
-export const GSMessageSchema = z
-    .object({
-        type: z.literal('hello'),
-        specimen: z.literal('wall').or(z.literal('editor')).or(z.literal('roy')),
+const HelloMessageBaseSchema = z.object({
+    type: z.literal('hello')
+});
+
+export const GSMessageSchema = z.discriminatedUnion('type', [
+    z.discriminatedUnion('specimen', [
+        HelloMessageBaseSchema.extend({
+            type: z.literal('hello'),
+            specimen: z.literal('wall'),
+            wallId: z.string()
+        }),
+        HelloMessageBaseSchema.extend({
+            type: z.literal('hello'),
+            specimen: z.literal('controller'),
+            wallId: z.string()
+        }),
+        HelloMessageBaseSchema.extend({
+            type: z.literal('hello'),
+            specimen: z.literal('editor'),
+            projectId: z.string(),
+            slideId: z.string()
+        }),
+        HelloMessageBaseSchema.extend({
+            type: z.literal('hello'),
+            specimen: z.literal('roy')
+        })
+    ]),
+    z.object({ type: z.literal('hydrate'), layers: LayerSchema.array() }),
+    z.object({ type: z.literal('rehydrate_please') }),
+    z.object({
+        type: z.literal('upsert_layer'),
+        origin: z.string().optional(),
+        layer: LayerSchema
+    }),
+    z.object({ type: z.literal('delete_layer'), numericId: z.number() }),
+    z.object({ type: z.literal('video_play'), numericId: z.number() }),
+    z.object({ type: z.literal('video_pause'), numericId: z.number() }),
+    z.object({
+        type: z.literal('video_seek'),
+        numericId: z.number(),
+        mediaTime: z.number(),
+        playback: LayerPlaybackStateSchema
+    }),
+    z.object({
+        type: z.literal('video_sync'),
+        numericId: z.number(),
+        playback: LayerPlaybackStateSchema
+    }),
+    z.object({
+        type: z.literal('processing_progress'),
+        numericId: z.number(),
+        progress: z.number()
+    }),
+    z.object({ type: z.literal('clear_stage') }),
+    z.object({ type: z.literal('ping') }),
+    z.object({ type: z.literal('pong'), t0: z.number(), t1: z.number(), t2: z.number() }),
+    z.object({ type: z.literal('reboot') }),
+    z.object({
+        type: z.literal('stage_save'),
+        message: z.string(),
+        isAutoSave: z.boolean().optional()
+    }),
+    z.object({
+        type: z.literal('stage_save_response'),
+        success: z.boolean(),
+        commitId: z.string().optional(),
+        error: z.string().optional()
+    }),
+    z.object({ type: z.literal('stage_dirty') }),
+    z.object({
+        type: z.literal('bind_wall'),
+        wallId: z.string(),
+        projectId: z.string(),
+        slideId: z.string()
+    }),
+    z.object({ type: z.literal('unbind_wall'), wallId: z.string() }),
+    z.object({
+        type: z.literal('wall_binding_status'),
+        wallId: z.string(),
+        bound: z.boolean(),
         projectId: z.string().optional(),
         slideId: z.string().optional()
     })
-    .or(z.object({ type: z.literal('hydrate'), layers: LayerSchema.array() }))
-    .or(z.object({ type: z.literal('rehydrate_please') }))
-    .or(
-        z.object({
-            type: z.literal('upsert_layer'),
-            origin: z.string().optional(),
-            layer: LayerSchema
-        })
-    )
-    .or(z.object({ type: z.literal('delete_layer'), numericId: z.number() }))
-    .or(z.object({ type: z.literal('video_play'), numericId: z.number() }))
-    .or(z.object({ type: z.literal('video_pause'), numericId: z.number() }))
-    .or(
-        z.object({
-            type: z.literal('video_seek'),
-            numericId: z.number(),
-            mediaTime: z.number(),
-            playback: LayerPlaybackStateSchema
-        })
-    )
-    .or(
-        z.object({
-            type: z.literal('video_sync'),
-            numericId: z.number(),
-            playback: LayerPlaybackStateSchema
-        })
-    )
-    .or(
-        z.object({
-            type: z.literal('processing_progress'),
-            numericId: z.number(),
-            progress: z.number()
-        })
-    )
-    .or(z.object({ type: z.literal('clear_stage') }))
-    .or(z.object({ type: z.literal('ping') }))
-    .or(z.object({ type: z.literal('pong'), t0: z.number(), t1: z.number(), t2: z.number() }))
-    .or(z.object({ type: z.literal('reboot') }))
-    // ── Save pipeline messages ──
-    .or(
-        z.object({
-            type: z.literal('stage_save'),
-            message: z.string(),
-            isAutoSave: z.boolean().optional()
-        })
-    )
-    .or(
-        z.object({
-            type: z.literal('stage_save_response'),
-            success: z.boolean(),
-            commitId: z.string().optional(),
-            error: z.string().optional()
-        })
-    )
-    .or(z.object({ type: z.literal('stage_dirty') }));
+]);
 
 export type GSMessage = z.infer<typeof GSMessageSchema>;
 
@@ -161,11 +190,6 @@ export interface ScopeState {
     projectId: string;
     slideId: string;
     dirty: boolean;
-}
-
-/** Legacy single-scope interface (for wall clients that don't use scoping yet) */
-export interface StageState {
-    layers: Map<number, Layer>;
 }
 
 export interface Slide {

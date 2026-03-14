@@ -31,8 +31,10 @@ export class WallEngine {
     public layers = new Map<number, LayerWithWallEngineState>();
     private layoutCallbacks = new Set<LayoutUpdateCallback>();
     public viewport: Viewport;
+    public wallId: string | null;
 
-    private constructor(viewport: Viewport) {
+    private constructor(wallId: string, viewport: Viewport) {
+        this.wallId = wallId;
         this.viewport = viewport;
 
         // Automatically detect HTTPS vs HTTP for the WebSocket protocol
@@ -41,7 +43,7 @@ export class WallEngine {
 
         this.ws.onopen = () => {
             console.log('Wall Engine: Connected to Master Server');
-            this.ws.send(JSON.stringify({ type: 'hello', specimen: 'wall' }));
+            this.sendJSON({ type: 'hello', specimen: 'wall', wallId });
             this.startClockSync();
         };
 
@@ -56,11 +58,11 @@ export class WallEngine {
     }
 
     // --- SINGLETON ACCESSOR ---
-    public static getInstance(viewport?: Viewport): WallEngine {
+    public static getInstance(wallId: string, viewport?: Viewport): WallEngine {
         // Escape Vite's module scope by anchoring the Singleton to the Window
         if (!window.__WALL_ENGINE__) {
             if (!viewport) throw new Error('Viewport must be provided on first initialization');
-            window.__WALL_ENGINE__ = new WallEngine(viewport);
+            window.__WALL_ENGINE__ = new WallEngine(wallId, viewport);
         }
         return window.__WALL_ENGINE__;
     }

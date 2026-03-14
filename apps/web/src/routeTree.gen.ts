@@ -15,6 +15,7 @@ import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WallIndexRouteImport } from './routes/wall/index'
 import { Route as GalleryIndexRouteImport } from './routes/gallery/index'
+import { Route as ControllerIndexRouteImport } from './routes/controller/index'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as AuthQuarryIndexRouteImport } from './routes/_auth/quarry/index'
 import { Route as ApiUploadsSplatRouteImport } from './routes/api/uploads/$'
@@ -58,6 +59,11 @@ const WallIndexRoute = WallIndexRouteImport.update({
 const GalleryIndexRoute = GalleryIndexRouteImport.update({
   id: '/gallery/',
   path: '/gallery/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ControllerIndexRoute = ControllerIndexRouteImport.update({
+  id: '/controller/',
+  path: '/controller/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuestLoginRoute = GuestLoginRouteImport.update({
@@ -153,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/og': typeof OgRoute
   '/login': typeof GuestLoginRoute
+  '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
   '/wall/': typeof WallIndexRoute
   '/quarry/editor': typeof AuthQuarryEditorRouteRouteWithChildren
@@ -175,6 +182,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/og': typeof OgRoute
   '/login': typeof GuestLoginRoute
+  '/controller': typeof ControllerIndexRoute
   '/gallery': typeof GalleryIndexRoute
   '/wall': typeof WallIndexRoute
   '/quarry/editor': typeof AuthQuarryEditorRouteRouteWithChildren
@@ -199,6 +207,7 @@ export interface FileRoutesById {
   '/_guest': typeof GuestRouteRouteWithChildren
   '/og': typeof OgRoute
   '/_guest/login': typeof GuestLoginRoute
+  '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
   '/wall/': typeof WallIndexRoute
   '/_auth/quarry/editor': typeof AuthQuarryEditorRouteRouteWithChildren
@@ -223,6 +232,7 @@ export interface FileRouteTypes {
     | '/'
     | '/og'
     | '/login'
+    | '/controller/'
     | '/gallery/'
     | '/wall/'
     | '/quarry/editor'
@@ -245,6 +255,7 @@ export interface FileRouteTypes {
     | '/'
     | '/og'
     | '/login'
+    | '/controller'
     | '/gallery'
     | '/wall'
     | '/quarry/editor'
@@ -268,6 +279,7 @@ export interface FileRouteTypes {
     | '/_guest'
     | '/og'
     | '/_guest/login'
+    | '/controller/'
     | '/gallery/'
     | '/wall/'
     | '/_auth/quarry/editor'
@@ -292,6 +304,7 @@ export interface RootRouteChildren {
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
   OgRoute: typeof OgRoute
+  ControllerIndexRoute: typeof ControllerIndexRoute
   GalleryIndexRoute: typeof GalleryIndexRoute
   WallIndexRoute: typeof WallIndexRoute
   ApiAssetsUriRoute: typeof ApiAssetsUriRoute
@@ -341,6 +354,13 @@ declare module '@tanstack/react-router' {
       path: '/gallery'
       fullPath: '/gallery/'
       preLoaderRoute: typeof GalleryIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/controller/': {
+      id: '/controller/'
+      path: '/controller'
+      fullPath: '/controller/'
+      preLoaderRoute: typeof ControllerIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_guest/login': {
@@ -550,6 +570,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
   GuestRouteRoute: GuestRouteRouteWithChildren,
   OgRoute: OgRoute,
+  ControllerIndexRoute: ControllerIndexRoute,
   GalleryIndexRoute: GalleryIndexRoute,
   WallIndexRoute: WallIndexRoute,
   ApiAssetsUriRoute: ApiAssetsUriRoute,

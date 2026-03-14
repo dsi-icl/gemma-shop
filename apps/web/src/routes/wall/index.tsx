@@ -16,8 +16,11 @@ export const Route = createFileRoute('/wall/')({ component: WallApp });
 
 function WallApp() {
     const [layers, setLayers] = useState<LayerWithWallComponentState[]>([]);
+    const wallId = useMemo(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('w');
+    }, []);
 
-    // 1. Parse URL Parameters: ?c=0&r=1
     const myViewport = useMemo<Viewport>(() => {
         const params = new URLSearchParams(window.location.search);
         const col = parseInt(params.get('c') || '0');
@@ -27,19 +30,22 @@ function WallApp() {
     }, []);
 
     // Initialize Engine with this screen's specific physical location
-    const engine = useMemo(() => WallEngine.getInstance(myViewport), [myViewport]);
+    const engine = useMemo(
+        () => (wallId ? WallEngine.getInstance(wallId, myViewport) : null),
+        [wallId, myViewport]
+    );
 
     useEffect(() => {
         if (window.__WALL_RELOADING__) {
             setTimeout(() => {
-                engine.sendJSON({ type: 'rehydrate_please' });
+                engine?.sendJSON({ type: 'rehydrate_please' });
             }, 500);
             window.__WALL_RELOADING__ = false;
         }
-    }, []);
+    }, [engine]);
 
     useEffect(() => {
-        const unsubscribe = engine.subscribeToLayoutUpdates((data) => {
+        const unsubscribe = engine?.subscribeToLayoutUpdates((data) => {
             if (data.type === 'hydrate') setLayers(data.layers);
             else if (data.type === 'upsert_layer') {
                 setLayers((prev) => [
@@ -54,7 +60,7 @@ function WallApp() {
         });
         let frameId: number;
         const loop = () => {
-            engine.layers.forEach((layer) => {
+            engine?.layers.forEach((layer) => {
                 if (!layer.el) return;
                 // if (!layer.visible) return;
 
@@ -103,10 +109,12 @@ function WallApp() {
 
         frameId = requestAnimationFrame(loop);
         return () => {
-            unsubscribe();
+            unsubscribe?.();
             cancelAnimationFrame(frameId);
         };
     }, [engine, myViewport]);
+
+    if (!engine) return;
 
     const stage = layers.map((layer) => {
         // Share the exact same spatial and registry logic across both media types

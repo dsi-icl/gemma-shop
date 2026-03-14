@@ -1,16 +1,9 @@
+import Uppy from '@uppy/core';
+import Tus from '@uppy/tus';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-    Stage,
-    Layer as KonvaLayer,
-    Transformer,
-    Group,
-    Text,
-    Rect,
-    Line,
-    Circle
-} from 'react-konva';
+import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'react-konva';
 
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaVideo } from '~/components/KonvaVideo';
@@ -22,7 +15,7 @@ import { useEditorStore } from '~/lib/editorStore';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
 
-import DOPreview from './DOPreview';
+// import DOPreview from './DOPreview';
 import { SlatePreview } from './SlatePreview';
 
 const engine = EditorEngine.getInstance();
@@ -259,23 +252,46 @@ export function EditorSlate() {
         store.upsertLayer(optimisticLayer);
         store.toggleLayerSelection(numericId.toString(), false, false);
 
-        // 3. Background network upload
-        const formData = new FormData();
-        formData.append('asset', file);
-        formData.append('numericId', numericId.toString());
-        formData.append('duration', duration.toString());
+        // 3. Background tus upload with metadata for server-side post-processing
+        const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+        const currentProjectId = useEditorStore.getState().projectId;
+
+        const uppy = new Uppy().use(Tus, {
+            endpoint: '/api/uploads/',
+            chunkSize: 5 * 1024 * 1024
+        });
 
         try {
-            const res = await fetch(`/upload`, { method: `POST`, body: formData });
-            if (!res.ok) throw new Error('Upload failed');
-            const data = await res.json();
+            uppy.addFile({
+                name: file.name,
+                type: file.type,
+                data: file,
+                meta: {
+                    numericId: numericId.toString(),
+                    duration: duration.toString(),
+                    projectId: currentProjectId ?? ''
+                }
+            });
+        } catch (err) {
+            console.error('Upload add-file failure', err);
+            useEditorStore.getState().removeLayer(numericId);
+            uppy.destroy();
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
+        uppy.on('upload-success', (_file, response) => {
+            // Derive asset URL from the tus upload ID
+            const uploadId = response.uploadURL?.split('/').pop() ?? '';
+            const assetFilename = isImage ? `${uploadId}${ext}` : `${uploadId}.mp4`;
+            const assetUrl = `${window.location.origin}/api/assets/${assetFilename}`;
 
             // Grab freshest config from shadow state (user may have moved the preview)
             const freshestLayer =
                 layersRef.current.find((l) => l.numericId === numericId) || optimisticLayer;
 
             // 4. Lock it in with preserved transformations
-            const finalizedLayer = { ...freshestLayer, url: data.url, isUploading: false };
+            const finalizedLayer = { ...freshestLayer, url: assetUrl, isUploading: false };
 
             useEditorStore.getState().upsertLayer(finalizedLayer);
             engine.setPlayback(numericId, defaultPlayback);
@@ -287,15 +303,23 @@ export function EditorSlate() {
                     numericId,
                     type: finalizedLayer.type,
                     playback: defaultPlayback,
-                    url: data.url,
+                    url: assetUrl,
                     config: freshestLayer.config
                 } as LayerWithEditorState
             });
             URL.revokeObjectURL(localUrl);
-        } catch (err) {
-            console.error(' Upload failure', err);
+
+            // Asset record is created server-side in onUploadFinish
+            uppy.destroy();
+        });
+
+        uppy.on('error', (err) => {
+            console.error('Upload failure', err);
             useEditorStore.getState().removeLayer(numericId);
-        }
+            uppy.destroy();
+        });
+
+        uppy.upload();
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 

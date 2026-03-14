@@ -48,6 +48,9 @@ interface EditorState {
     shapeFill: string;
     shapeStroke: string;
 
+    // ── Wall binding ──
+    boundWallId: string | null;
+
     // ── Save pipeline state ──
     saveStatus: SaveStatus;
     headCommitId: string | null;
@@ -123,6 +126,9 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     inkDash: [],
     shapeFill: '#ff0000',
     shapeStroke: '#000000',
+
+    // ── Wall binding ──
+    boundWallId: null,
 
     // ── Save pipeline state ──
     saveStatus: 'idle',

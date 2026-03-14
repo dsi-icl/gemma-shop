@@ -1,3 +1,4 @@
+import type { ControllerEngine } from '~/lib/controllerEngine';
 import type { EditorEngine } from '~/lib/editorEngine';
 import type { GSMessage, ScopeKey, ScopeState } from '~/lib/types';
 import type { WallEngine } from '~/lib/wallEngine';
@@ -6,8 +7,10 @@ export {};
 
 declare global {
     interface Window {
+        __CONTROLLER_ENGINE__?: ControllerEngine;
         __EDITOR_ENGINE__?: EditorEngine;
         __WALL_ENGINE__?: WallEngine;
+        __CONTROLLER_RELOADING__?: boolean;
         __EDITOR_RELOADING__?: boolean;
         __WALL_RELOADING__?: boolean;
     }
