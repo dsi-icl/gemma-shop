@@ -7,6 +7,7 @@ import { createFileRoute, useParams } from '@tanstack/react-router';
 import { useCallback, useEffect, useState } from 'react';
 import { usePanelRef } from 'react-resizable-panels';
 
+import { AssetLibrary } from '~/components/AssetLibrary';
 import { LayerList } from '~/components/LayerList';
 import { MainBoard } from '~/components/MainBoard';
 import { SlideList } from '~/components/SlideList';
@@ -25,8 +26,10 @@ function SlideEditor() {
     const [hasInitialised, setHasInitialised] = useState(false);
     const slidePanelRef = usePanelRef();
     const layerPanelRef = usePanelRef();
+    const mediaPanelRef = usePanelRef();
     const [slidesCollapsed, setSlidesCollapsed] = useState(true);
     const [layersCollapsed, setLayersCollapsed] = useState(false);
+    const [mediaCollapsed, setMediaCollapsed] = useState(false);
     const titleBarSize = 40;
 
     // Load project from commit DAG on mount
@@ -96,6 +99,22 @@ function SlideEditor() {
                             collapsed={layersCollapsed}
                             onCollapse={() => layerPanelRef.current?.collapse()}
                             onExpand={() => layerPanelRef.current?.expand()}
+                        />
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel
+                        collapsible
+                        collapsedSize={titleBarSize}
+                        minSize={titleBarSize}
+                        panelRef={mediaPanelRef}
+                        onResize={({ inPixels }) => setMediaCollapsed(inPixels <= titleBarSize)}
+                    >
+                        <AssetLibrary
+                            projectId={projectId}
+                            titleBarSize={titleBarSize}
+                            collapsed={mediaCollapsed}
+                            onCollapse={() => mediaPanelRef.current?.collapse()}
+                            onExpand={() => mediaPanelRef.current?.expand()}
                         />
                     </ResizablePanel>
                 </ResizablePanelGroup>

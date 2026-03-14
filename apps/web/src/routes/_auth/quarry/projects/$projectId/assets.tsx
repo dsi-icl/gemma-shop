@@ -16,7 +16,7 @@ import Tus from '@uppy/tus';
 import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { $createAsset, $deleteAsset } from '~/server/projects.fns';
+import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId/assets')({
@@ -37,17 +37,6 @@ function AssetsTab() {
 
     const [view, setView] = useLocalStorageValue<View>('assets-view', 'list');
 
-    const createAssetMutation = useMutation({
-        mutationFn: $createAsset,
-        onSuccess: () => {
-            queryClient.invalidateQueries({
-                queryKey: projectAssetsQueryOptions(projectId).queryKey
-            });
-            toast.success('Asset created');
-        },
-        onError: (e) => toast.error(e.message)
-    });
-
     const deleteAssetMutation = useMutation({
         mutationFn: $deleteAsset,
         onSuccess: () => {
@@ -62,7 +51,9 @@ function AssetsTab() {
     const handleUpload = useCallback(
         async (files: FileList) => {
             setUploading(true);
-            const uppy = new Uppy({ restrictions: { allowedFileTypes: ['image/*'] } }).use(Tus, {
+            const uppy = new Uppy({
+                restrictions: { allowedFileTypes: ['image/*', 'video/*'] }
+            }).use(Tus, {
                 endpoint: '/api/uploads/',
                 chunkSize: 5 * 1024 * 1024
             });
@@ -74,7 +65,12 @@ function AssetsTab() {
 
             try {
                 for (const file of Array.from(files)) {
-                    uppy.addFile({ name: file.name, type: file.type, data: file });
+                    uppy.addFile({
+                        name: file.name,
+                        type: file.type,
+                        data: file,
+                        meta: { projectId }
+                    });
                 }
             } catch (e: any) {
                 toast.error(e.message);
@@ -83,21 +79,15 @@ function AssetsTab() {
                 return;
             }
 
-            uppy.on('upload-success', (file, response) => {
-                if (response.uploadURL && file && file.size) {
-                    createAssetMutation.mutate({
-                        data: {
-                            projectId,
-                            name: file.name,
-                            url: response.uploadURL,
-                            size: file.size
-                        }
-                    });
-                }
+            uppy.on('complete', () => {
+                queryClient.invalidateQueries({
+                    queryKey: projectAssetsQueryOptions(projectId).queryKey
+                });
             });
 
             try {
                 await uppy.upload();
+                toast.success(`Uploaded ${files.length} file(s)`);
             } catch {
                 // errors handled by uppy events
             } finally {
@@ -105,7 +95,7 @@ function AssetsTab() {
                 uppy.destroy();
             }
         },
-        [projectId, createAssetMutation]
+        [projectId, queryClient]
     );
 
     return (
@@ -218,7 +208,7 @@ function AssetsTab() {
                             className="flex items-center gap-3 rounded-lg border p-2"
                         >
                             <img
-                                src={asset.url}
+                                src={asset.previewUrl ?? asset.url}
                                 alt={asset.name}
                                 className="h-16 w-16 rounded-md object-cover"
                             />
@@ -248,7 +238,7 @@ function AssetsTab() {
                     {assets.map((asset) => (
                         <div key={asset._id} className="group relative">
                             <img
-                                src={asset.url}
+                                src={asset.previewUrl ?? asset.url}
                                 alt={asset.name}
                                 className="aspect-square w-full rounded-lg object-cover"
                             />
