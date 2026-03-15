@@ -2,6 +2,7 @@ import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_auth')({
+    ssr: false,
     component: Outlet,
     beforeLoad: async ({ context }) => {
         const user = await context.queryClient.ensureQueryData({

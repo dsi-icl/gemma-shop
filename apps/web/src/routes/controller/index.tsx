@@ -7,7 +7,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ControllerEngine } from '~/lib/controllerEngine';
 import { $getCommit, $getProject } from '~/server/projects.fns';
 
-export const Route = createFileRoute('/controller/')({ component: ControllerApp });
+export const Route = createFileRoute('/controller/')({
+    ssr: 'data-only',
+    component: ControllerApp
+});
 
 interface BindingStatus {
     bound: boolean;

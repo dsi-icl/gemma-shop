@@ -12,7 +12,10 @@ import { WallEngine, type Viewport } from '~/lib/wallEngine';
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 
-export const Route = createFileRoute('/wall/')({ component: WallApp });
+export const Route = createFileRoute('/wall/')({
+    ssr: false,
+    component: WallApp
+});
 
 function WallApp() {
     const [layers, setLayers] = useState<LayerWithWallComponentState[]>([]);
@@ -130,6 +133,8 @@ function WallApp() {
                 // transition: 'all .1s ease-out',
                 width: `${layer.config.width}px`,
                 height: `${layer.config.height}px`,
+                maxWidth: `${layer.config.width}px`,
+                maxHeight: `${layer.config.height}px`,
                 zIndex: layer.config.zIndex
             } as CSSProperties
         };
@@ -142,7 +147,7 @@ function WallApp() {
                         alt={`Layer ${layer.numericId}`}
                         width="100%"
                         height="100%"
-                        className="block h-full w-full object-fill"
+                        className="block h-full w-full object-cover"
                     />
                 </div>
             );
@@ -172,7 +177,7 @@ function WallApp() {
                     muted
                     playsInline
                     loop={layer.loop ?? true}
-                    className="object-fill"
+                    className="object-cover"
                 />
             );
 
