@@ -1,0 +1,156 @@
+import { CaretDownIcon, SlidersHorizontalIcon } from '@phosphor-icons/react';
+import SideButtonNumberField from '@repo/ui/components/number-field';
+import { throttle } from '@tanstack/pacer';
+import { useCallback } from 'react';
+
+import { EditorEngine } from '~/lib/editorEngine';
+import { useEditorStore } from '~/lib/editorStore';
+import type { LayerWithEditorState } from '~/lib/types';
+
+interface ParametersPanelProps {
+    titleBarSize?: number;
+    collapsed?: boolean;
+    onCollapse?: () => void;
+    onExpand?: () => void;
+}
+
+export function ParametersPanel({
+    collapsed,
+    onCollapse,
+    onExpand,
+    titleBarSize = 48
+}: ParametersPanelProps) {
+    const layers = useEditorStore((s) => s.layers);
+    const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
+    const markDirty = useEditorStore((s) => s.markDirty);
+
+    const selectedLayer =
+        selectedLayerIds.length === 1
+            ? layers.find((l) => l.numericId.toString() === selectedLayerIds[0])
+            : null;
+
+    const toggleCollapse = () => {
+        if (collapsed) onExpand?.();
+        else onCollapse?.();
+    };
+
+    const updateConfig = useCallback(
+        (field: keyof LayerWithEditorState['config'], value: number) => {
+            console.log('updateConfig', field, value);
+            if (!selectedLayer) return;
+            const newConfig = { ...selectedLayer.config, [field]: value };
+            const updatedLayer = { ...selectedLayer, config: newConfig };
+
+            useEditorStore.setState((s) => ({
+                layers: s.layers.map((l) =>
+                    l.numericId === selectedLayer.numericId ? updatedLayer : l
+                )
+            }));
+
+            throttle(
+                () => {
+                    const engine = EditorEngine.getInstance();
+                    engine.sendJSON({
+                        type: 'upsert_layer',
+                        origin: 'parameters',
+                        layer: updatedLayer
+                    });
+                    markDirty();
+                },
+                { wait: 100 }
+            );
+        },
+        [selectedLayer, markDirty]
+    );
+
+    return (
+        <div className="flex h-full flex-col overflow-hidden bg-muted/30">
+            <button
+                onClick={toggleCollapse}
+                className="flex shrink-0 cursor-pointer items-center justify-between border-b border-border bg-muted/50 px-4"
+                style={{ height: titleBarSize }}
+            >
+                <h2 className="flex items-center gap-2 text-sm font-semibold">
+                    <SlidersHorizontalIcon size={18} weight="bold" /> Parameters
+                </h2>
+                <CaretDownIcon
+                    size={14}
+                    weight="bold"
+                    className={`text-muted-foreground transition-transform ${collapsed ? '' : 'rotate-180'}`}
+                />
+            </button>
+
+            {!collapsed && (
+                <div className="flex-1 overflow-y-auto p-3">
+                    {selectedLayer ? (
+                        <div className="space-y-3">
+                            <fieldset className="space-y-1.5">
+                                <legend className="text-xs font-semibold">Position</legend>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <SideButtonNumberField
+                                        label="X"
+                                        className={'text-xs'}
+                                        allowWheelScrub={true}
+                                        value={selectedLayer.config.cx}
+                                        onInput={(e) => console.log(e)}
+                                        onValueChange={(v) => {
+                                            if (v !== null) updateConfig('cx', v);
+                                        }}
+                                    />
+                                    <SideButtonNumberField
+                                        label="Y"
+                                        allowWheelScrub={true}
+                                        value={selectedLayer.config.cy}
+                                        onValueChange={(v) => {
+                                            if (v !== null) updateConfig('cy', v);
+                                        }}
+                                    />
+                                </div>
+                            </fieldset>
+
+                            <fieldset className="space-y-1.5">
+                                <legend className="text-xs font-semibold">Size</legend>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <SideButtonNumberField
+                                        label="Width"
+                                        allowWheelScrub={true}
+                                        value={selectedLayer.config.width}
+                                        onValueChange={(v) => {
+                                            if (v !== null) updateConfig('width', v);
+                                        }}
+                                    />
+                                    <SideButtonNumberField
+                                        label="Height"
+                                        allowWheelScrub={true}
+                                        value={selectedLayer.config.height}
+                                        onValueChange={(v) => {
+                                            if (v !== null) updateConfig('height', v);
+                                        }}
+                                    />
+                                </div>
+                            </fieldset>
+
+                            <fieldset className="space-y-1.5">
+                                <legend className="text-xs font-semibold">Transform</legend>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <SideButtonNumberField
+                                        label="Rotation"
+                                        allowWheelScrub={true}
+                                        value={selectedLayer.config.rotation}
+                                        onValueChange={(v) => {
+                                            if (v !== null) updateConfig('rotation', v);
+                                        }}
+                                    />
+                                </div>
+                            </fieldset>
+                        </div>
+                    ) : (
+                        <p className="text-center text-xs text-muted-foreground">
+                            Select a layer to edit its parameters
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}

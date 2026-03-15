@@ -10,10 +10,12 @@ import { usePanelRef } from 'react-resizable-panels';
 import { AssetLibrary } from '~/components/AssetLibrary';
 import { LayerList } from '~/components/LayerList';
 import { MainBoard } from '~/components/MainBoard';
+import { ParametersPanel } from '~/components/ParametersPanel';
 import { SlideList } from '~/components/SlideList';
 import { useEditorStore } from '~/lib/editorStore';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId/$slideId')({
+    ssr: false,
     component: SlideEditor
 });
 
@@ -23,12 +25,15 @@ function SlideEditor() {
     });
     const loadProject = useEditorStore((s) => s.loadProject);
 
-    const [hasInitialised, setHasInitialised] = useState(false);
+    const [hasInitialisedSlides, setHasInitialisedSlides] = useState(false);
+    const [hasInitialisedParams, setHasInitialisedParams] = useState(false);
     const slidePanelRef = usePanelRef();
     const layerPanelRef = usePanelRef();
+    const paramsPanelRef = usePanelRef();
     const mediaPanelRef = usePanelRef();
     const [slidesCollapsed, setSlidesCollapsed] = useState(true);
     const [layersCollapsed, setLayersCollapsed] = useState(false);
+    const [paramsCollapsed, setParamsCollapsed] = useState(true);
     const [mediaCollapsed, setMediaCollapsed] = useState(false);
     const titleBarSize = 40;
 
@@ -54,12 +59,20 @@ function SlideEditor() {
     }, [handleKeyboardSave]);
 
     useEffect(() => {
-        if (hasInitialised) return;
+        if (hasInitialisedSlides) return;
         if (slidesCollapsed && slidePanelRef.current) {
             slidePanelRef.current.collapse();
-            setHasInitialised(true);
+            setHasInitialisedSlides(true);
         }
-    }, [hasInitialised, slidesCollapsed, slidePanelRef]);
+    }, [hasInitialisedSlides, slidesCollapsed, slidePanelRef]);
+
+    useEffect(() => {
+        if (hasInitialisedParams) return;
+        if (paramsCollapsed && paramsPanelRef.current) {
+            paramsPanelRef.current.collapse();
+            setHasInitialisedParams(true);
+        }
+    }, [hasInitialisedParams, slidesCollapsed, slidePanelRef]);
 
     return (
         <ResizablePanelGroup
@@ -99,6 +112,21 @@ function SlideEditor() {
                             collapsed={layersCollapsed}
                             onCollapse={() => layerPanelRef.current?.collapse()}
                             onExpand={() => layerPanelRef.current?.expand()}
+                        />
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel
+                        collapsible
+                        collapsedSize={titleBarSize}
+                        minSize={titleBarSize}
+                        panelRef={paramsPanelRef}
+                        onResize={({ inPixels }) => setParamsCollapsed(inPixels <= titleBarSize)}
+                    >
+                        <ParametersPanel
+                            titleBarSize={titleBarSize}
+                            collapsed={paramsCollapsed}
+                            onCollapse={() => paramsPanelRef.current?.collapse()}
+                            onExpand={() => paramsPanelRef.current?.expand()}
                         />
                     </ResizablePanel>
                     <ResizableHandle withHandle />

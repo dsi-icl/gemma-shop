@@ -2,8 +2,6 @@ import { CaretDownIcon, ImageIcon, SpinnerGapIcon, UploadSimpleIcon } from '@pho
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
-import { encode } from 'blurhash';
-import { i } from 'motion/react-client';
 import { useCallback, useRef, useState } from 'react';
 import { Blurhash } from 'react-blurhash';
 import { toast } from 'sonner';

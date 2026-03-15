@@ -98,16 +98,6 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
             </div>
             <div className="flex-1 flex-col truncate text-sm text-foreground">
                 <span>{getLayerName(layer)}</span>
-                <span
-                    className={cn(
-                        layer.type === 'ink' ? 'opacity-0' : 'opacity-45',
-                        'flex w-full gap-5 text-xs'
-                    )}
-                >
-                    <span>x:{layer.config.cx}</span>
-                    <span>y:{layer.config.cy}</span>
-                    <span>r:{layer.config.rotation}</span>
-                </span>
             </div>
             <div>
                 <TipButton
