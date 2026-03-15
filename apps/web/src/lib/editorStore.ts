@@ -3,6 +3,7 @@ import { create } from 'zustand';
 
 import { $getCommit, $getProject } from '../server/projects.fns';
 import { EditorEngine } from './editorEngine';
+import type { ConnectionStatus } from './reconnectingWs';
 import type { Layer, LayerWithEditorState, Slide } from './types';
 
 type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
@@ -50,6 +51,9 @@ interface EditorState {
 
     // ── Wall binding ──
     boundWallId: string | null;
+
+    // ── Connection state ──
+    connectionStatus: ConnectionStatus;
 
     // ── Save pipeline state ──
     saveStatus: SaveStatus;
@@ -129,6 +133,9 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
 
     // ── Wall binding ──
     boundWallId: null,
+
+    // ── Connection state ──
+    connectionStatus: 'connecting' as ConnectionStatus,
 
     // ── Save pipeline state ──
     saveStatus: 'idle',
@@ -739,6 +746,11 @@ engine.subscribeToJson((data) => {
     } else if (data.type === 'processing_progress') {
         store.updateProgress(data.numericId, data.progress);
     }
+});
+
+// Wire connection status into the store
+engine.onConnectionStatusChange((status) => {
+    useEditorStore.setState({ connectionStatus: status });
 });
 
 // Wire save responses from the bus back into the store

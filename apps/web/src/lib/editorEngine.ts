@@ -2,6 +2,7 @@
 
 import { throttle } from '@tanstack/pacer';
 
+import { type ConnectionStatus, ReconnectingWebSocket } from './reconnectingWs';
 import { GSMessageSchema, type GSMessage, type Layer } from './types';
 
 const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
@@ -22,108 +23,116 @@ type PlaybackCallback = (
     id: number,
     playback: Extract<Layer, { type: 'video' }>['playback']
 ) => void;
+type ConnectionStatusCallback = (status: ConnectionStatus) => void;
 
 export class EditorEngine {
-    public ws: WebSocket;
-    private pingTimer: ReturnType<typeof setTimeout> | null = null;
+    private rws: ReconnectingWebSocket;
     private messageCallbacks = new Set<ServerMessageCallback>();
     private binaryCallbacks = new Set<BinaryMessageCallback>();
     private playbackCallbacks = new Set<PlaybackCallback>();
     private playbackStates = new Map<number, Extract<Layer, { type: 'video' }>['playback']>();
     private saveCallbacks = new Set<SaveResponseCallback>();
+    private connectionStatusCallbacks = new Set<ConnectionStatusCallback>();
     private bufferedHydration: Extract<GSMessage, { type: 'hydrate' }> | null = null;
     private clockOffset = 0;
     private bestRTT = Infinity;
-    // private currentProjectId: string | null = null;
-    // private currentSlideId: string | null = null;
+    private pingTimer: ReturnType<typeof setTimeout> | null = null;
+    private currentProjectId: string | null = null;
+    private currentSlideId: string | null = null;
 
     private constructor() {
-        this.ws = new WebSocket(WEBSOCKET_GEMMA_BUS);
-        this.ws.binaryType = 'arraybuffer';
+        this.rws = new ReconnectingWebSocket(WEBSOCKET_GEMMA_BUS, {
+            binaryType: 'arraybuffer',
+            onOpen: () => {
+                console.log('Editor Engine: Connected to Server');
+                // Reset clock sync state on every (re)connect
+                this.clockOffset = 0;
+                this.bestRTT = Infinity;
+                if (this.pingTimer) clearTimeout(this.pingTimer);
+                this.startClockSync();
 
-        this.ws.onopen = () => {
-            console.log('Editor Engine: Connected to Server');
-            // Waiting for the editor UI to join a scope
-            // const hello: GSMessage = {
-            //     type: 'hello',
-            //     specimen: 'editor',
-            //     ...(this.currentProjectId && { projectId: this.currentProjectId }),
-            //     ...(this.currentSlideId && { slideId: this.currentSlideId })
-            // };
-            // this.ws.send(JSON.stringify(hello));
-            this.startClockSync();
-        };
-
-        this.ws.onmessage = (event) => {
-            // --- BINARY FAST-PATH PARSER ---
-            if (event.data instanceof ArrayBuffer) {
-                const view = new DataView(event.data);
-                const opcode = view.getUint8(0);
-
-                // NEW: Intercept Binary Pong
-                if (opcode === 0x09) {
-                    const t0 = view.getFloat64(1, true);
-                    const t1 = view.getFloat64(9, true);
-                    const t2 = view.getFloat64(17, true);
-                    this.handlePong({ t0, t1, t2 });
-                    return;
+                // Re-join the scope if we were already in one (reconnection case)
+                if (this.currentProjectId && this.currentSlideId) {
+                    this.joinScope(this.currentProjectId, this.currentSlideId);
                 }
+            },
+            onMessage: (event) => this.handleMessage(event)
+        });
 
-                // Existing Batched Move logic
-                if (opcode === 0x05) {
-                    const count = view.getUint16(1, true);
-                    let offset = 3;
-                    for (let i = 0; i < count; i++) {
-                        const id = view.getUint16(offset, true);
-                        const cx = view.getFloat32(offset + 2, true);
-                        const cy = view.getFloat32(offset + 6, true);
-                        const width = view.getFloat32(offset + 10, true);
-                        const height = view.getFloat32(offset + 14, true);
-                        const scaleX = view.getFloat32(offset + 18, true);
-                        const scaleY = view.getFloat32(offset + 22, true);
-                        const rotation = view.getFloat32(offset + 26, true);
+        this.rws.onStateChange((status) => {
+            this.connectionStatusCallbacks.forEach((cb) => cb(status));
+        });
+    }
 
-                        this.binaryCallbacks.forEach((cb) =>
-                            cb(id, cx, cy, width, height, scaleX, scaleY, rotation)
-                        );
-                        offset += 30;
-                    }
-                }
+    /** Access the underlying WebSocket (changes on each reconnect) */
+    public get ws(): WebSocket {
+        return this.rws.ws;
+    }
+
+    private handleMessage(event: MessageEvent) {
+        // --- BINARY FAST-PATH PARSER ---
+        if (event.data instanceof ArrayBuffer) {
+            const view = new DataView(event.data);
+            const opcode = view.getUint8(0);
+
+            if (opcode === 0x09) {
+                const t0 = view.getFloat64(1, true);
+                const t1 = view.getFloat64(9, true);
+                const t2 = view.getFloat64(17, true);
+                this.handlePong({ t0, t1, t2 });
                 return;
             }
 
-            // --- JSON SLOW-PATH ---
-            if (typeof event.data === 'string') {
-                const data = GSMessageSchema.parse(JSON.parse(event.data));
+            if (opcode === 0x05) {
+                const count = view.getUint16(1, true);
+                let offset = 3;
+                for (let i = 0; i < count; i++) {
+                    const id = view.getUint16(offset, true);
+                    const cx = view.getFloat32(offset + 2, true);
+                    const cy = view.getFloat32(offset + 6, true);
+                    const width = view.getFloat32(offset + 10, true);
+                    const height = view.getFloat32(offset + 14, true);
+                    const scaleX = view.getFloat32(offset + 18, true);
+                    const scaleY = view.getFloat32(offset + 22, true);
+                    const rotation = view.getFloat32(offset + 26, true);
 
-                // Intercept Playback. Save it, broadcast it, and STOP it from reaching React.
-                if (data.type === 'video_sync' || data.type === 'video_seek') {
-                    this.playbackStates.set(data.numericId, data.playback);
-                    this.playbackCallbacks.forEach((cb) => cb(data.numericId, data.playback));
-                    return;
+                    this.binaryCallbacks.forEach((cb) =>
+                        cb(id, cx, cy, width, height, scaleX, scaleY, rotation)
+                    );
+                    offset += 30;
                 }
-
-                if (data.type === 'stage_save_response') {
-                    this.saveCallbacks.forEach((cb) => cb(data));
-                    return;
-                }
-
-                if (data.type === 'hydrate') {
-                    this.bufferedHydration = data;
-                    // Populate the playback memory on refresh so components have accurate data!
-                    data.layers.forEach((l) => {
-                        if (l.type === 'video' && l.playback)
-                            this.playbackStates.set(l.numericId, l.playback);
-                    });
-                }
-
-                this.messageCallbacks.forEach((cb) => cb(data));
             }
-        };
+            return;
+        }
+
+        // --- JSON SLOW-PATH ---
+        if (typeof event.data === 'string') {
+            const data = GSMessageSchema.parse(JSON.parse(event.data));
+
+            if (data.type === 'video_sync' || data.type === 'video_seek') {
+                this.playbackStates.set(data.numericId, data.playback);
+                this.playbackCallbacks.forEach((cb) => cb(data.numericId, data.playback));
+                return;
+            }
+
+            if (data.type === 'stage_save_response') {
+                this.saveCallbacks.forEach((cb) => cb(data));
+                return;
+            }
+
+            if (data.type === 'hydrate') {
+                this.bufferedHydration = data;
+                data.layers.forEach((l) => {
+                    if (l.type === 'video' && l.playback)
+                        this.playbackStates.set(l.numericId, l.playback);
+                });
+            }
+
+            this.messageCallbacks.forEach((cb) => cb(data));
+        }
     }
 
     public static getInstance(): EditorEngine {
-        // Escape Vite's module scope by anchoring the Singleton to the Window
         if (!window.__EDITOR_ENGINE__) {
             window.__EDITOR_ENGINE__ = new EditorEngine();
         }
@@ -133,10 +142,11 @@ export class EditorEngine {
     public destroy() {
         console.log('Editor Engine: Assassinating ghost instance...');
         if (this.pingTimer) clearTimeout(this.pingTimer);
-        this.ws.close();
+        this.rws.destroy();
         this.messageCallbacks.clear();
         this.binaryCallbacks.clear();
         this.playbackCallbacks.clear();
+        this.connectionStatusCallbacks.clear();
     }
 
     public getServerTime(): number {
@@ -145,14 +155,11 @@ export class EditorEngine {
 
     private startClockSync() {
         const sendPing = () => {
-            if (this.ws.readyState === WebSocket.OPEN) {
-                // 1 byte Opcode + 8 bytes Float64 (t0) = 9 bytes total
-                const buffer = new ArrayBuffer(9);
-                const view = new DataView(buffer);
-                view.setUint8(0, 0x08); // Opcode 0x08: Ping
-                view.setFloat64(1, Date.now(), true); // little-endian
-                this.ws.send(buffer);
-            }
+            const buffer = new ArrayBuffer(9);
+            const view = new DataView(buffer);
+            view.setUint8(0, 0x08);
+            view.setFloat64(1, Date.now(), true);
+            this.rws.send(buffer);
             this.pingTimer = setTimeout(sendPing, 3000);
         };
         sendPing();
@@ -204,6 +211,9 @@ export class EditorEngine {
 
     /** Join a project/slide scope. Re-sends hello if already connected. */
     public joinScope(projectId: string, slideId: string) {
+        this.currentProjectId = projectId;
+        this.currentSlideId = slideId;
+
         this.sendJSON({
             type: 'hello',
             specimen: 'editor',
@@ -261,9 +271,21 @@ export class EditorEngine {
         };
     }
 
+    /** Subscribe to connection status changes (connecting, connected, reconnecting, disconnected) */
+    public onConnectionStatusChange(cb: ConnectionStatusCallback) {
+        this.connectionStatusCallbacks.add(cb);
+        return () => {
+            this.connectionStatusCallbacks.delete(cb);
+        };
+    }
+
+    /** Current connection status */
+    public get connectionStatus(): ConnectionStatus {
+        return this.rws.status;
+    }
+
     public sendJSON = (data: GSMessage) => {
-        if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(data));
-        else console.warn('WebSocket not open. Cannot send JSON:', data);
+        this.rws.send(JSON.stringify(data));
     };
 
     public broadcastBinaryMove = throttle(
@@ -277,7 +299,6 @@ export class EditorEngine {
             scaleY: number,
             rotation: number
         ) => {
-            if (this.ws.readyState !== WebSocket.OPEN) return;
             const buffer = new ArrayBuffer(33);
             const view = new DataView(buffer);
             view.setUint8(0, 0x05);
@@ -290,7 +311,7 @@ export class EditorEngine {
             view.setFloat32(21, scaleX, true);
             view.setFloat32(25, scaleY, true);
             view.setFloat32(29, rotation, true);
-            this.ws.send(buffer);
+            this.rws.send(buffer);
         },
         { wait: 16 }
     );
