@@ -1,5 +1,6 @@
 'use client';
 
+import { ReconnectingWebSocket } from './reconnectingWs';
 import {
     GSMessageSchema,
     type GSMessage,
@@ -20,7 +21,7 @@ export interface Viewport {
 type LayoutUpdateCallback = (data: GSMessage) => void;
 
 export class WallEngine {
-    public ws: WebSocket;
+    private rws: ReconnectingWebSocket;
     private pingTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Clock Sync State
@@ -37,23 +38,46 @@ export class WallEngine {
         this.wallId = wallId;
         this.viewport = viewport;
 
-        // Automatically detect HTTPS vs HTTP for the WebSocket protocol
-        this.ws = new WebSocket(WEBSOCKET_GEMMA_BUS);
-        this.ws.binaryType = 'arraybuffer';
+        this.rws = new ReconnectingWebSocket(WEBSOCKET_GEMMA_BUS, {
+            binaryType: 'arraybuffer',
+            onOpen: () => {
+                console.log('Wall Engine: Connected to Master Server');
+                // Reset clock sync on every (re)connect
+                this.clockOffset = 0;
+                this.bestRTT = Infinity;
+                if (this.pingTimer) clearTimeout(this.pingTimer);
+                this.startClockSync();
 
-        this.ws.onopen = () => {
-            console.log('Wall Engine: Connected to Master Server');
-            this.sendJSON({ type: 'hello', specimen: 'wall', wallId });
-            this.startClockSync();
-        };
+                // Re-identify ourselves to the server
+                this.sendJSON({
+                    type: 'hello',
+                    specimen: 'wall',
+                    wallId,
+                    col: Math.round(viewport.x / 1920),
+                    row: Math.round(viewport.y / 1080)
+                });
+            },
+            onMessage: (event) => this.handleMessage(event)
+        });
 
-        this.ws.onmessage = (event) => this.handleMessage(event);
+        // On disconnect: clear layers so screens go black (better than stale content)
+        this.rws.onStateChange((status) => {
+            if (status === 'reconnecting') {
+                this.layers.clear();
+                this.layoutCallbacks.forEach((cb) => cb({ type: 'hydrate', layers: [] }));
+            }
+        });
+    }
+
+    /** Access the underlying WebSocket (changes on each reconnect) */
+    public get ws(): WebSocket {
+        return this.rws.ws;
     }
 
     public destroy() {
         console.log('Wall Engine: Assassinating ghost instance...');
         if (this.pingTimer) clearTimeout(this.pingTimer);
-        this.ws.close();
+        this.rws.destroy();
         this.layoutCallbacks.clear();
     }
 
@@ -101,14 +125,11 @@ export class WallEngine {
 
     private startClockSync() {
         const sendPing = () => {
-            if (this.ws.readyState === WebSocket.OPEN) {
-                // 1 byte Opcode + 8 bytes Float64 (t0) = 9 bytes total
-                const buffer = new ArrayBuffer(9);
-                const view = new DataView(buffer);
-                view.setUint8(0, 0x08); // Opcode 0x08: Ping
-                view.setFloat64(1, Date.now(), true); // little-endian
-                this.ws.send(buffer);
-            }
+            const buffer = new ArrayBuffer(9);
+            const view = new DataView(buffer);
+            view.setUint8(0, 0x08);
+            view.setFloat64(1, Date.now(), true);
+            this.rws.send(buffer);
             this.pingTimer = setTimeout(sendPing, 2000);
         };
         sendPing();
@@ -138,6 +159,29 @@ export class WallEngine {
                 const t1 = view.getFloat64(9, true);
                 const t2 = view.getFloat64(17, true);
                 this.handlePong({ t0, t1, t2 });
+                return;
+            }
+
+            // VIDEO_SYNC binary: batched playback state from VSYNC loop
+            if (opcode === 0x15) {
+                const count = view.getUint16(1, true);
+                let offset = 3;
+                for (let i = 0; i < count; i++) {
+                    const numericId = view.getUint16(offset, true);
+                    const status =
+                        view.getUint8(offset + 2) === 1
+                            ? ('playing' as const)
+                            : ('paused' as const);
+                    const anchorMediaTime = view.getFloat64(offset + 3, true);
+                    const anchorServerTime = view.getFloat64(offset + 11, true);
+
+                    const layer = this.layers.get(numericId);
+                    if (layer?.type === 'video') {
+                        layer.playback = { status, anchorMediaTime, anchorServerTime };
+                        this.handlePlaybackStateChange(layer);
+                    }
+                    offset += 19;
+                }
                 return;
             }
 
@@ -315,8 +359,7 @@ export class WallEngine {
     }
 
     public sendJSON = (data: GSMessage) => {
-        if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(data));
-        else console.warn('WebSocket not open. Cannot send JSON:', data);
+        this.rws.send(JSON.stringify(data));
     };
 }
 

@@ -3,12 +3,12 @@ import { db } from '@repo/db';
 import type { Wall } from '@repo/db/schema';
 
 import {
-    bindWall as bindWallState,
+    bindWall,
     getOrCreateScope,
     hydrateWallNodes,
+    internScope,
     notifyControllers
 } from '~/lib/busState';
-import { makeScopeKey } from '~/lib/types';
 
 const walls = db.collection('walls');
 
@@ -48,9 +48,9 @@ export async function decrementWallConnection(wallId: string) {
 }
 
 export async function bindWallToScope(wallId: string, projectId: string, slideId: string) {
-    const scopeKey = makeScopeKey(projectId, slideId);
-    getOrCreateScope(scopeKey, projectId, slideId);
-    bindWallState(wallId, scopeKey);
+    const scopeId = internScope(projectId, slideId);
+    getOrCreateScope(scopeId, projectId, slideId);
+    bindWall(wallId, scopeId);
     hydrateWallNodes(wallId);
     notifyControllers(wallId, true, projectId, slideId);
 

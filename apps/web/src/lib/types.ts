@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+// ── Layer schemas ────────────────────────────────────────────────────────────
+
 const LayerPositionStateSchema = z.object({
     cx: z.number(),
     cy: z.number(),
@@ -32,7 +34,7 @@ const LayerSchema = z.discriminatedUnion('type', [
             loop: z.boolean(),
             duration: z.number(),
             rvfcActive: z.boolean(),
-            blurhash: z.string(),
+            blurhash: z.string().optional(),
             playback: LayerPlaybackStateSchema
         })
         .extend(LayerBaseSchema.shape),
@@ -40,7 +42,7 @@ const LayerSchema = z.discriminatedUnion('type', [
         .object({
             type: z.literal('image'),
             url: z.string(),
-            blurhash: z.string()
+            blurhash: z.string().optional()
         })
         .extend(LayerBaseSchema.shape),
     z.object({ type: z.literal('graph') }).extend(LayerBaseSchema.shape),
@@ -80,16 +82,41 @@ const LayerSchema = z.discriminatedUnion('type', [
 
 export type Layer = z.infer<typeof LayerSchema>;
 
-const HelloMessageBaseSchema = z.object({
-    type: z.literal('hello')
-});
+// ── Hello schema (exported separately for handshake-only validation) ─────────
+
+const HelloMessageBaseSchema = z.object({ type: z.literal('hello') });
+
+export const HelloSchema = z.discriminatedUnion('specimen', [
+    HelloMessageBaseSchema.extend({
+        specimen: z.literal('wall'),
+        wallId: z.string(),
+        col: z.number(),
+        row: z.number()
+    }),
+    HelloMessageBaseSchema.extend({
+        specimen: z.literal('controller'),
+        wallId: z.string()
+    }),
+    HelloMessageBaseSchema.extend({
+        specimen: z.literal('editor'),
+        projectId: z.string(),
+        slideId: z.string()
+    }),
+    HelloMessageBaseSchema.extend({
+        specimen: z.literal('roy')
+    })
+]);
+
+// ── Full message schema (kept for diagnostics fallback & client-side use) ────
 
 export const GSMessageSchema = z.discriminatedUnion('type', [
     z.discriminatedUnion('specimen', [
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
             specimen: z.literal('wall'),
-            wallId: z.string()
+            wallId: z.string(),
+            col: z.number(),
+            row: z.number()
         }),
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
@@ -167,6 +194,8 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
 
 export type GSMessage = z.infer<typeof GSMessageSchema>;
 
+// ── Client-side extended layer types ─────────────────────────────────────────
+
 export type LayerWithWallComponentState = Layer & { el?: HTMLElement; visible?: boolean };
 
 export type LayerWithWallEngineState = LayerWithWallComponentState & {
@@ -178,10 +207,10 @@ export type LayerWithWallEngineState = LayerWithWallComponentState & {
 
 export type LayerWithEditorState = Layer & { progress?: number; isUploading?: boolean };
 
-/** Scope key format: "e:projectId:slideId" for editor scopes */
-export type ScopeKey = string;
+// ── Scope utilities ──────────────────────────────────────────────────────────
 
-export function makeScopeKey(projectId: string, slideId: string): ScopeKey {
+/** Human-readable scope label for logging and client display */
+export function makeScopeLabel(projectId: string, slideId: string): string {
     return `e:${projectId}:${slideId}`;
 }
 
@@ -190,6 +219,8 @@ export interface ScopeState {
     projectId: string;
     slideId: string;
     dirty: boolean;
+    /** Cached JSON payload for hydrate messages. Invalidated on any layer mutation. */
+    hydrateCache: string | null;
 }
 
 export interface Slide {
