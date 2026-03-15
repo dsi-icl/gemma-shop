@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { copyFile, readFile, stat, unlink } from 'node:fs/promises';
-import path, { extname, join } from 'node:path';
+import { extname, join } from 'node:path';
 
 import { db } from '@repo/db';
 import { createFileRoute } from '@tanstack/react-router';
@@ -10,9 +10,7 @@ import { encode } from 'blurhash';
 import { ObjectId } from 'mongodb';
 import sharp from 'sharp';
 
-import { ASSET_DIR, TMP_DIR } from '~/lib/serverVariables';
-
-const UPLOAD_DIR = path.resolve('.uploads');
+import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 
 const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff']);
 const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv']);

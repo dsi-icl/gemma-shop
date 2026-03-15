@@ -41,3 +41,4 @@ worker-configuration.d.ts
 
 apps/web/public/assets
 .uploads
+.tmp
