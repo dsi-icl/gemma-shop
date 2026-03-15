@@ -100,7 +100,7 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
                         localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)
                     );
                     const oldError = console.error; console.error = (...args) => {
-                        if (args[0].includes('A tree hydrated but some attributes of the server rendered HTML'))
+                        if (args && typeof args[0] === 'string' && args[0].includes('A tree hydrated but some attributes of the server rendered HTML'))
                             return console.debug('Client and server tree have different attributes.');
                         oldError(...args); }
                     `}
