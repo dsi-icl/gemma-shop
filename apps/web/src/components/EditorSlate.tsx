@@ -857,11 +857,7 @@ export function EditorSlate() {
                 }}
             /> */}
             </div>
-            <SlatePreview
-                stageSlot={stageSlot}
-                stageWidth={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
-                stageHeight={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
-            />
+            <SlatePreview stageSlot={stageSlot} stageInstance={stageInstance} />
             <Toolbar fileInputRef={fileInputRef} onUpload={handleUpload} />
             {/* {stageInstance.current ? (
                 <DOPreview imageUrl={stageInstance.current.toDataURL()} />

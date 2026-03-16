@@ -1,27 +1,24 @@
 import { decode, isBlurhashValid } from 'blurhash';
 import { useState, RefObject, useEffect } from 'react';
-import { Circle, KonvaNodeEvents, Layer, Rect, Stage, Image, Line } from 'react-konva';
+import { Konva, Circle, KonvaNodeEvents, Layer, Rect, Stage, Image, Line } from 'react-konva';
 
 import { getDOGridLines } from '~/lib/editorHelpers';
 import type { LayerWithEditorState } from '~/lib/types';
 
 type SlatePreviewProps = {
     stageSlot: RefObject<HTMLDivElement | null>;
-    stageWidth: number;
-    stageHeight: number;
+    stageInstance: RefObject<Konva.Stage | null>;
     layers: LayerWithEditorState[];
 };
 
-const PREVIEW_SCALE = 0.15;
+const PREVIEW_SCALE = 0.2;
 
-export function ViewerSlatePreview({
-    stageSlot,
-    stageWidth,
-    stageHeight,
-    layers
-}: SlatePreviewProps) {
+export function ViewerSlatePreview({ stageSlot, stageInstance, layers }: SlatePreviewProps) {
     const [scrollLeft, setScrollLeft] = useState(0);
     const [showGrid] = useState(true);
+
+    const stageWidth = stageInstance.current?.width() || 0;
+    const stageHeight = stageInstance.current?.height() || 0;
 
     useEffect(() => {
         if (!stageSlot.current) return;

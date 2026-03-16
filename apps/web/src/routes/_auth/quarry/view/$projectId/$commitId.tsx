@@ -320,8 +320,7 @@ function CommitViewer() {
 
                             <ViewerSlatePreview
                                 stageSlot={stageSlot}
-                                stageWidth={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
-                                stageHeight={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
+                                stageInstance={stageInstance}
                                 layers={sortedLayers}
                             />
                         </div>

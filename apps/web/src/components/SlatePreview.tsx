@@ -1,4 +1,5 @@
 import { decode, isBlurhashValid } from 'blurhash';
+import Konva from 'konva';
 import { useState, RefObject, useEffect } from 'react';
 import { Circle, KonvaNodeEvents, Layer, Line, Rect, Stage, Image } from 'react-konva';
 
@@ -7,17 +8,19 @@ import { useEditorStore } from '~/lib/editorStore';
 
 type SlatePreviewProps = {
     stageSlot: RefObject<HTMLDivElement | null>;
-    stageWidth: number;
-    stageHeight: number;
+    stageInstance: RefObject<Konva.Stage | null>;
 };
 
-const PREVIEW_SCALE = 0.15;
+const PREVIEW_SCALE = 0.2;
 
-export function SlatePreview({ stageSlot, stageWidth, stageHeight }: SlatePreviewProps) {
+export function SlatePreview({ stageSlot, stageInstance }: SlatePreviewProps) {
     const [scrollLeft, setScrollLeft] = useState(0);
     const layers = useEditorStore((s) => s.layers);
     const showGrid = useEditorStore((s) => s.showGrid);
     const showInk = useEditorStore((s) => s.showInk);
+
+    const stageWidth = stageInstance.current?.width() || 0;
+    const stageHeight = stageInstance.current?.height() || 0;
 
     useEffect(() => {
         if (!stageSlot.current) return;
