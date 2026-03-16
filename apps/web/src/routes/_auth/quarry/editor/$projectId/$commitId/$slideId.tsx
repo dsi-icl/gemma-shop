@@ -15,7 +15,6 @@ import { SlideList } from '~/components/SlideList';
 import { useEditorStore } from '~/lib/editorStore';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId/$commitId/$slideId')({
-    ssr: false,
     component: SlideEditor
 });
 

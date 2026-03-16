@@ -4,7 +4,6 @@ import { $ensureMutableHead } from '~/server/projects.fns';
 import { $getCommit } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId/')({
-    ssr: false,
     beforeLoad: async ({ params }) => {
         const headCommitId = await $ensureMutableHead({ data: { projectId: params.projectId } });
         const commit = await $getCommit({ data: { id: headCommitId } });

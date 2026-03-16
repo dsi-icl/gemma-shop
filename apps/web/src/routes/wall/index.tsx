@@ -13,7 +13,6 @@ const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 
 export const Route = createFileRoute('/wall/')({
-    ssr: false,
     component: WallApp
 });
 

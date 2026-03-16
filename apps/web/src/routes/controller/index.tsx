@@ -8,7 +8,6 @@ import { ControllerEngine } from '~/lib/controllerEngine';
 import { $getCommit } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/controller/')({
-    ssr: 'data-only',
     component: ControllerApp
 });
 

@@ -12,7 +12,6 @@ import { publishedProjectsQueryOptions } from '~/server/projects.queries';
 import { $bindWall } from '~/server/walls.fns';
 
 export const Route = createFileRoute('/gallery/')({
-    ssr: 'data-only',
     component: HomePage,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(publishedProjectsQueryOptions());
