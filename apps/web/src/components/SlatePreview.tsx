@@ -121,7 +121,7 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                                     );
                             }
                             if (
-                                shape.type === 'image' &&
+                                (shape.type === 'image' || shape.type === 'video') &&
                                 shape.blurhash &&
                                 isBlurhashValid(shape.blurhash)
                             ) {

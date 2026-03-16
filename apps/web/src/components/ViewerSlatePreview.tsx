@@ -127,7 +127,7 @@ export function ViewerSlatePreview({
                                     );
                             }
                             if (
-                                shape.type === 'image' &&
+                                (shape.type === 'image' || shape.type === 'video') &&
                                 shape.blurhash &&
                                 isBlurhashValid(shape.blurhash)
                             ) {

@@ -43,6 +43,8 @@ interface ToolbarProps {
 export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     const {
         projectId,
+        projectName,
+        parentSaveMessage,
         activeSlideId,
         selectedLayerIds,
         layers,
@@ -102,7 +104,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     return (
         <TooltipProvider>
             <div
-                id="toolbar"
+                id="titlebar"
                 className="flex items-center gap-1 border-t border-border bg-card/50 px-2 py-1"
             >
                 {/* Hidden file input */}
@@ -163,53 +165,11 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     </TipButton>
                 </div>
 
-                {/* ── Ink ── */}
-                {isDrawing || isInk || isShape ? (
-                    <>
-                        <Separator orientation="vertical" className="mx-1 h-6" />
-                        <InkToolbar />
-                    </>
-                ) : null}
-
-                {/* ── Layer Ordering ── */}
-                {activeLayer && (
-                    <>
-                        <Separator orientation="vertical" className="mx-1 h-6" />
-                        <div className="flex items-center gap-0.5">
-                            <TipButton tip="Bring to front" onClick={bringToFront}>
-                                <ArrowLineUpIcon />
-                            </TipButton>
-                            <TipButton tip="Send to back" onClick={sendToBack}>
-                                <ArrowLineDownIcon />
-                            </TipButton>
-                        </div>
-                    </>
-                )}
-
-                {/* ── Video Playback ── */}
-                {isVideo && activeLayer && !activeLayer.isUploading && (
-                    <>
-                        <Separator orientation="vertical" className="mx-1 h-6" />
-                        <PlaybackControls
-                            key={`pc_${activeLayer.numericId}`}
-                            layer={activeLayer as Extract<LayerWithEditorState, { type: 'video' }>}
-                            engine={engine}
-                        />
-                        <Separator orientation="vertical" className="mx-1 h-6" />
-                        <VideoScrubber
-                            key={`vs_${activeLayer.numericId}`}
-                            layer={activeLayer as Extract<LayerWithEditorState, { type: 'video' }>}
-                            engine={engine}
-                        />
-                    </>
-                )}
-
-                <div className="grow" />
-
-                {/* ── Save status text ── */}
-                {saveStatus === 'dirty' && (
-                    <span className="text-xs text-muted-foreground">Unsaved</span>
-                )}
+                <div className="w-full grow text-center text-xs text-muted-foreground">
+                    {projectName} - {parentSaveMessage} - 0000
+                    {/* ── Save status text ── */}
+                    {saveStatus === 'dirty' && <span> - Unsaved</span>}
+                </div>
 
                 {/* Spacer */}
                 <div className="flex-1" />
@@ -316,13 +276,60 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     </TipButton>
                 </div>
             </div>
-            {isText && activeLayer && (
+            {/* {isText && activeLayer && (
                 <TextEditor
                     key={`te_${activeLayer.numericId}`}
                     layer={activeLayer as Extract<LayerWithEditorState, { type: 'text' }>}
                     engine={engine}
                 />
-            )}
+            )} */}
+            <div
+                id="toolbar"
+                className="flex h-11 items-center gap-1 border-t border-b border-border bg-card/50 px-2 py-1"
+            >
+                {activeLayer && <span className="px-2 text-xs">{activeLayer.type}</span>}
+
+                {/* ── Layer Ordering ── */}
+                {activeLayer && (
+                    <>
+                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <div className="flex items-center gap-0.5">
+                            <TipButton tip="Bring to front" onClick={bringToFront}>
+                                <ArrowLineUpIcon />
+                            </TipButton>
+                            <TipButton tip="Send to back" onClick={sendToBack}>
+                                <ArrowLineDownIcon />
+                            </TipButton>
+                        </div>
+                    </>
+                )}
+
+                {/* ── Ink ── */}
+                {isDrawing || isInk || isShape ? (
+                    <>
+                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <InkToolbar />
+                    </>
+                ) : null}
+
+                {/* ── Video Playback ── */}
+                {isVideo && activeLayer && !activeLayer.isUploading && (
+                    <>
+                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <PlaybackControls
+                            key={`pc_${activeLayer.numericId}`}
+                            layer={activeLayer as Extract<LayerWithEditorState, { type: 'video' }>}
+                            engine={engine}
+                        />
+                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <VideoScrubber
+                            key={`vs_${activeLayer.numericId}`}
+                            layer={activeLayer as Extract<LayerWithEditorState, { type: 'video' }>}
+                            engine={engine}
+                        />
+                    </>
+                )}
+            </div>
         </TooltipProvider>
     );
 }

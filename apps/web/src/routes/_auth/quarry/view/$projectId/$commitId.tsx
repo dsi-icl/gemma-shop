@@ -19,7 +19,7 @@ import type { LayerWithEditorState } from '~/lib/types';
 import { $createBranchHead } from '~/server/projects.fns';
 import { commitQueryOptions, projectQueryOptions } from '~/server/projects.queries';
 
-const STAGE_SCALE_FACTOR = 0.1;
+const STAGE_SCALE_FACTOR = 0.15;
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 const COLS = 16;
@@ -205,6 +205,13 @@ function CommitViewer() {
                         {/* Canvas area */}
                         <div className="flex flex-1 flex-col overflow-hidden">
                             {/* Stage */}
+
+                            <ViewerSlatePreview
+                                stageSlot={stageSlot}
+                                stageInstance={stageInstance}
+                                stageScaleFactor={STAGE_SCALE_FACTOR}
+                                layers={sortedLayers}
+                            />
                             <div ref={stageSlot} className="flex-1 overflow-auto bg-black">
                                 <Stage
                                     ref={stageInstance}
@@ -317,13 +324,6 @@ function CommitViewer() {
                                     </KonvaLayer>
                                 </Stage>
                             </div>
-
-                            <ViewerSlatePreview
-                                stageSlot={stageSlot}
-                                stageInstance={stageInstance}
-                                stageScaleFactor={STAGE_SCALE_FACTOR}
-                                layers={sortedLayers}
-                            />
                         </div>
                     </div>
                 </ResizablePanel>

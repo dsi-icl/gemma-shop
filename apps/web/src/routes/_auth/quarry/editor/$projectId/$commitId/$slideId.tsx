@@ -34,7 +34,7 @@ function SlideEditor() {
     const [layersCollapsed, setLayersCollapsed] = useState(false);
     const [paramsCollapsed, setParamsCollapsed] = useState(true);
     const [mediaCollapsed, setMediaCollapsed] = useState(false);
-    const titleBarSize = 40;
+    const titleBarSize = 42;
 
     // Load project from commit DAG on mount
     useEffect(() => {
