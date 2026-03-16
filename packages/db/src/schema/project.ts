@@ -18,7 +18,7 @@ export type Collaborator = z.infer<typeof Collaborator>;
 export const ProjectSchema = z.object({
     _id: oid,
     name: z.string().min(1, 'Name is required'),
-    authorOrganisation: z.string().min(1, 'Author/organisation is required'),
+    authorOrganisation: z.string().min(1, 'Author/Organisation is required'),
     description: z.string().default(''),
     tags: z.array(z.string()).default([]),
     heroImages: z.array(z.string()).default([]),
@@ -36,7 +36,7 @@ export type Project = z.infer<typeof ProjectSchema>;
 
 export const CreateProjectInput = z.object({
     name: z.string().min(1, 'Name is required'),
-    authorOrganisation: z.string().min(1, 'Author/organisation is required'),
+    authorOrganisation: z.string().min(1, 'Author/Organisation is required'),
     description: z.string().default(''),
     tags: z.array(z.string()).default([]),
     heroImages: z.array(z.string()).default([]),
@@ -47,7 +47,7 @@ export type CreateProjectInput = z.infer<typeof CreateProjectInput>;
 export const UpdateProjectInput = z.object({
     _id: z.string(),
     name: z.string().min(1, 'Name is required').optional(),
-    authorOrganisation: z.string().min(1, 'Author/organisation is required').optional(),
+    authorOrganisation: z.string().min(1, 'Author/Organisation is required').optional(),
     description: z.string().optional(),
     tags: z.array(z.string()).optional(),
     heroImages: z.array(z.string()).optional(),
