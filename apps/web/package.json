@@ -32,6 +32,7 @@
         "@uppy/tus": "catalog:",
         "blurhash": "catalog:",
         "date-fns": "catalog:",
+        "maplibre-gl": "catalog:",
         "motion": "catalog:",
         "nitro": "catalog:",
         "react": "catalog:",
