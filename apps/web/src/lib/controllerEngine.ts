@@ -8,6 +8,7 @@ const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : '
 type BindingStatus = {
     bound: boolean;
     projectId?: string;
+    commitId?: string;
     slideId?: string;
 };
 
@@ -41,6 +42,7 @@ export class ControllerEngine {
                         cb({
                             bound: data.bound,
                             projectId: data.projectId,
+                            commitId: data.commitId,
                             slideId: data.slideId
                         })
                     );
@@ -80,11 +82,12 @@ export class ControllerEngine {
     };
 
     /** Navigate the bound wall to a different slide */
-    public bindSlide(projectId: string, slideId: string) {
+    public bindSlide(projectId: string, commitId: string, slideId: string) {
         this.sendJSON({
             type: 'bind_wall',
             wallId: this.wallId,
             projectId,
+            commitId,
             slideId
         });
     }

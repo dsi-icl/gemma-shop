@@ -230,6 +230,132 @@ export async function publishCommit(projectId: string, commitId: string | null, 
     return isPublishing;
 }
 
+/**
+ * Ensure a project has a mutable HEAD commit. Creates one if missing or migrates
+ * legacy immutable heads. Returns the stable HEAD commit ID.
+ */
+export async function ensureMutableHead(projectId: string, userEmail: string): Promise<string> {
+    const project = await projects.findOne({ _id: new ObjectId(projectId) });
+    if (!project) throw new Error('Project not found');
+    assertCanEdit(project, userEmail);
+
+    // Case 1: HEAD exists and is already mutable
+    if (project.headCommitId) {
+        const head = await commits.findOne({ _id: new ObjectId(project.headCommitId) });
+        if (head?.isMutableHead) {
+            return project.headCommitId.toString();
+        }
+
+        // Case 2: HEAD exists but is immutable (legacy) — create mutable HEAD on top
+        const newHead = {
+            projectId: new ObjectId(projectId),
+            parentId: new ObjectId(project.headCommitId),
+            authorId: new ObjectId(),
+            message: 'HEAD',
+            content: head?.content ?? { slides: [] },
+            isAutoSave: false,
+            isMutableHead: true,
+            createdAt: new Date()
+        };
+        const result = await commits.insertOne(newHead);
+        await projects.updateOne(
+            { _id: new ObjectId(projectId) },
+            { $set: { headCommitId: result.insertedId, updatedAt: new Date().toISOString() } }
+        );
+        return result.insertedId.toHexString();
+    }
+
+    // Case 3: No HEAD at all — create fresh mutable HEAD with a default slide
+    const defaultSlideId = new ObjectId().toHexString();
+    const newHead = {
+        projectId: new ObjectId(projectId),
+        parentId: null,
+        authorId: new ObjectId(),
+        message: 'HEAD',
+        content: { slides: [{ id: defaultSlideId, order: 0, layers: [] }] },
+        isAutoSave: false,
+        isMutableHead: true,
+        createdAt: new Date()
+    };
+    const result = await commits.insertOne(newHead);
+    await projects.updateOne(
+        { _id: new ObjectId(projectId) },
+        { $set: { headCommitId: result.insertedId, updatedAt: new Date().toISOString() } }
+    );
+    return result.insertedId.toHexString();
+}
+
+/**
+ * Create a new mutable branch head from any existing commit.
+ * Does NOT change project.headCommitId — it's an independent branch.
+ * Returns the new branch head's commit ID.
+ */
+export async function createBranchHead(
+    projectId: string,
+    sourceCommitId: string,
+    userEmail: string
+): Promise<string> {
+    const project = await projects.findOne({ _id: new ObjectId(projectId) });
+    if (!project) throw new Error('Project not found');
+    assertCanEdit(project, userEmail);
+
+    const source = await commits.findOne({ _id: new ObjectId(sourceCommitId) });
+    if (!source) throw new Error('Source commit not found');
+    if (source.projectId.toString() !== projectId)
+        throw new Error('Commit does not belong to project');
+
+    const branchHead = {
+        projectId: new ObjectId(projectId),
+        parentId: new ObjectId(sourceCommitId),
+        authorId: new ObjectId(),
+        message: 'HEAD',
+        content: source.content ?? { slides: [] },
+        isAutoSave: false,
+        isMutableHead: true,
+        createdAt: new Date()
+    };
+    const result = await commits.insertOne(branchHead);
+    return result.insertedId.toHexString();
+}
+
+/**
+ * Promote a branch head to be the project's main HEAD.
+ * The old HEAD remains as a branch (isMutableHead stays true).
+ */
+export async function promoteBranchHead(
+    projectId: string,
+    branchCommitId: string,
+    userEmail: string
+): Promise<void> {
+    const project = await projects.findOne({ _id: new ObjectId(projectId) });
+    if (!project) throw new Error('Project not found');
+    assertCanEdit(project, userEmail);
+
+    const branch = await commits.findOne({ _id: new ObjectId(branchCommitId) });
+    if (!branch) throw new Error('Branch commit not found');
+    if (!branch.isMutableHead) throw new Error('Can only promote a mutable branch head');
+    if (branch.projectId.toString() !== projectId)
+        throw new Error('Commit does not belong to project');
+
+    await projects.updateOne(
+        { _id: new ObjectId(projectId) },
+        {
+            $set: {
+                headCommitId: new ObjectId(branchCommitId),
+                updatedAt: new Date().toISOString()
+            }
+        }
+    );
+
+    await auditLogs.insertOne({
+        projectId: new ObjectId(projectId),
+        actorId: userEmail,
+        action: 'BRANCH_PROMOTED',
+        changes: { headCommitId: branchCommitId },
+        createdAt: new Date()
+    });
+}
+
 export interface SerializedAuditLog {
     _id: string;
     projectId: string;
@@ -260,6 +386,9 @@ export interface SerializedCommit {
     parentId: string | null;
     authorId: string | null;
     message: string;
+    isMutableHead: boolean;
+    isAutoSave: boolean;
+    firstSlideId: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -280,15 +409,22 @@ export async function getProjectCommits(projectId: string): Promise<SerializedCo
         .find({ projectId: new ObjectId(projectId) })
         .sort({ createdAt: -1 })
         .toArray();
-    return docs.map((d) => ({
-        _id: d._id.toString(),
-        projectId: d.projectId.toString(),
-        parentId: d.parentId?.toString() ?? null,
-        authorId: d.authorId?.toString() ?? null,
-        message: String(d.message ?? ''),
-        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
-        updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : String(d.updatedAt)
-    }));
+    return docs.map((d) => {
+        const slides = (d.content as any)?.slides as Array<{ id: string }> | undefined;
+        return {
+            _id: d._id.toString(),
+            projectId: d.projectId.toString(),
+            parentId: d.parentId?.toString() ?? null,
+            authorId: d.authorId?.toString() ?? null,
+            message: String(d.message ?? ''),
+            isMutableHead: Boolean(d.isMutableHead),
+            isAutoSave: Boolean(d.isAutoSave),
+            firstSlideId: slides?.[0]?.id ?? null,
+            createdAt:
+                d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
+            updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : String(d.updatedAt)
+        };
+    });
 }
 
 function assertCanView(doc: Record<string, unknown>, userEmail: string) {
@@ -331,16 +467,20 @@ function serializeProject(doc: Record<string, unknown>): Project {
 }
 
 function serializeCommit(doc: Record<string, unknown>): SerializedCommitWithContent {
+    const content = doc.content as SerializedCommitWithContent['content'];
     return {
         _id: doc._id!.toString(),
         projectId: doc.projectId!.toString(),
         parentId: doc.parentId?.toString() ?? null,
         authorId: doc.authorId?.toString() ?? null,
         message: String(doc.message ?? ''),
+        isMutableHead: Boolean(doc.isMutableHead),
+        isAutoSave: Boolean(doc.isAutoSave),
+        firstSlideId: content?.slides?.[0]?.id ?? null,
         createdAt:
             doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
         updatedAt:
             doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : String(doc.updatedAt),
-        content: doc.content as SerializedCommitWithContent['content']
+        content
     };
 }

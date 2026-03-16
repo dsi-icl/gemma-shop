@@ -1,18 +1,22 @@
-import { CircleNotchIcon } from '@phosphor-icons/react';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
+
+import { $ensureMutableHead } from '~/server/projects.fns';
+import { $getCommit } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId/')({
     ssr: false,
-    component: ProjectEditor
-});
+    beforeLoad: async ({ params }) => {
+        const headCommitId = await $ensureMutableHead({ data: { projectId: params.projectId } });
+        const commit = await $getCommit({ data: { id: headCommitId } });
+        const firstSlideId = commit?.content?.slides?.[0]?.id ?? 'default';
 
-function ProjectEditor() {
-    return (
-        <div className="container mx-auto h-full min-h-full p-4 pt-24">
-            <div className="flex h-full items-center justify-center gap-2 align-middle">
-                <span>Loading your project</span>
-                <CircleNotchIcon className="animate-spin" />
-            </div>
-        </div>
-    );
-}
+        throw redirect({
+            to: '/quarry/editor/$projectId/$commitId/$slideId',
+            params: {
+                projectId: params.projectId,
+                commitId: headCommitId,
+                slideId: firstSlideId
+            }
+        });
+    }
+});

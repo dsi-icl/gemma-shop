@@ -1,8 +1,9 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import type { SerializedAuditLog, SerializedCommit } from './projects';
+import type { SerializedAuditLog, SerializedCommit, SerializedCommitWithContent } from './projects';
 import {
     $getAuditLogs,
+    $getCommit,
     $getProject,
     $getProjectCommits,
     $listAssets,
@@ -44,4 +45,11 @@ export const commitsQueryOptions = (projectId: string) =>
     queryOptions({
         queryKey: ['projects', projectId, 'commits'],
         queryFn: () => $getProjectCommits({ data: { projectId } }) as Promise<SerializedCommit[]>
+    });
+
+export const commitQueryOptions = (commitId: string) =>
+    queryOptions({
+        queryKey: ['commits', commitId],
+        queryFn: () =>
+            $getCommit({ data: { id: commitId } }) as Promise<SerializedCommitWithContent>
     });

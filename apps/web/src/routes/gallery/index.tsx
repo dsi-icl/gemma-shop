@@ -56,9 +56,17 @@ function HomePage() {
 
     const handleWallSelected = async (wallId: string) => {
         if (!pendingProjectId) return;
+        const project = publishedProjects.find((p) => p._id === pendingProjectId);
+        if (!project?.publishedCommitId) return;
         try {
-            // Use 'default' as the first slide — the bus will create the scope
-            await $bindWall({ data: { wallId, projectId: pendingProjectId, slideId: 'default' } });
+            await $bindWall({
+                data: {
+                    wallId,
+                    projectId: pendingProjectId,
+                    commitId: project.publishedCommitId,
+                    slideId: 'default'
+                }
+            });
             toast.success('Project loaded on wall');
         } catch (e: any) {
             toast.error(e.message);

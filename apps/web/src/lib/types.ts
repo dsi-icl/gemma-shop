@@ -100,6 +100,7 @@ export const HelloSchema = z.discriminatedUnion('specimen', [
     HelloMessageBaseSchema.extend({
         specimen: z.literal('editor'),
         projectId: z.string(),
+        commitId: z.string(),
         slideId: z.string()
     }),
     HelloMessageBaseSchema.extend({
@@ -127,6 +128,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             type: z.literal('hello'),
             specimen: z.literal('editor'),
             projectId: z.string(),
+            commitId: z.string(),
             slideId: z.string()
         }),
         HelloMessageBaseSchema.extend({
@@ -180,6 +182,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         type: z.literal('bind_wall'),
         wallId: z.string(),
         projectId: z.string(),
+        commitId: z.string(),
         slideId: z.string()
     }),
     z.object({ type: z.literal('unbind_wall'), wallId: z.string() }),
@@ -188,8 +191,10 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         wallId: z.string(),
         bound: z.boolean(),
         projectId: z.string().optional(),
+        commitId: z.string().optional(),
         slideId: z.string().optional()
-    })
+    }),
+    z.object({ type: z.literal('seed_scope'), layers: LayerSchema.array() })
 ]);
 
 export type GSMessage = z.infer<typeof GSMessageSchema>;
@@ -210,13 +215,14 @@ export type LayerWithEditorState = Layer & { progress?: number; isUploading?: bo
 // ── Scope utilities ──────────────────────────────────────────────────────────
 
 /** Human-readable scope label for logging and client display */
-export function makeScopeLabel(projectId: string, slideId: string): string {
-    return `e:${projectId}:${slideId}`;
+export function makeScopeLabel(projectId: string, commitId: string, slideId: string): string {
+    return `e:${projectId}:${commitId}:${slideId}`;
 }
 
 export interface ScopeState {
     layers: Map<number, Layer>;
     projectId: string;
+    commitId: string;
     slideId: string;
     dirty: boolean;
     /** Cached JSON payload for hydrate messages. Invalidated on any layer mutation. */

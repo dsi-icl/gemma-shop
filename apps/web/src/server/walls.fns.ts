@@ -12,9 +12,10 @@ export const $bindWall = createServerFn({ method: 'POST' })
         z.object({
             wallId: z.string(),
             projectId: z.string(),
+            commitId: z.string(),
             slideId: z.string()
         })
     )
     .handler(async ({ data }) => {
-        await bindWallToScope(data.wallId, data.projectId, data.slideId);
+        await bindWallToScope(data.wallId, data.projectId, data.commitId, data.slideId);
     });

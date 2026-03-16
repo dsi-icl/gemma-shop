@@ -20,9 +20,9 @@ export const scopedState: Map<ScopeId, ScopeState> = _hmr.scopedState;
 const scopeKeyToId: Map<string, ScopeId> = _hmr.scopeKeyToId;
 const scopeIdToKey: Map<ScopeId, string> = _hmr.scopeIdToKey;
 
-// Intern a (projectId, slideId) pair into a numeric ScopeId
-export function internScope(projectId: string, slideId: string): ScopeId {
-    const raw = makeScopeLabel(projectId, slideId);
+// Intern a (projectId, commitId, slideId) triple into a numeric ScopeId
+export function internScope(projectId: string, commitId: string, slideId: string): ScopeId {
+    const raw = makeScopeLabel(projectId, commitId, slideId);
     let id = scopeKeyToId.get(raw);
     if (id === undefined) {
         id = _hmr.nextScopeId++;
@@ -37,7 +37,7 @@ export function scopeLabel(id: ScopeId): string {
 }
 
 export type PeerMeta =
-    | { specimen: 'editor'; projectId: string; slideId: string; scopeId: ScopeId }
+    | { specimen: 'editor'; projectId: string; commitId: string; slideId: string; scopeId: ScopeId }
     | { specimen: 'wall'; wallId: string; col: number; row: number }
     | { specimen: 'controller'; wallId: string }
     | { specimen: 'roy' };
@@ -82,6 +82,11 @@ export const activeVideos = new Map<number, { scopeId: ScopeId; layer: Layer }>(
 
 /** Running peer counts — O(1) reads instead of iterating all peers */
 export const peerCounts = { editor: 0, wall: 0, controller: 0, roy: 0 };
+
+/** Live wall node count — O(1) read from in-memory index. */
+export function getWallNodeCount(wallId: string): number {
+    return wallsByWallId.get(wallId)?.size ?? 0;
+}
 
 // Binary opcodes
 export const OP = {
@@ -197,10 +202,22 @@ export function unregisterPeer(peerId: string): PeerMeta | null {
     return meta;
 }
 
-export function getOrCreateScope(scopeId: ScopeId, projectId: string, slideId: string): ScopeState {
+export function getOrCreateScope(
+    scopeId: ScopeId,
+    projectId: string,
+    commitId: string,
+    slideId: string
+): ScopeState {
     let scope = scopedState.get(scopeId);
     if (!scope) {
-        scope = { layers: new Map(), projectId, slideId, dirty: false, hydrateCache: null };
+        scope = {
+            layers: new Map(),
+            projectId,
+            commitId,
+            slideId,
+            dirty: false,
+            hydrateCache: null
+        };
         scopedState.set(scopeId, scope);
     }
     return scope;
@@ -362,6 +379,7 @@ export function notifyControllers(
     wallId: string,
     bound: boolean,
     projectId?: string,
+    commitId?: string,
     slideId?: string
 ) {
     const entries = controllersByWallId.get(wallId);
@@ -372,6 +390,7 @@ export function notifyControllers(
         wallId,
         bound,
         ...(projectId ? { projectId } : {}),
+        ...(commitId ? { commitId } : {}),
         ...(slideId ? { slideId } : {})
     } satisfies GSMessage);
 
@@ -689,6 +708,39 @@ export function logPeerCounts() {
     );
 }
 
+/**
+ * Auto-seed a scope from the DB commit when the scope is freshly created (empty).
+ * Fetches the commit, finds the matching slide, and populates scope.layers.
+ */
+export async function seedScopeFromDb(scopeId: ScopeId): Promise<boolean> {
+    const scope = scopedState.get(scopeId);
+    if (!scope || scope.layers.size > 0) return false;
+
+    try {
+        const commit = await db
+            .collection('commits')
+            .findOne({ _id: new ObjectId(scope.commitId) });
+        if (!commit?.content?.slides) return false;
+
+        const slide = (commit.content.slides as Array<{ id: string; layers: any[] }>).find(
+            (s) => s.id === scope.slideId
+        );
+        if (!slide?.layers?.length) return false;
+
+        for (const layer of slide.layers) {
+            if (typeof layer?.numericId === 'number') {
+                scope.layers.set(layer.numericId, layer);
+            }
+        }
+        scope.dirty = false;
+        invalidateHydrateCache(scopeId);
+        return true;
+    } catch (err) {
+        console.error(`[Bus] seedScopeFromDb failed for ${scopeLabel(scopeId)}:`, err);
+        return false;
+    }
+}
+
 // DB snapshoting
 export async function buildSlidesSnapshot(
     scope: ScopeState,
@@ -737,68 +789,59 @@ export async function saveScope(
     const projectId = new ObjectId(scope.projectId);
 
     try {
-        const project = await db.collection('projects').findOne({ _id: projectId });
-        if (!project) return { success: false, error: 'Project not found' };
+        // Resolve the mutable HEAD commit ID — prefer scope.commitId, fall back to project lookup
+        let headId: ObjectId;
+        if (scope.commitId) {
+            headId = new ObjectId(scope.commitId);
+        } else {
+            const project = await db.collection('projects').findOne({ _id: projectId });
+            if (!project?.headCommitId) return { success: false, error: 'No HEAD commit' };
+            headId = new ObjectId(project.headCommitId);
+        }
 
-        const headId = project.headCommitId ? new ObjectId(project.headCommitId) : null;
         const updatedSlides = await buildSlidesSnapshot(scope, headId);
 
         if (isAutoSave) {
-            const filter = {
-                projectId,
-                isAutoSave: true,
-                ...(headId ? { parentId: headId } : { parentId: null })
-            };
-
+            // Update the mutable HEAD in place
             await db.collection('commits').updateOne(
-                filter,
+                { _id: headId },
                 {
                     $set: {
                         message,
                         content: { slides: updatedSlides },
-                        isAutoSave: true,
                         updatedAt: new Date()
-                    },
-                    $setOnInsert: {
-                        projectId,
-                        parentId: headId,
-                        authorId: new ObjectId(), // TODO: session user
-                        createdAt: new Date()
                     }
-                },
-                { upsert: true }
+                }
             );
 
             scope.dirty = false;
             return { success: true };
         }
 
-        const newCommit = {
+        // Manual save: create immutable snapshot, then pointer-swap HEAD's parentId
+        const snapshot = {
             projectId,
-            parentId: headId,
+            parentId: null as ObjectId | null,
             authorId: new ObjectId(), // TODO: session user
             message,
             content: { slides: updatedSlides },
             isAutoSave: false,
+            isMutableHead: false,
             createdAt: new Date()
         };
 
-        const result = await db.collection('commits').insertOne(newCommit);
-
-        await db
-            .collection('projects')
-            .updateOne(
-                { _id: projectId },
-                { $set: { headCommitId: result.insertedId, updatedAt: new Date() } }
-            );
-
-        if (headId) {
-            await db.collection('commits').deleteMany({
-                projectId,
-                isAutoSave: true,
-                parentId: headId
-            });
+        // Preserve HEAD's current parentId chain on the snapshot
+        const currentHead = await db.collection('commits').findOne({ _id: headId });
+        if (currentHead?.parentId) {
+            snapshot.parentId = new ObjectId(currentHead.parentId);
         }
+
+        const result = await db.collection('commits').insertOne(snapshot);
+
+        // Pointer swap: HEAD now points at the snapshot
+        await db
+            .collection('commits')
+            .updateOne({ _id: headId }, { $set: { parentId: result.insertedId } });
 
         scope.dirty = false;
         return { success: true, commitId: result.insertedId.toHexString() };

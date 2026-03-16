@@ -1,4 +1,4 @@
-import { ArrowLeftIcon } from '@phosphor-icons/react';
+import { ArrowLeftIcon, PencilSimpleIcon } from '@phosphor-icons/react';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
@@ -13,6 +13,7 @@ import {
 } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 
+import { $ensureMutableHead, $getCommit } from '~/server/projects.fns';
 import { projectQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId')({
@@ -84,6 +85,24 @@ function ProjectLayout() {
                         Published
                     </Badge>
                 )}
+                <Button
+                    variant="default"
+                    size="sm"
+                    className="ml-auto"
+                    onClick={async () => {
+                        const headCommitId = await $ensureMutableHead({
+                            data: { projectId }
+                        });
+                        const commit = await $getCommit({ data: { id: headCommitId } });
+                        const firstSlideId = commit?.content?.slides?.[0]?.id ?? 'default';
+                        navigate({
+                            to: '/quarry/editor/$projectId/$commitId/$slideId',
+                            params: { projectId, commitId: headCommitId, slideId: firstSlideId }
+                        });
+                    }}
+                >
+                    <PencilSimpleIcon weight="bold" /> Edit
+                </Button>
             </div>
 
             <Tabs

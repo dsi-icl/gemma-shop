@@ -5,7 +5,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ControllerEngine } from '~/lib/controllerEngine';
-import { $getCommit, $getProject } from '~/server/projects.fns';
+import { $getCommit } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/controller/')({
     ssr: 'data-only',
@@ -15,13 +15,14 @@ export const Route = createFileRoute('/controller/')({
 interface BindingStatus {
     bound: boolean;
     projectId?: string;
+    commitId?: string;
     slideId?: string;
 }
 
 interface SlideEntry {
     id: string;
     order: number;
-    description: string;
+    layerCount: number;
 }
 
 function ControllerApp() {
@@ -44,13 +45,11 @@ function ControllerApp() {
         });
     }, [engine]);
 
-    // Fetch slides when binding changes
-    const loadSlides = useCallback(async (projectId: string) => {
+    // Fetch slides from the bound commit
+    const loadSlides = useCallback(async (commitId: string) => {
         setLoadingSlides(true);
         try {
-            const project = await $getProject({ data: { id: projectId } });
-            if (!project?.headCommitId) return;
-            const commit = await $getCommit({ data: { id: project.headCommitId } });
+            const commit = await $getCommit({ data: { id: commitId } });
             if (!commit?.content?.slides) return;
             const commitSlides = commit.content.slides as Array<{
                 id: string;
@@ -61,7 +60,7 @@ function ControllerApp() {
                 commitSlides.map((s) => ({
                     id: s.id,
                     order: s.order,
-                    description: `Slide ${s.order}`
+                    layerCount: s.layers.length
                 }))
             );
         } catch (e) {
@@ -72,12 +71,12 @@ function ControllerApp() {
     }, []);
 
     useEffect(() => {
-        if (binding.bound && binding.projectId) {
-            loadSlides(binding.projectId);
+        if (binding.bound && binding.commitId) {
+            loadSlides(binding.commitId);
         } else {
             setSlides([]);
         }
-    }, [binding.bound, binding.projectId, loadSlides]);
+    }, [binding.bound, binding.commitId, loadSlides]);
 
     // HMR rehydrate
     useEffect(() => {
@@ -123,12 +122,16 @@ function ControllerApp() {
                 ) : (
                     <div className="flex flex-col gap-2">
                         <div className="mb-2 text-xs text-white/50">Slides ({slides.length})</div>
-                        {slides.map((slide) => (
+                        {slides.map((slide, idx) => (
                             <button
                                 key={slide.id}
                                 onClick={() => {
-                                    if (binding.projectId) {
-                                        engine?.bindSlide(binding.projectId, slide.id);
+                                    if (binding.projectId && binding.commitId) {
+                                        engine?.bindSlide(
+                                            binding.projectId,
+                                            binding.commitId,
+                                            slide.id
+                                        );
                                     }
                                 }}
                                 className={`cursor-pointer rounded-lg border px-4 py-3 text-left transition-colors ${
@@ -137,8 +140,10 @@ function ControllerApp() {
                                         : 'border-white/10 hover:border-white/30 hover:bg-white/5'
                                 }`}
                             >
-                                <div className="text-sm font-medium">{slide.description}</div>
-                                <div className="text-xs text-white/50">{slide.id}</div>
+                                <div className="text-sm font-medium">Slide {idx + 1}</div>
+                                <div className="text-xs text-white/50">
+                                    {slide.layerCount} layer{slide.layerCount !== 1 ? 's' : ''}
+                                </div>
                             </button>
                         ))}
                     </div>

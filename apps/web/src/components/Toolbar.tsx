@@ -88,8 +88,9 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     };
 
     const handleWallSelect = (wallId: string) => {
-        if (!projectId || !activeSlideId) return;
-        engine.bindWall(wallId, projectId, activeSlideId);
+        const { commitId } = useEditorStore.getState();
+        if (!projectId || !commitId || !activeSlideId) return;
+        engine.bindWall(wallId, projectId, commitId, activeSlideId);
         useEditorStore.setState({ boundWallId: wallId });
     };
 

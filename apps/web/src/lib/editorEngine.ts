@@ -34,10 +34,13 @@ export class EditorEngine {
     private saveCallbacks = new Set<SaveResponseCallback>();
     private connectionStatusCallbacks = new Set<ConnectionStatusCallback>();
     private bufferedHydration: Extract<GSMessage, { type: 'hydrate' }> | null = null;
+    private hydrateResolver: ((data: Extract<GSMessage, { type: 'hydrate' }>) => void) | null =
+        null;
     private clockOffset = 0;
     private bestRTT = Infinity;
     private pingTimer: ReturnType<typeof setTimeout> | null = null;
     private currentProjectId: string | null = null;
+    private currentCommitId: string | null = null;
     private currentSlideId: string | null = null;
 
     private constructor() {
@@ -52,8 +55,12 @@ export class EditorEngine {
                 this.startClockSync();
 
                 // Re-join the scope if we were already in one (reconnection case)
-                if (this.currentProjectId && this.currentSlideId) {
-                    this.joinScope(this.currentProjectId, this.currentSlideId);
+                if (this.currentProjectId && this.currentCommitId && this.currentSlideId) {
+                    this.joinScope(
+                        this.currentProjectId,
+                        this.currentCommitId,
+                        this.currentSlideId
+                    );
                 }
             },
             onMessage: (event) => this.handleMessage(event)
@@ -126,6 +133,10 @@ export class EditorEngine {
                     if (l.type === 'video' && l.playback)
                         this.playbackStates.set(l.numericId, l.playback);
                 });
+                if (this.hydrateResolver) {
+                    this.hydrateResolver(data);
+                    this.hydrateResolver = null;
+                }
             }
 
             this.messageCallbacks.forEach((cb) => cb(data));
@@ -147,6 +158,28 @@ export class EditorEngine {
         this.binaryCallbacks.clear();
         this.playbackCallbacks.clear();
         this.connectionStatusCallbacks.clear();
+    }
+
+    /**
+     * Returns a promise that resolves with the next hydrate message.
+     * If a hydrate was already buffered (from joinScope), resolves immediately.
+     * Call clearBufferedHydration() before joinScope to ensure a fresh wait.
+     */
+    public waitForHydrate(): Promise<Extract<GSMessage, { type: 'hydrate' }>> {
+        if (this.bufferedHydration) {
+            const data = this.bufferedHydration;
+            this.bufferedHydration = null;
+            return Promise.resolve(data);
+        }
+        return new Promise((resolve) => {
+            this.hydrateResolver = resolve;
+        });
+    }
+
+    /** Clear any buffered hydration so the next waitForHydrate waits for a fresh message. */
+    public clearBufferedHydration() {
+        this.bufferedHydration = null;
+        this.hydrateResolver = null;
     }
 
     public getServerTime(): number {
@@ -209,15 +242,17 @@ export class EditorEngine {
     /** Wall currently bound to this editor session (if any) */
     public boundWallId: string | null = null;
 
-    /** Join a project/slide scope. Re-sends hello if already connected. */
-    public joinScope(projectId: string, slideId: string) {
+    /** Join a project/commit/slide scope. Re-sends hello if already connected. */
+    public joinScope(projectId: string, commitId: string, slideId: string) {
         this.currentProjectId = projectId;
+        this.currentCommitId = commitId;
         this.currentSlideId = slideId;
 
         this.sendJSON({
             type: 'hello',
             specimen: 'editor',
             projectId,
+            commitId,
             slideId
         });
 
@@ -227,18 +262,20 @@ export class EditorEngine {
                 type: 'bind_wall',
                 wallId: this.boundWallId,
                 projectId,
+                commitId,
                 slideId
             });
         }
     }
 
     /** Bind a wall to follow this editor's current scope */
-    public bindWall(wallId: string, projectId: string, slideId: string) {
+    public bindWall(wallId: string, projectId: string, commitId: string, slideId: string) {
         this.boundWallId = wallId;
         this.sendJSON({
             type: 'bind_wall',
             wallId,
             projectId,
+            commitId,
             slideId
         });
     }

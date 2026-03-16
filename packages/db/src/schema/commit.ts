@@ -20,5 +20,6 @@ export const CommitSchema = z.object({
         )
     }),
     isAutoSave: z.boolean().default(false),
+    isMutableHead: z.boolean().default(false),
     createdAt: z.date().default(() => new Date())
 });

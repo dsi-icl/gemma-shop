@@ -1,10 +1,21 @@
 import { throttle } from '@tanstack/pacer';
 import { create } from 'zustand';
 
-import { $getCommit, $getProject } from '../server/projects.fns';
+import { $getCommit } from '../server/projects.fns';
 import { EditorEngine } from './editorEngine';
 import type { ConnectionStatus } from './reconnectingWs';
 import type { Layer, LayerWithEditorState, Slide } from './types';
+
+/** Generate a 24-char hex string mimicking a MongoDB ObjectId (timestamp + random). */
+function generateSlideId(): string {
+    const timestamp = Math.floor(Date.now() / 1000)
+        .toString(16)
+        .padStart(8, '0');
+    const random = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    return timestamp + random;
+}
 
 type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
@@ -55,12 +66,15 @@ interface EditorState {
     // ── Connection state ──
     connectionStatus: ConnectionStatus;
 
+    // ── Commit tracking ──
+    commitId: string | null;
+
     // ── Save pipeline state ──
     saveStatus: SaveStatus;
     headCommitId: string | null;
 
     // ── Pure state mutations ──
-    loadProject: (projectId: string, slideId: string) => Promise<void>;
+    loadProject: (projectId: string, commitId: string, slideId: string) => Promise<void>;
     hydrate: (layers: LayerWithEditorState[]) => void;
     upsertLayer: (layer: LayerWithEditorState) => void;
     removeLayer: (numericId: number) => void;
@@ -137,14 +151,18 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     // ── Connection state ──
     connectionStatus: 'connecting' as ConnectionStatus,
 
+    // ── Commit tracking ──
+    commitId: null,
+
     // ── Save pipeline state ──
     saveStatus: 'idle',
     headCommitId: null,
 
     // ── Pure state mutations ──────────────────────────────────────────────
-    loadProject: async (projectId, slideId) => {
+    loadProject: async (projectId, commitId, slideId) => {
         set({
             projectId,
+            commitId,
             layers: [],
             slides: [],
             activeSlideId: null,
@@ -152,39 +170,46 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             headCommitId: null
         });
 
-        // Join the scope on the bus — this triggers hydration from bus state
         const engine = EditorEngine.getInstance();
-        engine.joinScope(projectId, slideId);
 
-        const project = await $getProject({ data: { id: projectId } });
+        // Clear any stale buffered hydration before joining
+        engine.clearBufferedHydration();
 
-        if (project && project.headCommitId) {
-            const commit = await $getCommit({ data: { id: project.headCommitId } });
-            if (commit && commit.content && commit.content.slides) {
-                const commitSlides = commit.content.slides as Array<{
-                    id: string;
-                    order: number;
-                    layers: LayerWithEditorState[];
-                }>;
-                const slides = commitSlides.map(
-                    (s) => ({ id: s.id, description: `Slide ${s.order}` }) as Slide
-                );
-                set({ slides, headCommitId: project.headCommitId });
+        // Join the scope — bus responds with hydrate (empty if fresh, populated if existing)
+        engine.joinScope(projectId, commitId, slideId);
+        const hydrate = await engine.waitForHydrate();
 
-                const activeSlide = commitSlides.find((s) => s.id === slideId);
-                if (activeSlide) {
-                    get().hydrate(activeSlide.layers as LayerWithEditorState[]);
-                    set({ activeSlideId: slideId });
+        // Always fetch the commit for slide list metadata
+        const commit = await $getCommit({ data: { id: commitId } });
+        if (commit?.content?.slides) {
+            const commitSlides = commit.content.slides as Array<{
+                id: string;
+                order: number;
+                layers: LayerWithEditorState[];
+            }>;
+            const slides = commitSlides.map(
+                (s) => ({ id: s.id, description: `Slide ${s.order}` }) as Slide
+            );
+            set({ slides, headCommitId: commitId });
+        }
 
-                    // Push layers to the bus so it has the committed state for this scope
-                    for (const layer of activeSlide.layers) {
-                        engine.sendJSON({
-                            type: 'upsert_layer',
-                            origin: 'loadProject',
-                            layer: layer as LayerWithEditorState
-                        });
-                    }
-                }
+        if (hydrate.layers.length > 0) {
+            // Scope already has state (another editor, or reconnection) — trust bus
+            get().hydrate(hydrate.layers as LayerWithEditorState[]);
+            set({ activeSlideId: slideId });
+        } else {
+            // Fresh scope — seed from commit data
+            const commitSlides = commit?.content?.slides as
+                | Array<{ id: string; order: number; layers: LayerWithEditorState[] }>
+                | undefined;
+            const activeSlide = commitSlides?.find((s) => s.id === slideId);
+            if (activeSlide) {
+                get().hydrate(activeSlide.layers as LayerWithEditorState[]);
+                set({ activeSlideId: slideId });
+                engine.sendJSON({
+                    type: 'seed_scope',
+                    layers: activeSlide.layers as LayerWithEditorState[]
+                });
             }
         }
     },
@@ -668,7 +693,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
 
     addSlide: () => {
         set((s) => ({
-            slides: [...s.slides, { id: `s${Date.now()}`, description: 'New Slide' }]
+            slides: [...s.slides, { id: generateSlideId(), description: 'New Slide' }]
         }));
         get().markDirty();
     },
@@ -682,7 +707,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         if (!copiedSlide) return;
         const newSlide: Slide = {
             ...copiedSlide,
-            id: `s${Date.now()}`,
+            id: generateSlideId(),
             description: `${copiedSlide.description} (Copy)`
         };
         set((s) => ({ slides: [...s.slides, newSlide] }));

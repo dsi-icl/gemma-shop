@@ -23,6 +23,7 @@ import {
     hydrateWallNodes,
     notifyControllers,
     logPeerCounts,
+    seedScopeFromDb,
     saveScope,
     resolveScopeId,
     registerActiveVideo,
@@ -44,7 +45,6 @@ import {
     type PeerEntry
 } from '~/lib/busState';
 import { HelloSchema, GSMessageSchema, makeScopeLabel, type GSMessage } from '~/lib/types';
-import { upsertWallConnection, decrementWallConnection } from '~/server/walls';
 
 // ── Binary opcodes ──────────────────────────────────────────────────────────
 
@@ -145,6 +145,38 @@ handlers.set('delete_layer', ({ entry, data, scopeId, rawText }) => {
     broadcastToScopeRaw(scopeId, rawText, entry);
 });
 
+handlers.set('seed_scope', ({ entry, data, scopeId }) => {
+    if (scopeId === null) return;
+    const scope = scopedState.get(scopeId);
+    if (!scope) return;
+
+    // Replace all layers wholesale
+    scope.layers.clear();
+    for (const layer of data.layers) {
+        if (typeof layer?.numericId === 'number') {
+            scope.layers.set(layer.numericId, layer);
+        }
+    }
+    scope.dirty = true;
+
+    clearActiveVideosForScope(scopeId);
+    invalidateHydrateCache(scopeId);
+
+    // Cascade hydrate to all bound walls
+    for (const [wallId, boundScope] of wallBindings) {
+        if (boundScope === scopeId) {
+            hydrateWallNodes(wallId);
+        }
+    }
+
+    // Broadcast hydrate to other editors in scope
+    broadcastToEditors(
+        scopeId,
+        { type: 'hydrate', layers: Array.from(scope.layers.values()) },
+        entry
+    );
+});
+
 handlers.set('reboot', ({ scopeId, rawText }) => {
     if (scopeId !== null) {
         broadcastToWallsRaw(scopeId, rawText);
@@ -186,14 +218,24 @@ handlers.set('stage_save', ({ entry, data, scopeId }) => {
 });
 
 handlers.set('bind_wall', ({ data }) => {
-    const scopeId = internScope(data.projectId, data.slideId);
-    getOrCreateScope(scopeId, data.projectId, data.slideId);
+    const scopeId = internScope(data.projectId, data.commitId, data.slideId);
+    const scope = getOrCreateScope(scopeId, data.projectId, data.commitId, data.slideId);
     bindWall(data.wallId, scopeId);
-    hydrateWallNodes(data.wallId);
-    // recomputeAllLayerNodes(scopeId);
-    notifyControllers(data.wallId, true, data.projectId, data.slideId);
+
+    const finish = () => {
+        hydrateWallNodes(data.wallId);
+        notifyControllers(data.wallId, true, data.projectId, data.commitId, data.slideId);
+    };
+
+    if (scope.layers.size === 0) {
+        // Fresh scope — auto-seed from DB before hydrating walls
+        seedScopeFromDb(scopeId).then(finish);
+    } else {
+        finish();
+    }
+
     console.log(
-        `[WS] Wall ${data.wallId} bound to scope=${makeScopeLabel(data.projectId, data.slideId)}`
+        `[WS] Wall ${data.wallId} bound to scope=${makeScopeLabel(data.projectId, data.commitId, data.slideId)}`
     );
 });
 
@@ -253,19 +295,29 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
     if (existing) unregisterPeer(peer.id);
 
     if (parsed.specimen === 'editor') {
-        const scopeId = internScope(parsed.projectId, parsed.slideId);
-        getOrCreateScope(scopeId, parsed.projectId, parsed.slideId);
+        const scopeId = internScope(parsed.projectId, parsed.commitId, parsed.slideId);
+        const scope = getOrCreateScope(scopeId, parsed.projectId, parsed.commitId, parsed.slideId);
 
         registerPeer(peer, {
             specimen: 'editor',
             projectId: parsed.projectId,
+            commitId: parsed.commitId,
             slideId: parsed.slideId,
             scopeId
         });
 
-        peer.send(getHydratePayload(scopeId));
+        if (scope.layers.size === 0) {
+            // Fresh scope — auto-seed from DB so the editor gets layers immediately
+            seedScopeFromDb(scopeId).then(() => {
+                peer.send(getHydratePayload(scopeId));
+            });
+        } else {
+            peer.send(getHydratePayload(scopeId));
+        }
 
-        console.log(`[WS] Editor joined scope=${makeScopeLabel(parsed.projectId, parsed.slideId)}`);
+        console.log(
+            `[WS] Editor joined scope=${makeScopeLabel(parsed.projectId, parsed.commitId, parsed.slideId)}`
+        );
         logPeerCounts();
         return;
     }
@@ -277,7 +329,6 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
             col: parsed.col,
             row: parsed.row
         });
-        upsertWallConnection(parsed.wallId).catch(() => {});
 
         const boundScope = wallBindings.get(parsed.wallId);
 
@@ -295,7 +346,6 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
 
     if (parsed.specimen === 'controller') {
         registerPeer(peer, { specimen: 'controller', wallId: parsed.wallId });
-        upsertWallConnection(parsed.wallId).catch(() => {});
 
         const boundScope = wallBindings.get(parsed.wallId);
         const scope = boundScope !== undefined ? scopedState.get(boundScope) : null;
@@ -303,7 +353,9 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
             type: 'wall_binding_status',
             wallId: parsed.wallId,
             bound: boundScope !== undefined,
-            ...(scope ? { projectId: scope.projectId, slideId: scope.slideId } : {})
+            ...(scope
+                ? { projectId: scope.projectId, commitId: scope.commitId, slideId: scope.slideId }
+                : {})
         });
 
         console.log(`[WS] Controller joined wallId=${parsed.wallId}`);
@@ -378,10 +430,7 @@ export default defineWebSocketHandler({
     },
 
     close(peer) {
-        const meta = unregisterPeer(peer.id);
-        if (meta && (meta.specimen === 'wall' || meta.specimen === 'controller')) {
-            decrementWallConnection(meta.wallId).catch(() => {});
-        }
+        unregisterPeer(peer.id);
         logPeerCounts();
     },
 

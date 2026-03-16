@@ -28,10 +28,11 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
         toggleSlideSelection(id, shiftKey, ctrlKey);
         if (!shiftKey && !ctrlKey) {
             setActiveSlideId(id);
-            if (projectId) {
+            const { commitId } = useEditorStore.getState();
+            if (projectId && commitId) {
                 navigate({
-                    to: '/quarry/editor/$projectId/$slideId',
-                    params: { projectId, slideId: id }
+                    to: '/quarry/editor/$projectId/$commitId/$slideId',
+                    params: { projectId, commitId, slideId: id }
                 });
             }
         }

@@ -6,8 +6,10 @@ import { z } from 'zod';
 import {
     archiveProject,
     createAsset,
+    createBranchHead,
     createProject,
     deleteAsset,
+    ensureMutableHead,
     getAuditLogs,
     getCommit,
     getProject,
@@ -15,6 +17,7 @@ import {
     listAssets,
     listProjects,
     listPublishedProjects,
+    promoteBranchHead,
     publishCommit,
     restoreProject,
     updateProject
@@ -126,9 +129,30 @@ export const $getAuditLogs = createServerFn({ method: 'GET' })
         return getAuditLogs(data.projectId);
     });
 
+export const $ensureMutableHead = createServerFn({ method: 'POST' })
+    .inputValidator(z.object({ projectId: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        return ensureMutableHead(data.projectId, context.user.email);
+    });
+
 export const $getProjectCommits = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ projectId: z.string() }))
     .middleware([authMiddleware])
     .handler(async ({ data }) => {
         return getProjectCommits(data.projectId);
+    });
+
+export const $createBranchHead = createServerFn({ method: 'POST' })
+    .inputValidator(z.object({ projectId: z.string(), sourceCommitId: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        return createBranchHead(data.projectId, data.sourceCommitId, context.user.email);
+    });
+
+export const $promoteBranchHead = createServerFn({ method: 'POST' })
+    .inputValidator(z.object({ projectId: z.string(), branchCommitId: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        return promoteBranchHead(data.projectId, data.branchCommitId, context.user.email);
     });
