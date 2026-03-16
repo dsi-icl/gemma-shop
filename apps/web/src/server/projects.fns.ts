@@ -7,10 +7,12 @@ import { createUploadToken, revokeUploadToken, validateUploadToken } from '~/lib
 
 import {
     archiveProject,
+    copySlideInCommit,
     createAsset,
     createBranchHead,
     createProject,
     deleteAsset,
+    deleteSlideFromCommit,
     ensureMutableHead,
     getAuditLogs,
     getCommit,
@@ -157,6 +159,34 @@ export const $promoteBranchHead = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         return promoteBranchHead(data.projectId, data.branchCommitId, context.user.email);
+    });
+
+// ── Slide operations ─────────────────────────────────────────────────────────
+
+export const $copySlideInCommit = createServerFn({ method: 'POST' })
+    .inputValidator(
+        z.object({
+            commitId: z.string(),
+            sourceSlideId: z.string(),
+            newSlideId: z.string(),
+            newSlideName: z.string()
+        })
+    )
+    .middleware([authMiddleware])
+    .handler(async ({ data }) => {
+        return copySlideInCommit(
+            data.commitId,
+            data.sourceSlideId,
+            data.newSlideId,
+            data.newSlideName
+        );
+    });
+
+export const $deleteSlideFromCommit = createServerFn({ method: 'POST' })
+    .inputValidator(z.object({ commitId: z.string(), slideId: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ data }) => {
+        return deleteSlideFromCommit(data.commitId, data.slideId);
     });
 
 // ── Upload tokens ─────────────────────────────────────────────────────────────

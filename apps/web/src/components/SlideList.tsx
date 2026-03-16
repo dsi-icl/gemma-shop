@@ -21,9 +21,26 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
     const toggleSlideSelection = useEditorStore((s) => s.toggleSlideSelection);
     const setActiveSlideId = useEditorStore((s) => s.setActiveSlideId);
     const copySlide = useEditorStore((s) => s.copySlide);
+    const deleteSlide = useEditorStore((s) => s.deleteSlide);
     const renameSlide = useEditorStore((s) => s.renameSlide);
     const projectId = useEditorStore((s) => s.projectId);
     const navigate = useNavigate();
+
+    const handleDelete = async (slideId: string) => {
+        const isActive = activeSlideId === slideId;
+        await deleteSlide(slideId);
+        if (isActive) {
+            const { slides: updatedSlides, commitId } = useEditorStore.getState();
+            const next = updatedSlides[0];
+            if (next && projectId && commitId) {
+                setActiveSlideId(next.id);
+                navigate({
+                    to: '/quarry/editor/$projectId/$commitId/$slideId',
+                    params: { projectId, commitId, slideId: next.id }
+                });
+            }
+        }
+    };
 
     const handleSelect = (id: string, shiftKey: boolean, ctrlKey: boolean) => {
         toggleSlideSelection(id, shiftKey, ctrlKey);
@@ -78,6 +95,8 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
                                 isActive={activeSlideId === slide.id}
                                 onCopySlide={copySlide}
                                 onRenameSlide={renameSlide}
+                                onDeleteSlide={handleDelete}
+                                canDelete={slides.length > 1}
                             />
                         )}
                         overlayRenderer={(slide) => (

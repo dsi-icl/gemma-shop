@@ -12,6 +12,7 @@ import type {
 } from '@repo/db/schema';
 import { ObjectId } from 'mongodb';
 
+import { scopedState } from '~/lib/busState';
 import { ASSET_DIR } from '~/lib/serverVariables';
 
 const projects = db.collection('projects');
@@ -426,6 +427,112 @@ export async function getProjectCommits(projectId: string): Promise<SerializedCo
             updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : String(d.updatedAt)
         };
     });
+}
+
+/**
+ * Copy a slide's layers within a commit, assigning fresh numericIds to all copied layers.
+ * Returns the new slide's id.
+ */
+export async function copySlideInCommit(
+    commitId: string,
+    sourceSlideId: string,
+    newSlideId: string,
+    newSlideName: string
+): Promise<void> {
+    const commit = await commits.findOne({ _id: new ObjectId(commitId) });
+    if (!commit?.content?.slides) throw new Error('Commit not found');
+
+    const slides = commit.content.slides as Array<{
+        id: string;
+        order: number;
+        name?: string;
+        layers: Array<Record<string, unknown>>;
+    }>;
+    const source = slides.find((s) => s.id === sourceSlideId);
+    if (!source) throw new Error('Source slide not found');
+
+    // Prefer live bus scope layers (may have unsaved changes) over commit data
+    let sourceLayers: Array<Record<string, unknown>> = source.layers ?? [];
+    for (const scope of scopedState.values()) {
+        if (
+            scope.commitId === commitId &&
+            scope.slideId === sourceSlideId &&
+            scope.layers.size > 0
+        ) {
+            sourceLayers = Array.from(scope.layers.values()) as Array<Record<string, unknown>>;
+            break;
+        }
+    }
+
+    // Find the highest numericId across ALL slides + live scopes to avoid conflicts
+    let maxId = 0;
+    for (const slide of slides) {
+        for (const layer of slide.layers ?? []) {
+            if (typeof layer.numericId === 'number' && layer.numericId > maxId) {
+                maxId = layer.numericId;
+            }
+        }
+    }
+    // Also check all live scopes for the same commit (other slides may have unsaved layers)
+    for (const scope of scopedState.values()) {
+        if (scope.commitId === commitId) {
+            for (const [numericId] of scope.layers) {
+                if (numericId > maxId) maxId = numericId;
+            }
+        }
+    }
+
+    // Deep-copy layers with new numericIds
+    const copiedLayers = sourceLayers.map((layer, i) => ({
+        ...JSON.parse(JSON.stringify(layer)),
+        numericId: maxId + i + 1
+    }));
+
+    const newSlide = {
+        id: newSlideId,
+        order: source.order + 0.5,
+        name: newSlideName,
+        layers: copiedLayers
+    };
+
+    const updatedSlides = [...slides, newSlide]
+        .sort((a, b) => a.order - b.order)
+        .map((s, i) => ({ ...s, order: i }));
+
+    await commits.updateOne(
+        { _id: new ObjectId(commitId) },
+        { $set: { 'content.slides': updatedSlides, updatedAt: new Date() } }
+    );
+}
+
+/**
+ * Delete a slide from a commit document.
+ * Returns false if it's the last slide (must keep at least one).
+ */
+export async function deleteSlideFromCommit(commitId: string, slideId: string): Promise<boolean> {
+    const commit = await commits.findOne({ _id: new ObjectId(commitId) });
+    if (!commit?.content?.slides) throw new Error('Commit not found');
+
+    const slides = commit.content.slides as Array<{
+        id: string;
+        order: number;
+        name?: string;
+        layers: unknown[];
+    }>;
+
+    if (slides.length <= 1) return false;
+
+    const updatedSlides = slides
+        .filter((s) => s.id !== slideId)
+        .sort((a, b) => a.order - b.order)
+        .map((s, i) => ({ ...s, order: i }));
+
+    await commits.updateOne(
+        { _id: new ObjectId(commitId) },
+        { $set: { 'content.slides': updatedSlides, updatedAt: new Date() } }
+    );
+
+    return true;
 }
 
 function assertCanView(doc: Record<string, unknown>, userEmail: string) {

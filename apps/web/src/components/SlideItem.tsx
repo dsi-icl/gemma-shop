@@ -1,4 +1,4 @@
-import { CopyIcon, PencilSimpleIcon } from '@phosphor-icons/react';
+import { CopyIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Slide } from '~/lib/types';
@@ -9,6 +9,8 @@ interface SlideItemProps {
     isActive: boolean;
     onCopySlide?: (slide: Slide) => void;
     onRenameSlide?: (slideId: string, name: string) => void;
+    onDeleteSlide?: (slideId: string) => void;
+    canDelete?: boolean;
 }
 
 export function SlideItem({
@@ -16,7 +18,9 @@ export function SlideItem({
     isSelected,
     isActive,
     onCopySlide,
-    onRenameSlide
+    onRenameSlide,
+    onDeleteSlide,
+    canDelete = true
 }: SlideItemProps) {
     const [editing, setEditing] = useState(false);
     const [editValue, setEditValue] = useState(slide.name);
@@ -54,6 +58,7 @@ export function SlideItem({
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={commitRename}
                     onKeyDown={(e) => {
+                        e.stopPropagation();
                         if (e.key === 'Enter') commitRename();
                         if (e.key === 'Escape') setEditing(false);
                     }}
@@ -96,6 +101,18 @@ export function SlideItem({
                     title="Copy Slide"
                 >
                     <CopyIcon size={16} weight="bold" />
+                </button>
+            )}
+            {!editing && onDeleteSlide && canDelete && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteSlide(slide.id);
+                    }}
+                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+                    title="Delete Slide"
+                >
+                    <TrashIcon size={16} weight="bold" />
                 </button>
             )}
         </div>

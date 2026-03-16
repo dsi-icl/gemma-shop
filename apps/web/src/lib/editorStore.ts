@@ -1,7 +1,7 @@
 import { throttle } from '@tanstack/pacer';
 import { create } from 'zustand';
 
-import { $getCommit } from '../server/projects.fns';
+import { $copySlideInCommit, $deleteSlideFromCommit, $getCommit } from '../server/projects.fns';
 import { projectAssetsQueryOptions } from '../server/projects.queries';
 import { EditorEngine } from './editorEngine';
 import type { ConnectionStatus } from './reconnectingWs';
@@ -120,7 +120,8 @@ interface EditorState {
     reboot: () => void;
     reorderLayers: (layers: LayerWithEditorState[]) => void;
     addSlide: () => void;
-    copySlide: (slide: Slide) => void;
+    copySlide: (slide: Slide) => Promise<void>;
+    deleteSlide: (slideId: string) => Promise<void>;
     renameSlide: (slideId: string, name: string) => void;
     reorderSlides: (slides: Slide[]) => void;
     deselectAllLayers: () => void;
@@ -196,11 +197,14 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
             const commitSlides = commit.content.slides as Array<{
                 id: string;
                 order: number;
+                name?: string;
                 layers: LayerWithEditorState[];
             }>;
-            const slides = commitSlides.map(
-                (s) => ({ id: s.id, name: `Slide ${s.order}` }) as Slide
-            );
+            const slides: Slide[] = commitSlides.map((s, i) => ({
+                id: s.id,
+                order: s.order ?? i,
+                name: s.name || `Slide ${(s.order ?? i) + 1}`
+            }));
             set({ slides, headCommitId: commitId });
         }
 
@@ -711,19 +715,56 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         get().markDirty();
     },
 
-    copySlide: (slide) => {
-        const newSlide: Slide = {
-            ...slide,
-            order: slide.order + 0.5,
-            id: generateSlideId(),
-            name: `${slide.name} (Copy)`
-        };
-        const newSlides = [...get().slides, newSlide]
-            .sort((a, b) => a.order - b.order)
-            .map((s, i) => ({ ...s, order: i }));
-        set({ slides: newSlides });
-        broadcastSlides(newSlides);
-        get().markDirty();
+    copySlide: async (slide) => {
+        const { commitId } = get();
+        if (!commitId) return;
+
+        const newSlideId = generateSlideId();
+        const newSlideName = `${slide.name} (Copy)`;
+
+        try {
+            // Server-side: copies layers in the commit doc with fresh numericIds
+            await $copySlideInCommit({
+                data: { commitId, sourceSlideId: slide.id, newSlideId, newSlideName }
+            });
+
+            const newSlide: Slide = {
+                id: newSlideId,
+                order: slide.order + 0.5,
+                name: newSlideName
+            };
+            const newSlides = [...get().slides, newSlide]
+                .sort((a, b) => a.order - b.order)
+                .map((s, i) => ({ ...s, order: i }));
+            set({ slides: newSlides });
+            broadcastSlides(newSlides);
+        } catch (err) {
+            console.error('[EditorStore] copySlide failed:', err);
+        }
+    },
+
+    deleteSlide: async (slideId) => {
+        const { slides, commitId, activeSlideId } = get();
+        if (!commitId || slides.length <= 1) return;
+
+        try {
+            const ok = await $deleteSlideFromCommit({ data: { commitId, slideId } });
+            if (!ok) return;
+
+            const newSlides = slides
+                .filter((s) => s.id !== slideId)
+                .sort((a, b) => a.order - b.order)
+                .map((s, i) => ({ ...s, order: i }));
+            set({ slides: newSlides });
+            broadcastSlides(newSlides);
+
+            // If we deleted the active slide, switch to the first remaining one
+            if (activeSlideId === slideId && newSlides.length > 0) {
+                set({ activeSlideId: newSlides[0].id });
+            }
+        } catch (err) {
+            console.error('[EditorStore] deleteSlide failed:', err);
+        }
     },
 
     renameSlide: (slideId, name) => {
