@@ -39,6 +39,9 @@ import {
     getHydratePayload,
     touchPing,
     reapStalePeers,
+    persistSlideMetadata,
+    broadcastToEditorsByCommit,
+    notifyControllersByCommit,
     // layerNodes,
     // canSendNonCritical,
     EMPTY_HYDRATE,
@@ -175,6 +178,24 @@ handlers.set('seed_scope', ({ entry, data, scopeId }) => {
         { type: 'hydrate', layers: Array.from(scope.layers.values()) },
         entry
     );
+});
+
+handlers.set('update_slides', ({ entry, data }) => {
+    const { commitId, slides } = data;
+    if (!commitId || !Array.isArray(slides)) return;
+
+    // Persist metadata to DB (no layer changes)
+    persistSlideMetadata(commitId, slides).then((ok) => {
+        if (!ok) {
+            console.error(`[Bus] Failed to persist slide metadata for commit ${commitId}`);
+            return;
+        }
+
+        // Broadcast slides_updated to all editors + controllers on this commit
+        const payload = JSON.stringify({ type: 'slides_updated', commitId, slides });
+        broadcastToEditorsByCommit(commitId, payload, entry);
+        notifyControllersByCommit(commitId, payload);
+    });
 });
 
 handlers.set('reboot', ({ scopeId, rawText }) => {

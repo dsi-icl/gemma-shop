@@ -364,6 +364,34 @@ export function broadcastToScope(scopeId: ScopeId, data: GSMessage, exclude?: Pe
     broadcastToWallsRaw(scopeId, payload);
 }
 
+/** Broadcast a payload to all editors whose scope matches a given commitId (across all slides). */
+export function broadcastToEditorsByCommit(commitId: string, payload: string, exclude?: PeerEntry) {
+    for (const [scopeId, scope] of scopedState) {
+        if (scope.commitId === commitId) {
+            const set = editorsByScope.get(scopeId);
+            if (!set) continue;
+            for (const entry of set) {
+                if (entry !== exclude) entry.peer.send(payload);
+            }
+        }
+    }
+}
+
+/** Notify all controllers whose wall is bound to any scope with the given commitId. */
+export function notifyControllersByCommit(commitId: string, payload: string) {
+    const notified = new Set<string>();
+    for (const [wallId, scopeId] of wallBindings) {
+        const scope = scopedState.get(scopeId);
+        if (scope?.commitId === commitId && !notified.has(wallId)) {
+            notified.add(wallId);
+            const entries = controllersByWallId.get(wallId);
+            if (entries) {
+                for (const entry of entries) entry.peer.send(payload);
+            }
+        }
+    }
+}
+
 // Hydrate all wall peers for a given wallId with their bound scope's layers
 export function hydrateWallNodes(wallId: string) {
     const scopeId = wallBindings.get(wallId);
@@ -848,5 +876,56 @@ export async function saveScope(
     } catch (err) {
         console.error(`[Bus] saveScope failed for ${scopeLabel(scopeId)}:`, err);
         return { success: false, error: String(err) };
+    }
+}
+
+/**
+ * Persist slide metadata (id, order, name) to the commit document.
+ * Only updates metadata fields — never touches layers.
+ */
+export async function persistSlideMetadata(
+    commitId: string,
+    slides: Array<{ id: string; order: number; name: string }>
+): Promise<boolean> {
+    try {
+        const commit = await db.collection('commits').findOne({ _id: new ObjectId(commitId) });
+        if (!commit?.content?.slides) return false;
+
+        const existingSlides: Array<{ id: string; order: number; name: string; layers: any[] }> =
+            commit.content.slides;
+
+        // Build a lookup of new metadata by slide id
+        const metaById = new Map(slides.map((s) => [s.id, s]));
+
+        // Update existing slides' metadata, preserve layers
+        const updatedSlides = existingSlides.map((s) => {
+            const meta = metaById.get(s.id);
+            if (meta) {
+                return { ...s, order: meta.order, name: meta.name };
+            }
+            return s;
+        });
+
+        // Add any new slides that don't exist yet (empty layers)
+        for (const meta of slides) {
+            if (!existingSlides.some((s) => s.id === meta.id)) {
+                updatedSlides.push({ id: meta.id, order: meta.order, name: meta.name, layers: [] });
+            }
+        }
+
+        // Sort by order
+        updatedSlides.sort((a, b) => a.order - b.order);
+
+        await db
+            .collection('commits')
+            .updateOne(
+                { _id: new ObjectId(commitId) },
+                { $set: { 'content.slides': updatedSlides, updatedAt: new Date() } }
+            );
+
+        return true;
+    } catch (err) {
+        console.error(`[Bus] persistSlideMetadata failed for commit ${commitId}:`, err);
+        return false;
     }
 }

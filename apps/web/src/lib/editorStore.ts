@@ -36,6 +36,18 @@ const sendLayerUpdate = throttle(
     { wait: 100 }
 );
 
+/** Broadcast slide list metadata to the bus for persistence + relay to other editors/controllers */
+function broadcastSlides(slides: Slide[]) {
+    const engine = EditorEngine.getInstance();
+    const commitId = useEditorStore.getState().commitId;
+    if (!commitId) return;
+    engine.sendJSON({
+        type: 'update_slides',
+        commitId,
+        slides: slides.map((s) => ({ id: s.id, order: s.order, name: s.name }))
+    });
+}
+
 interface EditorState {
     // ── State ──
     projectId: string | null;
@@ -46,7 +58,6 @@ interface EditorState {
     slides: Slide[];
     activeSlideId: string | null;
     selectedSlides: string[];
-    copiedSlide: Slide | null;
     lastSelectedSlide: string | null;
     lastSelectedLayerId: string | null;
     showSpacePreview: boolean;
@@ -83,7 +94,6 @@ interface EditorState {
     setSlides: (slides: Slide[]) => void;
     setActiveSlideId: (id: string | null) => void;
     setSelectedSlides: (ids: string[]) => void;
-    setCopiedSlide: (slide: Slide | null) => void;
     setInkColour: (color: string) => void;
     setInkWidth: (width: number) => void;
     setInkDash: (dash: number[]) => void;
@@ -110,7 +120,7 @@ interface EditorState {
     reorderLayers: (layers: LayerWithEditorState[]) => void;
     addSlide: () => void;
     copySlide: (slide: Slide) => void;
-    pasteSlide: () => void;
+    renameSlide: (slideId: string, name: string) => void;
     reorderSlides: (slides: Slide[]) => void;
     deselectAllLayers: () => void;
     toggleSlideSelection: (id: string, isShiftClick: boolean, isCtrlClick: boolean) => void;
@@ -188,7 +198,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
                 layers: LayerWithEditorState[];
             }>;
             const slides = commitSlides.map(
-                (s) => ({ id: s.id, description: `Slide ${s.order}` }) as Slide
+                (s) => ({ id: s.id, name: `Slide ${s.order}` }) as Slide
             );
             set({ slides, headCommitId: commitId });
         }
@@ -321,7 +331,6 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     setSlides: (slides) => set({ slides }),
     setActiveSlideId: (id) => set({ activeSlideId: id }),
     setSelectedSlides: (ids) => set({ selectedSlides: ids }),
-    setCopiedSlide: (slide) => set({ copiedSlide: slide }),
     setInkColour: (color) => {
         set((s) => {
             const newState: Partial<EditorState> = { inkColour: color };
@@ -692,30 +701,40 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     },
 
     addSlide: () => {
-        set((s) => ({
-            slides: [...s.slides, { id: generateSlideId(), description: 'New Slide' }]
-        }));
+        const newSlides = [
+            ...get().slides,
+            { id: generateSlideId(), name: 'New Slide', order: get().slides.length }
+        ];
+        set({ slides: newSlides });
+        broadcastSlides(newSlides);
         get().markDirty();
     },
 
     copySlide: (slide) => {
-        set({ copiedSlide: slide });
+        const newSlide: Slide = {
+            ...slide,
+            order: slide.order + 0.5,
+            id: generateSlideId(),
+            name: `${slide.name} (Copy)`
+        };
+        const newSlides = [...get().slides, newSlide]
+            .sort((a, b) => a.order - b.order)
+            .map((s, i) => ({ ...s, order: i }));
+        set({ slides: newSlides });
+        broadcastSlides(newSlides);
+        get().markDirty();
     },
 
-    pasteSlide: () => {
-        const { copiedSlide } = get();
-        if (!copiedSlide) return;
-        const newSlide: Slide = {
-            ...copiedSlide,
-            id: generateSlideId(),
-            description: `${copiedSlide.description} (Copy)`
-        };
-        set((s) => ({ slides: [...s.slides, newSlide] }));
+    renameSlide: (slideId, name) => {
+        const newSlides = get().slides.map((s) => (s.id === slideId ? { ...s, name } : s));
+        set({ slides: newSlides });
+        broadcastSlides(newSlides);
         get().markDirty();
     },
 
     reorderSlides: (slides) => {
         set({ slides });
+        broadcastSlides(slides);
         get().markDirty();
     },
 
@@ -770,6 +789,17 @@ engine.subscribeToJson((data) => {
         store.upsertLayer(data.layer);
     } else if (data.type === 'processing_progress') {
         store.updateProgress(data.numericId, data.progress);
+    } else if (data.type === 'slides_updated') {
+        // Another editor changed slide metadata — update our list without touching layers
+        if (data.commitId === store.commitId) {
+            store.setSlides(
+                data.slides.map((s: { id: string; order: number; name: string }) => ({
+                    id: s.id,
+                    order: s.order,
+                    name: s.name
+                }))
+            );
+        }
     }
 });
 

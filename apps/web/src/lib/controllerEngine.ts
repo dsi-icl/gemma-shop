@@ -14,12 +14,14 @@ type BindingStatus = {
 
 type BindingCallback = (status: BindingStatus) => void;
 type HydrateCallback = (layers: Extract<GSMessage, { type: 'hydrate' }>['layers']) => void;
+type SlidesUpdatedCallback = (slides: Array<{ id: string; order: number; name: string }>) => void;
 
 export class ControllerEngine {
     private rws: ReconnectingWebSocket;
     public wallId: string;
     private bindingCallbacks = new Set<BindingCallback>();
     private hydrateCallbacks = new Set<HydrateCallback>();
+    private slidesUpdatedCallbacks = new Set<SlidesUpdatedCallback>();
 
     private constructor(wallId: string) {
         this.wallId = wallId;
@@ -51,6 +53,10 @@ export class ControllerEngine {
                 if (data.type === 'hydrate') {
                     this.hydrateCallbacks.forEach((cb) => cb(data.layers));
                 }
+
+                if (data.type === 'slides_updated') {
+                    this.slidesUpdatedCallbacks.forEach((cb) => cb(data.slides));
+                }
             }
         });
 
@@ -75,6 +81,7 @@ export class ControllerEngine {
         this.rws.destroy();
         this.bindingCallbacks.clear();
         this.hydrateCallbacks.clear();
+        this.slidesUpdatedCallbacks.clear();
     }
 
     public sendJSON = (data: GSMessage) => {
@@ -103,6 +110,13 @@ export class ControllerEngine {
         this.hydrateCallbacks.add(cb);
         return () => {
             this.hydrateCallbacks.delete(cb);
+        };
+    }
+
+    public onSlidesUpdated(cb: SlidesUpdatedCallback) {
+        this.slidesUpdatedCallbacks.add(cb);
+        return () => {
+            this.slidesUpdatedCallbacks.delete(cb);
         };
     }
 }

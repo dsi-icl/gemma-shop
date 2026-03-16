@@ -194,7 +194,17 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         commitId: z.string().optional(),
         slideId: z.string().optional()
     }),
-    z.object({ type: z.literal('seed_scope'), layers: LayerSchema.array() })
+    z.object({ type: z.literal('seed_scope'), layers: LayerSchema.array() }),
+    z.object({
+        type: z.literal('update_slides'),
+        commitId: z.string(),
+        slides: z.array(z.object({ id: z.string(), order: z.number(), name: z.string() }))
+    }),
+    z.object({
+        type: z.literal('slides_updated'),
+        commitId: z.string(),
+        slides: z.array(z.object({ id: z.string(), order: z.number(), name: z.string() }))
+    })
 ]);
 
 export type GSMessage = z.infer<typeof GSMessageSchema>;
@@ -231,5 +241,6 @@ export interface ScopeState {
 
 export interface Slide {
     id: string;
-    description: string;
+    order: number;
+    name: string;
 }
