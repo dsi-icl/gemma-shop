@@ -6,11 +6,12 @@ export const AssetSchema = z.object({
     _id: oid,
     projectId: oid,
     name: z.string(),
-    url: z.url(),
+    url: z.string(),
     size: z.number(),
     mimeType: z.string().optional(),
     blurhash: z.string().optional(),
     previewUrl: z.string().optional(),
+    sizes: z.array(z.number()).optional(),
     createdAt: z.iso.datetime(),
     createdBy: z.string()
 });
@@ -19,10 +20,11 @@ export type Asset = z.infer<typeof AssetSchema>;
 export const CreateAssetInput = z.object({
     projectId: oid,
     name: z.string(),
-    url: z.url(),
+    url: z.string(),
     size: z.number(),
     mimeType: z.string().optional(),
     blurhash: z.string().optional(),
-    previewUrl: z.string().optional()
+    previewUrl: z.string().optional(),
+    sizes: z.array(z.number()).optional()
 });
 export type CreateAssetInput = z.infer<typeof CreateAssetInput>;

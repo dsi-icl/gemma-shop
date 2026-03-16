@@ -2,10 +2,21 @@
 
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-konva';
 
 import type { LayerWithEditorState } from '~/lib/types';
+
+/** Pick the best variant URL for the given display width */
+function selectVariantUrl(url: string, sizes: number[] | undefined, displayWidth: number): string {
+    if (!sizes?.length || !url.startsWith('/api/assets/')) return url;
+
+    const filename = url.split('/').pop()!;
+    const baseId = filename.replace(/\.[^.]+$/, '');
+    const sorted = [...sizes].sort((a, b) => a - b);
+    const match = sorted.find((s) => s >= displayWidth) ?? sorted[sorted.length - 1];
+    return `/api/assets/${baseId}_${match}.webp`;
+}
 
 export function KonvaStaticImage({
     layer,
@@ -23,21 +34,28 @@ export function KonvaStaticImage({
     const [img, setImg] = useState<HTMLImageElement | null>(null);
     const imageRef = useRef<Konva.Image>(null);
 
+    // Pick variant based on the layer's display width (scaled)
+    const variantUrl = useMemo(() => {
+        if (layer.type !== 'image') return layer.url;
+        const displayWidth = Math.ceil(layer.config.width * (layer.config.scaleX ?? 1));
+        return selectVariantUrl(layer.url, layer.sizes, displayWidth);
+    }, [layer.url, layer.sizes, layer.config.width, layer.config.scaleX, layer.type]);
+
     useEffect(() => {
         if (layer.type !== 'image')
             return () => {
                 setImg(null);
             };
         const i = new window.Image();
-        if (!layer.url.startsWith('blob:') && !layer.url.startsWith('data:')) {
+        if (!variantUrl.startsWith('blob:') && !variantUrl.startsWith('data:')) {
             i.crossOrigin = 'anonymous';
         }
         i.onload = () => {
             setImg(i);
             imageRef.current?.getLayer()?.batchDraw();
         };
-        i.src = layer.url;
-    }, [`${layer.type === 'image' ? layer.url : ''}`]);
+        i.src = variantUrl;
+    }, [variantUrl, layer.type]);
 
     return (
         <Image

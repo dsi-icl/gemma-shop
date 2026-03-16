@@ -35,6 +35,7 @@ const LayerSchema = z.discriminatedUnion('type', [
             duration: z.number(),
             rvfcActive: z.boolean(),
             blurhash: z.string().optional(),
+            sizes: z.array(z.number()).optional(),
             playback: LayerPlaybackStateSchema
         })
         .extend(LayerBaseSchema.shape),
@@ -42,7 +43,8 @@ const LayerSchema = z.discriminatedUnion('type', [
         .object({
             type: z.literal('image'),
             url: z.string(),
-            blurhash: z.string().optional()
+            blurhash: z.string().optional(),
+            sizes: z.array(z.number()).optional()
         })
         .extend(LayerBaseSchema.shape),
     z.object({ type: z.literal('graph') }).extend(LayerBaseSchema.shape),
@@ -216,6 +218,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             mimeType: z.string().optional(),
             blurhash: z.string().optional(),
             previewUrl: z.string().optional(),
+            sizes: z.array(z.number()).optional(),
             createdAt: z.string(),
             createdBy: z.string()
         })

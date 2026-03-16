@@ -164,15 +164,15 @@ export async function deleteAsset(assetId: string, userEmail: string) {
 
     await assets.deleteOne({ _id: new ObjectId(assetId) });
 
-    // Clean up the file from disk if it's a locally-served asset
+    // Clean up files from disk (original + preview + all generated variants)
     if (asset.url && typeof asset.url === 'string') {
-        try {
-            const url = new URL(asset.url);
-            const filename = basename(decodeURIComponent(url.pathname));
-            await unlink(join(ASSET_DIR, filename));
-        } catch {
-            // File may already be gone or URL may be external — not critical
+        const baseId = asset.url.replace(/\.[^.]+$/, '');
+        const filesToDelete = [asset.url];
+        if (asset.previewUrl) filesToDelete.push(asset.previewUrl as string);
+        if (Array.isArray(asset.sizes)) {
+            for (const size of asset.sizes) filesToDelete.push(`${baseId}_${size}.webp`);
         }
+        await Promise.allSettled(filesToDelete.map((f) => unlink(join(ASSET_DIR, f))));
     }
 }
 

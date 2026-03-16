@@ -2,14 +2,25 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
+import { ProjectImage } from './ProjectImage';
+
 interface AssetPreviewOverlayProps {
     src: string;
     name: string;
     isVideo: boolean;
+    blurhash?: string;
+    sizes?: number[];
     onClose: () => void;
 }
 
-function AssetPreviewOverlayInner({ src, name, isVideo, onClose }: AssetPreviewOverlayProps) {
+function AssetPreviewOverlayInner({
+    src,
+    name,
+    isVideo,
+    blurhash,
+    sizes,
+    onClose
+}: AssetPreviewOverlayProps) {
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
@@ -36,13 +47,17 @@ function AssetPreviewOverlayInner({ src, name, isVideo, onClose }: AssetPreviewO
                         src={src}
                         controls
                         autoPlay
-                        className="bg-checkerboard max-h-[90vh] max-w-[90vw] rounded-lg"
+                        className="max-h-[90vh] max-w-[90vw] rounded-lg"
                     />
                 ) : (
-                    <img
+                    <ProjectImage
                         src={src}
+                        blurhash={blurhash}
+                        sizes={sizes}
+                        forceOriginal
                         alt={name}
-                        className="bg-checkerboard max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+                        className="max-h-[90vh] max-w-[90vw] rounded-lg"
+                        imgClassName="object-contain"
                     />
                 )}
             </motion.div>
@@ -62,9 +77,6 @@ function AssetPreviewOverlayInner({ src, name, isVideo, onClose }: AssetPreviewO
 
 /** Wrap with AnimatePresence — render when `preview` is non-null, pass `null` to unmount with exit animation. */
 export function AssetPreviewOverlay(props: AssetPreviewOverlayProps | null) {
-    // This component is meant to be used with conditional rendering:
-    // {preview && <AssetPreviewOverlay ... />}
-    // The AnimatePresence wrapper is provided by AssetPreviewPortal below.
     return <AssetPreviewOverlayInner {...(props as AssetPreviewOverlayProps)} />;
 }
 
@@ -73,7 +85,13 @@ export function AssetPreviewPortal({
     preview,
     onClose
 }: {
-    preview: { src: string; name: string; isVideo: boolean } | null;
+    preview: {
+        src: string;
+        name: string;
+        isVideo: boolean;
+        blurhash?: string;
+        sizes?: number[];
+    } | null;
     onClose: () => void;
 }) {
     return (
@@ -84,6 +102,8 @@ export function AssetPreviewPortal({
                     src={preview.src}
                     name={preview.name}
                     isVideo={preview.isVideo}
+                    blurhash={preview.blurhash}
+                    sizes={preview.sizes}
                     onClose={onClose}
                 />
             )}

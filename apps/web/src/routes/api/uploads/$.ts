@@ -122,6 +122,46 @@ async function extractVideoPreview(
     });
 }
 
+const VARIANT_WIDTHS = [50, 200, 800, 1600];
+
+/** Generate WebP variants at multiple sizes. Returns the list of widths actually generated. */
+async function generateVariants(sourcePath: string, baseId: string): Promise<number[]> {
+    try {
+        const meta = await sharp(sourcePath).metadata();
+        const origWidth = meta.width ?? 0;
+        if (origWidth === 0) return [];
+
+        const sizes: number[] = [];
+
+        // Generate downscaled variants (skip if original is already smaller)
+        for (const width of VARIANT_WIDTHS) {
+            if (origWidth <= width) continue;
+            const outPath = join(ASSET_DIR, `${baseId}_${width}.webp`);
+            await sharp(sourcePath)
+                .resize(width, undefined, { fit: 'inside', withoutEnlargement: true })
+                .webp({ quality: 80 })
+                .toFile(outPath);
+            sizes.push(width);
+        }
+
+        // Always generate a full-res WebP (unless source is already WebP)
+        const srcExt = extname(sourcePath).toLowerCase();
+        if (srcExt !== '.webp') {
+            const outPath = join(ASSET_DIR, `${baseId}_${origWidth}.webp`);
+            await sharp(sourcePath).webp({ quality: 85 }).toFile(outPath);
+            sizes.push(origWidth);
+        } else {
+            // Source is already WebP — include original width in sizes for selection
+            sizes.push(origWidth);
+        }
+
+        return sizes;
+    } catch (err) {
+        console.error('[Tus] variant generation failed:', err);
+        return [];
+    }
+}
+
 const tusServer = new Server({
     path: '/api/uploads',
     datastore: new FileStore({ directory: UPLOAD_DIR }),
@@ -174,6 +214,7 @@ const tusServer = new Server({
             let previewFilename: string | null = null;
             let blurhash: string | null = null;
             let mimeType: string | null = null;
+            let sizes: number[] = [];
 
             if (isImage) {
                 // ── Image: copy with upload.id-based name ──
@@ -183,6 +224,7 @@ const tusServer = new Server({
 
                 mimeType = `image/${ext.slice(1)}`;
                 blurhash = await computeBlurhash(finalPath);
+                sizes = await generateVariants(finalPath, upload.id);
             } else if (isVideo) {
                 // ── Video: transcode + generate preview ──
                 assetFilename = `${upload.id}.mp4`;
@@ -226,10 +268,11 @@ const tusServer = new Server({
                 if (result.code !== 0) {
                     console.error('[Tus] FFmpeg transcode failed:', result.stderr);
                 } else {
-                    // Extract preview frame and compute blurhash from it
+                    // Extract preview frame, compute blurhash, and generate variants from it
                     const previewOk = await extractVideoPreview(finalPath, previewPath, duration);
                     if (previewOk) {
                         blurhash = await computeBlurhash(previewPath);
+                        sizes = await generateVariants(previewPath, upload.id);
                     }
                 }
 
@@ -253,6 +296,7 @@ const tusServer = new Server({
                     mimeType,
                     blurhash,
                     previewUrl: previewFilename ?? undefined,
+                    sizes: sizes.length > 0 ? sizes : undefined,
                     createdBy: userEmail,
                     createdAt: new Date().toISOString()
                 });
@@ -270,13 +314,14 @@ const tusServer = new Server({
                         mimeType: mimeType ?? undefined,
                         blurhash: blurhash ?? undefined,
                         previewUrl: previewFilename ?? undefined,
+                        sizes: sizes.length > 0 ? sizes : undefined,
                         createdAt: new Date().toISOString(),
                         createdBy: userEmail
                     });
                 }
 
                 console.log(
-                    `[Tus] Asset created: ${assetFilename} (blurhash: ${blurhash ? 'yes' : 'no'})`
+                    `[Tus] Asset created: ${assetFilename} (blurhash: ${blurhash ? 'yes' : 'no'}, sizes: [${sizes.join(', ')}])`
                 );
             }
         } catch (err) {

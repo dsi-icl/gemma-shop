@@ -22,6 +22,7 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AssetPreviewPortal, downloadAsset, isVideoAsset } from '~/components/AssetPreviewOverlay';
+import { ProjectImage } from '~/components/ProjectImage';
 import { UploadDialog } from '~/components/UploadDialog';
 import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
@@ -48,6 +49,8 @@ function AssetsTab() {
         src: string;
         name: string;
         isVideo: boolean;
+        blurhash?: string;
+        sizes?: number[];
     } | null>(null);
 
     const deleteAssetMutation = useMutation({
@@ -72,12 +75,16 @@ function AssetsTab() {
         previewUrl?: string;
         name: string;
         mimeType?: string;
+        blurhash?: string;
+        sizes?: number[];
     }) => {
         const isVideo = isVideoAsset(asset);
         setPreview({
             src: `/api/assets/${asset.url}`,
             name: asset.name,
-            isVideo
+            isVideo,
+            blurhash: asset.blurhash,
+            sizes: asset.sizes
         });
     };
 
@@ -209,10 +216,13 @@ function AssetsTab() {
                             key={asset._id}
                             className="flex items-center gap-3 rounded-lg border p-2"
                         >
-                            <img
-                                src={`/api/assets/${asset.previewUrl ?? asset.url}`}
+                            <ProjectImage
+                                src={asset.previewUrl ?? asset.url}
+                                blurhash={asset.blurhash}
+                                sizes={asset.sizes}
                                 alt={asset.name}
-                                className="h-16 w-16 cursor-pointer rounded-md object-cover"
+                                className="h-16 w-16 rounded-md"
+                                imgClassName="cursor-pointer object-cover"
                                 onClick={() => openPreview(asset)}
                             />
                             <div className="flex-1">
@@ -259,10 +269,13 @@ function AssetsTab() {
                 <div className="grid grid-cols-4 gap-2">
                     {assets.map((asset) => (
                         <div key={asset._id} className="group relative">
-                            <img
-                                src={`/api/assets/${asset.previewUrl ?? asset.url}`}
+                            <ProjectImage
+                                src={asset.previewUrl ?? asset.url}
+                                blurhash={asset.blurhash}
+                                sizes={asset.sizes}
                                 alt={asset.name}
-                                className="aspect-square w-full cursor-pointer rounded-lg object-cover"
+                                className="--check-size=5px aspect-square w-full rounded-lg"
+                                imgClassName="cursor-pointer object-cover"
                                 onClick={() => openPreview(asset)}
                             />
                             <div className="absolute inset-0 flex items-center justify-center gap-1 rounded-lg bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">

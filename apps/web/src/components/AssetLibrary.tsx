@@ -16,7 +16,6 @@ import {
 } from '@repo/ui/components/dialog';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-import { Blurhash } from 'react-blurhash';
 import { toast } from 'sonner';
 
 import { EditorEngine } from '~/lib/editorEngine';
@@ -26,6 +25,7 @@ import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
 
 import { AssetPreviewPortal, downloadAsset, isVideoAsset } from './AssetPreviewOverlay';
+import { ProjectImage } from './ProjectImage';
 import { UploadDialog } from './UploadDialog';
 
 interface AssetLibraryProps {
@@ -54,6 +54,8 @@ export function AssetLibrary({
         src: string;
         name: string;
         isVideo: boolean;
+        blurhash?: string;
+        sizes?: number[];
     } | null>(null);
 
     const deleteAssetMutation = useMutation({
@@ -103,7 +105,13 @@ export function AssetLibrary({
     }, [projectId, queryClient]);
 
     const addAssetAsLayer = useCallback(
-        async (asset: { name: string; url: string; mimeType?: string; blurhash?: string }) => {
+        async (asset: {
+            name: string;
+            url: string;
+            mimeType?: string;
+            blurhash?: string;
+            sizes?: number[];
+        }) => {
             const isVideo =
                 asset.mimeType?.startsWith('video/') ||
                 /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name) ||
@@ -189,12 +197,14 @@ export function AssetLibrary({
                     duration,
                     loop: true,
                     blurhash: asset.blurhash ?? '',
+                    sizes: asset.sizes,
                     ...layerBase
                 };
             } else {
                 layer = {
                     type: 'image',
                     blurhash: asset.blurhash ?? '',
+                    sizes: asset.sizes,
                     ...layerBase
                 };
             }
@@ -276,10 +286,9 @@ export function AssetLibrary({
                                     const isVideo =
                                         asset.mimeType?.startsWith('video/') ||
                                         /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name);
-                                    const thumbIdentifier = isVideo ? asset.previewUrl : asset.url;
-                                    const thumbSrc = thumbIdentifier
-                                        ? `/api/assets/${thumbIdentifier}`
-                                        : undefined;
+                                    const thumbIdentifier = isVideo
+                                        ? (asset.previewUrl ?? asset.url)
+                                        : asset.url;
 
                                     return (
                                         <button
@@ -290,32 +299,26 @@ export function AssetLibrary({
                                                     url: asset.url ? `/api/assets/${asset.url}` : ''
                                                 })
                                             }
-                                            className="bg-checkerboard group relative max-w-25 cursor-pointer overflow-hidden rounded-md border border-border bg-background transition-colors [--checker-size:5px] hover:border-primary"
+                                            className="bg-checkerboard group relative max-w-25 cursor-pointer overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-primary"
                                             title={asset.name}
                                         >
-                                            {asset.blurhash && !thumbSrc && (
-                                                <Blurhash
-                                                    hash={asset.blurhash}
-                                                    width="100%"
-                                                    height="100%"
-                                                    className="aspect-square"
-                                                />
-                                            )}
-                                            {thumbSrc ? (
-                                                <img
-                                                    src={thumbSrc}
+                                            {thumbIdentifier ? (
+                                                <ProjectImage
+                                                    src={thumbIdentifier}
+                                                    blurhash={asset.blurhash}
+                                                    sizes={asset.sizes}
                                                     alt={asset.name}
-                                                    className="aspect-square w-full object-cover"
-                                                    loading="lazy"
+                                                    className="aspect-square w-full [--checker-size:10px]"
+                                                    imgClassName="object-cover"
                                                 />
-                                            ) : !asset.blurhash ? (
+                                            ) : (
                                                 <div className="flex aspect-square items-center justify-center bg-muted">
                                                     <ImageIcon
                                                         size={24}
                                                         className="text-muted-foreground"
                                                     />
                                                 </div>
-                                            ) : null}
+                                            )}
                                             <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                                                 <span className="block truncate text-[10px] text-white">
                                                     {asset.name}
@@ -328,7 +331,9 @@ export function AssetLibrary({
                                                         setPreview({
                                                             src: `/api/assets/${asset.url}`,
                                                             name: asset.name,
-                                                            isVideo: isVideoAsset(asset)
+                                                            isVideo: isVideoAsset(asset),
+                                                            blurhash: asset.blurhash,
+                                                            sizes: asset.sizes
                                                         });
                                                     }}
                                                     className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
