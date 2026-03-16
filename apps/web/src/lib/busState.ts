@@ -929,3 +929,69 @@ export async function persistSlideMetadata(
         return false;
     }
 }
+
+// ── MongoDB Change Stream: live asset updates ──────────────────────────────
+
+/** Broadcast asset_added to all editors working on the same project (across all scopes). */
+export function broadcastAssetToEditorsByProject(
+    projectId: string,
+    asset: Record<string, unknown>
+) {
+    const payload = JSON.stringify({ type: 'asset_added', projectId, asset });
+    let sent = 0;
+    for (const [scopeId, scope] of scopedState) {
+        if (scope.projectId === projectId) {
+            const set = editorsByScope.get(scopeId);
+            if (!set) continue;
+            for (const entry of set) {
+                entry.peer.send(payload);
+                sent++;
+            }
+        }
+    }
+    console.log(
+        `[Bus] asset_added broadcast: projectId=${projectId}, sent to ${sent} editor(s), scopes=${scopedState.size}`
+    );
+}
+
+function startAssetChangeStream() {
+    try {
+        const changeStream = db
+            .collection('assets')
+            .watch([{ $match: { operationType: 'insert' } }], { fullDocument: 'updateLookup' });
+
+        changeStream.on('change', (change) => {
+            if (change.operationType === 'insert' && change.fullDocument) {
+                const doc = change.fullDocument;
+                broadcastAssetToEditorsByProject(doc.projectId.toString(), {
+                    _id: doc._id.toString(),
+                    name: doc.name,
+                    url: doc.url,
+                    size: doc.size,
+                    // Convert null → undefined so JSON.stringify strips them
+                    // (Zod z.string().optional() rejects null)
+                    mimeType: doc.mimeType ?? undefined,
+                    blurhash: doc.blurhash ?? undefined,
+                    previewUrl: doc.previewUrl ?? undefined,
+                    createdAt: String(doc.createdAt),
+                    createdBy: String(doc.createdBy)
+                });
+            }
+        });
+
+        changeStream.on('error', (err) => {
+            console.error('[Bus] Asset change stream error:', err);
+        });
+
+        console.log('[Bus] Asset change stream started');
+        return changeStream;
+    } catch (err) {
+        console.error('[Bus] Failed to start asset change stream:', err);
+        return null;
+    }
+}
+
+// HMR-safe: only start once
+if (!(process as any).__ASSET_CHANGE_STREAM__) {
+    (process as any).__ASSET_CHANGE_STREAM__ = startAssetChangeStream();
+}

@@ -3,6 +3,8 @@ import { CreateAssetInput, CreateProjectInput, UpdateProjectInput } from '@repo/
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 
+import { createUploadToken, revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
+
 import {
     archiveProject,
     createAsset,
@@ -155,4 +157,26 @@ export const $promoteBranchHead = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         return promoteBranchHead(data.projectId, data.branchCommitId, context.user.email);
+    });
+
+// ── Upload tokens ─────────────────────────────────────────────────────────────
+
+export const $createUploadToken = createServerFn({ method: 'POST' })
+    .inputValidator(z.object({ projectId: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        return createUploadToken(data.projectId, context.user.email);
+    });
+
+export const $revokeUploadToken = createServerFn({ method: 'POST' })
+    .inputValidator(z.object({ token: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ data }) => {
+        revokeUploadToken(data.token);
+    });
+
+export const $validateUploadToken = createServerFn({ method: 'POST' })
+    .inputValidator(z.object({ token: z.string() }))
+    .handler(async ({ data }) => {
+        return validateUploadToken(data.token);
     });

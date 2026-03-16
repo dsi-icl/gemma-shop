@@ -2,6 +2,7 @@ import { throttle } from '@tanstack/pacer';
 import { create } from 'zustand';
 
 import { $getCommit } from '../server/projects.fns';
+import { projectAssetsQueryOptions } from '../server/projects.queries';
 import { EditorEngine } from './editorEngine';
 import type { ConnectionStatus } from './reconnectingWs';
 import type { Layer, LayerWithEditorState, Slide } from './types';
@@ -787,6 +788,12 @@ engine.subscribeToJson((data) => {
         store.hydrate(data.layers);
     } else if (data.type === 'upsert_layer') {
         store.upsertLayer(data.layer);
+    } else if (data.type === 'delete_layer') {
+        // Remote delete — only update local state, don't re-broadcast
+        useEditorStore.setState((s) => ({
+            layers: s.layers.filter((l) => l.numericId !== data.numericId),
+            selectedLayerIds: s.selectedLayerIds.filter((id) => id !== data.numericId.toString())
+        }));
     } else if (data.type === 'processing_progress') {
         store.updateProgress(data.numericId, data.progress);
     } else if (data.type === 'slides_updated') {
@@ -799,6 +806,19 @@ engine.subscribeToJson((data) => {
                     name: s.name
                 }))
             );
+        }
+    } else if (data.type === 'asset_added') {
+        // New asset uploaded (by any editor or mobile) — invalidate React Query cache
+        console.log(
+            `[EditorStore] asset_added received: projectId=${data.projectId}, store.projectId=${store.projectId}`
+        );
+        if (data.projectId === store.projectId) {
+            import('~/router').then(({ queryClient }) => {
+                console.log(`[EditorStore] Invalidating asset query for project ${data.projectId}`);
+                queryClient.invalidateQueries({
+                    queryKey: projectAssetsQueryOptions(data.projectId).queryKey
+                });
+            });
         }
     }
 });

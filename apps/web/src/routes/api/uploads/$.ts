@@ -11,6 +11,7 @@ import { ObjectId } from 'mongodb';
 import sharp from 'sharp';
 
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
+import { validateUploadToken } from '~/lib/uploadTokens';
 
 const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff']);
 const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv']);
@@ -133,7 +134,24 @@ const tusServer = new Server({
             const ext = extname(originalName).toLowerCase();
             const numericId = parseInt(upload.metadata?.numericId ?? '0') || 0;
             const duration = parseFloat(upload.metadata?.duration ?? '0') || 0;
-            const projectId = upload.metadata?.projectId ?? null;
+
+            // Resolve projectId and userEmail from either upload token or session metadata
+            let projectId: string | null = null;
+            let userEmail = 'system';
+            const uploadToken = upload.metadata?.uploadToken;
+            if (uploadToken) {
+                const tokenData = validateUploadToken(uploadToken);
+                if (!tokenData) {
+                    console.warn('[Tus] Upload rejected: invalid or expired token');
+                    await unlink(tusFilePath).catch(() => {});
+                    return {};
+                }
+                projectId = tokenData.projectId;
+                userEmail = tokenData.userEmail;
+            } else {
+                projectId = upload.metadata?.projectId ?? null;
+                userEmail = upload.metadata?.userEmail ?? 'system';
+            }
 
             // Detect type via magic bytes
             const headerBytes = new Uint8Array(
@@ -227,7 +245,7 @@ const tusServer = new Server({
                     (await stat(join(ASSET_DIR, assetFilename)).catch(() => null))?.size ??
                     upload.size;
 
-                await db.collection('assets').insertOne({
+                const insertResult = await db.collection('assets').insertOne({
                     projectId: new ObjectId(projectId),
                     name: originalName,
                     url: assetFilename,
@@ -235,9 +253,27 @@ const tusServer = new Server({
                     mimeType,
                     blurhash,
                     previewUrl: previewFilename ?? undefined,
-                    createdBy: upload.metadata?.userEmail ?? 'system',
+                    createdBy: userEmail,
                     createdAt: new Date().toISOString()
                 });
+
+                // Broadcast to all editors on this project via bus bridge
+                console.log(
+                    `[Tus] Broadcasting asset_added: bridge=${!!process.__BROADCAST_ASSET_ADDED__}, projectId=${projectId}`
+                );
+                if (process.__BROADCAST_ASSET_ADDED__) {
+                    process.__BROADCAST_ASSET_ADDED__(projectId, {
+                        _id: insertResult.insertedId.toString(),
+                        name: originalName,
+                        url: assetFilename,
+                        size: fileSize,
+                        mimeType: mimeType ?? undefined,
+                        blurhash: blurhash ?? undefined,
+                        previewUrl: previewFilename ?? undefined,
+                        createdAt: new Date().toISOString(),
+                        createdBy: userEmail
+                    });
+                }
 
                 console.log(
                     `[Tus] Asset created: ${assetFilename} (blurhash: ${blurhash ? 'yes' : 'no'})`

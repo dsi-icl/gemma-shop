@@ -12,7 +12,9 @@ export default defineConfig({
         tsconfigPaths: true
     },
     server: {
-        port: 3670
+        host: '0.0.0.0',
+        port: 3670,
+        allowedHosts: ['localhost', '127.0.0.1']
     },
     plugins: [
         ttfPlugin(),

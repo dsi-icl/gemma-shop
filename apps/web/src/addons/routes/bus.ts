@@ -42,6 +42,7 @@ import {
     persistSlideMetadata,
     broadcastToEditorsByCommit,
     notifyControllersByCommit,
+    broadcastAssetToEditorsByProject,
     // layerNodes,
     // canSendNonCritical,
     EMPTY_HYDRATE,
@@ -525,6 +526,17 @@ export default defineWebSocketHandler({
     for (const entry of allEditors) {
         entry.peer.send(payload);
     }
+};
+
+// Bridge for asset uploads — broadcast asset_added to editors on the same project
+(process as any).__BROADCAST_ASSET_ADDED__ = (
+    projectId: string,
+    asset: Record<string, unknown>
+) => {
+    console.log(
+        `[Bus] __BROADCAST_ASSET_ADDED__ called: projectId=${projectId}, asset=${asset._id}`
+    );
+    broadcastAssetToEditorsByProject(projectId, asset);
 };
 
 // ── VSYNC loop (iterates active videos only) ─────────────────────────────────

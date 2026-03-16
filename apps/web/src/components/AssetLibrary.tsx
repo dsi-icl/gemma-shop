@@ -1,15 +1,24 @@
-import { CaretDownIcon, ImageIcon, SpinnerGapIcon, UploadSimpleIcon } from '@phosphor-icons/react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import Uppy from '@uppy/core';
-import Tus from '@uppy/tus';
-import { useCallback, useRef, useState } from 'react';
+import { CaretDownIcon, ImageIcon, TrashIcon, UploadSimpleIcon } from '@phosphor-icons/react';
+import { Button } from '@repo/ui/components/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogTitle
+} from '@repo/ui/components/dialog';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
 import { Blurhash } from 'react-blurhash';
 import { toast } from 'sonner';
 
 import { EditorEngine } from '~/lib/editorEngine';
 import { useEditorStore } from '~/lib/editorStore';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
+import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
+
+import { UploadDialog } from './UploadDialog';
 
 interface AssetLibraryProps {
     projectId: string;
@@ -28,84 +37,57 @@ export function AssetLibrary({
 }: AssetLibraryProps) {
     const { data: assets = [] } = useQuery(projectAssetsQueryOptions(projectId));
     const queryClient = useQueryClient();
-    const [uploading, setUploading] = useState(false);
-    const [dragOver, setDragOver] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [deleteTarget, setDeleteTarget] = useState<{
+        id: string;
+        name: string;
+        inUse: boolean;
+    } | null>(null);
 
-    const uploadFiles = useCallback(
-        async (files: File[]) => {
-            if (files.length === 0) return;
-            setUploading(true);
-
-            const uppy = new Uppy({
-                restrictions: { allowedFileTypes: ['image/*', 'video/*'] }
-            }).use(Tus, {
-                endpoint: '/api/uploads/',
-                chunkSize: 5 * 1024 * 1024
-            });
-
-            uppy.on('error', (error) => {
-                toast.error(error.message);
-                setUploading(false);
-            });
-
-            try {
-                for (const file of files) {
-                    uppy.addFile({
-                        name: file.name,
-                        type: file.type,
-                        data: file,
-                        meta: { projectId }
-                    });
+    const deleteAssetMutation = useMutation({
+        mutationFn: $deleteAsset,
+        onSuccess: () => {
+            // Remove any layers using this asset's URL
+            if (deleteTarget) {
+                const store = useEditorStore.getState();
+                const matchingAsset = assets.find((a) => a._id === deleteTarget.id);
+                if (matchingAsset) {
+                    const assetUrl = matchingAsset.url;
+                    const prefixedUrl = `/api/assets/${assetUrl}`;
+                    for (const layer of [...store.layers]) {
+                        if (
+                            (layer.type === 'image' || layer.type === 'video') &&
+                            (layer.url === assetUrl || layer.url === prefixedUrl)
+                        ) {
+                            // removeLayer updates state + sends delete_layer to bus
+                            store.removeLayer(layer.numericId);
+                        }
+                    }
                 }
-            } catch (e: any) {
-                toast.error(e.message);
-                setUploading(false);
-                uppy.destroy();
-                return;
             }
-
-            uppy.on('complete', () => {
-                // Server creates asset records in onUploadFinish — refresh the list
-                queryClient.invalidateQueries({
-                    queryKey: projectAssetsQueryOptions(projectId).queryKey
-                });
+            queryClient.invalidateQueries({
+                queryKey: projectAssetsQueryOptions(projectId).queryKey
             });
-
-            try {
-                await uppy.upload();
-                toast.success(`Uploaded ${files.length} file(s)`);
-            } catch {
-                // errors handled by uppy events
-            } finally {
-                setUploading(false);
-                uppy.destroy();
-            }
+            toast.success('Asset deleted');
+            setDeleteTarget(null);
         },
-        [projectId, queryClient]
-    );
+        onError: (e) => toast.error(e.message)
+    });
 
-    const handleDrop = useCallback(
-        (e: React.DragEvent) => {
-            e.preventDefault();
-            setDragOver(false);
-            const files = Array.from(e.dataTransfer.files).filter(
-                (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
-            );
-            uploadFiles(files);
-        },
-        [uploadFiles]
-    );
+    const handleDeleteClick = useCallback((asset: { _id: string; name: string; url: string }) => {
+        const { layers } = useEditorStore.getState();
+        const inUse = layers.some(
+            (l) =>
+                (l.type === 'image' || l.type === 'video') &&
+                (l.url === asset.url || l.url === `/api/assets/${asset.url}`)
+        );
+        setDeleteTarget({ id: asset._id, name: asset.name, inUse });
+    }, []);
 
-    const handleFileInput = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) => {
-            if (e.target.files?.length) {
-                uploadFiles(Array.from(e.target.files));
-                e.target.value = '';
-            }
-        },
-        [uploadFiles]
-    );
+    const handleUploadComplete = useCallback(() => {
+        queryClient.invalidateQueries({
+            queryKey: projectAssetsQueryOptions(projectId).queryKey
+        });
+    }, [projectId, queryClient]);
 
     const addAssetAsLayer = useCallback(
         async (asset: { name: string; url: string; mimeType?: string; blurhash?: string }) => {
@@ -122,19 +104,15 @@ export function AssetLibrary({
             let mediaWidth = 800;
             let mediaHeight = 600;
             let duration = 0;
-            let vid: HTMLVideoElement | undefined;
-            let img: HTMLImageElement | undefined;
-            // let blurhash = '';
 
             if (isVideo) {
                 try {
-                    vid = document.createElement('video');
+                    const vid = document.createElement('video');
                     vid.muted = true;
                     vid.playsInline = true;
                     vid.crossOrigin = 'anonymous';
                     vid.src = asset.url;
                     await new Promise<void>((resolve, reject) => {
-                        if (!vid) return;
                         vid.onloadeddata = () => resolve();
                         vid.onerror = () => reject(new Error('Failed to load video'));
                     });
@@ -148,11 +126,10 @@ export function AssetLibrary({
                 }
             } else {
                 try {
-                    img = new window.Image();
+                    const img = new window.Image();
                     img.crossOrigin = 'anonymous';
                     img.src = asset.url;
                     await new Promise<void>((resolve) => {
-                        if (!img) return;
                         img.onload = () => resolve();
                         img.onerror = () => resolve();
                     });
@@ -162,15 +139,6 @@ export function AssetLibrary({
                     // use defaults
                 }
             }
-
-            // const canvas = document.createElement('canvas');
-            // const maxWidth = 100;
-            // const scale = maxWidth / mediaWidth;
-            // const width = maxWidth;
-            // const height = Math.floor(mediaHeight * scale);
-            // canvas.width = width;
-            // canvas.height = height;
-            // const ctx = canvas.getContext('2d');
 
             const config: Layer['config'] = {
                 cx: mediaWidth / 2,
@@ -194,19 +162,13 @@ export function AssetLibrary({
                 url: asset.url,
                 config,
                 isUploading: false,
-                progress: 100,
-                ...(isVideo ? {} : {})
+                progress: 100
             };
 
             let layer:
                 | Extract<LayerWithEditorState, { type: 'image' }>
                 | Extract<LayerWithEditorState, { type: 'video' }>;
             if (isVideo) {
-                // if (ctx && vid) {
-                //     ctx?.drawImage(vid, 0, 0, width, height);
-                //     const imageData = ctx.getImageData(0, 0, width, height);
-                //     blurhash = encode(imageData.data, imageData.width, imageData.height, 4, 4);
-                // }
                 layer = {
                     type: 'video',
                     playback: defaultPlayback,
@@ -217,11 +179,6 @@ export function AssetLibrary({
                     ...layerBase
                 };
             } else {
-                // if (ctx && img) {
-                //     ctx?.drawImage(img, 0, 0, width, height);
-                //     const imageData = ctx.getImageData(0, 0, width, height);
-                //     blurhash = encode(imageData.data, imageData.width, imageData.height, 4, 4);
-                // }
                 layer = {
                     type: 'image',
                     blurhash: asset.blurhash ?? '',
@@ -247,6 +204,20 @@ export function AssetLibrary({
         else onCollapse?.();
     };
 
+    const uploadTrigger = (
+        <button className="flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+            <UploadSimpleIcon size={14} />
+            Upload
+        </button>
+    );
+
+    const emptyTrigger = (
+        <button className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-4 text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+            <UploadSimpleIcon size={24} />
+            <span className="text-xs">Drop files or click to upload</span>
+        </button>
+    );
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-muted/30">
             <button
@@ -257,54 +228,31 @@ export function AssetLibrary({
                 <h2 className="flex items-center gap-2 text-sm font-semibold">
                     <ImageIcon size={18} weight="bold" /> Media
                 </h2>
-                <div className="flex items-center gap-2">
-                    {uploading && (
-                        <SpinnerGapIcon
-                            size={14}
-                            weight="bold"
-                            className="animate-spin text-muted-foreground"
-                        />
-                    )}
-                    <CaretDownIcon
-                        size={14}
-                        weight="bold"
-                        className={`text-muted-foreground transition-transform ${collapsed ? '' : 'rotate-180'}`}
-                    />
-                </div>
+                <CaretDownIcon
+                    size={14}
+                    weight="bold"
+                    className={`text-muted-foreground transition-transform ${collapsed ? '' : 'rotate-180'}`}
+                />
             </button>
 
             {!collapsed && (
-                <div
-                    className={`flex flex-1 flex-col overflow-y-auto p-2 transition-colors ${dragOver ? 'bg-primary/10' : ''}`}
-                    onDragOver={(e) => {
-                        e.preventDefault();
-                        setDragOver(true);
-                    }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={handleDrop}
-                >
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*,video/*"
-                        className="hidden"
-                        onChange={handleFileInput}
-                    />
-
-                    {assets.length === 0 && !uploading && (
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-4 text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                        >
-                            <UploadSimpleIcon size={24} />
-                            <span className="text-xs">Drop files or click to upload</span>
-                        </button>
+                <div className="flex flex-1 flex-col overflow-y-auto p-2">
+                    {assets.length === 0 && (
+                        <UploadDialog
+                            projectId={projectId}
+                            trigger={emptyTrigger}
+                            onUploadComplete={handleUploadComplete}
+                        />
                     )}
 
                     {assets.length > 0 && (
                         <>
-                            <div className="grid grid-cols-3 gap-1.5">
+                            <div
+                                className="grid gap-1.5"
+                                style={{
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))'
+                                }}
+                            >
                                 {assets.map((asset) => {
                                     const isVideo =
                                         asset.mimeType?.startsWith('video/') ||
@@ -323,7 +271,7 @@ export function AssetLibrary({
                                                     url: asset.url ? `/api/assets/${asset.url}` : ''
                                                 })
                                             }
-                                            className="group relative cursor-pointer overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-primary"
+                                            className="group relative max-w-25 cursor-pointer overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-primary"
                                             title={asset.name}
                                         >
                                             {asset.blurhash && !thumbSrc && (
@@ -340,13 +288,6 @@ export function AssetLibrary({
                                                     alt={asset.name}
                                                     className="aspect-square w-full object-cover"
                                                     loading="lazy"
-                                                    style={
-                                                        asset.blurhash
-                                                            ? {
-                                                                  backgroundImage: 'none'
-                                                              }
-                                                            : undefined
-                                                    }
                                                 />
                                             ) : !asset.blurhash ? (
                                                 <div className="flex aspect-square items-center justify-center bg-muted">
@@ -356,27 +297,82 @@ export function AssetLibrary({
                                                     />
                                                 </div>
                                             ) : null}
-                                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                            <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                                                 <span className="block truncate text-[10px] text-white">
                                                     {asset.name}
                                                 </span>
                                             </div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteClick(asset);
+                                                }}
+                                                className="absolute top-0.5 right-0.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive"
+                                                title="Delete asset"
+                                            >
+                                                <TrashIcon size={12} />
+                                            </button>
                                         </button>
                                     );
                                 })}
                             </div>
 
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="mt-2 flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                            >
-                                <UploadSimpleIcon size={14} />
-                                {uploading ? 'Uploading...' : 'Upload'}
-                            </button>
+                            <div className="mt-2">
+                                <UploadDialog
+                                    projectId={projectId}
+                                    trigger={uploadTrigger}
+                                    onUploadComplete={handleUploadComplete}
+                                />
+                            </div>
                         </>
                     )}
                 </div>
             )}
+
+            <Dialog
+                open={deleteTarget !== null}
+                onOpenChange={(open) => {
+                    if (!open) setDeleteTarget(null);
+                }}
+            >
+                <DialogContent className="w-80 p-5">
+                    <DialogTitle>Delete asset</DialogTitle>
+                    <DialogDescription className="mt-1">
+                        {deleteTarget?.inUse ? (
+                            <>
+                                <strong>{deleteTarget.name}</strong> is currently used in a layer on
+                                this slide. The layer will be removed. Are you sure?
+                            </>
+                        ) : (
+                            <>
+                                Are you sure you want to delete{' '}
+                                <strong>{deleteTarget?.name}</strong>?
+                            </>
+                        )}
+                    </DialogDescription>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <DialogClose>
+                            <Button variant="outline" size="sm">
+                                Cancel
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={deleteAssetMutation.isPending}
+                            onClick={() => {
+                                if (deleteTarget) {
+                                    deleteAssetMutation.mutate({
+                                        data: { id: deleteTarget.id }
+                                    });
+                                }
+                            }}
+                        >
+                            {deleteAssetMutation.isPending ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

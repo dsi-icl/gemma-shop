@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as WallIndexRouteImport } from './routes/wall/index'
 import { Route as GalleryIndexRouteImport } from './routes/gallery/index'
 import { Route as ControllerIndexRouteImport } from './routes/controller/index'
+import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as AuthQuarryIndexRouteImport } from './routes/_auth/quarry/index'
 import { Route as ApiUploadsSplatRouteImport } from './routes/api/uploads/$'
@@ -72,6 +73,11 @@ const GalleryIndexRoute = GalleryIndexRouteImport.update({
 const ControllerIndexRoute = ControllerIndexRouteImport.update({
   id: '/controller/',
   path: '/controller/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UploadProjectIdRoute = UploadProjectIdRouteImport.update({
+  id: '/upload/$projectId',
+  path: '/upload/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuestLoginRoute = GuestLoginRouteImport.update({
@@ -180,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/og': typeof OgRoute
   '/test': typeof TestRoute
   '/login': typeof GuestLoginRoute
+  '/upload/$projectId': typeof UploadProjectIdRoute
   '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
   '/wall/': typeof WallIndexRoute
@@ -206,6 +213,7 @@ export interface FileRoutesByTo {
   '/og': typeof OgRoute
   '/test': typeof TestRoute
   '/login': typeof GuestLoginRoute
+  '/upload/$projectId': typeof UploadProjectIdRoute
   '/controller': typeof ControllerIndexRoute
   '/gallery': typeof GalleryIndexRoute
   '/wall': typeof WallIndexRoute
@@ -234,6 +242,7 @@ export interface FileRoutesById {
   '/og': typeof OgRoute
   '/test': typeof TestRoute
   '/_guest/login': typeof GuestLoginRoute
+  '/upload/$projectId': typeof UploadProjectIdRoute
   '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
   '/wall/': typeof WallIndexRoute
@@ -262,6 +271,7 @@ export interface FileRouteTypes {
     | '/og'
     | '/test'
     | '/login'
+    | '/upload/$projectId'
     | '/controller/'
     | '/gallery/'
     | '/wall/'
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/og'
     | '/test'
     | '/login'
+    | '/upload/$projectId'
     | '/controller'
     | '/gallery'
     | '/wall'
@@ -315,6 +326,7 @@ export interface FileRouteTypes {
     | '/og'
     | '/test'
     | '/_guest/login'
+    | '/upload/$projectId'
     | '/controller/'
     | '/gallery/'
     | '/wall/'
@@ -343,6 +355,7 @@ export interface RootRouteChildren {
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
   OgRoute: typeof OgRoute
   TestRoute: typeof TestRoute
+  UploadProjectIdRoute: typeof UploadProjectIdRoute
   ControllerIndexRoute: typeof ControllerIndexRoute
   GalleryIndexRoute: typeof GalleryIndexRoute
   WallIndexRoute: typeof WallIndexRoute
@@ -407,6 +420,13 @@ declare module '@tanstack/react-router' {
       path: '/controller'
       fullPath: '/controller/'
       preLoaderRoute: typeof ControllerIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/upload/$projectId': {
+      id: '/upload/$projectId'
+      path: '/upload/$projectId'
+      fullPath: '/upload/$projectId'
+      preLoaderRoute: typeof UploadProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_guest/login': {
@@ -636,6 +656,7 @@ const rootRouteChildren: RootRouteChildren = {
   GuestRouteRoute: GuestRouteRouteWithChildren,
   OgRoute: OgRoute,
   TestRoute: TestRoute,
+  UploadProjectIdRoute: UploadProjectIdRoute,
   ControllerIndexRoute: ControllerIndexRoute,
   GalleryIndexRoute: GalleryIndexRoute,
   WallIndexRoute: WallIndexRoute,

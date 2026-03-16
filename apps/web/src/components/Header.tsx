@@ -19,14 +19,17 @@ export function Header() {
             <KeyboardToggle />
             <ThemeToggle />
             <Link to="/login">
-                <Button variant="outline" size="icon">
+                <Button variant="outline">
                     <Suspense
                         fallback={
                             <CircleNotchIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 animate-spin transition-all" />
                         }
                     >
                         {user ? (
-                            <SignOutIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all" />
+                            <>
+                                <SignOutIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all" />
+                                {user.email}
+                            </>
                         ) : (
                             <UserIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all" />
                         )}

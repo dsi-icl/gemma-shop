@@ -9,7 +9,7 @@ import { routeTree } from './routeTree.gen';
 import { RootRouteContext } from './types';
 import { getRequest } from './utils/request-tools';
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
             refetchOnWindowFocus: false,

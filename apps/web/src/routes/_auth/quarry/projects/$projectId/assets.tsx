@@ -1,4 +1,4 @@
-import { ListIcon, RowsIcon, SquaresFourIcon, TrashIcon, UploadIcon } from '@phosphor-icons/react';
+import { ListIcon, RowsIcon, SquaresFourIcon, TrashIcon } from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
 import {
     Table,
@@ -11,11 +11,10 @@ import {
 import { useLocalStorageValue } from '@repo/ui/hooks/use-localstorage-value';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import Uppy from '@uppy/core';
-import Tus from '@uppy/tus';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import { toast } from 'sonner';
 
+import { UploadDialog } from '~/components/UploadDialog';
 import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
 
@@ -30,10 +29,11 @@ type View = 'list' | 'list-preview' | 'grid';
 
 function AssetsTab() {
     const { projectId } = Route.useParams();
-    const { data: assets } = useSuspenseQuery(projectAssetsQueryOptions(projectId));
+    const { data: assets } = useSuspenseQuery({
+        ...projectAssetsQueryOptions(projectId),
+        refetchInterval: 5000
+    });
     const queryClient = useQueryClient();
-    const [uploading, setUploading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [view, setView] = useLocalStorageValue<View>('assets-view', 'list');
 
@@ -48,63 +48,21 @@ function AssetsTab() {
         onError: (e) => toast.error(e.message)
     });
 
-    const handleUpload = useCallback(
-        async (files: FileList) => {
-            setUploading(true);
-            const uppy = new Uppy({
-                restrictions: { allowedFileTypes: ['image/*', 'video/*'] }
-            }).use(Tus, {
-                endpoint: '/api/uploads/',
-                chunkSize: 5 * 1024 * 1024
-            });
+    const handleUploadComplete = useCallback(() => {
+        queryClient.invalidateQueries({
+            queryKey: projectAssetsQueryOptions(projectId).queryKey
+        });
+    }, [projectId, queryClient]);
 
-            uppy.on('error', (error) => {
-                toast.error(error.message);
-                setUploading(false);
-            });
-
-            try {
-                for (const file of Array.from(files)) {
-                    uppy.addFile({
-                        name: file.name,
-                        type: file.type,
-                        data: file,
-                        meta: { projectId }
-                    });
-                }
-            } catch (e: any) {
-                toast.error(e.message);
-                setUploading(false);
-                uppy.destroy();
-                return;
-            }
-
-            uppy.on('complete', () => {
-                queryClient.invalidateQueries({
-                    queryKey: projectAssetsQueryOptions(projectId).queryKey
-                });
-            });
-
-            try {
-                await uppy.upload();
-                toast.success(`Uploaded ${files.length} file(s)`);
-            } catch {
-                // errors handled by uppy events
-            } finally {
-                setUploading(false);
-                uppy.destroy();
-            }
-        },
-        [projectId, queryClient]
-    );
+    const uploadTrigger = <Button variant="outline">Upload media</Button>;
 
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-start justify-between">
                 <div>
-                    <h3 className="mb-1 text-base font-medium">Project Assets</h3>
+                    <h3 className="mb-1 text-base font-medium">Project Media</h3>
                     <p className="text-sm text-muted-foreground">
-                        Manage the assets associated with this project.
+                        Manage the media assets associated with this project.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -131,32 +89,26 @@ function AssetsTab() {
                             <SquaresFourIcon />
                         </Button>
                     </div>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                            if (e.target.files?.length) {
-                                handleUpload(e.target.files);
-                            }
-                        }}
+                    <UploadDialog
+                        projectId={projectId}
+                        trigger={uploadTrigger}
+                        onUploadComplete={handleUploadComplete}
                     />
-                    <Button
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                    >
-                        <UploadIcon />
-                        {uploading ? 'Uploading...' : 'Upload assets'}
-                    </Button>
                 </div>
             </div>
 
             {assets.length === 0 && (
                 <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed text-muted-foreground">
                     <p>No assets yet</p>
-                    <p className="text-xs">Upload some assets to get started.</p>
+                    <UploadDialog
+                        projectId={projectId}
+                        trigger={
+                            <button className="cursor-pointer text-xs text-primary hover:underline">
+                                Upload some assets to get started
+                            </button>
+                        }
+                        onUploadComplete={handleUploadComplete}
+                    />
                 </div>
             )}
 
@@ -208,7 +160,7 @@ function AssetsTab() {
                             className="flex items-center gap-3 rounded-lg border p-2"
                         >
                             <img
-                                src={asset.previewUrl ?? asset.url}
+                                src={`/api/assets/${asset.previewUrl ?? asset.url}`}
                                 alt={asset.name}
                                 className="h-16 w-16 rounded-md object-cover"
                             />
@@ -238,7 +190,7 @@ function AssetsTab() {
                     {assets.map((asset) => (
                         <div key={asset._id} className="group relative">
                             <img
-                                src={asset.previewUrl ?? asset.url}
+                                src={`/api/assets/${asset.previewUrl ?? asset.url}`}
                                 alt={asset.name}
                                 className="aspect-square w-full rounded-lg object-cover"
                             />
