@@ -14,7 +14,7 @@ hydrateRoot(
     </StrictMode>,
     {
         onCaughtError: (err) => {
-            console.error(err);
+            console.error('onCaughtError', err);
         },
         onRecoverableError: (err) => {
             if (
@@ -25,7 +25,7 @@ hydrateRoot(
             else console.error(err);
         },
         onUncaughtError: (err) => {
-            console.error(err);
+            console.error(' onCaughtError', err);
         }
     }
 );

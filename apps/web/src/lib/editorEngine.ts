@@ -114,7 +114,13 @@ export class EditorEngine {
 
         // --- JSON SLOW-PATH ---
         if (typeof event.data === 'string') {
-            const data = GSMessageSchema.parse(JSON.parse(event.data));
+            let data: GSMessage;
+            try {
+                data = GSMessageSchema.parse(JSON.parse(event.data));
+            } catch (err) {
+                console.warn('[EditorEngine] Failed to parse message:', err, event.data);
+                return;
+            }
 
             if (data.type === 'video_sync' || data.type === 'video_seek') {
                 this.playbackStates.set(data.numericId, data.playback);

@@ -9,7 +9,9 @@ import { emailOTP, magicLink } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 
 export const auth = betterAuth({
-    baseURL: process.env.VITE_BASE_URL,
+    baseURL: {
+        allowedHosts: [process.env.VITE_BASE_URL]
+    },
     secret: process.env.SERVER_AUTH_SECRET,
     telemetry: {
         enabled: false
