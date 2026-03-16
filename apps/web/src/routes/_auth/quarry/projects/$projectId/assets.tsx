@@ -1,4 +1,11 @@
-import { ListIcon, RowsIcon, SquaresFourIcon, TrashIcon } from '@phosphor-icons/react';
+import {
+    DownloadIcon,
+    EyeIcon,
+    ListIcon,
+    RowsIcon,
+    SquaresFourIcon,
+    TrashIcon
+} from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
 import {
     Table,
@@ -11,9 +18,10 @@ import {
 import { useLocalStorageValue } from '@repo/ui/hooks/use-localstorage-value';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
+import { AssetPreviewPortal, downloadAsset, isVideoAsset } from '~/components/AssetPreviewOverlay';
 import { UploadDialog } from '~/components/UploadDialog';
 import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
@@ -36,6 +44,11 @@ function AssetsTab() {
     const queryClient = useQueryClient();
 
     const [view, setView] = useLocalStorageValue<View>('assets-view', 'list');
+    const [preview, setPreview] = useState<{
+        src: string;
+        name: string;
+        isVideo: boolean;
+    } | null>(null);
 
     const deleteAssetMutation = useMutation({
         mutationFn: $deleteAsset,
@@ -53,6 +66,24 @@ function AssetsTab() {
             queryKey: projectAssetsQueryOptions(projectId).queryKey
         });
     }, [projectId, queryClient]);
+
+    const openPreview = (asset: {
+        url: string;
+        previewUrl?: string;
+        name: string;
+        mimeType?: string;
+    }) => {
+        const isVideo = isVideoAsset(asset);
+        setPreview({
+            src: `/api/assets/${asset.url}`,
+            name: asset.name,
+            isVideo
+        });
+    };
+
+    const handleDownload = (asset: { url: string; name: string }) => {
+        downloadAsset(`/api/assets/${asset.url}`, asset.name);
+    };
 
     const uploadTrigger = <Button variant="outline">Upload media</Button>;
 
@@ -120,7 +151,7 @@ function AssetsTab() {
                                 <TableHead>Name</TableHead>
                                 <TableHead>Size</TableHead>
                                 <TableHead>Created At</TableHead>
-                                <TableHead className="w-12" />
+                                <TableHead className="w-28" />
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -132,18 +163,37 @@ function AssetsTab() {
                                         {new Date(asset.createdAt).toLocaleString()}
                                     </TableCell>
                                     <TableCell>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            onClick={() =>
-                                                deleteAssetMutation.mutate({
-                                                    data: { id: asset._id }
-                                                })
-                                            }
-                                            disabled={deleteAssetMutation.isPending}
-                                        >
-                                            <TrashIcon />
-                                        </Button>
+                                        <div className="flex items-center gap-0.5">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => openPreview(asset)}
+                                                title="Preview"
+                                            >
+                                                <EyeIcon />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => handleDownload(asset)}
+                                                title="Download"
+                                            >
+                                                <DownloadIcon />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() =>
+                                                    deleteAssetMutation.mutate({
+                                                        data: { id: asset._id }
+                                                    })
+                                                }
+                                                disabled={deleteAssetMutation.isPending}
+                                                title="Delete"
+                                            >
+                                                <TrashIcon />
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -162,7 +212,8 @@ function AssetsTab() {
                             <img
                                 src={`/api/assets/${asset.previewUrl ?? asset.url}`}
                                 alt={asset.name}
-                                className="h-16 w-16 rounded-md object-cover"
+                                className="h-16 w-16 cursor-pointer rounded-md object-cover"
+                                onClick={() => openPreview(asset)}
                             />
                             <div className="flex-1">
                                 <div className="font-medium">{asset.name}</div>
@@ -170,16 +221,35 @@ function AssetsTab() {
                                     {(asset.size / 1024).toFixed(2)} KB
                                 </div>
                             </div>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() =>
-                                    deleteAssetMutation.mutate({ data: { id: asset._id } })
-                                }
-                                disabled={deleteAssetMutation.isPending}
-                            >
-                                <TrashIcon />
-                            </Button>
+                            <div className="flex items-center gap-0.5">
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => openPreview(asset)}
+                                    title="Preview"
+                                >
+                                    <EyeIcon />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => handleDownload(asset)}
+                                    title="Download"
+                                >
+                                    <DownloadIcon />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() =>
+                                        deleteAssetMutation.mutate({ data: { id: asset._id } })
+                                    }
+                                    disabled={deleteAssetMutation.isPending}
+                                    title="Delete"
+                                >
+                                    <TrashIcon />
+                                </Button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -192,9 +262,26 @@ function AssetsTab() {
                             <img
                                 src={`/api/assets/${asset.previewUrl ?? asset.url}`}
                                 alt={asset.name}
-                                className="aspect-square w-full rounded-lg object-cover"
+                                className="aspect-square w-full cursor-pointer rounded-lg object-cover"
+                                onClick={() => openPreview(asset)}
                             />
-                            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                            <div className="absolute inset-0 flex items-center justify-center gap-1 rounded-lg bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                                <Button
+                                    variant="secondary"
+                                    size="icon-sm"
+                                    onClick={() => openPreview(asset)}
+                                    title="Preview"
+                                >
+                                    <EyeIcon />
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    size="icon-sm"
+                                    onClick={() => handleDownload(asset)}
+                                    title="Download"
+                                >
+                                    <DownloadIcon />
+                                </Button>
                                 <Button
                                     variant="destructive"
                                     size="icon-sm"
@@ -202,6 +289,7 @@ function AssetsTab() {
                                         deleteAssetMutation.mutate({ data: { id: asset._id } })
                                     }
                                     disabled={deleteAssetMutation.isPending}
+                                    title="Delete"
                                 >
                                     <TrashIcon />
                                 </Button>
@@ -210,6 +298,8 @@ function AssetsTab() {
                     ))}
                 </div>
             )}
+
+            <AssetPreviewPortal preview={preview} onClose={() => setPreview(null)} />
         </div>
     );
 }

@@ -1,4 +1,11 @@
-import { CaretDownIcon, ImageIcon, TrashIcon, UploadSimpleIcon } from '@phosphor-icons/react';
+import {
+    CaretDownIcon,
+    DownloadIcon,
+    EyeIcon,
+    ImageIcon,
+    TrashIcon,
+    UploadSimpleIcon
+} from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
 import {
     Dialog,
@@ -18,6 +25,7 @@ import type { Layer, LayerWithEditorState } from '~/lib/types';
 import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
 
+import { AssetPreviewPortal, downloadAsset, isVideoAsset } from './AssetPreviewOverlay';
 import { UploadDialog } from './UploadDialog';
 
 interface AssetLibraryProps {
@@ -41,6 +49,11 @@ export function AssetLibrary({
         id: string;
         name: string;
         inUse: boolean;
+    } | null>(null);
+    const [preview, setPreview] = useState<{
+        src: string;
+        name: string;
+        isVideo: boolean;
     } | null>(null);
 
     const deleteAssetMutation = useMutation({
@@ -205,9 +218,9 @@ export function AssetLibrary({
     };
 
     const uploadTrigger = (
-        <button className="flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary">
-            <UploadSimpleIcon size={14} />
-            Upload
+        <button className="group relative flex aspect-square w-full max-w-25 cursor-pointer flex-col justify-center overflow-hidden rounded-md border border-border bg-background text-center align-middle transition-colors hover:border-primary">
+            <UploadSimpleIcon size={16} className="w-full" />
+            <span className="text-xs">Upload</span>
         </button>
     );
 
@@ -253,6 +266,12 @@ export function AssetLibrary({
                                     gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))'
                                 }}
                             >
+                                <UploadDialog
+                                    key={'upload-dialog'}
+                                    projectId={projectId}
+                                    trigger={uploadTrigger}
+                                    onUploadComplete={handleUploadComplete}
+                                />
                                 {assets.map((asset) => {
                                     const isVideo =
                                         asset.mimeType?.startsWith('video/') ||
@@ -271,7 +290,7 @@ export function AssetLibrary({
                                                     url: asset.url ? `/api/assets/${asset.url}` : ''
                                                 })
                                             }
-                                            className="group relative max-w-25 cursor-pointer overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-primary"
+                                            className="bg-checkerboard group relative max-w-25 cursor-pointer overflow-hidden rounded-md border border-border bg-background transition-colors [--checker-size:5px] hover:border-primary"
                                             title={asset.name}
                                         >
                                             {asset.blurhash && !thumbSrc && (
@@ -302,32 +321,55 @@ export function AssetLibrary({
                                                     {asset.name}
                                                 </span>
                                             </div>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteClick(asset);
-                                                }}
-                                                className="absolute top-0.5 right-0.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive"
-                                                title="Delete asset"
-                                            >
-                                                <TrashIcon size={12} />
-                                            </button>
+                                            <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setPreview({
+                                                            src: `/api/assets/${asset.url}`,
+                                                            name: asset.name,
+                                                            isVideo: isVideoAsset(asset)
+                                                        });
+                                                    }}
+                                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
+                                                    title="Preview"
+                                                >
+                                                    <EyeIcon size={12} />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        downloadAsset(
+                                                            `/api/assets/${asset.url}`,
+                                                            asset.name
+                                                        );
+                                                    }}
+                                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
+                                                    title="Download"
+                                                >
+                                                    <DownloadIcon size={12} />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteClick(asset);
+                                                    }}
+                                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
+                                                    title="Delete asset"
+                                                >
+                                                    <TrashIcon size={12} />
+                                                </button>
+                                            </div>
                                         </button>
                                     );
                                 })}
-                            </div>
-
-                            <div className="mt-2">
-                                <UploadDialog
-                                    projectId={projectId}
-                                    trigger={uploadTrigger}
-                                    onUploadComplete={handleUploadComplete}
-                                />
                             </div>
                         </>
                     )}
                 </div>
             )}
+
+            <AssetPreviewPortal preview={preview} onClose={() => setPreview(null)} />
 
             <Dialog
                 open={deleteTarget !== null}
