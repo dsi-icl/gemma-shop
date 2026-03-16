@@ -5,3 +5,50 @@
 @theme inline {
     --font-sans: 'Inter Variable', sans-serif;
 }
+
+@property --wave-pos {
+    syntax: '<percentage>';
+    inherits: false;
+    initial-value: -20%;
+}
+
+.placeholder-grid {
+    --grid-size: 30px;
+    --grid-color: #ffffff;
+    --bg-mute: #e2e8f0;
+    --bg-lit: #60a5fa;
+
+    min-width: 100px;
+    min-height: 100px;
+
+    background-image:
+        linear-gradient(var(--grid-color) 2px, transparent 2px),
+        linear-gradient(90deg, var(--grid-color) 2px, transparent 2px),
+        radial-gradient(
+            circle at center,
+            var(--bg-mute) calc(var(--wave-pos) - 20%),
+            var(--bg-lit) var(--wave-pos),
+            var(--bg-mute) calc(var(--wave-pos) + 20%)
+        );
+
+    background-size:
+        var(--grid-size) var(--grid-size),
+        var(--grid-size) var(--grid-size),
+        100% 100%;
+
+    background-position:
+        0 0,
+        0 0,
+        center;
+
+    animation: radial-pulse 1.5s ease-in-out 1 forwards;
+}
+
+@keyframes radial-pulse {
+    0% {
+        --wave-pos: -20%;
+    }
+    100% {
+        --wave-pos: 130%;
+    }
+}

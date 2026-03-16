@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TestRouteImport } from './routes/test'
 import { Route as OgRouteImport } from './routes/og'
 import { Route as GuestRouteRouteImport } from './routes/_guest/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
@@ -37,11 +36,6 @@ import { Route as AuthQuarryProjectsProjectIdAssetsRouteImport } from './routes/
 import { Route as AuthQuarryEditorProjectIdSlideIdRouteImport } from './routes/_auth/quarry/editor/$projectId/$slideId'
 import { Route as AuthQuarryEditorProjectIdCommitIdSlideIdRouteImport } from './routes/_auth/quarry/editor/$projectId/$commitId/$slideId'
 
-const TestRoute = TestRouteImport.update({
-  id: '/test',
-  path: '/test',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const OgRoute = OgRouteImport.update({
   id: '/og',
   path: '/og',
@@ -184,7 +178,6 @@ const AuthQuarryEditorProjectIdCommitIdSlideIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/og': typeof OgRoute
-  '/test': typeof TestRoute
   '/login': typeof GuestLoginRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/controller/': typeof ControllerIndexRoute
@@ -211,7 +204,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/og': typeof OgRoute
-  '/test': typeof TestRoute
   '/login': typeof GuestLoginRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/controller': typeof ControllerIndexRoute
@@ -240,7 +232,6 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_guest': typeof GuestRouteRouteWithChildren
   '/og': typeof OgRoute
-  '/test': typeof TestRoute
   '/_guest/login': typeof GuestLoginRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/controller/': typeof ControllerIndexRoute
@@ -269,7 +260,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/og'
-    | '/test'
     | '/login'
     | '/upload/$projectId'
     | '/controller/'
@@ -296,7 +286,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/og'
-    | '/test'
     | '/login'
     | '/upload/$projectId'
     | '/controller'
@@ -324,7 +313,6 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/_guest'
     | '/og'
-    | '/test'
     | '/_guest/login'
     | '/upload/$projectId'
     | '/controller/'
@@ -354,7 +342,6 @@ export interface RootRouteChildren {
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
   OgRoute: typeof OgRoute
-  TestRoute: typeof TestRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
   ControllerIndexRoute: typeof ControllerIndexRoute
   GalleryIndexRoute: typeof GalleryIndexRoute
@@ -366,13 +353,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/test': {
-      id: '/test'
-      path: '/test'
-      fullPath: '/test'
-      preLoaderRoute: typeof TestRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/og': {
       id: '/og'
       path: '/og'
@@ -655,7 +635,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
   GuestRouteRoute: GuestRouteRouteWithChildren,
   OgRoute: OgRoute,
-  TestRoute: TestRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,
   ControllerIndexRoute: ControllerIndexRoute,
   GalleryIndexRoute: GalleryIndexRoute,
