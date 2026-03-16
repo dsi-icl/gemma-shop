@@ -321,6 +321,7 @@ function CommitViewer() {
                             <ViewerSlatePreview
                                 stageSlot={stageSlot}
                                 stageInstance={stageInstance}
+                                stageScaleFactor={STAGE_SCALE_FACTOR}
                                 layers={sortedLayers}
                             />
                         </div>

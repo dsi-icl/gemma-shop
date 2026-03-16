@@ -20,7 +20,7 @@ import { SlatePreview } from './SlatePreview';
 
 const engine = EditorEngine.getInstance();
 
-const STAGE_SCALE_FACTOR = 0.1;
+const STAGE_SCALE_FACTOR = 0.15;
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 const BLOCKSNAP_X = SCREEN_W / 10;
@@ -53,18 +53,31 @@ export function EditorSlate() {
     const inkWidth = useEditorStore((s) => s.inkWidth);
 
     // ── Local-only state (Konva interaction, not shared) ──────────────────
+    const [stageScaleFactor, _setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
     const [isPinching, setIsPinching] = useState(false);
     const [currentInkLine, setCurrentInkLine] = useState<Array<number>>([]);
     const lastX = useRef(0);
     const stageLastX = useRef(0);
 
     const stageSlot = useRef<HTMLDivElement>(null);
+    const stageWrapper = useRef<HTMLDivElement>(null);
     const stageInstance = useRef<Konva.Stage>(null);
     const trRef = useRef<Konva.Transformer>(null);
     const lastCenter = useRef<{ x: number; y: number } | null>(null);
     const lastDist = useRef<number | null>(null);
     const lastAngle = useRef<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // useEffect(() => {
+    //     if (stageWrapper.current && stageInstance.current) {
+    //         const realHeight = SCREEN_H * ROWS;
+    //         const { clientHeight } = stageWrapper.current;
+    //         const scale = 1 / (realHeight / clientHeight);
+    //         setStageScaleFactor(scale);
+    //         stageInstance.current.scale({ x: scale, y: scale });
+    //         stageInstance.current.batchDraw();
+    //     }
+    // }, [stageWrapper, stageInstance]);
 
     // Shadow ref — keeps binary-updated positions for the fast-path.
     // Binary updates mutate this directly (no React re-render).
@@ -493,7 +506,7 @@ export function EditorSlate() {
             const point = stage?.getPointerPosition();
             if (!point) return;
             setCurrentInkLine((l) =>
-                l.concat([point.x / STAGE_SCALE_FACTOR, point.y / STAGE_SCALE_FACTOR])
+                l.concat([point.x / stageScaleFactor, point.y / stageScaleFactor])
             );
             return;
         }
@@ -608,24 +621,31 @@ export function EditorSlate() {
     // ── Render ────────────────────────────────────────────────────────────
     return (
         <>
-            <div
-                ref={stageSlot}
-                id="slate"
-                className="h-fit overflow-auto border-b border-border bg-black"
-            >
-                <Stage
-                    ref={stageInstance}
-                    width={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
-                    height={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
-                    onMouseDown={handleStageInteractionStart}
-                    onTouchStart={handleStageInteractionStart}
-                    onTouchMove={handleTouchMove}
-                    onTouchEnd={handleTouchEnd}
-                    scaleX={STAGE_SCALE_FACTOR}
-                    scaleY={STAGE_SCALE_FACTOR}
+            <Toolbar fileInputRef={fileInputRef} onUpload={handleUpload} />
+            <SlatePreview
+                stageSlot={stageSlot}
+                stageInstance={stageInstance}
+                stageScaleFactor={stageScaleFactor}
+            />
+            <div ref={stageWrapper} className="flex grow flex-col">
+                <div
+                    ref={stageSlot}
+                    id="slate"
+                    className="h-fit overflow-auto border-b border-border bg-black"
                 >
-                    <KonvaLayer>
-                        {/* {Array.from({ length: COLS * ROWS }).map((_, i) => {
+                    <Stage
+                        ref={stageInstance}
+                        width={COLS * SCREEN_W * stageScaleFactor}
+                        height={ROWS * SCREEN_H * stageScaleFactor}
+                        onMouseDown={handleStageInteractionStart}
+                        onTouchStart={handleStageInteractionStart}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                        scaleX={stageScaleFactor}
+                        scaleY={stageScaleFactor}
+                    >
+                        <KonvaLayer>
+                            {/* {Array.from({ length: COLS * ROWS }).map((_, i) => {
                             const col = i % COLS;
                             const row = Math.floor(i / COLS);
                             return (
@@ -651,203 +671,206 @@ export function EditorSlate() {
                             );
                         })} */}
 
-                        {[...layers]
-                            .sort((a, b) => a.config.zIndex - b.config.zIndex)
-                            .map((layer) => {
-                                const props = {
-                                    listening: !isDrawing,
-                                    isPinching,
-                                    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
-                                        toggleLayerSelection(
-                                            layer.numericId.toString(),
-                                            e.evt.shiftKey,
-                                            e.evt.ctrlKey || e.evt.metaKey
-                                        );
-                                    },
-                                    onTransform: (e: KonvaEventObject<Event>) =>
-                                        handleTransform(e, layer.numericId),
-                                    onTransformEnd: (e: KonvaEventObject<Event>) =>
-                                        handleTransformEnd(e, layer.numericId)
-                                };
-
-                                if (layer.type === 'image') {
-                                    return (
-                                        <KonvaStaticImage
-                                            key={`spi_${layer.numericId}`}
-                                            layer={layer}
-                                            {...props}
-                                        />
-                                    );
-                                }
-                                if (layer.type === 'video')
-                                    return (
-                                        <KonvaVideo
-                                            key={`vid_${layer.numericId}`}
-                                            layer={layer}
-                                            {...props}
-                                        />
-                                    );
-                                if (layer.type === 'text') {
-                                    return (
-                                        <Rect
-                                            key={`txt_${layer.numericId}`}
-                                            layer={layer}
-                                            fill={'#f00'}
-                                            id={layer.numericId.toString()}
-                                            x={layer.config.cx}
-                                            y={layer.config.cy}
-                                            width={layer.config.width}
-                                            height={layer.config.height}
-                                            scaleX={layer.config.scaleX}
-                                            scaleY={layer.config.scaleY}
-                                            offsetX={layer.config.width / 2}
-                                            offsetY={layer.config.height / 2}
-                                            rotation={layer.config.rotation}
-                                            draggable={!props.isPinching}
-                                            onClick={props.onSelect}
-                                            onTap={props.onSelect}
-                                            onDragMove={props.onTransform}
-                                            onTransform={props.onTransform}
-                                            onDragEnd={props.onTransformEnd}
-                                            onTransformEnd={props.onTransformEnd}
-                                        />
-                                    );
-                                }
-                                if (layer.type === 'graph') {
-                                    return (
-                                        <RoyStaticRenderer
-                                            key={`roy_${layer.numericId}`}
-                                            layer={layer}
-                                            {...props}
-                                        />
-                                    );
-                                }
-                                if (layer.type === 'map') {
-                                    return (
-                                        <Rect
-                                            key={`map_${layer.numericId}`}
-                                            layer={layer}
-                                            fill={'#f00'}
-                                            id={layer.numericId.toString()}
-                                            x={layer.config.cx}
-                                            y={layer.config.cy}
-                                            width={layer.config.width}
-                                            height={layer.config.height}
-                                            scaleX={layer.config.scaleX}
-                                            scaleY={layer.config.scaleY}
-                                            offsetX={layer.config.width / 2}
-                                            offsetY={layer.config.height / 2}
-                                            rotation={layer.config.rotation}
-                                            draggable={!props.isPinching}
-                                            onClick={props.onSelect}
-                                            onTap={props.onSelect}
-                                            onDragMove={props.onTransform}
-                                            onTransform={props.onTransform}
-                                            onDragEnd={props.onTransformEnd}
-                                            onTransformEnd={props.onTransformEnd}
-                                        />
-                                    );
-                                }
-                                if (layer.type === 'shape') {
-                                    const commonProps = {
-                                        id: layer.numericId.toString(),
-                                        x: layer.config.cx,
-                                        y: layer.config.cy,
-                                        rotation: layer.config.rotation,
-                                        scaleX: layer.config.scaleX,
-                                        scaleY: layer.config.scaleY,
-                                        draggable: !props.isPinching,
-                                        onClick: props.onSelect,
-                                        onTap: props.onSelect,
-                                        onDragMove: props.onTransform,
-                                        onTransform: props.onTransform,
-                                        onDragEnd: props.onTransformEnd,
-                                        onTransformEnd: props.onTransformEnd,
-                                        fill: layer.fill,
-                                        stroke: layer.strokeColor,
-                                        strokeWidth: layer.strokeWidth
+                            {[...layers]
+                                .sort((a, b) => a.config.zIndex - b.config.zIndex)
+                                .map((layer) => {
+                                    const props = {
+                                        listening: !isDrawing,
+                                        isPinching,
+                                        onSelect: (
+                                            e: KonvaEventObject<MouseEvent | TouchEvent>
+                                        ) => {
+                                            toggleLayerSelection(
+                                                layer.numericId.toString(),
+                                                e.evt.shiftKey,
+                                                e.evt.ctrlKey || e.evt.metaKey
+                                            );
+                                        },
+                                        onTransform: (e: KonvaEventObject<Event>) =>
+                                            handleTransform(e, layer.numericId),
+                                        onTransformEnd: (e: KonvaEventObject<Event>) =>
+                                            handleTransformEnd(e, layer.numericId)
                                     };
 
-                                    if (layer.shape === 'rectangle') {
+                                    if (layer.type === 'image') {
+                                        return (
+                                            <KonvaStaticImage
+                                                key={`spi_${layer.numericId}`}
+                                                layer={layer}
+                                                {...props}
+                                            />
+                                        );
+                                    }
+                                    if (layer.type === 'video')
+                                        return (
+                                            <KonvaVideo
+                                                key={`vid_${layer.numericId}`}
+                                                layer={layer}
+                                                {...props}
+                                            />
+                                        );
+                                    if (layer.type === 'text') {
                                         return (
                                             <Rect
-                                                key={`shape_${layer.numericId}`}
-                                                {...commonProps}
+                                                key={`txt_${layer.numericId}`}
+                                                layer={layer}
+                                                fill={'#f00'}
+                                                id={layer.numericId.toString()}
+                                                x={layer.config.cx}
+                                                y={layer.config.cy}
                                                 width={layer.config.width}
                                                 height={layer.config.height}
+                                                scaleX={layer.config.scaleX}
+                                                scaleY={layer.config.scaleY}
                                                 offsetX={layer.config.width / 2}
                                                 offsetY={layer.config.height / 2}
-                                                dash={layer.strokeDash}
+                                                rotation={layer.config.rotation}
+                                                draggable={!props.isPinching}
+                                                onClick={props.onSelect}
+                                                onTap={props.onSelect}
+                                                onDragMove={props.onTransform}
+                                                onTransform={props.onTransform}
+                                                onDragEnd={props.onTransformEnd}
+                                                onTransformEnd={props.onTransformEnd}
                                             />
                                         );
                                     }
-                                    if (layer.shape === 'circle') {
+                                    if (layer.type === 'graph') {
                                         return (
-                                            <Circle
-                                                key={`shape_${layer.numericId}`}
-                                                {...commonProps}
-                                                offsetX={layer.config.width / 2}
-                                                offsetY={layer.config.height / 2}
-                                                radius={layer.config.width / 2}
-                                                dash={layer.strokeDash}
+                                            <RoyStaticRenderer
+                                                key={`roy_${layer.numericId}`}
+                                                layer={layer}
+                                                {...props}
                                             />
                                         );
                                     }
-                                }
-                                if (showInk && layer.type === 'ink') {
-                                    return (
-                                        <Line
-                                            key={`ink_${layer.numericId}`}
-                                            listening={true}
-                                            points={layer.line}
-                                            stroke={layer.color}
-                                            strokeWidth={layer.width}
-                                            dash={layer.dash}
-                                            dashEnabled={true}
-                                            tension={0.4}
-                                            shadowForStrokeEnabled={
-                                                selectedLayerIds[0] === layer.numericId.toString()
-                                            }
-                                            shadowColor="#00a1ff"
-                                            shadowBlur={10}
-                                            shadowOffsetY={20}
-                                            shadowOffsetX={20}
-                                            shadowOpacity={1}
-                                            lineCap="round"
-                                            lineJoin="round"
-                                        />
-                                    );
-                                }
-                                return null;
-                            })}
-                        {showInk && (
-                            <Line
-                                key="new-line"
-                                points={currentInkLine}
-                                stroke={inkColour}
-                                strokeWidth={inkWidth}
-                                dash={inkDash}
-                                dashEnabled={true}
-                                tension={0.5}
-                                lineCap="round"
-                                lineJoin="round"
+                                    if (layer.type === 'map') {
+                                        return (
+                                            <Rect
+                                                key={`map_${layer.numericId}`}
+                                                layer={layer}
+                                                fill={'#f00'}
+                                                id={layer.numericId.toString()}
+                                                x={layer.config.cx}
+                                                y={layer.config.cy}
+                                                width={layer.config.width}
+                                                height={layer.config.height}
+                                                scaleX={layer.config.scaleX}
+                                                scaleY={layer.config.scaleY}
+                                                offsetX={layer.config.width / 2}
+                                                offsetY={layer.config.height / 2}
+                                                rotation={layer.config.rotation}
+                                                draggable={!props.isPinching}
+                                                onClick={props.onSelect}
+                                                onTap={props.onSelect}
+                                                onDragMove={props.onTransform}
+                                                onTransform={props.onTransform}
+                                                onDragEnd={props.onTransformEnd}
+                                                onTransformEnd={props.onTransformEnd}
+                                            />
+                                        );
+                                    }
+                                    if (layer.type === 'shape') {
+                                        const commonProps = {
+                                            id: layer.numericId.toString(),
+                                            x: layer.config.cx,
+                                            y: layer.config.cy,
+                                            rotation: layer.config.rotation,
+                                            scaleX: layer.config.scaleX,
+                                            scaleY: layer.config.scaleY,
+                                            draggable: !props.isPinching,
+                                            onClick: props.onSelect,
+                                            onTap: props.onSelect,
+                                            onDragMove: props.onTransform,
+                                            onTransform: props.onTransform,
+                                            onDragEnd: props.onTransformEnd,
+                                            onTransformEnd: props.onTransformEnd,
+                                            fill: layer.fill,
+                                            stroke: layer.strokeColor,
+                                            strokeWidth: layer.strokeWidth
+                                        };
+
+                                        if (layer.shape === 'rectangle') {
+                                            return (
+                                                <Rect
+                                                    key={`shape_${layer.numericId}`}
+                                                    {...commonProps}
+                                                    width={layer.config.width}
+                                                    height={layer.config.height}
+                                                    offsetX={layer.config.width / 2}
+                                                    offsetY={layer.config.height / 2}
+                                                    dash={layer.strokeDash}
+                                                />
+                                            );
+                                        }
+                                        if (layer.shape === 'circle') {
+                                            return (
+                                                <Circle
+                                                    key={`shape_${layer.numericId}`}
+                                                    {...commonProps}
+                                                    offsetX={layer.config.width / 2}
+                                                    offsetY={layer.config.height / 2}
+                                                    radius={layer.config.width / 2}
+                                                    dash={layer.strokeDash}
+                                                />
+                                            );
+                                        }
+                                    }
+                                    if (showInk && layer.type === 'ink') {
+                                        return (
+                                            <Line
+                                                key={`ink_${layer.numericId}`}
+                                                listening={true}
+                                                points={layer.line}
+                                                stroke={layer.color}
+                                                strokeWidth={layer.width}
+                                                dash={layer.dash}
+                                                dashEnabled={true}
+                                                tension={0.4}
+                                                shadowForStrokeEnabled={
+                                                    selectedLayerIds[0] ===
+                                                    layer.numericId.toString()
+                                                }
+                                                shadowColor="#00a1ff"
+                                                shadowBlur={10}
+                                                shadowOffsetY={20}
+                                                shadowOffsetX={20}
+                                                shadowOpacity={1}
+                                                lineCap="round"
+                                                lineJoin="round"
+                                            />
+                                        );
+                                    }
+                                    return null;
+                                })}
+                            {showInk && (
+                                <Line
+                                    key="new-line"
+                                    points={currentInkLine}
+                                    stroke={inkColour}
+                                    strokeWidth={inkWidth}
+                                    dash={inkDash}
+                                    dashEnabled={true}
+                                    tension={0.5}
+                                    lineCap="round"
+                                    lineJoin="round"
+                                />
+                            )}
+                            {showGrid && getDOGridLines(COLS * SCREEN_W, ROWS * SCREEN_H, 20)}
+                            <Transformer
+                                ref={trRef}
+                                flipEnabled={false}
+                                anchorCornerRadius={10}
+                                anchorSize={20}
+                                boundBoxFunc={(oldBox, newBox) => {
+                                    if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5)
+                                        return oldBox;
+                                    return newBox;
+                                }}
                             />
-                        )}
-                        {showGrid && getDOGridLines(COLS * SCREEN_W, ROWS * SCREEN_H, 20)}
-                        <Transformer
-                            ref={trRef}
-                            flipEnabled={false}
-                            anchorCornerRadius={10}
-                            anchorSize={20}
-                            boundBoxFunc={(oldBox, newBox) => {
-                                if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5)
-                                    return oldBox;
-                                return newBox;
-                            }}
-                        />
-                    </KonvaLayer>
-                </Stage>
-                {/* <RoyForceGraph
+                        </KonvaLayer>
+                    </Stage>
+                    {/* <RoyForceGraph
                 style={{
                     display: 'block',
                     position: 'fixed',
@@ -856,9 +879,9 @@ export function EditorSlate() {
                     visibility: 'hidden'
                 }}
             /> */}
+                </div>
+                <div className="h-fit grow"></div>
             </div>
-            <SlatePreview stageSlot={stageSlot} stageInstance={stageInstance} />
-            <Toolbar fileInputRef={fileInputRef} onUpload={handleUpload} />
             {/* {stageInstance.current ? (
                 <DOPreview imageUrl={stageInstance.current.toDataURL()} />
             ) : null} */}

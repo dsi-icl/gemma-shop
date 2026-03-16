@@ -1,6 +1,7 @@
 import { decode, isBlurhashValid } from 'blurhash';
+import Konva from 'konva';
 import { useState, RefObject, useEffect } from 'react';
-import { Konva, Circle, KonvaNodeEvents, Layer, Rect, Stage, Image, Line } from 'react-konva';
+import { Circle, KonvaNodeEvents, Layer, Rect, Stage, Image, Line } from 'react-konva';
 
 import { getDOGridLines } from '~/lib/editorHelpers';
 import type { LayerWithEditorState } from '~/lib/types';
@@ -8,12 +9,18 @@ import type { LayerWithEditorState } from '~/lib/types';
 type SlatePreviewProps = {
     stageSlot: RefObject<HTMLDivElement | null>;
     stageInstance: RefObject<Konva.Stage | null>;
+    stageScaleFactor: number;
     layers: LayerWithEditorState[];
 };
 
-const PREVIEW_SCALE = 0.2;
+const PREVIEW_SCALE = 0.15;
 
-export function ViewerSlatePreview({ stageSlot, stageInstance, layers }: SlatePreviewProps) {
+export function ViewerSlatePreview({
+    stageSlot,
+    stageInstance,
+    stageScaleFactor,
+    layers
+}: SlatePreviewProps) {
     const [scrollLeft, setScrollLeft] = useState(0);
     const [showGrid] = useState(true);
 
@@ -71,10 +78,10 @@ export function ViewerSlatePreview({ stageSlot, stageInstance, layers }: SlatePr
                                 return (
                                     <Line
                                         key={`ink_${shape.numericId}`}
-                                        points={shape.line.map((p) => p * PREVIEW_SCALE)}
+                                        points={shape.line.map((p) => p * stageScaleFactor)}
                                         stroke={shape.color}
-                                        strokeWidth={shape.width * PREVIEW_SCALE * 4}
-                                        dash={shape.dash.map((d) => d * PREVIEW_SCALE)}
+                                        strokeWidth={shape.width * stageScaleFactor * 4}
+                                        dash={shape.dash.map((d) => d * stageScaleFactor)}
                                         dashEnabled={true}
                                         tension={0.4}
                                         lineCap="round"
@@ -86,15 +93,15 @@ export function ViewerSlatePreview({ stageSlot, stageInstance, layers }: SlatePr
                                     return (
                                         <Circle
                                             key={shape.numericId}
-                                            x={shape.config.cx * PREVIEW_SCALE}
-                                            y={shape.config.cy * PREVIEW_SCALE}
-                                            offsetX={(shape.config.width * PREVIEW_SCALE) / 2}
-                                            offsetY={(shape.config.height * PREVIEW_SCALE) / 2}
-                                            radius={(shape.config.width * PREVIEW_SCALE) / 2}
+                                            x={shape.config.cx * stageScaleFactor}
+                                            y={shape.config.cy * stageScaleFactor}
+                                            offsetX={(shape.config.width * stageScaleFactor) / 2}
+                                            offsetY={(shape.config.height * stageScaleFactor) / 2}
+                                            radius={(shape.config.width * stageScaleFactor) / 2}
                                             fill="transparent"
                                             stroke={shape.strokeColor}
-                                            strokeWidth={shape.strokeWidth * PREVIEW_SCALE * 4}
-                                            dash={shape.strokeDash.map((d) => d * PREVIEW_SCALE)}
+                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                            dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
                                             listening={false}
                                         />
                                     );
@@ -102,17 +109,19 @@ export function ViewerSlatePreview({ stageSlot, stageInstance, layers }: SlatePr
                                     return (
                                         <Rect
                                             key={shape.numericId}
-                                            x={shape.config.cx * PREVIEW_SCALE}
-                                            y={shape.config.cy * PREVIEW_SCALE}
-                                            width={shape.config.width * PREVIEW_SCALE}
-                                            height={shape.config.height * PREVIEW_SCALE}
-                                            offsetX={(shape.config.width * PREVIEW_SCALE) / 2}
-                                            offsetY={(shape.config.height * PREVIEW_SCALE) / 2}
+                                            x={shape.config.cx * stageScaleFactor}
+                                            y={shape.config.cy * stageScaleFactor}
+                                            width={shape.config.width * stageScaleFactor}
+                                            height={shape.config.height * stageScaleFactor}
+                                            offsetX={(shape.config.width * stageScaleFactor) / 2}
+                                            offsetY={(shape.config.height * stageScaleFactor) / 2}
                                             rotation={shape.config.rotation}
                                             fill="transparent"
                                             stroke={shape.strokeColor}
-                                            strokeWidth={shape.strokeWidth * PREVIEW_SCALE * 4}
-                                            dash={shape.strokeDash.map((d) => d * PREVIEW_SCALE)}
+                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                            dash={shape.strokeDash.map(
+                                                (d) => d * PREVstageScaleFactorIEW_SCALE
+                                            )}
                                             listening={false}
                                         />
                                     );
@@ -137,12 +146,12 @@ export function ViewerSlatePreview({ stageSlot, stageInstance, layers }: SlatePr
                                     <Image
                                         key={shape.numericId}
                                         image={offscreenCanvas}
-                                        x={shape.config.cx * PREVIEW_SCALE}
-                                        y={shape.config.cy * PREVIEW_SCALE}
-                                        width={shape.config.width * PREVIEW_SCALE}
-                                        height={shape.config.height * PREVIEW_SCALE}
-                                        offsetX={(shape.config.width * PREVIEW_SCALE) / 2}
-                                        offsetY={(shape.config.height * PREVIEW_SCALE) / 2}
+                                        x={shape.config.cx * stageScaleFactor}
+                                        y={shape.config.cy * stageScaleFactor}
+                                        width={shape.config.width * stageScaleFactor}
+                                        height={shape.config.height * stageScaleFactor}
+                                        offsetX={(shape.config.width * stageScaleFactor) / 2}
+                                        offsetY={(shape.config.height * stageScaleFactor) / 2}
                                         rotation={shape.config.rotation}
                                         listening={false}
                                     />
@@ -151,12 +160,12 @@ export function ViewerSlatePreview({ stageSlot, stageInstance, layers }: SlatePr
                             return (
                                 <Rect
                                     key={shape.numericId}
-                                    x={shape.config.cx * PREVIEW_SCALE}
-                                    y={shape.config.cy * PREVIEW_SCALE}
-                                    width={shape.config.width * PREVIEW_SCALE}
-                                    height={shape.config.height * PREVIEW_SCALE}
-                                    offsetX={(shape.config.width * PREVIEW_SCALE) / 2}
-                                    offsetY={(shape.config.height * PREVIEW_SCALE) / 2}
+                                    x={shape.config.cx * stageScaleFactor}
+                                    y={shape.config.cy * stageScaleFactor}
+                                    width={shape.config.width * stageScaleFactor}
+                                    height={shape.config.height * stageScaleFactor}
+                                    offsetX={(shape.config.width * stageScaleFactor) / 2}
+                                    offsetY={(shape.config.height * stageScaleFactor) / 2}
                                     rotation={shape.config.rotation}
                                     fill="#555"
                                     listening={false}
