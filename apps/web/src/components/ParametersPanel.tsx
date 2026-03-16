@@ -85,7 +85,7 @@ export function ParametersPanel({
                     {selectedLayer ? (
                         <div className="space-y-3">
                             <fieldset className="space-y-1.5">
-                                <legend className="text-xs font-semibold">Position</legend>
+                                {/* <legend className="text-xs font-semibold">Position</legend> */}
                                 <div className="grid grid-cols-2 gap-2">
                                     <SideButtonNumberField
                                         label="X"
@@ -109,7 +109,7 @@ export function ParametersPanel({
                             </fieldset>
 
                             <fieldset className="space-y-1.5">
-                                <legend className="text-xs font-semibold">Size</legend>
+                                {/* <legend className="text-xs font-semibold">Size</legend> */}
                                 <div className="grid grid-cols-2 gap-2">
                                     <SideButtonNumberField
                                         label="Width"
@@ -131,7 +131,7 @@ export function ParametersPanel({
                             </fieldset>
 
                             <fieldset className="space-y-1.5">
-                                <legend className="text-xs font-semibold">Transform</legend>
+                                {/* <legend className="text-xs font-semibold">Transform</legend> */}
                                 <div className="grid grid-cols-2 gap-2">
                                     <SideButtonNumberField
                                         label="Rotation"
