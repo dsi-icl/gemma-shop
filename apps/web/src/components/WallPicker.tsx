@@ -75,7 +75,7 @@ export function WallPickerPopover({ onSelect, trigger }: WallPickerPopoverProps)
                     </Button>
                 )}
             </PopoverTrigger>
-            <PopoverContent side="top" className="w-64 p-2">
+            <PopoverContent className="w-64 p-2" side="bottom" align="start">
                 <WallList onSelect={handleSelect} />
             </PopoverContent>
         </Popover>

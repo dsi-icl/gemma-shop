@@ -42,7 +42,7 @@ export function ColorPicker({ value, onChange, className }: ColorPickerProps) {
                     <div className="h-4 w-4 rounded-full" style={{ backgroundColor: value }} />
                 </TipButton>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-3">
+            <PopoverContent className="w-auto p-3" side="bottom" align="start">
                 <div className="space-y-3">
                     <HexAlphaColorPicker color={value} onChange={onChange} className="mr-0" />
                     <div className="flex w-full items-center gap-2">

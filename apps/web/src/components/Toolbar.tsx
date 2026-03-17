@@ -127,7 +127,7 @@ export function Toolbar({ fileInputRef, onUpload, onEditText }: ToolbarProps) {
                                 <ShapesIcon />
                             </TipButton>
                         </PopoverTrigger>
-                        <PopoverContent side="top" className="w-auto p-1">
+                        <PopoverContent className="w-auto p-1" side="bottom" align="start">
                             <div className="flex gap-1">
                                 <Button
                                     variant="ghost"
@@ -225,7 +225,7 @@ export function Toolbar({ fileInputRef, onUpload, onEditText }: ToolbarProps) {
                                 )}
                             </TipButton>
                         </PopoverTrigger>
-                        <PopoverContent side="top" className="w-72 p-3">
+                        <PopoverContent className="w-72 p-3" side="bottom" align="start">
                             <form
                                 onSubmit={(e) => {
                                     e.preventDefault();

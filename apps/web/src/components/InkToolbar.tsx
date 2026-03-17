@@ -39,7 +39,7 @@ export function InkToolbar() {
                         </svg>
                     </TipButton>
                 </PopoverTrigger>
-                <PopoverContent side="top" className="w-48 p-3">
+                <PopoverContent className="w-48 p-3" side="bottom" align="start">
                     <div className="flex flex-col gap-4">
                         <div className="space-y-2">
                             <h4 className="leading-none font-medium">Stroke Width</h4>
