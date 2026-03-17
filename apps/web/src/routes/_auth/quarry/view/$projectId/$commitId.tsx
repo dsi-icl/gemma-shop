@@ -288,14 +288,14 @@ function CommitViewer() {
                                                     );
                                                 }
                                             }
-                                            if (layer.type === 'ink') {
+                                            if (layer.type === 'line') {
                                                 return (
                                                     <Line
-                                                        key={`ink_${layer.numericId}`}
+                                                        key={`lin_${layer.numericId}`}
                                                         points={layer.line}
-                                                        stroke={layer.color}
-                                                        strokeWidth={layer.width}
-                                                        dash={layer.dash}
+                                                        stroke={layer.strokeColor}
+                                                        strokeWidth={layer.strokeWidth}
+                                                        dash={layer.strokeDash}
                                                         dashEnabled={true}
                                                         tension={0.4}
                                                         lineCap="round"

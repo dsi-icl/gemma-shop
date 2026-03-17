@@ -74,14 +74,14 @@ export function ViewerSlatePreview({
                     {[...layers]
                         .sort((a, b) => a.config.zIndex - b.config.zIndex)
                         .map((shape) => {
-                            if (shape.type === 'ink')
+                            if (shape.type === 'line')
                                 return (
                                     <Line
-                                        key={`ink_${shape.numericId}`}
+                                        key={`lin_${shape.numericId}`}
                                         points={shape.line.map((p) => p * stageScaleFactor)}
-                                        stroke={shape.color}
-                                        strokeWidth={shape.width * stageScaleFactor * 4}
-                                        dash={shape.dash.map((d) => d * stageScaleFactor)}
+                                        stroke={shape.strokeColor}
+                                        strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                        dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
                                         dashEnabled={true}
                                         tension={0.4}
                                         lineCap="round"
@@ -102,6 +102,8 @@ export function ViewerSlatePreview({
                                             stroke={shape.strokeColor}
                                             strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
                                             dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
+                                            lineCap="round"
+                                            lineJoin="round"
                                             listening={false}
                                         />
                                     );
@@ -120,6 +122,11 @@ export function ViewerSlatePreview({
                                             stroke={shape.strokeColor}
                                             strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
                                             dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
+                                            dashOffset={
+                                                ((shape.strokeDash[0] ?? 0) * stageScaleFactor) / 2
+                                            }
+                                            lineCap="round"
+                                            lineJoin="round"
                                             listening={false}
                                         />
                                     );

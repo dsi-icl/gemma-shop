@@ -41,12 +41,11 @@ export interface EditorState {
     lastSelectedLayerId: string | null;
     showSpacePreview: boolean;
     showGrid: boolean;
-    showInk: boolean;
     isDrawing: boolean;
     isSnapping: boolean;
-    inkColour: string;
-    inkWidth: number;
-    inkDash: number[];
+    strokeColor: string;
+    strokeWidth: number;
+    strokeDash: number[];
     shapeFill: string;
     shapeStroke: string;
 
@@ -73,9 +72,9 @@ export interface EditorState {
     setSlides: (slides: Slide[]) => void;
     setActiveSlideId: (id: string | null) => void;
     setSelectedSlides: (ids: string[]) => void;
-    setInkColour: (color: string) => void;
-    setInkWidth: (width: number) => void;
-    setInkDash: (dash: number[]) => void;
+    setStrokeColor: (color: string) => void;
+    setStrokeWidth: (width: number) => void;
+    setStrokeDash: (dash: number[]) => void;
     setShapeFill: (fill: string) => void;
 
     // ── Save actions ──
@@ -93,7 +92,7 @@ export interface EditorState {
     addTextLayer: () => void;
     addMapLayer: () => void;
     addShapeLayer: (shape: 'rectangle' | 'circle') => void;
-    addInkLayer: (line: Array<number>) => void;
+    addLineLayer: (line: Array<number>) => void;
     clearStage: () => void;
     reboot: () => void;
     reorderLayers: (layers: LayerWithEditorState[]) => void;
@@ -106,7 +105,6 @@ export interface EditorState {
     toggleSlideSelection: (id: string, isShiftClick: boolean, isCtrlClick: boolean) => void;
     toggleLayerSelection: (id: string, isShiftClick: boolean, isCtrlClick: boolean) => void;
     toggleGrid: () => void;
-    toggleInk: () => void;
     toggleDrawing: () => void;
     toggleSnapping: () => void;
     toggleSpacePreview: () => void;
@@ -171,12 +169,11 @@ export const useEditorStore =
                   lastSelectedLayerId: null,
                   showSpacePreview: false,
                   showGrid: true,
-                  showInk: true,
                   isDrawing: false,
                   isSnapping: true,
-                  inkColour: '#ff0000',
-                  inkWidth: 10,
-                  inkDash: [],
+                  strokeColor: '#ff0000',
+                  strokeWidth: 10,
+                  strokeDash: [],
                   shapeFill: '#ff0000',
                   shapeStroke: '#000000',
 
@@ -364,15 +361,15 @@ export const useEditorStore =
                           const newState: Partial<EditorState> = {
                               selectedLayerIds: [id]
                           };
-                          if (selectedLayer?.type === 'ink') {
-                              newState.inkColour = selectedLayer.color;
-                              newState.inkDash = selectedLayer.dash;
-                              newState.inkWidth = selectedLayer.width;
+                          if (selectedLayer?.type === 'line') {
+                              newState.strokeColor = selectedLayer.strokeColor;
+                              newState.strokeDash = selectedLayer.strokeDash;
+                              newState.strokeWidth = selectedLayer.strokeWidth;
                           }
                           if (selectedLayer?.type === 'shape') {
-                              newState.inkColour = selectedLayer.strokeColor;
-                              newState.inkDash = selectedLayer.strokeDash;
-                              newState.inkWidth = selectedLayer.strokeWidth;
+                              newState.strokeColor = selectedLayer.strokeColor;
+                              newState.strokeDash = selectedLayer.strokeDash;
+                              newState.strokeWidth = selectedLayer.strokeWidth;
                               newState.shapeFill = selectedLayer.fill;
                           }
                           set(newState);
@@ -383,63 +380,67 @@ export const useEditorStore =
                   setSlides: (slides) => set({ slides }),
                   setActiveSlideId: (id) => set({ activeSlideId: id }),
                   setSelectedSlides: (ids) => set({ selectedSlides: ids }),
-                  setInkColour: (color) => {
+                  setStrokeColor: (strokeColor) => {
                       set((s) => {
-                          const newState: Partial<EditorState> = { inkColour: color };
+                          const newState: Partial<EditorState> = { strokeColor };
                           if (s.selectedLayerIds.length > 0) {
                               const numericId = parseInt(s.selectedLayerIds[0]);
                               newState.layers = s.layers.map((l) => {
                                   if (l.numericId === numericId) {
-                                      if (l.type === 'ink') return { ...l, color };
-                                      if (l.type === 'shape') return { ...l, strokeColor: color };
+                                      if (l.type === 'line') return { ...l, strokeColor };
+                                      if (l.type === 'shape') return { ...l, strokeColor };
                                   }
                                   return l;
                               });
                               const newLayerState = s.layers.find((l) => l.numericId === numericId);
                               if (newLayerState) {
-                                  sendLayerUpdate(newLayerState, 'setInkColour');
+                                  sendLayerUpdate(newLayerState, 'setStrokeColor');
                               }
                           }
                           return newState;
                       });
                       get().markDirty();
                   },
-                  setInkWidth: (width) => {
+                  setStrokeWidth: (strokeWidth) => {
                       set((s) => {
-                          const newState: Partial<EditorState> = { inkWidth: width };
+                          const newState: Partial<EditorState> = { strokeWidth };
                           if (s.selectedLayerIds.length > 0) {
                               const numericId = parseInt(s.selectedLayerIds[0]);
                               newState.layers = s.layers.map((l) => {
                                   if (l.numericId === numericId) {
-                                      if (l.type === 'ink') return { ...l, width };
-                                      if (l.type === 'shape') return { ...l, strokeWidth: width };
+                                      if (l.type === 'line') return { ...l, strokeWidth };
+                                      if (l.type === 'shape') return { ...l, strokeWidth };
                                   }
                                   return l;
                               });
-                              const newLayerState = s.layers.find((l) => l.numericId === numericId);
+                              const newLayerState = newState.layers.find(
+                                  (l) => l.numericId === numericId
+                              );
                               if (newLayerState) {
-                                  sendLayerUpdate(newLayerState, 'setInkWidth');
+                                  sendLayerUpdate(newLayerState, 'setStrokeWidth');
                               }
                           }
                           return newState;
                       });
                       get().markDirty();
                   },
-                  setInkDash: (dash) => {
+                  setStrokeDash: (strokeDash) => {
                       set((s) => {
-                          const newState: Partial<EditorState> = { inkDash: dash };
+                          const newState: Partial<EditorState> = { strokeDash };
                           if (s.selectedLayerIds.length > 0) {
                               const numericId = parseInt(s.selectedLayerIds[0]);
                               newState.layers = s.layers.map((l) => {
                                   if (l.numericId === numericId) {
-                                      if (l.type === 'ink') return { ...l, dash };
-                                      if (l.type === 'shape') return { ...l, strokeDash: dash };
+                                      if (l.type === 'line') return { ...l, strokeDash };
+                                      if (l.type === 'shape') return { ...l, strokeDash };
                                   }
                                   return l;
                               });
-                              const newLayerState = s.layers.find((l) => l.numericId === numericId);
+                              const newLayerState = newState.layers.find(
+                                  (l) => l.numericId === numericId
+                              );
                               if (newLayerState) {
-                                  sendLayerUpdate(newLayerState, 'setInkDash');
+                                  sendLayerUpdate(newLayerState, 'setStrokeDash');
                               }
                           }
                           return newState;
@@ -454,7 +455,9 @@ export const useEditorStore =
                               newState.layers = s.layers.map((l) =>
                                   l.numericId === numericId ? { ...l, fill } : l
                               );
-                              const newLayerState = s.layers.find((l) => l.numericId === numericId);
+                              const newLayerState = newState.layers.find(
+                                  (l) => l.numericId === numericId
+                              );
                               if (newLayerState) {
                                   sendLayerUpdate(newLayerState, 'setShapeFill');
                               }
@@ -632,7 +635,8 @@ export const useEditorStore =
                   },
 
                   addShapeLayer: (shape) => {
-                      const { allocateId, allocateZIndex, inkColour, inkDash, inkWidth } = get();
+                      const { allocateId, allocateZIndex, strokeColor, strokeDash, strokeWidth } =
+                          get();
                       const numericId = allocateId();
                       const zIndex = allocateZIndex();
 
@@ -651,9 +655,9 @@ export const useEditorStore =
                               zIndex
                           },
                           fill: 'transparent',
-                          strokeColor: inkColour,
-                          strokeDash: inkDash,
-                          strokeWidth: inkWidth
+                          strokeColor,
+                          strokeDash,
+                          strokeWidth
                       };
 
                       set((s) => ({
@@ -669,8 +673,9 @@ export const useEditorStore =
                       get().markDirty();
                   },
 
-                  addInkLayer: (line) => {
-                      const { allocateId, allocateZIndex, inkColour, inkWidth, inkDash } = get();
+                  addLineLayer: (line) => {
+                      const { allocateId, allocateZIndex, strokeColor, strokeDash, strokeWidth } =
+                          get();
                       const numericId = allocateId();
                       const zIndex = allocateZIndex();
 
@@ -701,7 +706,7 @@ export const useEditorStore =
 
                       const newLayer: LayerWithEditorState = {
                           numericId,
-                          type: 'ink',
+                          type: 'line',
                           config: {
                               cx: minX,
                               cy: minY,
@@ -713,9 +718,9 @@ export const useEditorStore =
                               zIndex
                           },
                           line: line.map((p) => Math.round(p)),
-                          color: inkColour,
-                          width: inkWidth,
-                          dash: inkDash
+                          strokeColor,
+                          strokeWidth,
+                          strokeDash
                       };
                       set((s) => ({
                           layers: [...s.layers, newLayer],
@@ -724,7 +729,7 @@ export const useEditorStore =
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
-                          origin: 'addInkLayer',
+                          origin: 'addLineLayer',
                           layer: newLayer
                       });
                       get().markDirty();
@@ -866,7 +871,6 @@ export const useEditorStore =
                       set({ lastSelectedSlide: id });
                   },
                   toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
-                  toggleInk: () => set((s) => ({ showInk: !s.showInk })),
                   toggleDrawing: () =>
                       set((s) => ({
                           isDrawing: !s.isDrawing,

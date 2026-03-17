@@ -18,7 +18,6 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
     const [scrollLeft, setScrollLeft] = useState(0);
     const layers = useEditorStore((s) => s.layers);
     const showGrid = useEditorStore((s) => s.showGrid);
-    const showInk = useEditorStore((s) => s.showInk);
 
     const stageWidth = stageInstance.current?.width() || 0;
     const stageHeight = stageInstance.current?.height() || 0;
@@ -70,14 +69,14 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                     {[...layers]
                         .sort((a, b) => a.config.zIndex - b.config.zIndex)
                         .map((shape) => {
-                            if (showInk && shape.type === 'ink')
+                            if (shape.type === 'line')
                                 return (
                                     <Line
-                                        key={`ink_${shape.numericId}`}
+                                        key={`lin_${shape.numericId}`}
                                         points={shape.line.map((p) => p * stageScaleFactor)}
-                                        stroke={shape.color}
-                                        strokeWidth={shape.width * stageScaleFactor * 4}
-                                        dash={shape.dash.map((d) => d * stageScaleFactor)}
+                                        stroke={shape.strokeColor}
+                                        strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                        dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
                                         dashEnabled={true}
                                         tension={0.4}
                                         lineCap="round"
@@ -94,10 +93,12 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                                             offsetX={(shape.config.width * stageScaleFactor) / 2}
                                             offsetY={(shape.config.height * stageScaleFactor) / 2}
                                             radius={(shape.config.width * stageScaleFactor) / 2}
-                                            fill="transparent"
+                                            fill={shape.fill}
                                             stroke={shape.strokeColor}
                                             strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
                                             dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
+                                            lineCap="round"
+                                            lineJoin="round"
                                             listening={false}
                                         />
                                     );
@@ -112,10 +113,15 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                                             offsetX={(shape.config.width * stageScaleFactor) / 2}
                                             offsetY={(shape.config.height * stageScaleFactor) / 2}
                                             rotation={shape.config.rotation}
-                                            fill="transparent"
+                                            fill={shape.fill}
                                             stroke={shape.strokeColor}
-                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 2}
                                             dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
+                                            dashOffset={
+                                                ((shape.strokeDash[0] ?? 0) * stageScaleFactor) / 2
+                                            }
+                                            lineCap="round"
+                                            lineJoin="round"
                                             listening={false}
                                         />
                                     );

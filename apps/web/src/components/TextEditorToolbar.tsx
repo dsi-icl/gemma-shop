@@ -35,7 +35,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { ProjectFont } from '~/hooks/useProjectFonts';
 
-import { ColorPicker } from './ColourPicker';
+import { ColorPickerPopover } from './ColourPicker';
 
 interface ToolbarState {
     isBold: boolean;
@@ -297,11 +297,11 @@ export function TextEditorToolbar({
             {/* Colors */}
             <div className="flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">Text</span>
-                <ColorPicker value={state.fontColor} onChange={applyFontColor} />
+                <ColorPickerPopover value={state.fontColor} onChange={applyFontColor} />
             </div>
             <div className="flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">BG</span>
-                <ColorPicker value={state.bgColor} onChange={applyBgColor} />
+                <ColorPickerPopover value={state.bgColor} onChange={applyBgColor} />
             </div>
 
             <Separator orientation="vertical" className="mx-1 h-6" />

@@ -182,7 +182,7 @@ function WallApp() {
                 />
             );
 
-        if (layer.type === 'ink') {
+        if (layer.type === 'line') {
             let svgPoints = [];
             for (let i = 0; i < layer.line.length; i += 2)
                 svgPoints.push(
@@ -199,9 +199,10 @@ function WallApp() {
                         <polyline
                             points={svgPoints.join(' ')}
                             fill="none"
-                            stroke={layer.color}
-                            strokeWidth={layer.width}
-                            strokeDasharray={layer.dash.join(' ')}
+                            stroke={layer.strokeColor}
+                            strokeWidth={layer.strokeWidth}
+                            strokeDasharray={layer.strokeDash.join(' ')}
+                            strokeDashoffset={(layer.strokeDash[0] ?? 0) / 2}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                         />
@@ -225,9 +226,10 @@ function WallApp() {
                                 y={0}
                                 width={layer.config.width}
                                 height={layer.config.height}
-                                fill="none"
+                                fill={layer.fill}
                                 stroke={layer.strokeColor}
                                 strokeDasharray={layer.strokeDash.join(' ')}
+                                strokeDashoffset={(layer.strokeDash[0] ?? 0) / 2}
                                 strokeWidth={layer.strokeWidth}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
@@ -251,7 +253,7 @@ function WallApp() {
                                 cx={0}
                                 cy={0}
                                 r={layer.config.width / 2}
-                                fill="none"
+                                fill={layer.fill}
                                 stroke={layer.strokeColor}
                                 strokeDasharray={layer.strokeDash.join(' ')}
                                 strokeWidth={layer.strokeWidth}

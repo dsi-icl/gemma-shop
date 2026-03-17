@@ -26,7 +26,7 @@ import { TipButton } from '@repo/ui/components/tip-button';
 import { TooltipProvider } from '@repo/ui/components/tooltip';
 import { useRef, useState } from 'react';
 
-import { InkToolbar } from '~/components/InkToolbar';
+import { AppearanceToolbar } from '~/components/AppearanceToolbar';
 import { PlaybackControls } from '~/components/PlaybackControls';
 import { VideoScrubber } from '~/components/VideoScrubber';
 import { WallPickerPopover } from '~/components/WallPicker';
@@ -75,7 +75,7 @@ export function Toolbar({ fileInputRef, onUpload, onEditText }: ToolbarProps) {
     const isVideo = activeLayer?.type === 'video';
     const isText = activeLayer?.type === 'text';
     const isShape = activeLayer?.type === 'shape';
-    const isInk = activeLayer?.type === 'ink';
+    const isLine = activeLayer?.type === 'line';
 
     // Save popover state
     const [commitMessage, setCommitMessage] = useState('');
@@ -311,11 +311,11 @@ export function Toolbar({ fileInputRef, onUpload, onEditText }: ToolbarProps) {
                     </>
                 )}
 
-                {/* ── Ink ── */}
-                {isDrawing || isInk || isShape ? (
+                {/* ── Line ── */}
+                {isDrawing || isLine || isShape ? (
                     <>
                         <Separator orientation="vertical" className="mx-1 h-6" />
-                        <InkToolbar />
+                        <AppearanceToolbar />
                     </>
                 ) : null}
 

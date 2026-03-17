@@ -63,11 +63,11 @@ const LayerSchema = z.discriminatedUnion('type', [
         .extend(LayerBaseSchema.shape),
     z
         .object({
-            type: z.literal('ink'),
+            type: z.literal('line'),
             line: z.array(z.number()),
-            color: z.string(),
-            width: z.number(),
-            dash: z.array(z.number())
+            strokeColor: z.string(),
+            strokeDash: z.array(z.number()),
+            strokeWidth: z.number()
         })
         .extend(LayerBaseSchema.shape),
     z

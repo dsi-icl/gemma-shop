@@ -11,10 +11,9 @@ import { HexAlphaColorPicker } from 'react-colorful';
 interface ColorPickerProps {
     value: string;
     onChange: (value: string) => void;
-    className?: string;
 }
 
-export function ColorPicker({ value, onChange, className }: ColorPickerProps) {
+export function ColorPicker({ value, onChange }: ColorPickerProps) {
     const [hasEyeDropper, setHasEyeDropper] = useState(false);
 
     useEffect(() => {
@@ -31,10 +30,38 @@ export function ColorPicker({ value, onChange, className }: ColorPickerProps) {
             onChange(result.sRGBHex);
         } catch (e) {
             // User cancelled the selection, do nothing
-            console.log('EyeDropper canceled', e);
+            console.debug('EyeDropper cancelled', e);
         }
     };
 
+    return (
+        <div className="space-y-3">
+            <HexAlphaColorPicker color={value} onChange={onChange} className="mr-0" />
+            <div className="flex w-full items-center gap-2">
+                <Input
+                    maxLength={9}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="h-8 w-39 font-mono uppercase"
+                />
+                {hasEyeDropper && (
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 shrink-0"
+                        onClick={handleEyeDropper}
+                        title="Pick color from screen"
+                    >
+                        <EyedropperIcon className="h-4 w-4" />
+                        <span className="sr-only">Pick color from screen</span>
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+export function ColorPickerPopover({ value, onChange }: ColorPickerProps) {
     return (
         <Popover>
             <PopoverTrigger>
@@ -43,29 +70,7 @@ export function ColorPicker({ value, onChange, className }: ColorPickerProps) {
                 </TipButton>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-3" side="bottom" align="start">
-                <div className="space-y-3">
-                    <HexAlphaColorPicker color={value} onChange={onChange} className="mr-0" />
-                    <div className="flex w-full items-center gap-2">
-                        <Input
-                            maxLength={9}
-                            value={value}
-                            onChange={(e) => onChange(e.target.value)}
-                            className="h-8 w-39 font-mono uppercase"
-                        />
-                        {hasEyeDropper && (
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-8 shrink-0"
-                                onClick={handleEyeDropper}
-                                title="Pick color from screen"
-                            >
-                                <EyedropperIcon className="h-4 w-4" />
-                                <span className="sr-only">Pick color from screen</span>
-                            </Button>
-                        )}
-                    </div>
-                </div>
+                <ColorPicker value={value} onChange={onChange} />
             </PopoverContent>
         </Popover>
     );

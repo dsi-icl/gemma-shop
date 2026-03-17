@@ -46,18 +46,17 @@ export function EditorSlate() {
     const toggleLayerSelection = useEditorStore((s) => s.toggleLayerSelection);
     const deselectAllLayers = useEditorStore((s) => s.deselectAllLayers);
     const showGrid = useEditorStore((s) => s.showGrid);
-    const showInk = useEditorStore((s) => s.showInk);
     const isDrawing = useEditorStore((s) => s.isDrawing);
     const isSnapping = useEditorStore((s) => s.isSnapping);
-    const addInkLayer = useEditorStore((s) => s.addInkLayer);
-    const inkColour = useEditorStore((s) => s.inkColour);
-    const inkDash = useEditorStore((s) => s.inkDash);
-    const inkWidth = useEditorStore((s) => s.inkWidth);
+    const addLineLayer = useEditorStore((s) => s.addLineLayer);
+    const strokeColor = useEditorStore((s) => s.strokeColor);
+    const strokeDash = useEditorStore((s) => s.strokeDash);
+    const strokeWidth = useEditorStore((s) => s.strokeWidth);
 
     // ── Local-only state (Konva interaction, not shared) ──────────────────
     const [stageScaleFactor, _setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
     const [isPinching, setIsPinching] = useState(false);
-    const [currentInkLine, setCurrentInkLine] = useState<Array<number>>([]);
+    const [currentLine, setCurrentLine] = useState<Array<number>>([]);
     const [editingTextLayerId, setEditingTextLayerId] = useState<number | null>(null);
     const lastX = useRef(0);
     const stageLastX = useRef(0);
@@ -513,7 +512,7 @@ export function EditorSlate() {
             const stage = e.target.getStage();
             const point = stage?.getPointerPosition();
             if (!point) return;
-            setCurrentInkLine((l) =>
+            setCurrentLine((l) =>
                 l.concat([point.x / stageScaleFactor, point.y / stageScaleFactor])
             );
             return;
@@ -600,10 +599,10 @@ export function EditorSlate() {
             if (node) handleTransformEnd({ target: node }, parseInt(currentSelectedIds[0]));
         }
         // Without enough point this is probably a missfire
-        if (currentInkLine.length > 6) {
-            addInkLayer(currentInkLine);
+        if (currentLine.length > 6) {
+            addLineLayer(currentLine);
         }
-        setCurrentInkLine([]);
+        setCurrentLine([]);
         lastDist.current = null;
         lastAngle.current = null;
         lastCenter.current = null;
@@ -801,6 +800,9 @@ export function EditorSlate() {
                                                     offsetX={layer.config.width / 2}
                                                     offsetY={layer.config.height / 2}
                                                     dash={layer.strokeDash}
+                                                    dashOffset={(layer.strokeDash[0] ?? 0) / 2}
+                                                    lineCap="round"
+                                                    lineJoin="round"
                                                 />
                                             );
                                         }
@@ -813,19 +815,21 @@ export function EditorSlate() {
                                                     offsetY={layer.config.height / 2}
                                                     radius={layer.config.width / 2}
                                                     dash={layer.strokeDash}
+                                                    lineCap="round"
+                                                    lineJoin="round"
                                                 />
                                             );
                                         }
                                     }
-                                    if (showInk && layer.type === 'ink') {
+                                    if (layer.type === 'line') {
                                         return (
                                             <Line
-                                                key={`ink_${layer.numericId}`}
+                                                key={`lin_${layer.numericId}`}
                                                 listening={true}
                                                 points={layer.line}
-                                                stroke={layer.color}
-                                                strokeWidth={layer.width}
-                                                dash={layer.dash}
+                                                stroke={layer.strokeColor}
+                                                strokeWidth={layer.strokeWidth}
+                                                dash={layer.strokeDash}
                                                 dashEnabled={true}
                                                 tension={0.4}
                                                 shadowForStrokeEnabled={
@@ -844,13 +848,13 @@ export function EditorSlate() {
                                     }
                                     return null;
                                 })}
-                            {showInk && (
+                            {currentLine.length > 3 && (
                                 <Line
                                     key="new-line"
-                                    points={currentInkLine}
-                                    stroke={inkColour}
-                                    strokeWidth={inkWidth}
-                                    dash={inkDash}
+                                    points={currentLine}
+                                    stroke={strokeColor}
+                                    strokeWidth={strokeWidth}
+                                    dash={strokeDash}
                                     dashEnabled={true}
                                     tension={0.5}
                                     lineCap="round"

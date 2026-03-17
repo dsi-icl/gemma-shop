@@ -48,7 +48,7 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                         return <ShapesIcon size={20} weight="bold" />;
                 }
             }
-            case 'ink':
+            case 'line':
                 return <ScribbleIcon size={20} weight="bold" />;
             default:
                 return <BugBeetleIcon size={20} weight="bold" />;
@@ -77,9 +77,8 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                         return 'Shape';
                 }
             }
-            case 'ink':
-            case 'ink':
-                return 'Ink Line';
+            case 'line':
+                return 'Line';
             default:
                 return 'Unknown Layer';
         }

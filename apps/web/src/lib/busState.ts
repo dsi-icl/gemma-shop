@@ -33,6 +33,7 @@ export function internScope(projectId: string, commitId: string, slideId: string
 }
 
 export function scopeLabel(id: ScopeId): string {
+    console.log('scopeIdToKey', scopeIdToKey);
     return scopeIdToKey.get(id) ?? `<unknown:${id}>`;
 }
 
