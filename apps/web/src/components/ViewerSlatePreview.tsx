@@ -119,9 +119,7 @@ export function ViewerSlatePreview({
                                             fill="transparent"
                                             stroke={shape.strokeColor}
                                             strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
-                                            dash={shape.strokeDash.map(
-                                                (d) => d * PREVstageScaleFactorIEW_SCALE
-                                            )}
+                                            dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
                                             listening={false}
                                         />
                                     );
