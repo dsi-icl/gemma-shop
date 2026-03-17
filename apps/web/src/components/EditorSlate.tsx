@@ -6,8 +6,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'react-konva';
 
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
+import { KonvaTextLayer } from '~/components/KonvaTextLayer';
 import { KonvaVideo } from '~/components/KonvaVideo';
 import { RoyStaticRenderer } from '~/components/roygraph/RoyStaticRenderer';
+import { TextEditorDialog } from '~/components/TextEditorDialog';
 import { Toolbar } from '~/components/Toolbar';
 import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
@@ -56,6 +58,7 @@ export function EditorSlate() {
     const [stageScaleFactor, _setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
     const [isPinching, setIsPinching] = useState(false);
     const [currentInkLine, setCurrentInkLine] = useState<Array<number>>([]);
+    const [editingTextLayerId, setEditingTextLayerId] = useState<number | null>(null);
     const lastX = useRef(0);
     const stageLastX = useRef(0);
 
@@ -140,15 +143,20 @@ export function EditorSlate() {
     // ── Keyboard shortcut ─────────────────────────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // TODO Guard this function, it should not execute if the text editor is opened !!!
             const store = useEditorStore.getState();
             if (!store.selectedLayerIds.length) return;
+            // TODO Check if the Konva stage has focus or is the text editor is opened to prevent deleting layers
+
             if (e.key === 'Delete') store.deleteSelectedLayer();
             if (e.key === 'Escape') store.deselectAllLayers();
             const currentSelected = store.layers.find(
                 (l) => l.numericId === parseInt(store.selectedLayerIds[0])
             );
             if (!currentSelected) return;
-            e.preventDefault();
+
+            // TODO Check if the Konva stage has focus or is the text editor is opened
+
             const newLayerState = { ...currentSelected, config: { ...currentSelected.config } };
             if (e.key === 'ArrowLeft') {
                 if (e.shiftKey)
@@ -621,7 +629,11 @@ export function EditorSlate() {
     // ── Render ────────────────────────────────────────────────────────────
     return (
         <>
-            <Toolbar fileInputRef={fileInputRef} onUpload={handleUpload} />
+            <Toolbar
+                fileInputRef={fileInputRef}
+                onUpload={handleUpload}
+                onEditText={setEditingTextLayerId}
+            />
             <SlatePreview
                 stageSlot={stageSlot}
                 stageInstance={stageInstance}
@@ -711,26 +723,15 @@ export function EditorSlate() {
                                         );
                                     if (layer.type === 'text') {
                                         return (
-                                            <Rect
+                                            <KonvaTextLayer
                                                 key={`txt_${layer.numericId}`}
                                                 layer={layer}
-                                                fill={'#f00'}
-                                                id={layer.numericId.toString()}
-                                                x={layer.config.cx}
-                                                y={layer.config.cy}
-                                                width={layer.config.width}
-                                                height={layer.config.height}
-                                                scaleX={layer.config.scaleX}
-                                                scaleY={layer.config.scaleY}
-                                                offsetX={layer.config.width / 2}
-                                                offsetY={layer.config.height / 2}
-                                                rotation={layer.config.rotation}
-                                                draggable={!props.isPinching}
-                                                onClick={props.onSelect}
-                                                onTap={props.onSelect}
-                                                onDragMove={props.onTransform}
+                                                isPinching={props.isPinching}
+                                                onSelect={props.onSelect}
+                                                onDblClick={() =>
+                                                    setEditingTextLayerId(layer.numericId)
+                                                }
                                                 onTransform={props.onTransform}
-                                                onDragEnd={props.onTransformEnd}
                                                 onTransformEnd={props.onTransformEnd}
                                             />
                                         );
@@ -885,6 +886,24 @@ export function EditorSlate() {
             {/* {stageInstance.current ? (
                 <DOPreview imageUrl={stageInstance.current.toDataURL()} />
             ) : null} */}
+
+            {/* Text Editor Dialog */}
+            {editingTextLayerId !== null &&
+                (() => {
+                    const textLayer = layers.find(
+                        (l) => l.numericId === editingTextLayerId && l.type === 'text'
+                    ) as Extract<LayerWithEditorState, { type: 'text' }> | undefined;
+                    if (!textLayer) return null;
+                    return (
+                        <TextEditorDialog
+                            layer={textLayer}
+                            open
+                            onOpenChange={(open) => {
+                                if (!open) setEditingTextLayerId(null);
+                            }}
+                        />
+                    );
+                })()}
         </>
     );
 }

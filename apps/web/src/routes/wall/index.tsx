@@ -153,9 +153,11 @@ function WallApp() {
 
         if (layer.type === 'text') {
             return (
-                <div key={layer.numericId} {...commonProps}>
-                    {layer.textProto}
-                </div>
+                <div
+                    key={layer.numericId}
+                    {...commonProps}
+                    dangerouslySetInnerHTML={{ __html: layer.textHtml }}
+                />
             );
         }
 

@@ -52,3 +52,77 @@
         --wave-pos: 130%;
     }
 }
+
+.lexical-content-editable {
+    min-height: 100%;
+    caret-color: white;
+}
+
+.lexical-content-editable ::selection {
+    color: inherit;
+    background-color: rgba(36, 36, 36);
+}
+
+.lexical-content-editable:focus {
+    outline: none;
+}
+
+.lexical-paragraph {
+    margin: 0;
+}
+
+.lexical-h1 {
+    font-size: 2.5em;
+    font-weight: 700;
+    margin: 0;
+}
+
+.lexical-h2 {
+    font-size: 2em;
+    font-weight: 600;
+    margin: 0;
+}
+
+.lexical-h3 {
+    font-size: 1.5em;
+    font-weight: 600;
+    margin: 0;
+}
+
+.lexical-h4 {
+    font-size: 1.25em;
+    font-weight: 600;
+    margin: 0;
+}
+
+.lexical-bold {
+    font-weight: 700;
+}
+
+.lexical-italic {
+    font-style: italic;
+}
+
+.lexical-underline {
+    text-decoration: underline;
+}
+
+.lexical-strikethrough {
+    text-decoration: line-through;
+}
+
+.lexical-ul {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin: 0;
+}
+
+.lexical-ol {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+    margin: 0;
+}
+
+.lexical-li {
+    margin: 0;
+}

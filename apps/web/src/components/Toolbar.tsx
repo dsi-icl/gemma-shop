@@ -28,7 +28,6 @@ import { useRef, useState } from 'react';
 
 import { InkToolbar } from '~/components/InkToolbar';
 import { PlaybackControls } from '~/components/PlaybackControls';
-import { TextEditor } from '~/components/TextEditor';
 import { VideoScrubber } from '~/components/VideoScrubber';
 import { WallPickerPopover } from '~/components/WallPicker';
 import { EditorEngine } from '~/lib/editorEngine';
@@ -38,9 +37,10 @@ import type { LayerWithEditorState } from '~/lib/types';
 interface ToolbarProps {
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onEditText?: (layerId: number) => void;
 }
 
-export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
+export function Toolbar({ fileInputRef, onUpload, onEditText }: ToolbarProps) {
     const {
         projectId,
         projectName,
@@ -166,7 +166,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                 </div>
 
                 <div className="w-full grow text-center text-xs text-muted-foreground">
-                    {projectName} - {parentSaveMessage} - 0000
+                    {projectName} - {parentSaveMessage}
                     {/* ── Save status text ── */}
                     {saveStatus === 'dirty' && <span> - Unsaved</span>}
                 </div>
@@ -276,13 +276,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     </TipButton>
                 </div>
             </div>
-            {/* {isText && activeLayer && (
-                <TextEditor
-                    key={`te_${activeLayer.numericId}`}
-                    layer={activeLayer as Extract<LayerWithEditorState, { type: 'text' }>}
-                    engine={engine}
-                />
-            )} */}
+            {/* Empty — text editing moved to dialog via double-click or toolbar button */}
             <div
                 id="toolbar"
                 className="flex h-11 items-center gap-1 border-t border-b border-border bg-card/50 px-2 py-1"
@@ -301,6 +295,19 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                                 <ArrowLineDownIcon />
                             </TipButton>
                         </div>
+                    </>
+                )}
+
+                {/* ── Text ── */}
+                {isText && activeLayer && onEditText && (
+                    <>
+                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <TipButton
+                            tip="Edit text"
+                            onClick={() => onEditText(activeLayer.numericId)}
+                        >
+                            <PencilSimpleIcon />
+                        </TipButton>
                     </>
                 )}
 

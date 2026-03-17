@@ -58,7 +58,7 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
     const getLayerName = (layer: LayerWithEditorState): string => {
         switch (layer.type) {
             case 'text':
-                return layer.textProto.split('\n')[0] || 'Text';
+                return layer.textHtml.replace(/<[^>]*>/g, '').slice(0, 40) || 'Text';
             case 'image':
                 return 'Image';
             case 'video':
