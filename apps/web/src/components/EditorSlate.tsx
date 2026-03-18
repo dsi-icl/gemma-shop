@@ -39,7 +39,9 @@ function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
 }
 
 export function EditorSlate() {
-    // ── Store state (replaces useState + useRef counters) ─────────────────
+    const projectId = useEditorStore((s) => s.projectId);
+    const commitId = useEditorStore((s) => s.commitId);
+    const activeSlideId = useEditorStore((s) => s.activeSlideId);
     const layers = useEditorStore((s) => s.layers);
     // This probably requires some attention: The Konva Stage only selects one item at a time, but we use the multi-select layer sorter here.
     const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
@@ -142,10 +144,9 @@ export function EditorSlate() {
     // ── Keyboard shortcut ─────────────────────────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            // TODO Guard this function, it should not execute if the text editor is opened !!!
+            if (editingTextLayerId !== null) return;
             const store = useEditorStore.getState();
             if (!store.selectedLayerIds.length) return;
-            // TODO Check if the Konva stage has focus or is the text editor is opened to prevent deleting layers
 
             if (e.key === 'Delete') store.deleteSelectedLayer();
             if (e.key === 'Escape') store.deselectAllLayers();
@@ -153,8 +154,6 @@ export function EditorSlate() {
                 (l) => l.numericId === parseInt(store.selectedLayerIds[0])
             );
             if (!currentSelected) return;
-
-            // TODO Check if the Konva stage has focus or is the text editor is opened
 
             const newLayerState = { ...currentSelected, config: { ...currentSelected.config } };
             if (e.key === 'ArrowLeft') {
@@ -626,6 +625,7 @@ export function EditorSlate() {
     }, [selectedLayerIds]);
 
     // ── Render ────────────────────────────────────────────────────────────
+    console.log('render', editingTextLayerId);
     return (
         <>
             <Toolbar
@@ -892,22 +892,16 @@ export function EditorSlate() {
             ) : null} */}
 
             {/* Text Editor Dialog */}
-            {editingTextLayerId !== null &&
-                (() => {
-                    const textLayer = layers.find(
-                        (l) => l.numericId === editingTextLayerId && l.type === 'text'
-                    ) as Extract<LayerWithEditorState, { type: 'text' }> | undefined;
-                    if (!textLayer) return null;
-                    return (
-                        <TextEditorDialog
-                            layer={textLayer}
-                            open
-                            onOpenChange={(open) => {
-                                if (!open) setEditingTextLayerId(null);
-                            }}
-                        />
-                    );
-                })()}
+            {editingTextLayerId !== null ? (
+                <TextEditorDialog
+                    key={`txt_edit_${projectId}/${commitId}/${activeSlideId}/${editingTextLayerId}`}
+                    layerId={editingTextLayerId}
+                    open
+                    onOpenChange={(open) => {
+                        if (!open) setEditingTextLayerId(null);
+                    }}
+                />
+            ) : null}
         </>
     );
 }

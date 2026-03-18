@@ -56,7 +56,7 @@ const INITIAL_STATE: ToolbarState = {
     blockType: 'paragraph',
     fontSize: '48',
     fontColor: '#ffffff',
-    bgColor: 'transparent'
+    bgColor: '#ffffff00'
 };
 
 const SYSTEM_FONTS = ['sans-serif', 'serif', 'monospace', 'Inter Variable'];
@@ -300,7 +300,7 @@ export function TextEditorToolbar({
                 <ColorPickerPopover value={state.fontColor} onChange={applyFontColor} />
             </div>
             <div className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">BG</span>
+                <span className="text-xs text-muted-foreground">Background</span>
                 <ColorPickerPopover value={state.bgColor} onChange={applyBgColor} />
             </div>
 

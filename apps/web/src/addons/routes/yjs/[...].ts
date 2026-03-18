@@ -6,15 +6,13 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 
-// ── Y.Doc storage — one doc per textScope ────────────────────────────────────
-
 interface SharedDoc {
     doc: Y.Doc;
     awareness: awarenessProtocol.Awareness;
     peers: Set<Peer>;
 }
 
-/** In-memory store: textScope → SharedDoc. Survives Vite HMR via process global. */
+/** In-memory store: textLayerScope → SharedDoc. Survives Vite HMR via process global. */
 const _hmr = (process as any).__YJS_HMR__ ?? {
     docs: new Map<string, SharedDoc>()
 };
@@ -22,14 +20,14 @@ const _hmr = (process as any).__YJS_HMR__ ?? {
 
 const docs: Map<string, SharedDoc> = _hmr.docs;
 
-function getOrCreateDoc(textScope: string): SharedDoc {
-    let entry = docs.get(textScope);
+function getOrCreateDoc(textLayerScope: string): SharedDoc {
+    let entry = docs.get(textLayerScope);
     if (entry) return entry;
 
     const doc = new Y.Doc();
     const awareness = new awarenessProtocol.Awareness(doc);
     entry = { doc, awareness, peers: new Set() };
-    docs.set(textScope, entry);
+    docs.set(textLayerScope, entry);
 
     // Broadcast doc updates to all connected peers
     doc.on('update', (update: Uint8Array, origin: unknown) => {
@@ -83,40 +81,35 @@ function getOrCreateDoc(textScope: string): SharedDoc {
     return entry;
 }
 
-function cleanupDoc(textScope: string) {
-    const entry = docs.get(textScope);
+function cleanupDoc(textLayerScope: string) {
+    const entry = docs.get(textLayerScope);
     if (!entry || entry.peers.size > 0) return;
-    // Keep docs in memory for now — they may be reconnected to
-    // To save memory in production, could add a TTL cleanup here
+    // TODO decide if it makes sense to keep the document in memory eventually ....
+    console.log('Cleaning server YJS doc for scope', textLayerScope);
+    entry.doc.destroy();
+    docs.delete(textLayerScope);
 }
-
-// ── Message types (must match y-websocket protocol) ──────────────────────────
 
 const messageSync = 0;
 const messageAwareness = 1;
-
-// ── Peer metadata ────────────────────────────────────────────────────────────
-
 const peerScopes = new Map<string, string>();
-
-// ── WebSocket handler ────────────────────────────────────────────────────────
 
 export default defineWebSocketHandler({
     open(peer) {
         peer.websocket.binaryType = 'arraybuffer';
 
-        // Extract textScope from URL query
+        // Extract textLayerScope from URL query
         const url = peer.request?.url ?? peer.websocket.url ?? '';
         const parsed = new URL(url);
-        const textScope = parsed.searchParams.get('textScope');
+        const textLayerScope = parsed.pathname.replace('/yjs/', '');
 
-        if (!textScope) {
-            peer.close(4000, 'Missing textScope query parameter');
+        if (!textLayerScope) {
+            peer.close(4000, 'Missing textLayerScope query parameter');
             return;
         }
 
-        peerScopes.set(peer.id, textScope);
-        const entry = getOrCreateDoc(textScope);
+        peerScopes.set(peer.id, textLayerScope);
+        const entry = getOrCreateDoc(textLayerScope);
         entry.peers.add(peer);
 
         try {
@@ -146,10 +139,10 @@ export default defineWebSocketHandler({
     },
 
     message(peer, message) {
-        const textScope = peerScopes.get(peer.id);
-        if (!textScope) return;
+        const textLayerScope = peerScopes.get(peer.id);
+        if (!textLayerScope) return;
 
-        const entry = docs.get(textScope);
+        const entry = docs.get(textLayerScope);
         if (!entry) return;
 
         const data =
@@ -187,11 +180,11 @@ export default defineWebSocketHandler({
     },
 
     close(peer) {
-        const textScope = peerScopes.get(peer.id);
+        const textLayerScope = peerScopes.get(peer.id);
         peerScopes.delete(peer.id);
 
-        if (!textScope) return;
-        const entry = docs.get(textScope);
+        if (!textLayerScope) return;
+        const entry = docs.get(textLayerScope);
         if (!entry) return;
 
         entry.peers.delete(peer);
@@ -199,6 +192,6 @@ export default defineWebSocketHandler({
         // Remove awareness state for this peer
         awarenessProtocol.removeAwarenessStates(entry.awareness, [entry.doc.clientID], null);
 
-        cleanupDoc(textScope);
+        cleanupDoc(textLayerScope);
     }
 });
