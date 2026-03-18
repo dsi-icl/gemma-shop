@@ -250,42 +250,22 @@ function CommitsTab() {
                                             )}
                                     </TableCell>
                                     <TableCell className="flex items-center gap-1">
-                                        {commit.isMutableHead && commit.firstSlideId ? (
-                                            <Button
-                                                render={
-                                                    <Link
-                                                        to="/quarry/editor/$projectId/$commitId/$slideId"
-                                                        params={{
-                                                            projectId,
-                                                            commitId: commit._id,
-                                                            slideId: commit.firstSlideId
-                                                        }}
-                                                    />
-                                                }
-                                                variant="outline"
-                                                size="xs"
-                                                nativeButton={false}
-                                            >
-                                                <PencilSimpleIcon /> Edit
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                render={
-                                                    <Link
-                                                        to="/quarry/view/$projectId/$commitId"
-                                                        params={{
-                                                            projectId,
-                                                            commitId: commit._id
-                                                        }}
-                                                    />
-                                                }
-                                                variant="outline"
-                                                size="xs"
-                                                nativeButton={false}
-                                            >
-                                                <EyeIcon /> View
-                                            </Button>
-                                        )}
+                                        <Button
+                                            render={
+                                                <Link
+                                                    to="/quarry/view/$projectId/$commitId"
+                                                    params={{
+                                                        projectId,
+                                                        commitId: commit._id
+                                                    }}
+                                                />
+                                            }
+                                            variant="outline"
+                                            size="xs"
+                                            nativeButton={false}
+                                        >
+                                            <EyeIcon /> View
+                                        </Button>
                                         {commit.isMutableHead &&
                                             commit._id !== project.headCommitId && (
                                                 <Button
@@ -318,6 +298,25 @@ function CommitsTab() {
                                                 <GlobeIcon /> Publish
                                             </Button>
                                         )}
+                                        {commit.isMutableHead && commit.firstSlideId ? (
+                                            <Button
+                                                render={
+                                                    <Link
+                                                        to="/quarry/editor/$projectId/$commitId/$slideId"
+                                                        params={{
+                                                            projectId,
+                                                            commitId: commit._id,
+                                                            slideId: commit.firstSlideId
+                                                        }}
+                                                    />
+                                                }
+                                                variant="outline"
+                                                size="xs"
+                                                nativeButton={false}
+                                            >
+                                                <PencilSimpleIcon /> Edit
+                                            </Button>
+                                        ) : null}
                                     </TableCell>
                                 </TableRow>
                             );
