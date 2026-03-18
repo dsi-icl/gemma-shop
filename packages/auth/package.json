@@ -10,13 +10,13 @@
         "@react-email/render": "catalog:",
         "@repo/emails": "workspace:*",
         "better-auth": "catalog:",
-        "nodemailer": "^8.0.2"
+        "nodemailer": "catalog:"
     },
     "devDependencies": {
         "@repo/tsconfig": "workspace:*",
         "@types/bun": "catalog:",
         "@types/node": "catalog:",
-        "@types/nodemailer": "^7.0.11",
+        "@types/nodemailer": "catalog:",
         "typescript": "catalog:"
     },
     "peerDependencies": {
