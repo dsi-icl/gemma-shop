@@ -116,11 +116,6 @@ export const useEditorStore =
     typeof window !== 'undefined' && window.__EDITOR_STORE__
         ? window.__EDITOR_STORE__
         : create<EditorState>()((set, get) => {
-              console.log(
-                  'New store is being created ....d.................',
-                  import.meta.hot?.data
-              );
-
               /** Send a layer update to the server, preserving video playback state */
               const sendLayerUpdate = throttle(
                   (layer: LayerWithEditorState, origin: string) => {

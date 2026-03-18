@@ -43,7 +43,7 @@ export function EditorSlate() {
     const commitId = useEditorStore((s) => s.commitId);
     const activeSlideId = useEditorStore((s) => s.activeSlideId);
     const layers = useEditorStore((s) => s.layers);
-    // This probably requires some attention: The Konva Stage only selects one item at a time, but we use the multi-select layer sorter here.
+    // TODO This probably requires some attention: The Konva Stage only selects one item at a time, but we use the multi-select layer sorter here.
     const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
     const toggleLayerSelection = useEditorStore((s) => s.toggleLayerSelection);
     const deselectAllLayers = useEditorStore((s) => s.deselectAllLayers);
@@ -55,7 +55,6 @@ export function EditorSlate() {
     const strokeDash = useEditorStore((s) => s.strokeDash);
     const strokeWidth = useEditorStore((s) => s.strokeWidth);
 
-    // ── Local-only state (Konva interaction, not shared) ──────────────────
     const [stageScaleFactor, _setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
     const [isPinching, setIsPinching] = useState(false);
     const [currentLine, setCurrentLine] = useState<Array<number>>([]);
@@ -90,7 +89,6 @@ export function EditorSlate() {
         layersRef.current = layers;
     }, [layers]);
 
-    // ── HMR rehydration ───────────────────────────────────────────────────
     useEffect(() => {
         if (window.__EDITOR_RELOADING__) {
             setTimeout(() => {
@@ -100,7 +98,6 @@ export function EditorSlate() {
         }
     }, []);
 
-    // ── Binary fast-path subscription ─────────────────────────────────────
     // JSON messages are handled by the store wiring in editorStore.ts.
     // Only the binary path stays here because it directly manipulates Konva nodes.
     useEffect(() => {
@@ -141,7 +138,6 @@ export function EditorSlate() {
         return () => unsubscribeBinary();
     }, [isPinching]);
 
-    // ── Keyboard shortcut ─────────────────────────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (editingTextLayerId !== null) return;
@@ -342,8 +338,6 @@ export function EditorSlate() {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    // ── Konva transform handlers ──────────────────────────────────────────
-
     const handleTransform = (e: Pick<KonvaEventObject<Event>, 'target'>, numericId: number) => {
         const node = e.target as Konva.Shape;
         const layer = layersRef.current.find((l) => l.numericId === numericId);
@@ -463,8 +457,6 @@ export function EditorSlate() {
         const node = stage?.findOne<Konva.Shape>(`#${idToFlush}`);
         if (node) handleTransformEnd({ target: node }, parseInt(idToFlush));
     };
-
-    // ── Stage interaction handlers ────────────────────────────────────────
 
     const handleStageInteractionStart = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
@@ -607,7 +599,6 @@ export function EditorSlate() {
         lastCenter.current = null;
     };
 
-    // ── Transformer selection sync ────────────────────────────────────────
     useEffect(() => {
         if (selectedLayerIds.length && trRef.current) {
             const node = trRef.current.getStage()?.findOne(`#${selectedLayerIds[0]}`);
@@ -624,8 +615,6 @@ export function EditorSlate() {
         }
     }, [selectedLayerIds]);
 
-    // ── Render ────────────────────────────────────────────────────────────
-    console.log('render', editingTextLayerId);
     return (
         <>
             <Toolbar
