@@ -1,6 +1,6 @@
 import '@tanstack/react-start/server-only';
 import { unlink } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 
 import { db } from '@repo/db';
 import type {
