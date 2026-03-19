@@ -5,11 +5,13 @@ import { Button } from '@repo/ui/components/button';
 import { Input } from '@repo/ui/components/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/popover';
 import { TipButton } from '@repo/ui/components/tip-button';
-import { useEffect, useState } from 'react';
+import { PropsWithChildren, useEffect, useState } from 'react';
 import { HexAlphaColorPicker } from 'react-colorful';
 
-interface ColorPickerProps {
+interface ColorPickerProps extends PropsWithChildren {
     value: string;
+    tip?: string;
+    variant?: Parameters<typeof TipButton>[0]['variant'];
     onChange: (value: string) => void;
 }
 
@@ -61,12 +63,18 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
     );
 }
 
-export function ColorPickerPopover({ value, onChange }: ColorPickerProps) {
+export function ColorPickerPopover({ value, onChange, tip, variant, children }: ColorPickerProps) {
     return (
         <Popover>
             <PopoverTrigger>
-                <TipButton tip="Color" variant="outline" className="h-8 w-8 p-0">
-                    <div className="h-4 w-4 rounded-full" style={{ backgroundColor: value }} />
+                <TipButton
+                    tip={tip ?? 'Color'}
+                    variant={variant ?? 'outline'}
+                    className="h-8 w-8 p-0"
+                >
+                    {children ?? (
+                        <div className="h-4 w-4 rounded-full" style={{ backgroundColor: value }} />
+                    )}
                 </TipButton>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-3" side="bottom" align="start">

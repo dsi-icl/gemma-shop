@@ -48,6 +48,7 @@ export interface EditorState {
     strokeDash: number[];
     shapeFill: string;
     shapeStroke: string;
+    editingTextLayerId: number | null;
 
     // ── Wall binding ──
     boundWallId: string | null;
@@ -109,6 +110,8 @@ export interface EditorState {
     toggleDrawing: () => void;
     toggleSnapping: () => void;
     toggleSpacePreview: () => void;
+    startTextEditing: (numericId: number) => void;
+    stopTextEditing: () => void;
 }
 
 export type EditorStateCreator = ReturnType<ReturnType<typeof create<EditorState>>>;
@@ -172,6 +175,7 @@ export const useEditorStore =
                   strokeDash: [],
                   shapeFill: '#ff0000',
                   shapeStroke: '#000000',
+                  editingTextLayerId: null,
 
                   // ── Wall binding ──
                   boundWallId: null,
@@ -894,7 +898,16 @@ export const useEditorStore =
                           selectedLayerIds: !s.isDrawing ? [] : s.selectedLayerIds
                       })),
                   toggleSnapping: () => set((s) => ({ isSnapping: !s.isSnapping })),
-                  toggleSpacePreview: () => set((s) => ({ showSpacePreview: !s.showSpacePreview }))
+                  toggleSpacePreview: () => set((s) => ({ showSpacePreview: !s.showSpacePreview })),
+                  startTextEditing: (numericId) => {
+                      set({
+                          editingTextLayerId: numericId
+                      });
+                  },
+                  stopTextEditing: () =>
+                      set({
+                          editingTextLayerId: null
+                      })
               };
           });
 

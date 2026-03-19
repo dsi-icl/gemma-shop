@@ -37,10 +37,10 @@ import type { LayerWithEditorState } from '~/lib/types';
 interface ToolbarProps {
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onEditText?: (layerId: number) => void;
+    // onEditText?: (layerId: number) => void;
 }
 
-export function Toolbar({ fileInputRef, onUpload, onEditText }: ToolbarProps) {
+export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     const {
         projectId,
         projectName,
@@ -65,6 +65,7 @@ export function Toolbar({ fileInputRef, onUpload, onEditText }: ToolbarProps) {
     const isDrawing = useEditorStore((s) => s.isDrawing);
     const toggleDrawing = useEditorStore((s) => s.toggleDrawing);
     const saveStatus = useEditorStore((s) => s.saveStatus);
+    const startTextEditing = useEditorStore((s) => s.startTextEditing);
     const selectedId = selectedLayerIds[0];
 
     const engine = EditorEngine.getInstance();
@@ -299,12 +300,12 @@ export function Toolbar({ fileInputRef, onUpload, onEditText }: ToolbarProps) {
                 )}
 
                 {/* ── Text ── */}
-                {isText && activeLayer && onEditText && (
+                {isText && activeLayer && (
                     <>
                         <Separator orientation="vertical" className="mx-1 h-6" />
                         <TipButton
                             tip="Edit text"
-                            onClick={() => onEditText(activeLayer.numericId)}
+                            onClick={() => startTextEditing(activeLayer.numericId)}
                         >
                             <PencilSimpleIcon />
                         </TipButton>

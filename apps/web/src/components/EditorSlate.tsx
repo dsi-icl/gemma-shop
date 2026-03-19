@@ -9,7 +9,6 @@ import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaTextLayer } from '~/components/KonvaTextLayer';
 import { KonvaVideo } from '~/components/KonvaVideo';
 import { RoyStaticRenderer } from '~/components/roygraph/RoyStaticRenderer';
-import { TextEditorDialog } from '~/components/TextEditorDialog';
 import { Toolbar } from '~/components/Toolbar';
 import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
@@ -39,14 +38,12 @@ function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
 }
 
 export function EditorSlate() {
-    const projectId = useEditorStore((s) => s.projectId);
-    const commitId = useEditorStore((s) => s.commitId);
-    const activeSlideId = useEditorStore((s) => s.activeSlideId);
     const layers = useEditorStore((s) => s.layers);
     // TODO This probably requires some attention: The Konva Stage only selects one item at a time, but we use the multi-select layer sorter here.
     const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
     const toggleLayerSelection = useEditorStore((s) => s.toggleLayerSelection);
     const deselectAllLayers = useEditorStore((s) => s.deselectAllLayers);
+    const startTextEditing = useEditorStore((s) => s.startTextEditing);
     const showGrid = useEditorStore((s) => s.showGrid);
     const isDrawing = useEditorStore((s) => s.isDrawing);
     const isSnapping = useEditorStore((s) => s.isSnapping);
@@ -58,7 +55,7 @@ export function EditorSlate() {
     const [stageScaleFactor, _setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
     const [isPinching, setIsPinching] = useState(false);
     const [currentLine, setCurrentLine] = useState<Array<number>>([]);
-    const [editingTextLayerId, setEditingTextLayerId] = useState<number | null>(null);
+    const editingTextLayerId = useEditorStore((s) => s.editingTextLayerId);
     const lastX = useRef(0);
     const stageLastX = useRef(0);
 
@@ -168,7 +165,7 @@ export function EditorSlate() {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isSnapping]);
+    }, [editingTextLayerId, isSnapping]);
 
     // ── Upload handler (stays here — complex async + file APIs) ───────────
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -620,7 +617,7 @@ export function EditorSlate() {
             <Toolbar
                 fileInputRef={fileInputRef}
                 onUpload={handleUpload}
-                onEditText={setEditingTextLayerId}
+                // onEditText={setEditingTextLayerId}
             />
             <SlatePreview
                 stageSlot={stageSlot}
@@ -726,9 +723,7 @@ export function EditorSlate() {
                                                 isPinching={props.isPinching}
                                                 opacity={hiddenOpacity}
                                                 onSelect={props.onSelect}
-                                                onDblClick={() =>
-                                                    setEditingTextLayerId(layer.numericId)
-                                                }
+                                                onDblClick={() => startTextEditing(layer.numericId)}
                                                 onTransform={props.onTransform}
                                                 onTransformEnd={props.onTransformEnd}
                                             />
@@ -892,18 +887,6 @@ export function EditorSlate() {
             {/* {stageInstance.current ? (
                 <DOPreview imageUrl={stageInstance.current.toDataURL()} />
             ) : null} */}
-
-            {/* Text Editor Dialog */}
-            {editingTextLayerId !== null ? (
-                <TextEditorDialog
-                    key={`txt_edit_${projectId}/${commitId}/${activeSlideId}/${editingTextLayerId}`}
-                    layerId={editingTextLayerId}
-                    open
-                    onOpenChange={(open) => {
-                        if (!open) setEditingTextLayerId(null);
-                    }}
-                />
-            ) : null}
         </>
     );
 }
