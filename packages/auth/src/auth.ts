@@ -5,7 +5,7 @@ import { MagicLinkEmail } from '@repo/emails/MagicLinkEmail';
 import { OtpEmail } from '@repo/emails/OtpEmail';
 import { mongodbAdapter } from 'better-auth/adapters/mongodb';
 import { betterAuth } from 'better-auth/minimal';
-import { emailOTP, magicLink } from 'better-auth/plugins';
+import { admin, emailOTP, magicLink } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import nodemailer from 'nodemailer';
 
@@ -21,10 +21,13 @@ const transporter = nodemailer.createTransport({
 
 const FROM_EMAIL = process.env.EMAIL_FROM || 'noreply@gemma-cast.local';
 
+const trustedOrigins = process.env.TRUSTED_ORIGINS
+    ? process.env.TRUSTED_ORIGINS.split(',').map((s) => s.trim())
+    : ['http://localhost:3670'];
+
 export const auth = betterAuth({
-    baseURL: {
-        allowedHosts: [process.env.VITE_BASE_URL]
-    },
+    baseURL: process.env.APP_BASE_URL || 'http://localhost:3670',
+    trustedOrigins,
     secret: process.env.SERVER_AUTH_SECRET,
     telemetry: {
         enabled: false
@@ -34,6 +37,7 @@ export const auth = betterAuth({
     // https://www.better-auth.com/docs/integrations/tanstack#usage-tips
     plugins: [
         tanstackStartCookies(),
+        admin(),
         magicLink({
             sendMagicLink: async ({ email, token, url }) => {
                 const html = await render(MagicLinkEmail({ url }));

@@ -10,13 +10,20 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as OgRouteImport } from './routes/og'
+import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as GuestRouteRouteImport } from './routes/_guest/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WallIndexRouteImport } from './routes/wall/index'
 import { Route as GalleryIndexRouteImport } from './routes/gallery/index'
 import { Route as ControllerIndexRouteImport } from './routes/controller/index'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
+import { Route as AdminWallsRouteImport } from './routes/admin/walls'
+import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as AdminStatsRouteImport } from './routes/admin/stats'
+import { Route as AdminProjectsRouteImport } from './routes/admin/projects'
+import { Route as AdminAssetsRouteImport } from './routes/admin/assets'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as AuthQuarryIndexRouteImport } from './routes/_auth/quarry/index'
 import { Route as ApiUploadsSplatRouteImport } from './routes/api/uploads/$'
@@ -39,6 +46,11 @@ import { Route as AuthQuarryEditorProjectIdCommitIdSlideIdRouteImport } from './
 const OgRoute = OgRouteImport.update({
   id: '/og',
   path: '/og',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRouteRoute = AdminRouteRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuestRouteRoute = GuestRouteRouteImport.update({
@@ -69,10 +81,40 @@ const ControllerIndexRoute = ControllerIndexRouteImport.update({
   path: '/controller/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const UploadProjectIdRoute = UploadProjectIdRouteImport.update({
   id: '/upload/$projectId',
   path: '/upload/$projectId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminWallsRoute = AdminWallsRouteImport.update({
+  id: '/walls',
+  path: '/walls',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminStatsRoute = AdminStatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminProjectsRoute = AdminProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminAssetsRoute = AdminAssetsRouteImport.update({
+  id: '/assets',
+  path: '/assets',
+  getParentRoute: () => AdminRouteRoute,
 } as any)
 const GuestLoginRoute = GuestLoginRouteImport.update({
   id: '/login',
@@ -177,9 +219,16 @@ const AuthQuarryEditorProjectIdCommitIdSlideIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
   '/og': typeof OgRoute
   '/login': typeof GuestLoginRoute
+  '/admin/assets': typeof AdminAssetsRoute
+  '/admin/projects': typeof AdminProjectsRoute
+  '/admin/stats': typeof AdminStatsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/walls': typeof AdminWallsRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
   '/wall/': typeof WallIndexRoute
@@ -205,7 +254,13 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/og': typeof OgRoute
   '/login': typeof GuestLoginRoute
+  '/admin/assets': typeof AdminAssetsRoute
+  '/admin/projects': typeof AdminProjectsRoute
+  '/admin/stats': typeof AdminStatsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/walls': typeof AdminWallsRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
+  '/admin': typeof AdminIndexRoute
   '/controller': typeof ControllerIndexRoute
   '/gallery': typeof GalleryIndexRoute
   '/wall': typeof WallIndexRoute
@@ -231,9 +286,16 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_guest': typeof GuestRouteRouteWithChildren
+  '/admin': typeof AdminRouteRouteWithChildren
   '/og': typeof OgRoute
   '/_guest/login': typeof GuestLoginRoute
+  '/admin/assets': typeof AdminAssetsRoute
+  '/admin/projects': typeof AdminProjectsRoute
+  '/admin/stats': typeof AdminStatsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/walls': typeof AdminWallsRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
   '/wall/': typeof WallIndexRoute
@@ -259,9 +321,16 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/og'
     | '/login'
+    | '/admin/assets'
+    | '/admin/projects'
+    | '/admin/stats'
+    | '/admin/users'
+    | '/admin/walls'
     | '/upload/$projectId'
+    | '/admin/'
     | '/controller/'
     | '/gallery/'
     | '/wall/'
@@ -287,7 +356,13 @@ export interface FileRouteTypes {
     | '/'
     | '/og'
     | '/login'
+    | '/admin/assets'
+    | '/admin/projects'
+    | '/admin/stats'
+    | '/admin/users'
+    | '/admin/walls'
     | '/upload/$projectId'
+    | '/admin'
     | '/controller'
     | '/gallery'
     | '/wall'
@@ -312,9 +387,16 @@ export interface FileRouteTypes {
     | '/'
     | '/_auth'
     | '/_guest'
+    | '/admin'
     | '/og'
     | '/_guest/login'
+    | '/admin/assets'
+    | '/admin/projects'
+    | '/admin/stats'
+    | '/admin/users'
+    | '/admin/walls'
     | '/upload/$projectId'
+    | '/admin/'
     | '/controller/'
     | '/gallery/'
     | '/wall/'
@@ -341,6 +423,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
+  AdminRouteRoute: typeof AdminRouteRouteWithChildren
   OgRoute: typeof OgRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
   ControllerIndexRoute: typeof ControllerIndexRoute
@@ -358,6 +441,13 @@ declare module '@tanstack/react-router' {
       path: '/og'
       fullPath: '/og'
       preLoaderRoute: typeof OgRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_guest': {
@@ -402,12 +492,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ControllerIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/upload/$projectId': {
       id: '/upload/$projectId'
       path: '/upload/$projectId'
       fullPath: '/upload/$projectId'
       preLoaderRoute: typeof UploadProjectIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/walls': {
+      id: '/admin/walls'
+      path: '/walls'
+      fullPath: '/admin/walls'
+      preLoaderRoute: typeof AdminWallsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/stats': {
+      id: '/admin/stats'
+      path: '/stats'
+      fullPath: '/admin/stats'
+      preLoaderRoute: typeof AdminStatsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/projects': {
+      id: '/admin/projects'
+      path: '/projects'
+      fullPath: '/admin/projects'
+      preLoaderRoute: typeof AdminProjectsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/assets': {
+      id: '/admin/assets'
+      path: '/assets'
+      fullPath: '/admin/assets'
+      preLoaderRoute: typeof AdminAssetsRouteImport
+      parentRoute: typeof AdminRouteRoute
     }
     '/_guest/login': {
       id: '/_guest/login'
@@ -630,10 +762,33 @@ const GuestRouteRouteWithChildren = GuestRouteRoute._addFileChildren(
   GuestRouteRouteChildren,
 )
 
+interface AdminRouteRouteChildren {
+  AdminAssetsRoute: typeof AdminAssetsRoute
+  AdminProjectsRoute: typeof AdminProjectsRoute
+  AdminStatsRoute: typeof AdminStatsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminWallsRoute: typeof AdminWallsRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminAssetsRoute: AdminAssetsRoute,
+  AdminProjectsRoute: AdminProjectsRoute,
+  AdminStatsRoute: AdminStatsRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminWallsRoute: AdminWallsRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
+  AdminRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRouteRoute: AuthRouteRouteWithChildren,
   GuestRouteRoute: GuestRouteRouteWithChildren,
+  AdminRouteRoute: AdminRouteRouteWithChildren,
   OgRoute: OgRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,
   ControllerIndexRoute: ControllerIndexRoute,

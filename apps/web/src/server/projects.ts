@@ -45,12 +45,43 @@ export async function listAssets(projectId: string, userEmail: string) {
 
     assertCanView(project, userEmail);
 
-    const docs = await assets
-        .find({ projectId: new ObjectId(projectId) })
-        .sort({ createdAt: -1 })
-        .toArray();
+    const [projectDocs, publicDocs] = await Promise.all([
+        assets
+            .find({ projectId: new ObjectId(projectId) })
+            .sort({ createdAt: -1 })
+            .toArray(),
+        assets.find({ public: true }).sort({ createdAt: -1 }).toArray()
+    ]);
 
+    const projectAssets = projectDocs.map(serializeAsset);
+    const projectIds = new Set(projectAssets.map((a) => a._id));
+    const publicAssets = publicDocs
+        .filter((d) => !projectIds.has(d._id.toHexString()))
+        .map(serializeAsset);
+
+    return [...projectAssets, ...publicAssets];
+}
+
+export async function listPublicAssets() {
+    const docs = await assets.find({ public: true }).sort({ createdAt: -1 }).toArray();
     return docs.map(serializeAsset);
+}
+
+export async function deletePublicAsset(assetId: string) {
+    const asset = await assets.findOne({ _id: new ObjectId(assetId), public: true });
+    if (!asset) throw new Error('Public asset not found');
+
+    await assets.deleteOne({ _id: new ObjectId(assetId) });
+
+    if (asset.url && typeof asset.url === 'string') {
+        const baseId = asset.url.replace(/\.[^.]+$/, '');
+        const filesToDelete = [asset.url];
+        if (asset.previewUrl) filesToDelete.push(asset.previewUrl as string);
+        if (Array.isArray(asset.sizes)) {
+            for (const size of asset.sizes) filesToDelete.push(`${baseId}_${size}.webp`);
+        }
+        await Promise.allSettled(filesToDelete.map((f) => unlink(join(ASSET_DIR, f))));
+    }
 }
 
 export async function getProject(id: string) {

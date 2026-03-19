@@ -42,3 +42,19 @@ export const freshAuthMiddleware = createMiddleware().server(async ({ next }) =>
 
     return next({ context: { user } });
 });
+
+export const adminMiddleware = createMiddleware().server(async ({ next }) => {
+    const user = await _getUser();
+
+    if (!user) {
+        setResponseStatus(401);
+        throw new Error('Unauthorized');
+    }
+
+    if ((user as any).role !== 'admin') {
+        setResponseStatus(403);
+        throw new Error('Forbidden');
+    }
+
+    return next({ context: { user } });
+});

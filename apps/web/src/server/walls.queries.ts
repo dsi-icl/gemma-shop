@@ -5,5 +5,7 @@ import { $listWalls } from './walls.fns';
 export const wallsQueryOptions = () =>
     queryOptions({
         queryKey: ['walls'],
-        queryFn: () => $listWalls()
+        queryFn: () => $listWalls(),
+        staleTime: 0,
+        refetchInterval: 10_000
     });

@@ -10,7 +10,7 @@ import { encode } from 'blurhash';
 import { ObjectId } from 'mongodb';
 import sharp from 'sharp';
 
-import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
+import { UPLOAD_DIR, TMP_DIR, ASSET_DIR, PUBLIC_ASSET_PROJECT_ID } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
 
 const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff']);
@@ -288,6 +288,7 @@ const tusServer = new Server({
                     (await stat(join(ASSET_DIR, assetFilename)).catch(() => null))?.size ??
                     upload.size;
 
+                const isPublicAsset = projectId === PUBLIC_ASSET_PROJECT_ID;
                 const insertResult = await db.collection('assets').insertOne({
                     projectId: new ObjectId(projectId),
                     name: originalName,
@@ -297,6 +298,7 @@ const tusServer = new Server({
                     blurhash,
                     previewUrl: previewFilename ?? undefined,
                     sizes: sizes.length > 0 ? sizes : undefined,
+                    public: isPublicAsset,
                     createdBy: userEmail,
                     createdAt: new Date().toISOString()
                 });
