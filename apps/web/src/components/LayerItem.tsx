@@ -14,7 +14,6 @@ import {
     CircleIcon
 } from '@phosphor-icons/react';
 import { TipButton } from '@repo/ui/components/tip-button';
-import { cn } from '@repo/ui/lib/utils';
 import React from 'react';
 
 import { useEditorStore } from '~/lib/editorStore';
