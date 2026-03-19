@@ -221,105 +221,107 @@ function CommitViewer() {
                                     scaleY={STAGE_SCALE_FACTOR}
                                 >
                                     <KonvaLayer>
-                                        {sortedLayers.map((layer) => {
-                                            if (layer.type === 'image') {
-                                                return (
-                                                    <ReadOnlyImage
-                                                        key={`img_${layer.numericId}`}
-                                                        layer={layer}
-                                                    />
-                                                );
-                                            }
-                                            if (layer.type === 'video') {
-                                                // Video layers shown as placeholder rect in read-only view
-                                                // TODO Should be a blurhash when present
+                                        {sortedLayers
+                                            .filter((layer) => layer.config.visible)
+                                            .map((layer) => {
+                                                if (layer.type === 'image') {
+                                                    return (
+                                                        <ReadOnlyImage
+                                                            key={`img_${layer.numericId}`}
+                                                            layer={layer}
+                                                        />
+                                                    );
+                                                }
+                                                if (layer.type === 'video') {
+                                                    // Video layers shown as placeholder rect in read-only view
+                                                    // TODO Should be a blurhash when present
+                                                    return (
+                                                        <Rect
+                                                            key={`vid_${layer.numericId}`}
+                                                            x={layer.config.cx}
+                                                            y={layer.config.cy}
+                                                            width={layer.config.width}
+                                                            height={layer.config.height}
+                                                            scaleX={layer.config.scaleX}
+                                                            scaleY={layer.config.scaleY}
+                                                            offsetX={layer.config.width / 2}
+                                                            offsetY={layer.config.height / 2}
+                                                            rotation={layer.config.rotation}
+                                                            fill="#333"
+                                                            listening={false}
+                                                        />
+                                                    );
+                                                }
+                                                if (layer.type === 'shape') {
+                                                    const common = {
+                                                        x: layer.config.cx,
+                                                        y: layer.config.cy,
+                                                        rotation: layer.config.rotation,
+                                                        scaleX: layer.config.scaleX,
+                                                        scaleY: layer.config.scaleY,
+                                                        fill: layer.fill,
+                                                        stroke: layer.strokeColor,
+                                                        strokeWidth: layer.strokeWidth,
+                                                        listening: false as const
+                                                    };
+                                                    if (layer.shape === 'rectangle') {
+                                                        return (
+                                                            <Rect
+                                                                key={`shape_${layer.numericId}`}
+                                                                {...common}
+                                                                width={layer.config.width}
+                                                                height={layer.config.height}
+                                                                offsetX={layer.config.width / 2}
+                                                                offsetY={layer.config.height / 2}
+                                                                dash={layer.strokeDash}
+                                                            />
+                                                        );
+                                                    }
+                                                    if (layer.shape === 'circle') {
+                                                        return (
+                                                            <Circle
+                                                                key={`shape_${layer.numericId}`}
+                                                                {...common}
+                                                                offsetX={layer.config.width / 2}
+                                                                offsetY={layer.config.height / 2}
+                                                                radius={layer.config.width / 2}
+                                                                dash={layer.strokeDash}
+                                                            />
+                                                        );
+                                                    }
+                                                }
+                                                if (layer.type === 'line') {
+                                                    return (
+                                                        <Line
+                                                            key={`lin_${layer.numericId}`}
+                                                            points={layer.line}
+                                                            stroke={layer.strokeColor}
+                                                            strokeWidth={layer.strokeWidth}
+                                                            dash={layer.strokeDash}
+                                                            dashEnabled={true}
+                                                            tension={0.4}
+                                                            lineCap="round"
+                                                            lineJoin="round"
+                                                            listening={false}
+                                                        />
+                                                    );
+                                                }
+                                                // Fallback placeholder
                                                 return (
                                                     <Rect
-                                                        key={`vid_${layer.numericId}`}
+                                                        key={`fallback_${layer.numericId}`}
                                                         x={layer.config.cx}
                                                         y={layer.config.cy}
                                                         width={layer.config.width}
                                                         height={layer.config.height}
-                                                        scaleX={layer.config.scaleX}
-                                                        scaleY={layer.config.scaleY}
                                                         offsetX={layer.config.width / 2}
                                                         offsetY={layer.config.height / 2}
                                                         rotation={layer.config.rotation}
-                                                        fill="#333"
+                                                        fill="#555"
                                                         listening={false}
                                                     />
                                                 );
-                                            }
-                                            if (layer.type === 'shape') {
-                                                const common = {
-                                                    x: layer.config.cx,
-                                                    y: layer.config.cy,
-                                                    rotation: layer.config.rotation,
-                                                    scaleX: layer.config.scaleX,
-                                                    scaleY: layer.config.scaleY,
-                                                    fill: layer.fill,
-                                                    stroke: layer.strokeColor,
-                                                    strokeWidth: layer.strokeWidth,
-                                                    listening: false as const
-                                                };
-                                                if (layer.shape === 'rectangle') {
-                                                    return (
-                                                        <Rect
-                                                            key={`shape_${layer.numericId}`}
-                                                            {...common}
-                                                            width={layer.config.width}
-                                                            height={layer.config.height}
-                                                            offsetX={layer.config.width / 2}
-                                                            offsetY={layer.config.height / 2}
-                                                            dash={layer.strokeDash}
-                                                        />
-                                                    );
-                                                }
-                                                if (layer.shape === 'circle') {
-                                                    return (
-                                                        <Circle
-                                                            key={`shape_${layer.numericId}`}
-                                                            {...common}
-                                                            offsetX={layer.config.width / 2}
-                                                            offsetY={layer.config.height / 2}
-                                                            radius={layer.config.width / 2}
-                                                            dash={layer.strokeDash}
-                                                        />
-                                                    );
-                                                }
-                                            }
-                                            if (layer.type === 'line') {
-                                                return (
-                                                    <Line
-                                                        key={`lin_${layer.numericId}`}
-                                                        points={layer.line}
-                                                        stroke={layer.strokeColor}
-                                                        strokeWidth={layer.strokeWidth}
-                                                        dash={layer.strokeDash}
-                                                        dashEnabled={true}
-                                                        tension={0.4}
-                                                        lineCap="round"
-                                                        lineJoin="round"
-                                                        listening={false}
-                                                    />
-                                                );
-                                            }
-                                            // Fallback placeholder
-                                            return (
-                                                <Rect
-                                                    key={`fallback_${layer.numericId}`}
-                                                    x={layer.config.cx}
-                                                    y={layer.config.cy}
-                                                    width={layer.config.width}
-                                                    height={layer.config.height}
-                                                    offsetX={layer.config.width / 2}
-                                                    offsetY={layer.config.height / 2}
-                                                    rotation={layer.config.rotation}
-                                                    fill="#555"
-                                                    listening={false}
-                                                />
-                                            );
-                                        })}
+                                            })}
                                         {getDOGridLines(COLS * SCREEN_W, ROWS * SCREEN_H, 20)}
                                     </KonvaLayer>
                                 </Stage>

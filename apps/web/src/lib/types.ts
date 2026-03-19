@@ -15,7 +15,7 @@ const LayerPositionStateSchema = z.object({
 export type LayerPositionState = z.infer<typeof LayerPositionStateSchema>;
 
 const LayerConfigStateSchema = z
-    .object({ zIndex: z.number() })
+    .object({ zIndex: z.number(), visible: z.boolean().default(true) })
     .extend(LayerPositionStateSchema.shape);
 
 const LayerPlaybackStateSchema = z.object({

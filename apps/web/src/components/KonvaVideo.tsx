@@ -11,12 +11,14 @@ import type { LayerWithEditorState } from '~/lib/types';
 export function KonvaVideo({
     layer,
     isPinching,
+    opacity,
     onSelect,
     onTransform,
     onTransformEnd
 }: {
     layer: Extract<LayerWithEditorState, { type: 'video' }>;
     isPinching: boolean;
+    opacity?: number;
     onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
     onTransform: (e: KonvaEventObject<Event>) => void;
     onTransformEnd: (e: KonvaEventObject<Event>) => void;
@@ -143,6 +145,7 @@ export function KonvaVideo({
             height={layer.config.height}
             offsetX={layer.config.width / 2}
             offsetY={layer.config.height / 2}
+            opacity={opacity}
             draggable={!isPinching}
             onClick={onSelect}
             onTap={onSelect}

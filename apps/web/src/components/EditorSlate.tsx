@@ -242,7 +242,7 @@ export function EditorSlate() {
             scaleY: 1
         };
 
-        const config: Layer['config'] = { ...positions, zIndex };
+        const config: Layer['config'] = { ...positions, zIndex, visible: true };
 
         const defaultPlayback: Extract<Layer, { type: 'video' }>['playback'] = {
             status: 'paused',
@@ -674,9 +674,18 @@ export function EditorSlate() {
                             {[...layers]
                                 .sort((a, b) => a.config.zIndex - b.config.zIndex)
                                 .map((layer) => {
+                                    const isHidden = !layer.config.visible;
+                                    const isSelected = selectedLayerIds.includes(
+                                        layer.numericId.toString()
+                                    );
+                                    if (isHidden && !isSelected) return null;
+
+                                    const hiddenOpacity = isHidden ? 0.3 : 1;
+
                                     const props = {
                                         listening: !isDrawing,
                                         isPinching,
+                                        opacity: hiddenOpacity,
                                         onSelect: (
                                             e: KonvaEventObject<MouseEvent | TouchEvent>
                                         ) => {
@@ -715,6 +724,7 @@ export function EditorSlate() {
                                                 key={`txt_${layer.numericId}`}
                                                 layer={layer}
                                                 isPinching={props.isPinching}
+                                                opacity={hiddenOpacity}
                                                 onSelect={props.onSelect}
                                                 onDblClick={() =>
                                                     setEditingTextLayerId(layer.numericId)
@@ -749,6 +759,7 @@ export function EditorSlate() {
                                                 offsetX={layer.config.width / 2}
                                                 offsetY={layer.config.height / 2}
                                                 rotation={layer.config.rotation}
+                                                opacity={hiddenOpacity}
                                                 draggable={!props.isPinching}
                                                 onClick={props.onSelect}
                                                 onTap={props.onSelect}
@@ -767,6 +778,7 @@ export function EditorSlate() {
                                             rotation: layer.config.rotation,
                                             scaleX: layer.config.scaleX,
                                             scaleY: layer.config.scaleY,
+                                            opacity: hiddenOpacity,
                                             draggable: !props.isPinching,
                                             onClick: props.onSelect,
                                             onTap: props.onSelect,
@@ -815,6 +827,7 @@ export function EditorSlate() {
                                             <Line
                                                 key={`lin_${layer.numericId}`}
                                                 listening={true}
+                                                opacity={hiddenOpacity}
                                                 points={layer.line}
                                                 stroke={layer.strokeColor}
                                                 strokeWidth={layer.strokeWidth}

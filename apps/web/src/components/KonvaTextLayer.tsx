@@ -11,6 +11,7 @@ import type { LayerWithEditorState } from '~/lib/types';
 export function KonvaTextLayer({
     layer,
     isPinching,
+    opacity,
     onSelect,
     onDblClick,
     onTransform,
@@ -18,6 +19,7 @@ export function KonvaTextLayer({
 }: {
     layer: Extract<LayerWithEditorState, { type: 'text' }>;
     isPinching: boolean;
+    opacity?: number;
     onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
     onDblClick: () => void;
     onTransform: (e: KonvaEventObject<Event>) => void;
@@ -58,6 +60,7 @@ export function KonvaTextLayer({
             offsetX={layer.config.width / 2}
             offsetY={layer.config.height / 2}
             rotation={layer.config.rotation}
+            opacity={opacity}
             draggable={!isPinching}
             onClick={onSelect}
             onTap={onSelect}

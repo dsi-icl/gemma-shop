@@ -10,12 +10,14 @@ import type { LayerWithEditorState } from '~/lib/types';
 export function RoyStaticRenderer({
     layer,
     isPinching,
+    opacity,
     onSelect,
     onTransform,
     onTransformEnd
 }: {
     layer: LayerWithEditorState;
     isPinching: boolean;
+    opacity?: number;
     onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
     onTransform: (e: KonvaEventObject<Event>) => void;
     onTransformEnd: (e: KonvaEventObject<Event>) => void;
@@ -52,6 +54,7 @@ export function RoyStaticRenderer({
             scaleX={layer.config.scaleX}
             scaleY={layer.config.scaleY}
             rotation={layer.config.rotation}
+            opacity={opacity}
             draggable={!isPinching}
             onClick={onSelect}
             onTap={onSelect}

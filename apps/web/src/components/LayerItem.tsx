@@ -1,5 +1,7 @@
 import {
     BugBeetleIcon,
+    EyeIcon,
+    EyeSlashIcon,
     FilmSlateIcon,
     ImageIcon,
     MapTrifoldIcon,
@@ -25,6 +27,8 @@ interface LayerItemProps {
 
 export function LayerItem({ layer, isSelected }: LayerItemProps) {
     const removeLayer = useEditorStore((s) => s.removeLayer);
+    const toggleLayerVisibility = useEditorStore((s) => s.toggleLayerVisibility);
+    const isHidden = !layer.config.visible;
 
     const getLayerIcon = (type: LayerWithEditorState['type']): React.ReactNode => {
         switch (type) {
@@ -90,7 +94,7 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                 isSelected
                     ? 'border-ring bg-accent text-accent-foreground'
                     : 'border-border bg-card hover:border-primary'
-            }`}
+            } ${isHidden ? 'opacity-50' : ''}`}
         >
             <div className="mr-2 rounded bg-muted p-1.5 text-muted-foreground">
                 {getLayerIcon(layer.type)}
@@ -98,7 +102,15 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
             <div className="flex-1 flex-col truncate text-sm text-foreground">
                 <span>{getLayerName(layer)}</span>
             </div>
-            <div>
+            <div className="flex items-center gap-1">
+                <TipButton
+                    tip={isHidden ? 'Show layer' : 'Hide layer'}
+                    variant="ghost"
+                    onClick={() => toggleLayerVisibility(layer.numericId)}
+                    className="opacity-0 group-hover:opacity-100"
+                >
+                    {isHidden ? <EyeSlashIcon /> : <EyeIcon />}
+                </TipButton>
                 <TipButton
                     tip="Delete layer"
                     variant="destructive"

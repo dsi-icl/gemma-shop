@@ -104,6 +104,7 @@ export interface EditorState {
     deselectAllLayers: () => void;
     toggleSlideSelection: (id: string, isShiftClick: boolean, isCtrlClick: boolean) => void;
     toggleLayerSelection: (id: string, isShiftClick: boolean, isCtrlClick: boolean) => void;
+    toggleLayerVisibility: (numericId: number) => void;
     toggleGrid: () => void;
     toggleDrawing: () => void;
     toggleSnapping: () => void;
@@ -310,6 +311,23 @@ export const useEditorStore =
                               l.numericId === numericId ? { ...l, config } : l
                           )
                       }));
+                      get().markDirty();
+                  },
+
+                  toggleLayerVisibility: (numericId) => {
+                      const layer = get().layers.find((l) => l.numericId === numericId);
+                      if (!layer) return;
+                      const updatedLayer = {
+                          ...layer,
+                          config: { ...layer.config, visible: !layer.config.visible }
+                      };
+                      set((s) => ({
+                          layers: s.layers.map((l) =>
+                              l.numericId === numericId ? updatedLayer : l
+                          )
+                      }));
+                      const engine = EditorEngine.getInstance();
+                      engine.sendJSON({ type: 'upsert_layer', layer: updatedLayer });
                       get().markDirty();
                   },
 
@@ -571,7 +589,8 @@ export const useEditorStore =
                               rotation: 0,
                               scaleX: 1,
                               scaleY: 1,
-                              zIndex
+                              zIndex,
+                              visible: true
                           },
                           textHtml: '<p>New Text</p>'
                       };
@@ -605,7 +624,8 @@ export const useEditorStore =
                               rotation: 0,
                               scaleX: 1,
                               scaleY: 1,
-                              zIndex
+                              zIndex,
+                              visible: true
                           },
                           view: {
                               latitude: 37.7751,
@@ -647,7 +667,8 @@ export const useEditorStore =
                               rotation: 0,
                               scaleX: 1,
                               scaleY: 1,
-                              zIndex
+                              zIndex,
+                              visible: true
                           },
                           fill: 'transparent',
                           strokeColor,
@@ -710,7 +731,8 @@ export const useEditorStore =
                               rotation: 0,
                               scaleX: 1,
                               scaleY: 1,
-                              zIndex
+                              zIndex,
+                              visible: true
                           },
                           line: line.map((p) => Math.round(p)),
                           strokeColor,

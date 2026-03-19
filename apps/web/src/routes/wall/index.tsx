@@ -64,7 +64,11 @@ function WallApp() {
         const loop = () => {
             engine?.layers.forEach((layer) => {
                 if (!layer.el) return;
-                // if (!layer.visible) return;
+                if (!layer.config.visible) {
+                    layer.el.style.opacity = '0';
+                    layer.visible = false;
+                    return;
+                }
 
                 const pos = engine.calculateCurrentPosition(layer);
 
@@ -118,155 +122,157 @@ function WallApp() {
 
     if (!engine) return;
 
-    const stage = layers.map((layer) => {
-        // Share the exact same spatial and registry logic across both media types
-        const commonProps = {
-            ref: (el: HTMLElement | null) => {
-                if (el) engine.registerLayer(layer, el);
-            },
-            style: {
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                transformOrigin: '50% 50%',
-                // transition: 'all .1s ease-out',
-                width: `${layer.config.width}px`,
-                height: `${layer.config.height}px`,
-                maxWidth: `${layer.config.width}px`,
-                maxHeight: `${layer.config.height}px`,
-                zIndex: layer.config.zIndex
-            } as CSSProperties
-        };
+    const stage = layers
+        .filter((layer) => layer.config.visible)
+        .map((layer) => {
+            // Share the exact same spatial and registry logic across both media types
+            const commonProps = {
+                ref: (el: HTMLElement | null) => {
+                    if (el) engine.registerLayer(layer, el);
+                },
+                style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    transformOrigin: '50% 50%',
+                    // transition: 'all .1s ease-out',
+                    width: `${layer.config.width}px`,
+                    height: `${layer.config.height}px`,
+                    maxWidth: `${layer.config.width}px`,
+                    maxHeight: `${layer.config.height}px`,
+                    zIndex: layer.config.zIndex
+                } as CSSProperties
+            };
 
-        if (layer.type === 'image')
-            return (
-                <div key={layer.numericId} {...commonProps}>
-                    <img
-                        src={layer.url}
-                        alt={`Layer ${layer.numericId}`}
-                        width="100%"
-                        height="100%"
-                        className="block h-full w-full object-cover"
-                    />
-                </div>
-            );
-
-        if (layer.type === 'text') {
-            return (
-                <div
-                    key={layer.numericId}
-                    {...commonProps}
-                    dangerouslySetInnerHTML={{ __html: layer.textHtml }}
-                />
-            );
-        }
-
-        if (layer.type === 'map') {
-            return <MapWrapper key={layer.numericId} {...commonProps} layer={layer} />;
-        }
-
-        // if (layer.type === 'graph') {
-        //     return <RoyForceGraph key={layer.numericId} {...commonProps} />;
-        // }
-
-        if (layer.type === 'video')
-            return (
-                <video
-                    key={layer.numericId}
-                    {...commonProps}
-                    src={layer.url}
-                    muted
-                    playsInline
-                    loop={layer.loop ?? true}
-                    className="object-cover"
-                />
-            );
-
-        if (layer.type === 'line') {
-            let svgPoints = [];
-            for (let i = 0; i < layer.line.length; i += 2)
-                svgPoints.push(
-                    `${Math.round(layer.line[i] - layer.config.cx + layer.config.width / 2)},${Math.round(layer.line[i + 1] - layer.config.cy + layer.config.height / 2)}`
-                );
-            return (
-                <div key={layer.numericId} {...commonProps} className="origin-top-left">
-                    <svg
-                        width={layer.config.width * 1.5}
-                        height={layer.config.height * 1.5}
-                        className="overflow-visible"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <polyline
-                            points={svgPoints.join(' ')}
-                            fill="none"
-                            stroke={layer.strokeColor}
-                            strokeWidth={layer.strokeWidth}
-                            strokeDasharray={layer.strokeDash.join(' ')}
-                            strokeDashoffset={(layer.strokeDash[0] ?? 0) / 2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        />
-                    </svg>
-                </div>
-            );
-        }
-
-        if (layer.type === 'shape') {
-            if (layer.shape === 'rectangle')
+            if (layer.type === 'image')
                 return (
                     <div key={layer.numericId} {...commonProps}>
-                        <svg
-                            width={layer.config.width}
-                            height={layer.config.height}
-                            className="overflow-visible"
-                            xmlns="http://www.w3.org/2000/svg"
-                        >
-                            <rect
-                                x={0}
-                                y={0}
-                                width={layer.config.width}
-                                height={layer.config.height}
-                                fill={layer.fill}
-                                stroke={layer.strokeColor}
-                                strokeDasharray={layer.strokeDash.join(' ')}
-                                strokeDashoffset={(layer.strokeDash[0] ?? 0) / 2}
-                                strokeWidth={layer.strokeWidth}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                overflow="visible"
-                                //    rx=""
-                            />
-                        </svg>
+                        <img
+                            src={layer.url}
+                            alt={`Layer ${layer.numericId}`}
+                            width="100%"
+                            height="100%"
+                            className="block h-full w-full object-cover"
+                        />
                     </div>
                 );
 
-            if (layer.shape === 'circle')
+            if (layer.type === 'text') {
+                return (
+                    <div
+                        key={layer.numericId}
+                        {...commonProps}
+                        dangerouslySetInnerHTML={{ __html: layer.textHtml }}
+                    />
+                );
+            }
+
+            if (layer.type === 'map') {
+                return <MapWrapper key={layer.numericId} {...commonProps} layer={layer} />;
+            }
+
+            // if (layer.type === 'graph') {
+            //     return <RoyForceGraph key={layer.numericId} {...commonProps} />;
+            // }
+
+            if (layer.type === 'video')
+                return (
+                    <video
+                        key={layer.numericId}
+                        {...commonProps}
+                        src={layer.url}
+                        muted
+                        playsInline
+                        loop={layer.loop ?? true}
+                        className="object-cover"
+                    />
+                );
+
+            if (layer.type === 'line') {
+                let svgPoints = [];
+                for (let i = 0; i < layer.line.length; i += 2)
+                    svgPoints.push(
+                        `${Math.round(layer.line[i] - layer.config.cx + layer.config.width / 2)},${Math.round(layer.line[i + 1] - layer.config.cy + layer.config.height / 2)}`
+                    );
                 return (
                     <div key={layer.numericId} {...commonProps} className="origin-top-left">
                         <svg
-                            width={layer.config.width}
-                            height={layer.config.height}
+                            width={layer.config.width * 1.5}
+                            height={layer.config.height * 1.5}
                             className="overflow-visible"
                             xmlns="http://www.w3.org/2000/svg"
                         >
-                            <circle
-                                cx={0}
-                                cy={0}
-                                r={layer.config.width / 2}
-                                fill={layer.fill}
+                            <polyline
+                                points={svgPoints.join(' ')}
+                                fill="none"
                                 stroke={layer.strokeColor}
-                                strokeDasharray={layer.strokeDash.join(' ')}
                                 strokeWidth={layer.strokeWidth}
+                                strokeDasharray={layer.strokeDash.join(' ')}
+                                strokeDashoffset={(layer.strokeDash[0] ?? 0) / 2}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                overflow="visible"
                             />
                         </svg>
                     </div>
                 );
-        }
-        return null;
-    });
+            }
+
+            if (layer.type === 'shape') {
+                if (layer.shape === 'rectangle')
+                    return (
+                        <div key={layer.numericId} {...commonProps}>
+                            <svg
+                                width={layer.config.width}
+                                height={layer.config.height}
+                                className="overflow-visible"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <rect
+                                    x={0}
+                                    y={0}
+                                    width={layer.config.width}
+                                    height={layer.config.height}
+                                    fill={layer.fill}
+                                    stroke={layer.strokeColor}
+                                    strokeDasharray={layer.strokeDash.join(' ')}
+                                    strokeDashoffset={(layer.strokeDash[0] ?? 0) / 2}
+                                    strokeWidth={layer.strokeWidth}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    overflow="visible"
+                                    //    rx=""
+                                />
+                            </svg>
+                        </div>
+                    );
+
+                if (layer.shape === 'circle')
+                    return (
+                        <div key={layer.numericId} {...commonProps} className="origin-top-left">
+                            <svg
+                                width={layer.config.width}
+                                height={layer.config.height}
+                                className="overflow-visible"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <circle
+                                    cx={0}
+                                    cy={0}
+                                    r={layer.config.width / 2}
+                                    fill={layer.fill}
+                                    stroke={layer.strokeColor}
+                                    strokeDasharray={layer.strokeDash.join(' ')}
+                                    strokeWidth={layer.strokeWidth}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    overflow="visible"
+                                />
+                            </svg>
+                        </div>
+                    );
+            }
+            return null;
+        });
 
     return (
         <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">

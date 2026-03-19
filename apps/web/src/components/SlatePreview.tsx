@@ -68,6 +68,7 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                 <Layer>
                     {[...layers]
                         .sort((a, b) => a.config.zIndex - b.config.zIndex)
+                        .filter((shape) => shape.config.visible)
                         .map((shape) => {
                             if (shape.type === 'line')
                                 return (
