@@ -169,7 +169,8 @@ export function AssetLibrary({
                 rotation: 0,
                 scaleX: 1,
                 scaleY: 1,
-                zIndex
+                zIndex,
+                visible: true
             };
 
             const defaultPlayback: Extract<Layer, { type: 'video' }>['playback'] = {
