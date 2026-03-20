@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { copyFile, readFile, stat, unlink } from 'node:fs/promises';
+import { copyFile, open, stat, unlink } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 
 import { db } from '@repo/db';
@@ -17,15 +17,24 @@ const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.
 const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv']);
 
 function detectMediaType(bytes: Uint8Array): 'image' | 'video' | null {
+    const len = bytes.length;
+
     // JPEG: FF D8 FF
-    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image';
+    if (len >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image';
     // PNG: 89 50 4E 47
-    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
+    if (
+        len >= 4 &&
+        bytes[0] === 0x89 &&
+        bytes[1] === 0x50 &&
+        bytes[2] === 0x4e &&
+        bytes[3] === 0x47
+    )
         return 'image';
     // GIF: 47 49 46
-    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image';
+    if (len >= 3 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image';
     // WebP: RIFF????WEBP
     if (
+        len >= 12 &&
         bytes[0] === 0x52 &&
         bytes[1] === 0x49 &&
         bytes[2] === 0x46 &&
@@ -37,14 +46,37 @@ function detectMediaType(bytes: Uint8Array): 'image' | 'video' | null {
     )
         return 'image';
     // BMP: 42 4D
-    if (bytes[0] === 0x42 && bytes[1] === 0x4d) return 'image';
+    if (len >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) return 'image';
     // MP4/MOV: 'ftyp' box at offset 4
-    if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70)
+    if (
+        len >= 8 &&
+        bytes[4] === 0x66 &&
+        bytes[5] === 0x74 &&
+        bytes[6] === 0x79 &&
+        bytes[7] === 0x70
+    )
         return 'video';
     // WebM: 1A 45 DF A3
-    if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3)
+    if (
+        len >= 4 &&
+        bytes[0] === 0x1a &&
+        bytes[1] === 0x45 &&
+        bytes[2] === 0xdf &&
+        bytes[3] === 0xa3
+    )
         return 'video';
     return null;
+}
+
+async function readHeaderBytes(filePath: string, size = 12): Promise<Uint8Array> {
+    const file = await open(filePath, 'r');
+    try {
+        const buffer = Buffer.allocUnsafe(size);
+        const { bytesRead } = await file.read(buffer, 0, size, 0);
+        return new Uint8Array(buffer.buffer, buffer.byteOffset, bytesRead);
+    } finally {
+        await file.close();
+    }
 }
 
 function runFFmpeg(
@@ -193,9 +225,7 @@ const tusServer = new Server({
             }
 
             // Detect type via magic bytes
-            const headerBytes = new Uint8Array(
-                await readFile(tusFilePath).then((b) => b.subarray(0, 12))
-            );
+            const headerBytes = await readHeaderBytes(tusFilePath, 12);
             const detectedType = detectMediaType(headerBytes);
 
             const isImage =
