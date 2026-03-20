@@ -21,12 +21,17 @@ const transporter = nodemailer.createTransport({
 
 const FROM_EMAIL = process.env.EMAIL_FROM || 'noreply@gemma-cast.local';
 
+const allowedHosts = process.env.ALLOWED_HOSTS
+    ? process.env.ALLOWED_HOSTS.split(',').map((s) => s.trim())
+    : ['http://localhost:3670'];
 const trustedOrigins = process.env.TRUSTED_ORIGINS
     ? process.env.TRUSTED_ORIGINS.split(',').map((s) => s.trim())
     : ['http://localhost:3670'];
 
 export const auth = betterAuth({
-    baseURL: process.env.APP_BASE_URL || 'http://localhost:3670',
+    baseURL: {
+        allowedHosts
+    },
     trustedOrigins,
     secret: process.env.SERVER_AUTH_SECRET,
     telemetry: {
