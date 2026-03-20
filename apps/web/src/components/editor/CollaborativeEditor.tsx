@@ -36,7 +36,6 @@ export function CollaborativeEditor({ layerId }: { layerId: number }) {
 
     const providerFactory = useCallback(
         (id: string, yjsDocMap: Map<string, Y.Doc>) => {
-            console.log('providerFactory id:', id, layerId);
             const provider = createWebsocketProvider(id, yjsDocMap);
             return provider;
         },
