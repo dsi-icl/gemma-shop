@@ -1,7 +1,9 @@
 import { CaretDownIcon, SlidersHorizontalIcon } from '@phosphor-icons/react';
+import { Input } from '@repo/ui/components/input';
+import { Label } from '@repo/ui/components/label';
 import SideButtonNumberField from '@repo/ui/components/number-field';
 import { throttle } from '@tanstack/pacer';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { EditorEngine } from '~/lib/editorEngine';
 import { useEditorStore } from '~/lib/editorStore';
@@ -31,6 +33,37 @@ export function ParametersPanel({
         if (collapsed) onExpand?.();
         else onCollapse?.();
     };
+
+    const throttledWebUrlUpdate = useRef(
+        throttle(
+            (layer: LayerWithEditorState) => {
+                const engine = EditorEngine.getInstance();
+                engine.sendJSON({
+                    type: 'upsert_layer',
+                    origin: 'parameters-web-url',
+                    layer
+                });
+                markDirty();
+            },
+            { wait: 500 }
+        )
+    );
+
+    const updateWebProperty = useCallback(
+        (field: 'url' | 'scale', value: string | number) => {
+            if (!selectedLayer || selectedLayer.type !== 'web') return;
+            const updatedLayer = { ...selectedLayer, [field]: value };
+
+            useEditorStore.setState((s) => {
+                const newLayers = new Map(s.layers);
+                newLayers.set(selectedLayer.numericId, updatedLayer);
+                return { layers: newLayers };
+            });
+
+            throttledWebUrlUpdate.current(updatedLayer);
+        },
+        [selectedLayer, markDirty]
+    );
 
     const updateConfig = useCallback(
         (field: keyof LayerWithEditorState['config'], value: number) => {
@@ -141,6 +174,39 @@ export function ParametersPanel({
                                     />
                                 </div>
                             </fieldset>
+
+                            {selectedLayer.type === 'web' && (
+                                <>
+                                    <fieldset className="space-y-1.5">
+                                        <Label className="text-xs font-semibold">URL</Label>
+                                        <Input
+                                            type="url"
+                                            placeholder="https://example.com"
+                                            value={selectedLayer.url}
+                                            onChange={(e) =>
+                                                updateWebProperty('url', e.target.value)
+                                            }
+                                            className="text-xs"
+                                        />
+                                    </fieldset>
+                                    <fieldset className="space-y-1.5">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <SideButtonNumberField
+                                                label="Scale"
+                                                allowWheelScrub={true}
+                                                step={0.1}
+                                                smallStep={0.01}
+                                                min={0.1}
+                                                value={selectedLayer.scale}
+                                                onValueChange={(v) => {
+                                                    if (v !== null && v > 0)
+                                                        updateWebProperty('scale', v);
+                                                }}
+                                            />
+                                        </div>
+                                    </fieldset>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <p className="text-center text-xs text-muted-foreground">

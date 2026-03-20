@@ -1,0 +1,89 @@
+'use client';
+
+import type Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Image, Rect } from 'react-konva';
+
+import type { LayerWithEditorState } from '~/lib/types';
+
+/** Pick the best variant URL for the given display width */
+function selectVariantUrl(
+    filename: string,
+    sizes: number[] | undefined,
+    displayWidth: number
+): string {
+    if (!sizes?.length) return `/api/assets/${filename}`;
+
+    const baseId = filename.replace(/\.[^.]+$/, '');
+    const sorted = [...sizes].sort((a, b) => a - b);
+    const match = sorted.find((s) => s >= displayWidth) ?? sorted[sorted.length - 1];
+    return `/api/assets/${baseId}_${match}.webp`;
+}
+
+export function KonvaWebLayer({
+    layer,
+    isPinching,
+    opacity,
+    onSelect,
+    onTransform,
+    onTransformEnd
+}: {
+    layer: Extract<LayerWithEditorState, { type: 'web' }>;
+    isPinching: boolean;
+    opacity?: number;
+    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
+    onTransform: (e: KonvaEventObject<Event>) => void;
+    onTransformEnd: (e: KonvaEventObject<Event>) => void;
+}) {
+    const [img, setImg] = useState<HTMLImageElement | null>(null);
+    const imageRef = useRef<Konva.Image>(null);
+
+    const variantUrl = useMemo(() => {
+        if (!layer.stillImage) return null;
+        const displayWidth = Math.ceil(layer.config.width * (layer.config.scaleX ?? 1));
+        return selectVariantUrl(layer.stillImage, layer.sizes, displayWidth);
+    }, [layer.stillImage, layer.sizes, layer.config.width, layer.config.scaleX]);
+
+    useEffect(() => {
+        if (!variantUrl) {
+            setImg(null);
+            return;
+        }
+        const i = new window.Image();
+        i.crossOrigin = 'anonymous';
+        i.onload = () => {
+            setImg(i);
+            imageRef.current?.getLayer()?.batchDraw();
+        };
+        i.src = variantUrl;
+    }, [variantUrl]);
+
+    const commonProps = {
+        id: layer.numericId.toString(),
+        x: layer.config.cx,
+        y: layer.config.cy,
+        width: layer.config.width,
+        height: layer.config.height,
+        scaleX: layer.config.scaleX,
+        scaleY: layer.config.scaleY,
+        offsetX: layer.config.width / 2,
+        offsetY: layer.config.height / 2,
+        rotation: layer.config.rotation,
+        opacity,
+        draggable: !isPinching,
+        onClick: onSelect,
+        onTap: onSelect,
+        onDragMove: onTransform,
+        onTransform,
+        onDragEnd: onTransformEnd,
+        onTransformEnd
+    };
+
+    // Render stillImage if available, otherwise a placeholder rect
+    if (img) {
+        return <Image ref={imageRef} image={img} {...commonProps} />;
+    }
+
+    return <Rect {...commonProps} fill="#334" stroke="#556" strokeWidth={2} />;
+}

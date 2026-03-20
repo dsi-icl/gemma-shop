@@ -49,6 +49,7 @@
         "nitro": "catalog:",
         "pino": "catalog:",
         "pino-pretty": "catalog:",
+        "playwright": "catalog:",
         "qrcode": "catalog:",
         "react": "catalog:",
         "react-blurhash": "catalog:",

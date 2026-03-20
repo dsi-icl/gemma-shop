@@ -133,7 +133,9 @@ export function ViewerSlatePreview({
                                     );
                             }
                             if (
-                                (shape.type === 'image' || shape.type === 'video') &&
+                                (shape.type === 'image' ||
+                                    shape.type === 'video' ||
+                                    shape.type === 'web') &&
                                 shape.blurhash &&
                                 isBlurhashValid(shape.blurhash)
                             ) {

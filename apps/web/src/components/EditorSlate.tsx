@@ -8,6 +8,7 @@ import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'rea
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaTextLayer } from '~/components/KonvaTextLayer';
 import { KonvaVideo } from '~/components/KonvaVideo';
+import { KonvaWebLayer } from '~/components/KonvaWebLayer';
 import { RoyStaticRenderer } from '~/components/roygraph/RoyStaticRenderer';
 import { Toolbar } from '~/components/Toolbar';
 import { EditorEngine } from '~/lib/editorEngine';
@@ -761,6 +762,15 @@ export function EditorSlate() {
                                             onTransform={props.onTransform}
                                             onDragEnd={props.onTransformEnd}
                                             onTransformEnd={props.onTransformEnd}
+                                        />
+                                    );
+                                }
+                                if (layer.type === 'web') {
+                                    return (
+                                        <KonvaWebLayer
+                                            key={`web_${layer.numericId}`}
+                                            layer={layer}
+                                            {...props}
                                         />
                                     );
                                 }

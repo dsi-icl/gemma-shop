@@ -171,6 +171,25 @@ function WallApp() {
                 return <MapWrapper key={layer.numericId} {...commonProps} layer={layer} />;
             }
 
+            if (layer.type === 'web') {
+                const webScale = layer.scale || 1;
+                return (
+                    <div key={layer.numericId} {...commonProps}>
+                        <iframe
+                            src={layer.url || '/web-placeholder'}
+                            // sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                            style={{
+                                border: 'none',
+                                width: `${layer.config.width / webScale}px`,
+                                height: `${layer.config.height / webScale}px`,
+                                transform: `scale(${webScale})`,
+                                transformOrigin: '0 0'
+                            }}
+                        />
+                    </div>
+                );
+            }
+
             // if (layer.type === 'graph') {
             //     return <RoyForceGraph key={layer.numericId} {...commonProps} />;
             // }

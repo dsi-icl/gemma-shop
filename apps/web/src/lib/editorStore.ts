@@ -91,6 +91,7 @@ export interface EditorState {
     addTextLayer: () => void;
     addMapLayer: () => void;
     addShapeLayer: (shape: 'rectangle' | 'circle') => void;
+    addWebLayer: () => void;
     addLineLayer: (line: Array<number>) => void;
     clearStage: () => void;
     reboot: () => void;
@@ -638,6 +639,43 @@ export const useEditorStore =
                       engine.sendJSON({
                           type: 'upsert_layer',
                           origin: 'addMapLayer',
+                          layer: newLayer
+                      });
+                      get().markDirty();
+                  },
+
+                  addWebLayer: () => {
+                      const { allocateId, allocateZIndex } = get();
+                      const numericId = allocateId();
+                      const zIndex = allocateZIndex();
+
+                      const newLayer: LayerWithEditorState = {
+                          numericId,
+                          type: 'web',
+                          config: {
+                              cx: 1920 / 2,
+                              cy: 1080 / 2,
+                              width: 800,
+                              height: 600,
+                              rotation: 0,
+                              scaleX: 1,
+                              scaleY: 1,
+                              zIndex,
+                              visible: true
+                          },
+                          url: '',
+                          scale: 1
+                      };
+
+                      set((s) => {
+                          const newLayers = new Map(s.layers);
+                          newLayers.set(numericId, newLayer);
+                          return { layers: newLayers, selectedLayerIds: [numericId.toString()] };
+                      });
+                      const engine = EditorEngine.getInstance();
+                      engine.sendJSON({
+                          type: 'upsert_layer',
+                          origin: 'addWebLayer',
                           layer: newLayer
                       });
                       get().markDirty();

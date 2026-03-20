@@ -63,6 +63,16 @@ const LayerSchema = z.discriminatedUnion('type', [
         .extend(LayerBaseSchema.shape),
     z
         .object({
+            type: z.literal('web'),
+            url: z.string(),
+            scale: z.number().default(1),
+            stillImage: z.string().optional(),
+            blurhash: z.string().optional(),
+            sizes: z.array(z.number()).optional()
+        })
+        .extend(LayerBaseSchema.shape),
+    z
+        .object({
             type: z.literal('line'),
             line: z.array(z.number()),
             strokeColor: z.string(),

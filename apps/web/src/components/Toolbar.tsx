@@ -3,11 +3,13 @@ import {
     ArrowLineUpIcon,
     ArrowsClockwiseIcon,
     ArrowsInLineHorizontalIcon,
+    CameraIcon,
     CheckCircleIcon,
     CircleIcon,
     CircleNotchIcon,
     EraserIcon,
     FloppyDiskIcon,
+    GlobeSimpleIcon,
     GridNineIcon,
     ImageIcon,
     MapPinIcon,
@@ -24,7 +26,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/pop
 import { Separator } from '@repo/ui/components/separator';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { TooltipProvider } from '@repo/ui/components/tooltip';
-import { useRef, useState } from 'react';
+import { throttle } from '@tanstack/pacer';
+import { useCallback, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AppearanceToolbar } from '~/components/AppearanceToolbar';
@@ -79,6 +83,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     const {
         addTextLayer,
         addMapLayer,
+        addWebLayer,
         addShapeLayer,
         bringToFront,
         sendToBack,
@@ -89,6 +94,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         useShallow((s) => ({
             addTextLayer: s.addTextLayer,
             addMapLayer: s.addMapLayer,
+            addWebLayer: s.addWebLayer,
             addShapeLayer: s.addShapeLayer,
             bringToFront: s.bringToFront,
             sendToBack: s.sendToBack,
@@ -104,6 +110,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     const isText = activeLayer?.type === 'text';
     const isShape = activeLayer?.type === 'shape';
     const isLine = activeLayer?.type === 'line';
+    const isWeb = activeLayer?.type === 'web';
 
     // Save popover state
     const [commitMessage, setCommitMessage] = useState('');
@@ -116,6 +123,83 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         setCommitMessage('');
         saveProject(msg);
     };
+
+    const [webUrl, setWebUrl] = useState('');
+    const [isCapturing, setIsCapturing] = useState(false);
+
+    // Keep local webUrl in sync when selection changes
+    const activeWebUrl = isWeb && activeLayer ? activeLayer.url : '';
+    if (webUrl !== activeWebUrl && !isCapturing) {
+        setWebUrl(activeWebUrl);
+    }
+
+    const throttledWebUrlBroadcast = useRef(
+        throttle(
+            (layer: LayerWithEditorState) => {
+                const engine = EditorEngine.getInstance();
+                engine.sendJSON({ type: 'upsert_layer', origin: 'toolbar-web-url', layer });
+                useEditorStore.getState().markDirty();
+            },
+            { wait: 500 }
+        )
+    );
+
+    const handleWebUrlChange = useCallback(
+        (value: string) => {
+            if (!activeLayer || activeLayer.type !== 'web') return;
+            setWebUrl(value);
+            const updatedLayer = { ...activeLayer, url: value };
+            useEditorStore.setState((s) => {
+                const newLayers = new Map(s.layers);
+                newLayers.set(activeLayer.numericId, updatedLayer);
+                return { layers: newLayers };
+            });
+            throttledWebUrlBroadcast.current(updatedLayer);
+        },
+        [activeLayer]
+    );
+
+    const captureScreenshot = useCallback(async () => {
+        if (!activeLayer || activeLayer.type !== 'web' || !activeLayer.url) return;
+        setIsCapturing(true);
+        try {
+            const res = await fetch('/api/web-screenshot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: activeLayer.url,
+                    width: activeLayer.config.width,
+                    height: activeLayer.config.height,
+                    scale: activeLayer.scale,
+                    previousBaseId: activeLayer.stillImage
+                        ? activeLayer.stillImage.replace(/\.[^.]+$/, '')
+                        : undefined
+                })
+            });
+            if (!res.ok) throw new Error('Screenshot capture failed');
+            const { filename, blurhash, sizes } = await res.json();
+
+            const updatedLayer = {
+                ...activeLayer,
+                stillImage: filename,
+                blurhash: blurhash ?? undefined,
+                sizes: sizes?.length ? sizes : undefined
+            };
+            useEditorStore.getState().upsertLayer(updatedLayer);
+            const engine = EditorEngine.getInstance();
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'captureScreenshot',
+                layer: updatedLayer
+            });
+            useEditorStore.getState().markDirty();
+            toast.success('Screenshot captured');
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to capture screenshot');
+        } finally {
+            setIsCapturing(false);
+        }
+    }, [activeLayer]);
 
     const handleWallSelect = (wallId: string) => {
         const { projectId, commitId, activeSlideId } = useEditorStore.getState();
@@ -183,6 +267,9 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     </TipButton>
                     <TipButton tip="Add map layer" onClick={addMapLayer}>
                         <MapPinIcon />
+                    </TipButton>
+                    <TipButton tip="Add web layer" onClick={addWebLayer}>
+                        <GlobeSimpleIcon />
                     </TipButton>
                     <TipButton
                         tip="Draw"
@@ -346,6 +433,31 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                         <AppearanceToolbar />
                     </>
                 ) : null}
+
+                {/* ── Web ── */}
+                {isWeb && activeLayer && (
+                    <>
+                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <Input
+                            type="url"
+                            placeholder="https://example.com"
+                            value={webUrl}
+                            onChange={(e) => handleWebUrlChange(e.target.value)}
+                            className="h-7 min-w-48 flex-1 text-xs"
+                        />
+                        <TipButton
+                            tip={activeLayer.url ? 'Capture screenshot' : 'Set a URL first'}
+                            onClick={captureScreenshot}
+                            disabled={!activeLayer.url || isCapturing}
+                        >
+                            {isCapturing ? (
+                                <CircleNotchIcon className="animate-spin" />
+                            ) : (
+                                <CameraIcon />
+                            )}
+                        </TipButton>
+                    </>
+                )}
 
                 {/* ── Video Playback ── */}
                 {isVideo && activeLayer && !activeLayer.isUploading && (

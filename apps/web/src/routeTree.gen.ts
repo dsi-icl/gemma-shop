@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WebPlaceholderRouteImport } from './routes/web-placeholder'
 import { Route as OgRouteImport } from './routes/og'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as GuestRouteRouteImport } from './routes/_guest/route'
@@ -19,6 +20,7 @@ import { Route as GalleryIndexRouteImport } from './routes/gallery/index'
 import { Route as ControllerIndexRouteImport } from './routes/controller/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
+import { Route as ApiWebScreenshotRouteImport } from './routes/api/web-screenshot'
 import { Route as AdminWallsRouteImport } from './routes/admin/walls'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminStatsRouteImport } from './routes/admin/stats'
@@ -43,6 +45,11 @@ import { Route as AuthQuarryProjectsProjectIdAssetsRouteImport } from './routes/
 import { Route as AuthQuarryEditorProjectIdSlideIdRouteImport } from './routes/_auth/quarry/editor/$projectId/$slideId'
 import { Route as AuthQuarryEditorProjectIdCommitIdSlideIdRouteImport } from './routes/_auth/quarry/editor/$projectId/$commitId/$slideId'
 
+const WebPlaceholderRoute = WebPlaceholderRouteImport.update({
+  id: '/web-placeholder',
+  path: '/web-placeholder',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OgRoute = OgRouteImport.update({
   id: '/og',
   path: '/og',
@@ -89,6 +96,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const UploadProjectIdRoute = UploadProjectIdRouteImport.update({
   id: '/upload/$projectId',
   path: '/upload/$projectId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWebScreenshotRoute = ApiWebScreenshotRouteImport.update({
+  id: '/api/web-screenshot',
+  path: '/api/web-screenshot',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminWallsRoute = AdminWallsRouteImport.update({
@@ -221,12 +233,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/og': typeof OgRoute
+  '/web-placeholder': typeof WebPlaceholderRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/walls': typeof AdminWallsRoute
+  '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
@@ -253,12 +267,14 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/og': typeof OgRoute
+  '/web-placeholder': typeof WebPlaceholderRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/walls': typeof AdminWallsRoute
+  '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/admin': typeof AdminIndexRoute
   '/controller': typeof ControllerIndexRoute
@@ -288,12 +304,14 @@ export interface FileRoutesById {
   '/_guest': typeof GuestRouteRouteWithChildren
   '/admin': typeof AdminRouteRouteWithChildren
   '/og': typeof OgRoute
+  '/web-placeholder': typeof WebPlaceholderRoute
   '/_guest/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/walls': typeof AdminWallsRoute
+  '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
@@ -323,12 +341,14 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/og'
+    | '/web-placeholder'
     | '/login'
     | '/admin/assets'
     | '/admin/projects'
     | '/admin/stats'
     | '/admin/users'
     | '/admin/walls'
+    | '/api/web-screenshot'
     | '/upload/$projectId'
     | '/admin/'
     | '/controller/'
@@ -355,12 +375,14 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/og'
+    | '/web-placeholder'
     | '/login'
     | '/admin/assets'
     | '/admin/projects'
     | '/admin/stats'
     | '/admin/users'
     | '/admin/walls'
+    | '/api/web-screenshot'
     | '/upload/$projectId'
     | '/admin'
     | '/controller'
@@ -389,12 +411,14 @@ export interface FileRouteTypes {
     | '/_guest'
     | '/admin'
     | '/og'
+    | '/web-placeholder'
     | '/_guest/login'
     | '/admin/assets'
     | '/admin/projects'
     | '/admin/stats'
     | '/admin/users'
     | '/admin/walls'
+    | '/api/web-screenshot'
     | '/upload/$projectId'
     | '/admin/'
     | '/controller/'
@@ -425,6 +449,8 @@ export interface RootRouteChildren {
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
   OgRoute: typeof OgRoute
+  WebPlaceholderRoute: typeof WebPlaceholderRoute
+  ApiWebScreenshotRoute: typeof ApiWebScreenshotRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
   ControllerIndexRoute: typeof ControllerIndexRoute
   GalleryIndexRoute: typeof GalleryIndexRoute
@@ -436,6 +462,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/web-placeholder': {
+      id: '/web-placeholder'
+      path: '/web-placeholder'
+      fullPath: '/web-placeholder'
+      preLoaderRoute: typeof WebPlaceholderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/og': {
       id: '/og'
       path: '/og'
@@ -504,6 +537,13 @@ declare module '@tanstack/react-router' {
       path: '/upload/$projectId'
       fullPath: '/upload/$projectId'
       preLoaderRoute: typeof UploadProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/web-screenshot': {
+      id: '/api/web-screenshot'
+      path: '/api/web-screenshot'
+      fullPath: '/api/web-screenshot'
+      preLoaderRoute: typeof ApiWebScreenshotRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/walls': {
@@ -790,6 +830,8 @@ const rootRouteChildren: RootRouteChildren = {
   GuestRouteRoute: GuestRouteRouteWithChildren,
   AdminRouteRoute: AdminRouteRouteWithChildren,
   OgRoute: OgRoute,
+  WebPlaceholderRoute: WebPlaceholderRoute,
+  ApiWebScreenshotRoute: ApiWebScreenshotRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,
   ControllerIndexRoute: ControllerIndexRoute,
   GalleryIndexRoute: GalleryIndexRoute,
