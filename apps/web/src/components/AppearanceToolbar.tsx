@@ -3,6 +3,7 @@ import { Slider } from '@repo/ui/components/slider';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { ToggleGroup, ToggleGroupItem } from '@repo/ui/components/toggle-group';
 import { throttle } from '@tanstack/pacer';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useEditorStore } from '~/lib/editorStore';
 
@@ -50,7 +51,18 @@ export function AppearanceToolbar() {
         setStrokeWidth,
         strokeDash,
         setStrokeDash
-    } = useEditorStore();
+    } = useEditorStore(
+        useShallow((s) => ({
+            shapeFill: s.shapeFill,
+            setShapeFill: s.setShapeFill,
+            strokeColor: s.strokeColor,
+            setStrokeColor: s.setStrokeColor,
+            strokeWidth: s.strokeWidth,
+            setStrokeWidth: s.setStrokeWidth,
+            strokeDash: s.strokeDash,
+            setStrokeDash: s.setStrokeDash
+        }))
+    );
 
     return (
         <div className="flex items-center gap-2">

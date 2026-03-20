@@ -25,6 +25,7 @@ import { Separator } from '@repo/ui/components/separator';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { TooltipProvider } from '@repo/ui/components/tooltip';
 import { useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { AppearanceToolbar } from '~/components/AppearanceToolbar';
 import { PlaybackControls } from '~/components/PlaybackControls';
@@ -41,15 +42,41 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
+    // Project header — only changes on project load
+    const { projectName, parentSaveMessage } = useEditorStore(
+        useShallow((s) => ({ projectName: s.projectName, parentSaveMessage: s.parentSaveMessage }))
+    );
+
+    // Save / connection state — infrequent, independent
+    const saveStatus = useEditorStore((s) => s.saveStatus);
+    const boundWallId = useEditorStore((s) => s.boundWallId);
+
+    // Tool toggle state — batched since they often change together
+    const { showGrid, isDrawing, isSnapping } = useEditorStore(
+        useShallow((s) => ({
+            showGrid: s.showGrid,
+            isDrawing: s.isDrawing,
+            isSnapping: s.isSnapping
+        }))
+    );
+
+    // Derived active layer — re-renders only when the selected layer's own data changes,
+    // not on every other layer mutation
+    const activeLayer = useEditorStore((s) => {
+        const id = s.selectedLayerIds[0];
+        return id ? (s.layers.find((l) => l.numericId === parseInt(id)) ?? null) : null;
+    });
+
+    // Actions — stable references across renders, never trigger re-renders on their own
+    const { toggleSnapping, toggleDrawing, toggleGrid, startTextEditing } = useEditorStore(
+        useShallow((s) => ({
+            toggleSnapping: s.toggleSnapping,
+            toggleDrawing: s.toggleDrawing,
+            toggleGrid: s.toggleGrid,
+            startTextEditing: s.startTextEditing
+        }))
+    );
     const {
-        projectId,
-        projectName,
-        parentSaveMessage,
-        activeSlideId,
-        selectedLayerIds,
-        layers,
-        isSnapping,
-        toggleSnapping,
         addTextLayer,
         addMapLayer,
         addShapeLayer,
@@ -58,21 +85,21 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         clearStage,
         reboot,
         saveProject
-    } = useEditorStore();
-    const boundWallId = useEditorStore((s) => s.boundWallId);
-    const showGrid = useEditorStore((s) => s.showGrid);
-    const toggleGrid = useEditorStore((s) => s.toggleGrid);
-    const isDrawing = useEditorStore((s) => s.isDrawing);
-    const toggleDrawing = useEditorStore((s) => s.toggleDrawing);
-    const saveStatus = useEditorStore((s) => s.saveStatus);
-    const startTextEditing = useEditorStore((s) => s.startTextEditing);
-    const selectedId = selectedLayerIds[0];
+    } = useEditorStore(
+        useShallow((s) => ({
+            addTextLayer: s.addTextLayer,
+            addMapLayer: s.addMapLayer,
+            addShapeLayer: s.addShapeLayer,
+            bringToFront: s.bringToFront,
+            sendToBack: s.sendToBack,
+            clearStage: s.clearStage,
+            reboot: s.reboot,
+            saveProject: s.saveProject
+        }))
+    );
 
     const engine = EditorEngine.getInstance();
 
-    const activeLayer = selectedId
-        ? layers.find((l) => l.numericId === parseInt(selectedId))
-        : null;
     const isVideo = activeLayer?.type === 'video';
     const isText = activeLayer?.type === 'text';
     const isShape = activeLayer?.type === 'shape';
@@ -91,7 +118,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     };
 
     const handleWallSelect = (wallId: string) => {
-        const { commitId } = useEditorStore.getState();
+        const { projectId, commitId, activeSlideId } = useEditorStore.getState();
         if (!projectId || !commitId || !activeSlideId) return;
         engine.bindWall(wallId, projectId, commitId, activeSlideId);
         useEditorStore.setState({ boundWallId: wallId });
