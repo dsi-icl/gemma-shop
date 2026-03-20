@@ -320,7 +320,7 @@ function OtpView({ email, onBack }: { email: string; onBack: () => void }) {
                         setDigits('');
                     },
                     onSuccess: async () => {
-                        queryClient.removeQueries({ queryKey: authQueryOptions().queryKey });
+                        await queryClient.invalidateQueries(authQueryOptions());
                         await navigate({ to: '/quarry' });
                     }
                 }
@@ -332,20 +332,23 @@ function OtpView({ email, onBack }: { email: string; onBack: () => void }) {
             if (isPending) return;
             setDigits((prev) => {
                 if (prev.length >= OTP_LENGTH) return prev;
-                const next = prev + d;
-                if (next.length === OTP_LENGTH) {
-                    verifyOtp(next);
-                }
-                return next;
+                return prev + d;
             });
         },
-        [isPending, verifyOtp]
+        [isPending]
     );
 
     const deleteDigit = useCallback(() => {
         if (isPending) return;
         setDigits((prev) => prev.slice(0, -1));
     }, [isPending]);
+
+    // Auto-submit when all digits are entered
+    useEffect(() => {
+        if (digits.length === OTP_LENGTH && !isPending) {
+            verifyOtp(digits);
+        }
+    }, [digits, isPending, verifyOtp]);
 
     useEffect(() => {
         const handlePaste = (e: ClipboardEvent) => {
@@ -357,9 +360,6 @@ function OtpView({ email, onBack }: { email: string; onBack: () => void }) {
             const newDigits = pasted.replace(/\D/g, '').slice(0, OTP_LENGTH);
             if (newDigits) {
                 setDigits(newDigits);
-                if (newDigits.length === OTP_LENGTH) {
-                    verifyOtp(newDigits);
-                }
             }
         };
 
@@ -367,7 +367,7 @@ function OtpView({ email, onBack }: { email: string; onBack: () => void }) {
         return () => {
             document.removeEventListener('paste', handlePaste);
         };
-    }, [isPending, verifyOtp]);
+    }, [isPending]);
 
     return (
         <div className="flex flex-col items-center gap-4">

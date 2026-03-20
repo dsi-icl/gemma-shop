@@ -12,8 +12,7 @@ export function SignOutButton() {
             onClick={async () => {
                 await authClient.signOut({
                     fetchOptions: {
-                        onResponse: async () => {
-                            // manually set to null to avoid unnecessary refetching
+                        onSuccess: async () => {
                             queryClient.setQueryData(authQueryOptions().queryKey, null);
                             await router.invalidate();
                         }

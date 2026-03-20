@@ -30,7 +30,8 @@ const trustedOrigins = process.env.TRUSTED_ORIGINS
 
 export const auth = betterAuth({
     baseURL: {
-        allowedHosts
+        allowedHosts,
+        fallback: allowedHosts[0]
     },
     trustedOrigins,
     secret: process.env.SERVER_AUTH_SECRET,

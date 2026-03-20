@@ -19,7 +19,7 @@ function HeaderAuthSection() {
     const handleSignOut = async () => {
         await authClient.signOut({
             fetchOptions: {
-                onResponse: async () => {
+                onSuccess: async () => {
                     queryClient.setQueryData(authQueryOptions().queryKey, null);
                     await router.invalidate();
                     navigate({ to: '/' });
