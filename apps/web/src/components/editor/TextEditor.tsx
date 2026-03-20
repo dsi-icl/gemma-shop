@@ -2,21 +2,110 @@ import { AutoFocusPlugin } from '@lexical/react/LexicalAutoFocusPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+import { useEditorStore } from '~/lib/editorStore';
+import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
 
 import ToolbarPlugin from './ToolbarPlugin';
 
-export function TextEditor() {
+export function TextEditor({
+    layerId,
+    onMeasuredHeight
+}: {
+    layerId: number;
+    onMeasuredHeight?: (height: number) => void;
+}) {
+    const rootRef = useRef<HTMLDivElement | null>(null);
+    const layer = useEditorStore((s) => s.layers.get(layerId));
+    const [windowSize, setWindowSize] = useState({
+        width: typeof window === 'undefined' ? 1920 : window.innerWidth,
+        height: typeof window === 'undefined' ? 1080 : window.innerHeight
+    });
+    const logicalWidth = layer?.type === 'text' ? layer.config.width : 800;
+    const logicalHeight = layer?.type === 'text' ? layer.config.height : 400;
+    const layerScaleX = layer?.type === 'text' ? layer.config.scaleX : 1;
+    const layerScaleY = layer?.type === 'text' ? layer.config.scaleY : 1;
+    const safeWidth = Math.max(100, Math.round(logicalWidth));
+    const safeHeight = Math.max(80, Math.round(logicalHeight));
+    const safeScaleX = Math.max(0.05, layerScaleX);
+    const safeScaleY = Math.max(0.05, layerScaleY);
+    const maxUsableWidth = Math.max(320, windowSize.width - 160);
+    const maxUsableHeight = Math.max(220, windowSize.height - 260);
+    const fitScale = Math.min(
+        1,
+        maxUsableWidth / Math.max(1, safeWidth * safeScaleX),
+        maxUsableHeight / Math.max(1, safeHeight * safeScaleY)
+    );
+    const effectiveScaleX = safeScaleX * fitScale;
+    const effectiveScaleY = safeScaleY * fitScale;
+    const viewportWidth = useMemo(
+        () => Math.max(320, Math.ceil(safeWidth * effectiveScaleX)),
+        [safeWidth, effectiveScaleX]
+    );
+    const viewportHeight = useMemo(
+        () => Math.max(220, Math.ceil(safeHeight * effectiveScaleY)),
+        [safeHeight, effectiveScaleY]
+    );
+
+    useEffect(() => {
+        const onResize = () => {
+            setWindowSize({
+                width: window.innerWidth,
+                height: window.innerHeight
+            });
+        };
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    useEffect(() => {
+        if (!rootRef.current) return;
+        const editorInput = rootRef.current.querySelector('.editor-input') as HTMLElement | null;
+        if (!editorInput) return;
+
+        const notify = () => {
+            const measured = Math.max(40, Math.round(editorInput.scrollHeight));
+            onMeasuredHeight?.(measured);
+        };
+
+        notify();
+        const ro = new ResizeObserver(() => notify());
+        ro.observe(editorInput);
+        return () => ro.disconnect();
+    }, [onMeasuredHeight, safeWidth, safeHeight]);
+
     return (
-        <div className="flex flex-col gap-4">
+        <div ref={rootRef} className="flex flex-col gap-4">
             <ToolbarPlugin />
-            <div className="h-100 w-150 overflow-auto rounded-lg border border-border bg-black">
-                <RichTextPlugin
-                    contentEditable={
-                        <ContentEditable className="editor-input h-full w-full p-4 outline-none" />
-                    }
-                    ErrorBoundary={LexicalErrorBoundary}
-                />
-                <AutoFocusPlugin />
+            <div
+                className="overflow-auto rounded-lg border border-border bg-black"
+                style={{
+                    width: `${viewportWidth}px`,
+                    height: `${viewportHeight}px`
+                }}
+            >
+                <div
+                    style={{
+                        width: `${safeWidth}px`,
+                        height: `${safeHeight}px`,
+                        transform: `scale(${effectiveScaleX}, ${effectiveScaleY})`,
+                        transformOrigin: 'top left'
+                    }}
+                >
+                    <RichTextPlugin
+                        contentEditable={
+                            <ContentEditable
+                                className="editor-input h-full w-full outline-none"
+                                style={{
+                                    ...TEXT_BASE_STYLE
+                                }}
+                            />
+                        }
+                        ErrorBoundary={LexicalErrorBoundary}
+                    />
+                    <AutoFocusPlugin />
+                </div>
             </div>
         </div>
     );

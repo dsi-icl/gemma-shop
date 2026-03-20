@@ -117,6 +117,8 @@ export function EditorSlate() {
                         node.y(cy);
                         node.width(width);
                         node.height(height);
+                        node.offsetX(width / 2);
+                        node.offsetY(height / 2);
                         node.scaleX(scaleX);
                         node.scaleY(scaleY);
                         node.rotation(rotation);
@@ -134,6 +136,42 @@ export function EditorSlate() {
                         shadowLayer.config.scaleX = scaleX;
                         shadowLayer.config.scaleY = scaleY;
                         shadowLayer.config.rotation = rotation;
+
+                        // Text reflow must follow binary width/height updates (local + remote),
+                        // so we sync store config for text layers from the fast path.
+                        if (shadowLayer.type === 'text') {
+                            useEditorStore.setState((s) => {
+                                const current = s.layers.get(id);
+                                if (!current || current.type !== 'text') return s;
+                                const cfg = current.config;
+                                if (
+                                    cfg.cx === cx &&
+                                    cfg.cy === cy &&
+                                    cfg.width === width &&
+                                    cfg.height === height &&
+                                    cfg.scaleX === scaleX &&
+                                    cfg.scaleY === scaleY &&
+                                    cfg.rotation === rotation
+                                ) {
+                                    return s;
+                                }
+                                const newLayers = new Map(s.layers);
+                                newLayers.set(id, {
+                                    ...current,
+                                    config: {
+                                        ...cfg,
+                                        cx,
+                                        cy,
+                                        width,
+                                        height,
+                                        scaleX,
+                                        scaleY,
+                                        rotation
+                                    }
+                                });
+                                return { layers: newLayers };
+                            });
+                        }
                     }
                 }
             }
@@ -344,6 +382,42 @@ export function EditorSlate() {
         const layer = layersRef.current.get(numericId);
         if (!node || !layer) return;
 
+        if (layer.type === 'text') {
+            const activeAnchor = trRef.current?.getActiveAnchor() ?? '';
+            const isSideAnchor = activeAnchor === 'middle-left' || activeAnchor === 'middle-right';
+            const mode: 'side' | 'corner' = isSideAnchor ? 'side' : 'corner';
+            node.setAttr('textTransformMode', mode);
+
+            if (mode === 'side') {
+                const oldAbsTransform = node.getAbsoluteTransform().copy();
+                const originWorld = oldAbsTransform.point({ x: 0, y: 0 });
+                const oldScaleX = layer.config.scaleX || 1;
+                const oldScaleY = layer.config.scaleY || 1;
+                const effectiveScaleX = node.scaleX();
+                const newWidth = Math.max(20, (node.width() * effectiveScaleX) / oldScaleX);
+
+                node.width(newWidth);
+                node.offsetX(newWidth / 2);
+                node.offsetY(node.height() / 2);
+                node.scaleX(oldScaleX);
+                node.scaleY(oldScaleY);
+
+                const newAbsTransform = node.getAbsoluteTransform().copy();
+                const newOriginWorld = newAbsTransform.point({ x: 0, y: 0 });
+                const dx = originWorld.x - newOriginWorld.x;
+                const dy = originWorld.y - newOriginWorld.y;
+                const parent = node.getParent();
+                if (parent) {
+                    const parentTransform = parent.getAbsoluteTransform().copy();
+                    parentTransform.invert();
+                    const localDelta = parentTransform.point({ x: dx, y: dy });
+                    node.position({ x: node.x() + localDelta.x, y: node.y() + localDelta.y });
+                }
+            }
+
+            node.getLayer()?.batchDraw();
+        }
+
         // Scale baking for image/map layers
         if (layer.type === 'image' || layer.type === 'map' || layer.type === 'shape') {
             const scaleX = node.scaleX();
@@ -391,11 +465,12 @@ export function EditorSlate() {
 
     const handleTransformEnd = useCallback(
         (e: Pick<KonvaEventObject<Event>, 'target'>, numericId: number) => {
-            const node = e.target;
+            const node = e.target as Konva.Shape;
 
             // Must use layersRef — has binary-updated positions
             const layerToUpdate = layersRef.current.get(numericId);
             if (!layerToUpdate) return;
+            const textMode = node.getAttr('textTransformMode') as 'side' | 'corner' | undefined;
 
             if (
                 isSnapping &&
@@ -415,13 +490,25 @@ export function EditorSlate() {
                 cy: Math.round(node.y()),
                 width: Math.round(node.width()),
                 height: Math.round(node.height()),
-                scaleX: Math.round(node.scaleX() * 1000) / 1000,
-                scaleY: Math.round(node.scaleY() * 1000) / 1000,
+                scaleX:
+                    layerToUpdate.type === 'text' && textMode === 'side'
+                        ? layerToUpdate.config.scaleX
+                        : Math.round(node.scaleX() * 1000) / 1000,
+                scaleY:
+                    layerToUpdate.type === 'text' && textMode === 'side'
+                        ? layerToUpdate.config.scaleY
+                        : Math.round(node.scaleY() * 1000) / 1000,
                 rotation: Math.round(node.rotation())
             };
 
+            if (layerToUpdate.type === 'text' && textMode === 'side') {
+                node.scaleX(updatedConfig.scaleX);
+                node.scaleY(updatedConfig.scaleY);
+            }
+
             // Shadow mutation for binary fast-path
             layerToUpdate.config = updatedConfig;
+            node.setAttr('textTransformMode', undefined);
 
             const store = useEditorStore.getState();
             store.toggleLayerSelection(numericId.toString(), false, false);
@@ -672,6 +759,7 @@ export function EditorSlate() {
                             );
                         })} */}
 
+                            {/* oxlint-disable-next-line react-hooks-js/refs */}
                             {sortedLayers.map((layer) => {
                                 const isHidden = !layer.config.visible;
                                 const isSelected = selectedLayerIdSet.has(
@@ -872,6 +960,20 @@ export function EditorSlate() {
                                 flipEnabled={false}
                                 anchorCornerRadius={10}
                                 anchorSize={20}
+                                enabledAnchors={(() => {
+                                    const selectedId = selectedLayerIds[0];
+                                    if (!selectedId) return undefined;
+                                    const selected = layers.get(parseInt(selectedId, 10));
+                                    if (selected?.type !== 'text') return undefined;
+                                    return [
+                                        'top-left',
+                                        'top-right',
+                                        'middle-left',
+                                        'middle-right',
+                                        'bottom-left',
+                                        'bottom-right'
+                                    ] as const;
+                                })()}
                                 boundBoxFunc={(oldBox, newBox) => {
                                     if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5)
                                         return oldBox;

@@ -5,6 +5,7 @@ import { useEffect, useState, useMemo, type CSSProperties } from 'react';
 
 import { MapWrapper } from '~/components/MapWrapper';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
+import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
 import type { LayerWithWallComponentState } from '~/lib/types';
 import { WallEngine, type Viewport } from '~/lib/wallEngine';
 
@@ -162,6 +163,11 @@ function WallApp() {
                     <div
                         key={layer.numericId}
                         {...commonProps}
+                        style={{
+                            ...commonProps.style,
+                            ...TEXT_BASE_STYLE,
+                            overflow: 'hidden'
+                        }}
                         dangerouslySetInnerHTML={{ __html: layer.textHtml }}
                     />
                 );
@@ -177,6 +183,7 @@ function WallApp() {
                     <div key={layer.numericId} {...commonProps}>
                         <iframe
                             src={layer.url || '/web-placeholder'}
+                            title={`Web layer ${layer.numericId}`}
                             // sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                             style={{
                                 border: 'none',

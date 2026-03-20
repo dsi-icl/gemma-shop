@@ -2,7 +2,7 @@ import { LexicalCollaboration } from '@lexical/react/LexicalCollaborationContext
 import { CollaborationPlugin } from '@lexical/react/LexicalCollaborationPlugin';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { useAuth } from '@repo/auth/tanstack/hooks';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
 
 import { useEditorStore } from '~/lib/editorStore';
@@ -21,9 +21,16 @@ const editorConfig = {
     theme
 };
 
-export function CollaborativeEditor({ layerId }: { layerId: number }) {
+export function CollaborativeEditor({
+    layerId,
+    onMeasuredHeight
+}: {
+    layerId: number;
+    onMeasuredHeight?: (height: number) => void;
+}) {
     const { user } = useAuth();
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const layer = useEditorStore((s) => s.layers.get(layerId));
     const textEditScope = useEditorStore(
         (s) => `${s.projectId}_${s.commitId}_${s.activeSlideId}_${layerId}`
     );
@@ -33,16 +40,20 @@ export function CollaborativeEditor({ layerId }: { layerId: number }) {
                 .toString(16)
                 .padStart(6, '0')}`
     );
+    const latestHeightRef = useRef<number>(layer?.type === 'text' ? layer.config.height : 400);
 
-    const providerFactory = useCallback(
-        (id: string, yjsDocMap: Map<string, Y.Doc>) => {
-            const provider = createWebsocketProvider(id, yjsDocMap);
-            return provider;
-        },
-        [layerId]
-    );
+    const providerFactory = useCallback((id: string, yjsDocMap: Map<string, Y.Doc>) => {
+        const provider = createWebsocketProvider(id, yjsDocMap);
+        return provider;
+    }, []);
 
     if (!user) return null;
+
+    useEffect(() => {
+        return () => {
+            onMeasuredHeight?.(latestHeightRef.current);
+        };
+    }, [onMeasuredHeight]);
 
     return (
         <div ref={containerRef}>
@@ -56,7 +67,13 @@ export function CollaborativeEditor({ layerId }: { layerId: number }) {
                         cursorColor={userColor}
                         cursorsContainerRef={containerRef}
                     />
-                    <TextEditor />
+                    <TextEditor
+                        layerId={layerId}
+                        onMeasuredHeight={(height) => {
+                            latestHeightRef.current = height;
+                            onMeasuredHeight?.(height);
+                        }}
+                    />
                 </LexicalComposer>
             </LexicalCollaboration>
         </div>
