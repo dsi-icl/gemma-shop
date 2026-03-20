@@ -5,6 +5,8 @@ import { useAuth } from '@repo/auth/tanstack/hooks';
 import { useCallback, useRef, useState } from 'react';
 import * as Y from 'yjs';
 
+import { useEditorStore } from '~/lib/editorStore';
+
 import { createWebsocketProvider } from './providers';
 import { TextEditor } from './TextEditor';
 import theme from './theme';
@@ -22,6 +24,9 @@ const editorConfig = {
 export function CollaborativeEditor({ layerId }: { layerId: number }) {
     const { user } = useAuth();
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const textEditScope = useEditorStore(
+        (s) => `${s.projectId}_${s.commitId}_${s.activeSlideId}_${layerId}`
+    );
     const [userColor] = useState(
         () =>
             `#${Math.floor(Math.random() * 0xffffff)
@@ -45,7 +50,7 @@ export function CollaborativeEditor({ layerId }: { layerId: number }) {
             <LexicalCollaboration>
                 <LexicalComposer initialConfig={editorConfig}>
                     <CollaborationPlugin
-                        id="lexical/react-rich-collab"
+                        id={textEditScope}
                         providerFactory={providerFactory}
                         shouldBootstrap={false}
                         username={user.email}
