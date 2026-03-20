@@ -429,8 +429,12 @@ function handleBinary(peer: import('crossws').Peer, rawData: ArrayBuffer) {
             }
         }
 
-        // // Relay to walls: use AABB-filtered layerNodes when available
-        // // Extract layer numericId from binary: offset 3 = first entry's id (u16 LE)
+        // Relay to walls: currently broadcasts to all walls in scope.
+        // AABB spatial filtering is disabled because the layerNodes pre-computation
+        // created consistency issues during rapid layer mutations — walls could miss moves for
+        // layers that weren't yet registered in their node set. Re-enable for large deployments
+        // (100+ walls) once layerNodes tracking is stabilised and tested under concurrent edits.
+        //
         // const layerId = view.getUint16(3, true);
         // const targets = layerNodes.get(layerId);
         // if (targets) {
@@ -533,9 +537,6 @@ export default defineWebSocketHandler({
     projectId: string,
     asset: Record<string, unknown>
 ) => {
-    console.log(
-        `[Bus] __BROADCAST_ASSET_ADDED__ called: projectId=${projectId}, asset=${asset._id}`
-    );
     broadcastAssetToEditorsByProject(projectId, asset);
 };
 
