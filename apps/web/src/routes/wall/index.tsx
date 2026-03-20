@@ -139,8 +139,6 @@ function WallApp() {
                     // transition: 'all .1s ease-out',
                     width: `${layer.config.width}px`,
                     height: `${layer.config.height}px`,
-                    maxWidth: `${layer.config.width}px`,
-                    maxHeight: `${layer.config.height}px`,
                     zIndex: layer.config.zIndex
                 } as CSSProperties
             };
@@ -153,7 +151,7 @@ function WallApp() {
                             alt={`Layer ${layer.numericId}`}
                             width="100%"
                             height="100%"
-                            className="block h-full w-full object-cover"
+                            className="block h-full w-full object-fill"
                         />
                     </div>
                 );

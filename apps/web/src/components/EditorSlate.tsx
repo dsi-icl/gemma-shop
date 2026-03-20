@@ -25,10 +25,24 @@ const engine = EditorEngine.getInstance();
 const STAGE_SCALE_FACTOR = 0.15;
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
-const BLOCKSNAP_X = SCREEN_W / 10;
-const BLOCKSNAP_Y = SCREEN_H / 5;
+// Square snap grid aligned with physical screen boundaries:
+// 1920 % 120 === 0 and 1080 % 120 === 0
+const SNAP_GRID = 120;
 const COLS = 16;
 const ROWS = 4;
+
+function normalizeRotationToQuadrant(rotation: number): number {
+    return ((Math.round(rotation) % 360) + 360) % 360;
+}
+
+function isCardinalRotation(rotation: number): boolean {
+    const normalized = normalizeRotationToQuadrant(rotation);
+    return normalized === 0 || normalized === 90 || normalized === 180 || normalized === 270;
+}
+
+function snapToGrid(value: number, grid: number): number {
+    return Math.round(value / grid) * grid;
+}
 
 function getDistance(p1: { x: number; y: number }, p2: { x: number; y: number }) {
     return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
@@ -111,8 +125,9 @@ export function EditorSlate() {
                     const stage = trRef.current.getStage();
                     const node = stage?.findOne(`#${id}`);
                     const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
+                    const isActivelyTransforming = trRef.current.isTransforming();
 
-                    if (node && !node.isDragging() && !isPinching) {
+                    if (node && !node.isDragging() && !isActivelyTransforming && !isPinching) {
                         node.x(cx);
                         node.y(cy);
                         node.width(width);
@@ -195,15 +210,15 @@ export function EditorSlate() {
             if (e.key === 'ArrowLeft') {
                 if (e.shiftKey)
                     newLayerState.config.rotation = Math.round(newLayerState.config.rotation - 1);
-                else newLayerState.config.cx -= isSnapping ? BLOCKSNAP_X : 10;
+                else newLayerState.config.cx -= isSnapping ? SNAP_GRID : 10;
             }
             if (e.key === 'ArrowRight') {
                 if (e.shiftKey)
                     newLayerState.config.rotation = Math.round(newLayerState.config.rotation + 1);
-                else newLayerState.config.cx += isSnapping ? BLOCKSNAP_X : 10;
+                else newLayerState.config.cx += isSnapping ? SNAP_GRID : 10;
             }
-            if (e.key === 'ArrowUp') newLayerState.config.cy -= isSnapping ? BLOCKSNAP_Y : 10;
-            if (e.key === 'ArrowDown') newLayerState.config.cy += isSnapping ? BLOCKSNAP_Y : 10;
+            if (e.key === 'ArrowUp') newLayerState.config.cy -= isSnapping ? SNAP_GRID : 10;
+            if (e.key === 'ArrowDown') newLayerState.config.cy += isSnapping ? SNAP_GRID : 10;
             store.updateLayerConfig(currentSelected.numericId, newLayerState.config);
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -381,13 +396,13 @@ export function EditorSlate() {
         const node = e.target as Konva.Shape;
         const layer = layersRef.current.get(numericId);
         if (!node || !layer) return;
+        const activeAnchor = trRef.current?.getActiveAnchor() ?? null;
+        node.setAttr('lastActiveAnchor', activeAnchor);
 
         if (layer.type === 'text') {
-            const activeAnchor = trRef.current?.getActiveAnchor() ?? '';
-            const isHorizontalEdge =
-                activeAnchor === 'middle-left' || activeAnchor === 'middle-right';
-            const isVerticalEdge =
-                activeAnchor === 'top-center' || activeAnchor === 'bottom-center';
+            const textAnchor = activeAnchor ?? '';
+            const isHorizontalEdge = textAnchor === 'middle-left' || textAnchor === 'middle-right';
+            const isVerticalEdge = textAnchor === 'top-center' || textAnchor === 'bottom-center';
             const isReflowEdge = isHorizontalEdge || isVerticalEdge;
             const mode: 'reflow' | 'corner' = isReflowEdge ? 'reflow' : 'corner';
             node.setAttr('textTransformMode', mode);
@@ -501,7 +516,7 @@ export function EditorSlate() {
     };
 
     const handleTransformEnd = useCallback(
-        (e: Pick<KonvaEventObject<Event>, 'target'>, numericId: number) => {
+        (e: Pick<KonvaEventObject<Event>, 'target' | 'type'>, numericId: number) => {
             const node = e.target as Konva.Shape;
 
             // Must use layersRef — has binary-updated positions
@@ -509,15 +524,74 @@ export function EditorSlate() {
             if (!layerToUpdate) return;
             const textMode = node.getAttr('textTransformMode') as 'reflow' | 'corner' | undefined;
 
-            if (
-                isSnapping &&
-                (layerToUpdate.type === 'image' ||
-                    (layerToUpdate.type === 'shape' && layerToUpdate.shape === 'rectangle'))
-            ) {
-                node.position({
-                    x: Math.round(node.x() / BLOCKSNAP_X) * BLOCKSNAP_X,
-                    y: Math.round(node.y() / BLOCKSNAP_Y) * BLOCKSNAP_Y
-                });
+            if (isSnapping && layerToUpdate.type !== 'line') {
+                const rotation = normalizeRotationToQuadrant(node.rotation());
+
+                // Drag end: snap a stable visual reference (top-left of AABB) to the grid.
+                if (e.type === 'dragend') {
+                    const left = node.x() - node.width() / 2;
+                    const top = node.y() - node.height() / 2;
+                    const snappedLeft = snapToGrid(left, SNAP_GRID);
+                    const snappedTop = snapToGrid(top, SNAP_GRID);
+                    node.position({
+                        x: snappedLeft + node.width() / 2,
+                        y: snappedTop + node.height() / 2
+                    });
+                }
+
+                // Transform end: snap only moved edges and keep pinned edges/corner stable.
+                if (e.type === 'transformend' && isCardinalRotation(rotation)) {
+                    const anchor = node.getAttr('lastActiveAnchor') as string | null;
+                    const left = node.x() - node.width() / 2;
+                    const right = node.x() + node.width() / 2;
+                    const top = node.y() - node.height() / 2;
+                    const bottom = node.y() + node.height() / 2;
+
+                    let nextLeft = left;
+                    let nextRight = right;
+                    let nextTop = top;
+                    let nextBottom = bottom;
+
+                    if (anchor?.includes('left')) {
+                        // Moving the left edge -> keep right edge pinned
+                        nextLeft = snapToGrid(left, SNAP_GRID);
+                    } else if (anchor?.includes('right')) {
+                        // Moving the right edge -> keep left edge pinned
+                        nextRight = snapToGrid(right, SNAP_GRID);
+                    } else {
+                        // No horizontal handle (e.g. top-center/bottom-center): snap by position
+                        const snappedLeft = snapToGrid(left, SNAP_GRID);
+                        const deltaX = snappedLeft - left;
+                        nextLeft += deltaX;
+                        nextRight += deltaX;
+                    }
+
+                    if (anchor?.includes('top')) {
+                        // Moving the top edge -> keep bottom edge pinned
+                        nextTop = snapToGrid(top, SNAP_GRID);
+                    } else if (anchor?.includes('bottom')) {
+                        // Moving the bottom edge -> keep top edge pinned
+                        nextBottom = snapToGrid(bottom, SNAP_GRID);
+                    } else {
+                        // No vertical handle (e.g. middle-left/middle-right): snap by position
+                        const snappedTop = snapToGrid(top, SNAP_GRID);
+                        const deltaY = snappedTop - top;
+                        nextTop += deltaY;
+                        nextBottom += deltaY;
+                    }
+
+                    const nextWidth = Math.max(20, nextRight - nextLeft);
+                    const nextHeight = Math.max(20, nextBottom - nextTop);
+
+                    node.width(nextWidth);
+                    node.height(nextHeight);
+                    node.offsetX(nextWidth / 2);
+                    node.offsetY(nextHeight / 2);
+                    node.position({
+                        x: nextLeft + nextWidth / 2,
+                        y: nextTop + nextHeight / 2
+                    });
+                }
                 node.getLayer()?.batchDraw();
             }
 
@@ -543,9 +617,23 @@ export function EditorSlate() {
                 node.scaleY(updatedConfig.scaleY);
             }
 
+            // Always broadcast the final authoritative transform after local snapping/baking.
+            // This prevents walls from remaining on the last pre-snap binary frame.
+            engine.broadcastBinaryMove(
+                numericId,
+                updatedConfig.cx,
+                updatedConfig.cy,
+                updatedConfig.width,
+                updatedConfig.height,
+                updatedConfig.scaleX,
+                updatedConfig.scaleY,
+                updatedConfig.rotation
+            );
+
             // Shadow mutation for binary fast-path
             layerToUpdate.config = updatedConfig;
             node.setAttr('textTransformMode', undefined);
+            node.setAttr('lastActiveAnchor', undefined);
 
             const store = useEditorStore.getState();
             store.toggleLayerSelection(numericId.toString(), false, false);
@@ -580,7 +668,14 @@ export function EditorSlate() {
         if (!trRef.current) return;
         const stage = trRef.current.getStage();
         const node = stage?.findOne<Konva.Shape>(`#${idToFlush}`);
-        if (node) handleTransformEnd({ target: node }, parseInt(idToFlush));
+        if (node)
+            handleTransformEnd(
+                { target: node, type: 'transformend' } as Pick<
+                    KonvaEventObject<Event>,
+                    'target' | 'type'
+                >,
+                parseInt(idToFlush)
+            );
     };
 
     const handleStageInteractionStart = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
@@ -712,7 +807,14 @@ export function EditorSlate() {
         if (currentSelectedIds.length && trRef.current) {
             const stage = trRef.current.getStage();
             const node = stage?.findOne<Konva.Shape>(`#${currentSelectedIds[0]}`);
-            if (node) handleTransformEnd({ target: node }, parseInt(currentSelectedIds[0]));
+            if (node)
+                handleTransformEnd(
+                    { target: node, type: 'transformend' } as Pick<
+                        KonvaEventObject<Event>,
+                        'target' | 'type'
+                    >,
+                    parseInt(currentSelectedIds[0])
+                );
         }
         // Without enough point this is probably a missfire
         if (currentLine.length > 6) {

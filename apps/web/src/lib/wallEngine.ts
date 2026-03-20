@@ -343,7 +343,7 @@ export class WallEngine {
     }
 
     public calculateCurrentPosition(layer: LayerWithWallEngineState) {
-        if (!layer.animStartTime) return layer.targetPos;
+        if (!layer.animStartTime || layer.animDuration <= 0) return layer.targetPos;
 
         let t = (this.getServerTime() - layer.animStartTime) / layer.animDuration;
         t = Math.max(0, Math.min(1, t));
