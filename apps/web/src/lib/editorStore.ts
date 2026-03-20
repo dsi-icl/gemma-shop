@@ -32,8 +32,6 @@ export interface EditorState {
     parentSaveMessage: string | null;
     layers: LayerWithEditorState[];
     selectedLayerIds: string[];
-    nextId: number;
-    nextZIndex: number;
     slides: Slide[];
     activeSlideId: string | null;
     selectedSlides: string[];
@@ -116,6 +114,9 @@ export interface EditorState {
 
 export type EditorStateCreator = ReturnType<ReturnType<typeof create<EditorState>>>;
 
+let _nextId = 1;
+let _nextZIndex = 10;
+
 export const useEditorStore =
     typeof window !== 'undefined' && window.__EDITOR_STORE__
         ? window.__EDITOR_STORE__
@@ -158,8 +159,6 @@ export const useEditorStore =
                   parentSaveMessage: null,
                   layers: [],
                   selectedLayerIds: [],
-                  nextId: 1,
-                  nextZIndex: 10,
                   slides: [],
                   activeSlideId: null,
                   selectedSlides: [],
@@ -263,28 +262,27 @@ export const useEditorStore =
                   },
 
                   hydrate: (layers) => {
-                      const maxId = layers.reduce((max, l) => Math.max(max, l.numericId), 0);
-                      const maxZ = layers.reduce((max, l) => Math.max(max, l.config.zIndex), 0);
-                      set({ layers, nextId: maxId + 5, nextZIndex: maxZ + 5 });
+                      _nextId = layers.reduce((max, l) => Math.max(max, l.numericId), 0) + 5;
+                      _nextZIndex =
+                          layers.reduce((max, l) => Math.max(max, l.config.zIndex), 0) + 5;
+                      set({ layers });
                   },
 
                   upsertLayer: (layer) =>
                       set((s) => {
                           const isNew = !s.layers.find((l) => l.numericId === layer.numericId);
-                          let nextId = s.nextId;
-                          let nextZIndex = s.nextZIndex;
 
                           // Multiple editors may interfere — build 5-degree tolerance
-                          if (layer.numericId > s.nextId) nextId = layer.numericId + 5;
+                          if (layer.numericId >= _nextId) _nextId = layer.numericId + 5;
                           if (isNew) {
-                              nextZIndex =
-                                  (layer.config.zIndex ?? 0) > s.nextZIndex
+                              _nextZIndex =
+                                  (layer.config.zIndex ?? 0) >= _nextZIndex
                                       ? layer.config.zIndex + 5
-                                      : s.nextZIndex + 5;
+                                      : _nextZIndex + 5;
                           }
 
                           const filtered = s.layers.filter((l) => l.numericId !== layer.numericId);
-                          return { layers: [...filtered, layer], nextId, nextZIndex };
+                          return { layers: [...filtered, layer] };
                       }),
 
                   removeLayer: (numericId) => {
@@ -501,17 +499,9 @@ export const useEditorStore =
 
                   // ── Allocators ────────────────────────────────────────────────────────
 
-                  allocateId: () => {
-                      const id = get().nextId;
-                      set({ nextId: id + 1 });
-                      return id;
-                  },
+                  allocateId: () => _nextId++,
 
-                  allocateZIndex: () => {
-                      const z = get().nextZIndex;
-                      set({ nextZIndex: z + 1 });
-                      return z;
-                  },
+                  allocateZIndex: () => _nextZIndex++,
 
                   // ── Side-effect actions ───────────────────────────────────────────────
 
@@ -535,16 +525,16 @@ export const useEditorStore =
                       const layer = s.layers.find((l) => l.numericId === numericId);
                       if (!layer) return;
 
-                      const alreadyOnTop = layer.config.zIndex === s.nextZIndex;
-                      const newZIndex = alreadyOnTop ? layer.config.zIndex : s.nextZIndex;
+                      const alreadyOnTop = layer.config.zIndex === _nextZIndex;
+                      const newZIndex = alreadyOnTop ? layer.config.zIndex : _nextZIndex;
+                      if (!alreadyOnTop) _nextZIndex += 1;
                       const updatedConfig = { ...layer.config, zIndex: newZIndex };
                       const updatedLayer = { ...layer, config: updatedConfig };
 
                       set({
                           layers: s.layers.map((l) =>
                               l.numericId === numericId ? updatedLayer : l
-                          ),
-                          nextZIndex: alreadyOnTop ? s.nextZIndex : s.nextZIndex + 1
+                          )
                       });
 
                       sendLayerUpdate(updatedLayer, 'bringToFront');
@@ -988,10 +978,14 @@ if (import.meta.hot) {
         unsubStatus();
         unsubSave();
         data.editorState = useEditorStore.getState();
+        data._nextId = _nextId;
+        data._nextZIndex = _nextZIndex;
     });
     if (import.meta.hot.data.editorState) {
         try {
             useEditorStore.setState(import.meta.hot.data.editorState);
+            _nextId = import.meta.hot.data._nextId ?? _nextId;
+            _nextZIndex = import.meta.hot.data._nextZIndex ?? _nextZIndex;
         } catch (e) {
             console.error('[HMR]: Failed to rehydrate the store:', e);
         }
