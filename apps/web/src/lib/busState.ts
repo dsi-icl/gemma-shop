@@ -232,6 +232,19 @@ export function getOrCreateScope(
     return scope;
 }
 
+export function deleteYDocForLayer(scopeId: ScopeId, numericId: number) {
+    const scope = scopedState.get(scopeId);
+    if (!scope) return;
+
+    const ydocScope = `${scope.projectId}_${scope.commitId}_${scope.slideId}_${numericId}`;
+    void db
+        .collection('ydocs')
+        .deleteOne({ scope: ydocScope })
+        .catch((err) => {
+            console.error(`[Bus] Failed to delete ydoc for ${ydocScope}:`, err);
+        });
+}
+
 // Pre-allocated empty hydrate payload (avoids re-stringifying on every call).
 export const EMPTY_HYDRATE: string = JSON.stringify({ type: 'hydrate', layers: [] });
 

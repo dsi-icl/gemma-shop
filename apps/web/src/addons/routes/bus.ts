@@ -40,6 +40,7 @@ import {
     touchPing,
     reapStalePeers,
     persistSlideMetadata,
+    deleteYDocForLayer,
     broadcastToEditorsByCommit,
     notifyControllersByCommit,
     broadcastAssetToEditorsByProject,
@@ -48,7 +49,13 @@ import {
     EMPTY_HYDRATE,
     type PeerEntry
 } from '~/lib/busState';
-import { HelloSchema, GSMessageSchema, makeScopeLabel, type GSMessage } from '~/lib/types';
+import {
+    HelloSchema,
+    GSMessageSchema,
+    makeScopeLabel,
+    type GSMessage,
+    type Layer
+} from '~/lib/types';
 
 // ── Binary opcodes ──────────────────────────────────────────────────────────
 
@@ -142,6 +149,7 @@ handlers.set('delete_layer', ({ entry, data, scopeId, rawText }) => {
     if (scope) {
         scope.layers.delete(data.numericId);
         scope.dirty = true;
+        deleteYDocForLayer(scopeId, data.numericId);
     }
     unregisterActiveVideo(data.numericId);
     // deleteLayerNodes(data.numericId);
@@ -538,6 +546,50 @@ export default defineWebSocketHandler({
     asset: Record<string, unknown>
 ) => {
     broadcastAssetToEditorsByProject(projectId, asset);
+};
+
+// Bridge for YJS text updates — scope-targeted upsert into bus state + fanout.
+(process as any).__YJS_UPSERT_LAYER__ = (payload: {
+    projectId: string;
+    commitId: string;
+    slideId: string;
+    layerId: number;
+    textHtml: string;
+    fallbackLayer?: Extract<Layer, { type: 'text' }>;
+}) => {
+    try {
+        const { projectId, commitId, slideId, layerId, textHtml, fallbackLayer } = payload;
+        const scopeId = internScope(projectId, commitId, slideId);
+        const scope = getOrCreateScope(scopeId, projectId, commitId, slideId);
+
+        const existing = scope.layers.get(layerId);
+        const nextLayer =
+            existing?.type === 'text'
+                ? { ...existing, textHtml }
+                : fallbackLayer
+                  ? { ...fallbackLayer, textHtml }
+                  : null;
+
+        if (!nextLayer || nextLayer.type !== 'text') {
+            console.warn(
+                `[WS] YJS upsert ignored: text layer ${layerId} not found for scope ${makeScopeLabel(projectId, commitId, slideId)}`
+            );
+            return false;
+        }
+
+        scope.layers.set(layerId, nextLayer);
+        scope.dirty = true;
+        invalidateHydrateCache(scopeId);
+        broadcastToScope(scopeId, {
+            type: 'upsert_layer',
+            origin: 'yjs_sync',
+            layer: nextLayer
+        });
+        return true;
+    } catch (error) {
+        console.error('[WS] YJS upsert bridge failed:', error);
+        return false;
+    }
 };
 
 // ── VSYNC loop (iterates active videos only) ─────────────────────────────────

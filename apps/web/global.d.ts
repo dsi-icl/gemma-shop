@@ -1,7 +1,7 @@
 import type { ControllerEngine } from '~/lib/controllerEngine';
 import type { EditorEngine } from '~/lib/editorEngine';
 import type { EditorStateCreator } from '~/lib/editorStore';
-import type { GSMessage, ScopeKey, ScopeState } from '~/lib/types';
+import type { GSMessage, Layer, ScopeKey, ScopeState } from '~/lib/types';
 import type { WallEngine } from '~/lib/wallEngine';
 
 export {};
@@ -22,6 +22,14 @@ declare global {
             __SCOPED_STAGE_STATE__?: Map<ScopeKey, ScopeState>;
             __BROADCAST_EDITORS__?: (data: GSMessage) => void;
             __BROADCAST_ASSET_ADDED__?: (projectId: string, asset: Record<string, unknown>) => void;
+            __YJS_UPSERT_LAYER__?: (payload: {
+                projectId: string;
+                commitId: string;
+                slideId: string;
+                layerId: number;
+                textHtml: string;
+                fallbackLayer?: Extract<Layer, { type: 'text' }>;
+            }) => boolean | Promise<boolean>;
             __VSYNC_INTERVAL__?: ReturnType<typeof setInterval>;
             __AUTO_SAVE_INTERVAL__?: ReturnType<typeof setInterval>;
         }
