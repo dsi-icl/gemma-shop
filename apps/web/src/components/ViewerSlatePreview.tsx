@@ -47,8 +47,10 @@ export function ViewerSlatePreview({
         const x = e.target.x();
         if (x < 0) e.target.x(0);
         if (x > stageWidth - e.target.width()) e.target.x(stageWidth - e.target.width());
-        if (stageSlot.current) {
-            stageSlot.current.scrollLeft = x;
+        const slot = stageSlot.current;
+        if (slot) {
+            // oxlint-disable-next-line react-hooks-js/immutability
+            slot.scrollLeft = x;
         }
         e.target.y(0);
     };

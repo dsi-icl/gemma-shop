@@ -5,11 +5,12 @@ import {
     ResizablePanel,
     ResizablePanelGroup
 } from '@repo/ui/components/resizable';
+import { Separator } from '@repo/ui/components/separator';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { differenceInDays, format, formatDistanceToNow, isBefore, subMonths } from 'date-fns';
 import Konva from 'konva';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer as KonvaLayer, Rect, Circle, Line, Image } from 'react-konva';
 import { toast } from 'sonner';
 
@@ -70,6 +71,7 @@ function CommitViewer() {
     const navigate = useNavigate();
     const stageSlot = useRef<HTMLDivElement>(null);
     const stageInstance = useRef<Konva.Stage>(null);
+    const [stageScaleFactor, setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
     const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
     const [branching, setBranching] = useState(false);
 
@@ -91,6 +93,28 @@ function CommitViewer() {
         () => [...activeLayers].sort((a, b) => a.config.zIndex - b.config.zIndex),
         [activeLayers]
     );
+
+    useLayoutEffect(() => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+
+        const logicalHeight = SCREEN_H * ROWS;
+        const minScale = 0.01;
+
+        const recomputeScale = () => {
+            const availableHeight = slot.clientHeight;
+            if (availableHeight <= 0) return;
+            const maxVerticalScale = Math.max(minScale, availableHeight / logicalHeight);
+            const nextScale = Math.min(STAGE_SCALE_FACTOR, maxVerticalScale);
+            setStageScaleFactor((prev) => (Math.abs(prev - nextScale) < 0.0005 ? prev : nextScale));
+        };
+
+        recomputeScale();
+        const observer = new ResizeObserver(recomputeScale);
+        observer.observe(slot);
+
+        return () => observer.disconnect();
+    }, []);
 
     const handleEditFromVersion = async () => {
         setBranching(true);
@@ -161,184 +185,194 @@ function CommitViewer() {
     };
 
     return (
-        <div className="container flex min-h-svh min-w-full flex-col pt-18 pb-13">
+        <div className="container flex h-full max-h-full min-h-0 min-w-full flex-col overflow-hidden pt-18 pb-13">
             <ResizablePanelGroup
                 orientation="horizontal"
-                className="grow overflow-hidden font-sans text-foreground"
+                className="h-full min-h-0 w-full overflow-hidden font-sans text-foreground"
             >
-                <ResizablePanel>
-                    <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
-                        <div className="flex items-center gap-3">
-                            <Button
-                                render={
-                                    <Link
-                                        to="/quarry/projects/$projectId/commits"
-                                        params={{ projectId }}
-                                    />
-                                }
-                                variant="ghost"
-                                size="sm"
-                                nativeButton={false}
-                            >
-                                <ArrowLeftIcon /> Back
-                            </Button>
-                            <div>
-                                <h2 className="text-sm font-medium">{commit.message}</h2>
-                                <p className="text-xs text-muted-foreground">
-                                    Read-only view ·{' '}
-                                    {formatRelativeDate(new Date(commit.createdAt))}
-                                </p>
-                            </div>
-                        </div>
-                        <Button
-                            variant="default"
-                            size="sm"
-                            onClick={handleEditFromVersion}
-                            disabled={branching}
-                        >
-                            <GitBranchIcon /> Edit from this version
-                        </Button>
-                    </div>
-
-                    {/* Main content */}
-                    <div className="flex flex-1 overflow-hidden">
-                        {/* Canvas area */}
-                        <div className="flex flex-1 flex-col overflow-hidden">
-                            {/* Stage */}
-
-                            <ViewerSlatePreview
-                                stageSlot={stageSlot}
-                                stageInstance={stageInstance}
-                                stageScaleFactor={STAGE_SCALE_FACTOR}
-                                layers={sortedLayers}
-                            />
-                            <div ref={stageSlot} className="flex-1 overflow-auto bg-black">
-                                <Stage
-                                    ref={stageInstance}
-                                    width={COLS * SCREEN_W * STAGE_SCALE_FACTOR}
-                                    height={ROWS * SCREEN_H * STAGE_SCALE_FACTOR}
-                                    scaleX={STAGE_SCALE_FACTOR}
-                                    scaleY={STAGE_SCALE_FACTOR}
+                <ResizablePanel className="min-h-0 overflow-hidden">
+                    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    render={
+                                        <Link
+                                            to="/quarry/projects/$projectId/commits"
+                                            params={{ projectId }}
+                                        />
+                                    }
+                                    variant="ghost"
+                                    size="sm"
+                                    nativeButton={false}
                                 >
-                                    <KonvaLayer>
-                                        {sortedLayers
-                                            .filter((layer) => layer.config.visible)
-                                            .map((layer) => {
-                                                if (layer.type === 'image') {
-                                                    return (
-                                                        <ReadOnlyImage
-                                                            key={`img_${layer.numericId}`}
-                                                            layer={layer}
-                                                        />
-                                                    );
-                                                }
-                                                if (layer.type === 'video') {
-                                                    // Video layers shown as placeholder rect in read-only view
-                                                    // TODO Should be a blurhash when present
+                                    <ArrowLeftIcon /> Back
+                                </Button>
+                                <Separator orientation="vertical" className="mr-2" />
+                                <div className="flex items-center gap-2">
+                                    <h2 className="text-sm font-medium">{commit.message}</h2>
+                                    <p className="text-xs text-muted-foreground">
+                                        Read-only view ·{' '}
+                                        {formatRelativeDate(new Date(commit.createdAt))}
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={handleEditFromVersion}
+                                disabled={branching}
+                            >
+                                <GitBranchIcon /> Edit from this version
+                            </Button>
+                        </div>
+
+                        {/* Main content */}
+                        <div className="flex min-h-0 flex-1 overflow-hidden">
+                            {/* Canvas area */}
+                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                                {/* Stage */}
+
+                                <ViewerSlatePreview
+                                    stageSlot={stageSlot}
+                                    stageInstance={stageInstance}
+                                    stageScaleFactor={stageScaleFactor}
+                                    layers={sortedLayers}
+                                />
+                                <div
+                                    ref={stageSlot}
+                                    className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-black"
+                                >
+                                    <Stage
+                                        ref={stageInstance}
+                                        width={COLS * SCREEN_W * stageScaleFactor}
+                                        height={ROWS * SCREEN_H * stageScaleFactor}
+                                        scaleX={stageScaleFactor}
+                                        scaleY={stageScaleFactor}
+                                    >
+                                        <KonvaLayer>
+                                            {sortedLayers
+                                                .filter((layer) => layer.config.visible)
+                                                .map((layer) => {
+                                                    if (layer.type === 'image') {
+                                                        return (
+                                                            <ReadOnlyImage
+                                                                key={`img_${layer.numericId}`}
+                                                                layer={layer}
+                                                            />
+                                                        );
+                                                    }
+                                                    if (layer.type === 'video') {
+                                                        // Video layers shown as placeholder rect in read-only view
+                                                        // TODO Should be a blurhash when present
+                                                        return (
+                                                            <Rect
+                                                                key={`vid_${layer.numericId}`}
+                                                                x={layer.config.cx}
+                                                                y={layer.config.cy}
+                                                                width={layer.config.width}
+                                                                height={layer.config.height}
+                                                                scaleX={layer.config.scaleX}
+                                                                scaleY={layer.config.scaleY}
+                                                                offsetX={layer.config.width / 2}
+                                                                offsetY={layer.config.height / 2}
+                                                                rotation={layer.config.rotation}
+                                                                fill="#333"
+                                                                listening={false}
+                                                            />
+                                                        );
+                                                    }
+                                                    if (layer.type === 'shape') {
+                                                        const common = {
+                                                            x: layer.config.cx,
+                                                            y: layer.config.cy,
+                                                            rotation: layer.config.rotation,
+                                                            scaleX: layer.config.scaleX,
+                                                            scaleY: layer.config.scaleY,
+                                                            fill: layer.fill,
+                                                            stroke: layer.strokeColor,
+                                                            strokeWidth: layer.strokeWidth,
+                                                            listening: false as const
+                                                        };
+                                                        if (layer.shape === 'rectangle') {
+                                                            return (
+                                                                <Rect
+                                                                    key={`shape_${layer.numericId}`}
+                                                                    {...common}
+                                                                    width={layer.config.width}
+                                                                    height={layer.config.height}
+                                                                    offsetX={layer.config.width / 2}
+                                                                    offsetY={
+                                                                        layer.config.height / 2
+                                                                    }
+                                                                    dash={layer.strokeDash}
+                                                                />
+                                                            );
+                                                        }
+                                                        if (layer.shape === 'circle') {
+                                                            return (
+                                                                <Circle
+                                                                    key={`shape_${layer.numericId}`}
+                                                                    {...common}
+                                                                    offsetX={layer.config.width / 2}
+                                                                    offsetY={
+                                                                        layer.config.height / 2
+                                                                    }
+                                                                    radius={layer.config.width / 2}
+                                                                    dash={layer.strokeDash}
+                                                                />
+                                                            );
+                                                        }
+                                                    }
+                                                    if (layer.type === 'line') {
+                                                        return (
+                                                            <Line
+                                                                key={`lin_${layer.numericId}`}
+                                                                points={layer.line}
+                                                                stroke={layer.strokeColor}
+                                                                strokeWidth={layer.strokeWidth}
+                                                                dash={layer.strokeDash}
+                                                                dashEnabled={true}
+                                                                tension={0.4}
+                                                                lineCap="round"
+                                                                lineJoin="round"
+                                                                listening={false}
+                                                            />
+                                                        );
+                                                    }
+                                                    // Fallback placeholder
                                                     return (
                                                         <Rect
-                                                            key={`vid_${layer.numericId}`}
+                                                            key={`fallback_${layer.numericId}`}
                                                             x={layer.config.cx}
                                                             y={layer.config.cy}
                                                             width={layer.config.width}
                                                             height={layer.config.height}
-                                                            scaleX={layer.config.scaleX}
-                                                            scaleY={layer.config.scaleY}
                                                             offsetX={layer.config.width / 2}
                                                             offsetY={layer.config.height / 2}
                                                             rotation={layer.config.rotation}
-                                                            fill="#333"
+                                                            fill="#555"
                                                             listening={false}
                                                         />
                                                     );
-                                                }
-                                                if (layer.type === 'shape') {
-                                                    const common = {
-                                                        x: layer.config.cx,
-                                                        y: layer.config.cy,
-                                                        rotation: layer.config.rotation,
-                                                        scaleX: layer.config.scaleX,
-                                                        scaleY: layer.config.scaleY,
-                                                        fill: layer.fill,
-                                                        stroke: layer.strokeColor,
-                                                        strokeWidth: layer.strokeWidth,
-                                                        listening: false as const
-                                                    };
-                                                    if (layer.shape === 'rectangle') {
-                                                        return (
-                                                            <Rect
-                                                                key={`shape_${layer.numericId}`}
-                                                                {...common}
-                                                                width={layer.config.width}
-                                                                height={layer.config.height}
-                                                                offsetX={layer.config.width / 2}
-                                                                offsetY={layer.config.height / 2}
-                                                                dash={layer.strokeDash}
-                                                            />
-                                                        );
-                                                    }
-                                                    if (layer.shape === 'circle') {
-                                                        return (
-                                                            <Circle
-                                                                key={`shape_${layer.numericId}`}
-                                                                {...common}
-                                                                offsetX={layer.config.width / 2}
-                                                                offsetY={layer.config.height / 2}
-                                                                radius={layer.config.width / 2}
-                                                                dash={layer.strokeDash}
-                                                            />
-                                                        );
-                                                    }
-                                                }
-                                                if (layer.type === 'line') {
-                                                    return (
-                                                        <Line
-                                                            key={`lin_${layer.numericId}`}
-                                                            points={layer.line}
-                                                            stroke={layer.strokeColor}
-                                                            strokeWidth={layer.strokeWidth}
-                                                            dash={layer.strokeDash}
-                                                            dashEnabled={true}
-                                                            tension={0.4}
-                                                            lineCap="round"
-                                                            lineJoin="round"
-                                                            listening={false}
-                                                        />
-                                                    );
-                                                }
-                                                // Fallback placeholder
-                                                return (
-                                                    <Rect
-                                                        key={`fallback_${layer.numericId}`}
-                                                        x={layer.config.cx}
-                                                        y={layer.config.cy}
-                                                        width={layer.config.width}
-                                                        height={layer.config.height}
-                                                        offsetX={layer.config.width / 2}
-                                                        offsetY={layer.config.height / 2}
-                                                        rotation={layer.config.rotation}
-                                                        fill="#555"
-                                                        listening={false}
-                                                    />
-                                                );
-                                            })}
-                                        {getDOGridLines(COLS * SCREEN_W, ROWS * SCREEN_H, 20)}
-                                    </KonvaLayer>
-                                </Stage>
+                                                })}
+                                            {getDOGridLines(COLS * SCREEN_W, ROWS * SCREEN_H, 20)}
+                                        </KonvaLayer>
+                                    </Stage>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </ResizablePanel>
                 <ResizableHandle />
-                <ResizablePanel defaultSize={300} minSize={200}>
+                <ResizablePanel defaultSize={300} minSize={200} className="min-h-0 overflow-hidden">
                     {/* Slide list sidebar */}
-                    <div className="flex w-full flex-col border-l border-border">
+                    <div className="flex h-full min-h-0 w-full flex-col border-l border-border">
                         <div className="flex h-13 shrink-0 cursor-pointer items-center justify-between border-b border-border bg-muted/50 px-4">
                             <h2 className="flex items-center gap-2 text-sm font-semibold">
                                 <SlideshowIcon size={18} weight="bold" /> Slides
                             </h2>
                         </div>
-                        <div className="flex-1 space-y-1 overflow-y-auto p-2">
+                        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
                             {slides
                                 .sort((a, b) => a.order - b.order)
                                 .map((slide, idx) => (
