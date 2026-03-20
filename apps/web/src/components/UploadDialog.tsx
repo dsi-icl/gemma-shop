@@ -32,6 +32,14 @@ interface FileProgress {
     status: 'uploading' | 'complete' | 'error';
 }
 
+function isWoff2File(file: File): boolean {
+    return (
+        file.type === 'font/woff2' ||
+        file.name.toLowerCase().endsWith('.woff2') ||
+        file.type === 'application/font-woff2'
+    );
+}
+
 export function UploadDialog({ projectId, trigger, onUploadComplete }: UploadDialogProps) {
     const [open, setOpen] = useState(false);
     const [token, setToken] = useState<string | null>(null);
@@ -102,7 +110,7 @@ export function UploadDialog({ projectId, trigger, onUploadComplete }: UploadDia
             const uppy =
                 uppyRef.current ??
                 new Uppy({
-                    restrictions: { allowedFileTypes: ['image/*', 'video/*'] }
+                    restrictions: { allowedFileTypes: ['image/*', 'video/*', '.woff2'] }
                 }).use(Tus, {
                     endpoint: '/api/uploads/',
                     chunkSize: 5 * 1024 * 1024
@@ -166,7 +174,7 @@ export function UploadDialog({ projectId, trigger, onUploadComplete }: UploadDia
             e.preventDefault();
             setDragOver(false);
             const droppedFiles = Array.from(e.dataTransfer.files).filter(
-                (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
+                (f) => f.type.startsWith('image/') || f.type.startsWith('video/') || isWoff2File(f)
             );
             uploadFiles(droppedFiles);
         },
@@ -249,7 +257,7 @@ export function UploadDialog({ projectId, trigger, onUploadComplete }: UploadDia
                             ref={fileInputRef}
                             type="file"
                             multiple
-                            accept="image/*,video/*"
+                            accept="image/*,video/*,.woff2"
                             className="hidden"
                             onChange={handleFileInput}
                         />
@@ -273,7 +281,7 @@ export function UploadDialog({ projectId, trigger, onUploadComplete }: UploadDia
                                 Drop files or click to browse
                             </span>
                             <span className="text-[10px] text-muted-foreground/60">
-                                Images and videos
+                                Images, videos, and WOFF2 fonts
                             </span>
                         </button>
 

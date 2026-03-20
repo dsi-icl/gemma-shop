@@ -15,6 +15,15 @@ import {
     TextStrikethroughIcon,
     TextUnderlineIcon
 } from '@phosphor-icons/react';
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectTrigger,
+    SelectValue
+} from '@repo/ui/components/select';
 import { Separator } from '@repo/ui/components/separator';
 import { SymmetricSlider } from '@repo/ui/components/symmetric-slider';
 import { TipButton } from '@repo/ui/components/tip-button';
@@ -32,6 +41,7 @@ import {
 } from 'lexical';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useFonts } from '~/hooks/useFonts';
 import { useEditorStore } from '~/lib/editorStore';
 import { emToVirtualPx, TEXT_BASE_FONT_SIZE_PX, virtualPxToEm } from '~/lib/textRenderConfig';
 
@@ -41,6 +51,13 @@ const DEFAULT_FONT_COLOR = '#FFFFFFFF';
 const DEFAULT_BG_COLOR = '#333333FF';
 const FONT_SIZE_MIN = 10;
 const FONT_SIZE_MAX = 1000;
+const DEFAULT_FONT_OPTION_ID = 'system-sans';
+
+const SYSTEM_FONT_OPTIONS = [
+    { id: 'system-sans', label: 'System Sans', css: 'system-ui, sans-serif' },
+    { id: 'system-serif', label: 'System Serif', css: 'ui-serif, serif' },
+    { id: 'system-mono', label: 'System Mono', css: 'ui-monospace, monospace' }
+];
 
 function clampFontSize(px: number): number {
     return Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, px));
@@ -61,6 +78,10 @@ function parseFontSizeToEm(fontSizeRaw: string): number | null {
     return Number.isFinite(numeric) && numeric > 0 ? numeric / TEXT_BASE_FONT_SIZE_PX : null;
 }
 
+function normalizeFontFamily(value: string): string {
+    return value.replace(/["']/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 export default function ToolbarPlugin() {
     const [editor] = useLexicalComposerContext();
     const toolbarRef = useRef(null);
@@ -76,6 +97,10 @@ export default function ToolbarPlugin() {
     const [fontSizeInput, setFontSizeInput] = useState(String(TEXT_BASE_FONT_SIZE_PX));
     const [fontSizeMixed, setFontSizeMixed] = useState(false);
     const [isFontSizeInteracting, setIsFontSizeInteracting] = useState(false);
+    const [fontFamilyOptionId, setFontFamilyOptionId] = useState(DEFAULT_FONT_OPTION_ID);
+    const [fontFamilyMixed, setFontFamilyMixed] = useState(false);
+    const projectId = useEditorStore((s) => s.projectId);
+    const projectFonts = useFonts(projectId);
     const activeScaleX = useEditorStore((s) => {
         const id = s.editingTextLayerId;
         if (!id) return 1;
@@ -126,8 +151,39 @@ export default function ToolbarPlugin() {
                 setFontSizeInput(String(effectivePx));
                 setFontSizeMixed(!selection.isCollapsed() && !fontSizeValue);
             }
+
+            const selectedFontFamily = $getSelectionStyleValueForProperty(
+                selection,
+                'font-family',
+                ''
+            );
+            if (!selectedFontFamily) {
+                setFontFamilyOptionId(DEFAULT_FONT_OPTION_ID);
+                setFontFamilyMixed(!selection.isCollapsed());
+            } else {
+                const normalized = normalizeFontFamily(selectedFontFamily);
+                const systemMatch = SYSTEM_FONT_OPTIONS.find(
+                    (opt) => normalizeFontFamily(opt.css) === normalized
+                );
+                if (systemMatch) {
+                    setFontFamilyOptionId(systemMatch.id);
+                    setFontFamilyMixed(false);
+                } else {
+                    const family = selectedFontFamily.split(',')[0]?.replace(/["']/g, '').trim();
+                    const projectMatch = projectFonts.find(
+                        (f) => normalizeFontFamily(f.family) === normalizeFontFamily(family ?? '')
+                    );
+                    if (projectMatch) {
+                        setFontFamilyOptionId(`project:${projectMatch.family}`);
+                        setFontFamilyMixed(false);
+                    } else {
+                        setFontFamilyOptionId(DEFAULT_FONT_OPTION_ID);
+                        setFontFamilyMixed(!selection.isCollapsed());
+                    }
+                }
+            }
         }
-    }, [activeScaleX, activeScaleY, isFontSizeInteracting]);
+    }, [activeScaleX, activeScaleY, isFontSizeInteracting, projectFonts]);
 
     useEffect(() => {
         return mergeRegister(
@@ -191,6 +247,24 @@ export default function ToolbarPlugin() {
         setFontSizePx(clampedPx);
         setFontSizeInput(String(clampedPx));
         setFontSizeMixed(false);
+    };
+
+    const applyFontFamilyOption = (optionId: string | null) => {
+        if (!optionId) return;
+        const system = SYSTEM_FONT_OPTIONS.find((opt) => opt.id === optionId);
+        if (system) {
+            applyStyle('font-family', system.css);
+            setFontFamilyOptionId(system.id);
+            setFontFamilyMixed(false);
+            return;
+        }
+        if (optionId.startsWith('project:')) {
+            const family = optionId.slice('project:'.length);
+            const css = `"${family}", system-ui, sans-serif`;
+            applyStyle('font-family', css);
+            setFontFamilyOptionId(optionId);
+            setFontFamilyMixed(false);
+        }
     };
 
     // const applyFontFamily = (family: string) => {
@@ -370,31 +444,42 @@ export default function ToolbarPlugin() {
                     />
                 </div>
             </div>
-
-            {/* Add missing font select box here */}
-
-            {/* <div className="flex items-center gap-1">
+            <Separator orientation="vertical" className="mx-1 h-6" />
+            <div className="flex items-center gap-2 px-1">
                 <span className="text-xs text-muted-foreground">Font</span>
-                <select
-                    className="h-7 max-w-32 rounded border border-border bg-background px-1.5 text-xs"
-                    onChange={(e) => applyFontFamily(e.target.value)}
+                <Select
+                    value={fontFamilyOptionId}
+                    onValueChange={applyFontFamilyOption}
+                    onOpenChange={() => editor.focus()}
                 >
-                    {SYSTEM_FONTS.map((f) => (
-                        <option key={f} value={f}>
-                            {f}
-                        </option>
-                    ))}
-                    {projectFonts.length > 0 && (
-                        <optgroup label="Project Fonts">
-                            {projectFonts.map((f) => (
-                                <option key={f.family} value={f.family}>
-                                    {f.family}
-                                </option>
+                    <SelectTrigger size="sm" className="w-44 rounded border-border bg-background">
+                        <SelectValue>{fontFamilyMixed ? 'Mixed' : null}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                        {projectFonts.length > 0 ? (
+                            <SelectGroup>
+                                <SelectLabel>Assets</SelectLabel>
+                                {projectFonts.map((font) => (
+                                    <SelectItem
+                                        key={`project:${font.family}`}
+                                        value={`project:${font.family}`}
+                                    >
+                                        {font.family}
+                                    </SelectItem>
+                                ))}
+                            </SelectGroup>
+                        ) : null}
+                        <SelectGroup>
+                            <SelectLabel>System</SelectLabel>
+                            {SYSTEM_FONT_OPTIONS.map((opt) => (
+                                <SelectItem key={opt.id} value={opt.id}>
+                                    {opt.label}
+                                </SelectItem>
                             ))}
-                        </optgroup>
-                    )}
-                </select>
-            </div> */}
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </div>
         </div>
     );
 }

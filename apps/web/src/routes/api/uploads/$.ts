@@ -14,8 +14,11 @@ import { validateUploadToken } from '~/lib/uploadTokens';
 
 const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff']);
 const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv']);
+const ALLOWED_FONT_EXTS = new Set(['.woff2']);
 
-function detectMediaType(bytes: Uint8Array): 'image' | 'video' | null {
+type DetectedType = 'image' | 'video' | 'woff2' | null;
+
+function detectMediaType(bytes: Uint8Array): DetectedType {
     const len = bytes.length;
 
     // JPEG: FF D8 FF
@@ -64,6 +67,15 @@ function detectMediaType(bytes: Uint8Array): 'image' | 'video' | null {
         bytes[3] === 0xa3
     )
         return 'video';
+    // WOFF2: 77 4F 46 32 ('wOF2')
+    if (
+        len >= 4 &&
+        bytes[0] === 0x77 &&
+        bytes[1] === 0x4f &&
+        bytes[2] === 0x46 &&
+        bytes[3] === 0x32
+    )
+        return 'woff2';
     return null;
 }
 
@@ -168,7 +180,7 @@ const tusServer = new Server({
             }
 
             // Detect type via magic bytes
-            const headerBytes = await readHeaderBytes(tusFilePath, 12);
+            const headerBytes = await readHeaderBytes(tusFilePath, 48);
             const detectedType = detectMediaType(headerBytes);
 
             const isImage =
@@ -181,6 +193,8 @@ const tusServer = new Server({
                 (detectedType === null &&
                     ALLOWED_VIDEO_EXTS.has(ext) &&
                     !ALLOWED_IMAGE_EXTS.has(ext));
+            const isFontWoff2 =
+                detectedType === 'woff2' || (detectedType === null && ALLOWED_FONT_EXTS.has(ext));
 
             let assetFilename: string | null = null;
             let previewFilename: string | null = null;
@@ -249,6 +263,15 @@ const tusServer = new Server({
                 }
 
                 mimeType = 'video/mp4';
+            } else if (isFontWoff2) {
+                assetFilename = `${upload.id}.woff2`;
+                const finalPath = join(ASSET_DIR, assetFilename);
+                await copyFile(tusFilePath, finalPath);
+                mimeType = 'font/woff2';
+            } else {
+                console.warn(
+                    `[Tus] Unsupported upload type rejected: name=${originalName}, ext=${ext}, uploadId=${upload.id}`
+                );
             }
 
             // Clean up the raw tus upload (keep .json metadata for reference)

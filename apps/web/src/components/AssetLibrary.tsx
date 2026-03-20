@@ -15,7 +15,7 @@ import {
     DialogTitle
 } from '@repo/ui/components/dialog';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { EditorEngine } from '~/lib/editorEngine';
@@ -27,6 +27,10 @@ import { projectAssetsQueryOptions } from '~/server/projects.queries';
 import { AssetPreviewPortal, downloadAsset, isVideoAsset } from './AssetPreviewOverlay';
 import { ProjectImage } from './ProjectImage';
 import { UploadDialog } from './UploadDialog';
+
+function isFontAsset(asset: { name: string; mimeType?: string }): boolean {
+    return asset.mimeType === 'font/woff2' || /\.woff2$/i.test(asset.name);
+}
 
 interface AssetLibraryProps {
     projectId: string;
@@ -44,6 +48,15 @@ export function AssetLibrary({
     onExpand
 }: AssetLibraryProps) {
     const { data: assets = [] } = useQuery(projectAssetsQueryOptions(projectId));
+    const sortedAssets = useMemo(() => {
+        const media: typeof assets = [];
+        const fonts: typeof assets = [];
+        for (const asset of assets) {
+            if (isFontAsset(asset)) fonts.push(asset);
+            else media.push(asset);
+        }
+        return [...media, ...fonts];
+    }, [assets]);
     const queryClient = useQueryClient();
     const [deleteTarget, setDeleteTarget] = useState<{
         id: string;
@@ -261,7 +274,7 @@ export function AssetLibrary({
 
             {!collapsed && (
                 <div className="flex flex-1 flex-col overflow-y-auto p-2">
-                    {assets.length === 0 && (
+                    {sortedAssets.length === 0 && (
                         <UploadDialog
                             projectId={projectId}
                             trigger={emptyTrigger}
@@ -269,7 +282,7 @@ export function AssetLibrary({
                         />
                     )}
 
-                    {assets.length > 0 && (
+                    {sortedAssets.length > 0 && (
                         <>
                             <div
                                 className="grid gap-1.5"
@@ -283,27 +296,27 @@ export function AssetLibrary({
                                     trigger={uploadTrigger}
                                     onUploadComplete={handleUploadComplete}
                                 />
-                                {assets.map((asset) => {
+                                {sortedAssets.map((asset) => {
                                     const isVideo =
                                         asset.mimeType?.startsWith('video/') ||
                                         /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name);
+                                    const isFont = isFontAsset(asset);
                                     const thumbIdentifier = isVideo
                                         ? (asset.previewUrl ?? asset.url)
                                         : asset.url;
 
-                                    return (
-                                        <button
-                                            key={asset._id}
-                                            onClick={() =>
-                                                addAssetAsLayer({
-                                                    ...asset,
-                                                    url: asset.url ? `/api/assets/${asset.url}` : ''
-                                                })
-                                            }
-                                            className="bg-checkerboard group relative max-w-25 cursor-pointer overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-primary"
-                                            title={asset.name}
-                                        >
-                                            {thumbIdentifier ? (
+                                    const cardContent = (
+                                        <>
+                                            {isFont ? (
+                                                <div className="flex aspect-square flex-col items-center justify-center gap-1 bg-muted text-muted-foreground [--checker-size:10px]">
+                                                    <span className="rounded bg-background px-1.5 py-0.5 text-[9px] font-semibold tracking-wide">
+                                                        WOFF2
+                                                    </span>
+                                                    <span className="max-w-[90%] truncate text-[10px]">
+                                                        {asset.name.replace(/\.woff2$/i, '')}
+                                                    </span>
+                                                </div>
+                                            ) : thumbIdentifier ? (
                                                 <ProjectImage
                                                     src={thumbIdentifier}
                                                     blurhash={asset.blurhash}
@@ -326,22 +339,24 @@ export function AssetLibrary({
                                                 </span>
                                             </div>
                                             <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setPreview({
-                                                            src: `/api/assets/${asset.url}`,
-                                                            name: asset.name,
-                                                            isVideo: isVideoAsset(asset),
-                                                            blurhash: asset.blurhash,
-                                                            sizes: asset.sizes
-                                                        });
-                                                    }}
-                                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
-                                                    title="Preview"
-                                                >
-                                                    <EyeIcon size={12} />
-                                                </button>
+                                                {!isFont ? (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setPreview({
+                                                                src: `/api/assets/${asset.url}`,
+                                                                name: asset.name,
+                                                                isVideo: isVideoAsset(asset),
+                                                                blurhash: asset.blurhash,
+                                                                sizes: asset.sizes
+                                                            });
+                                                        }}
+                                                        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
+                                                        title="Preview"
+                                                    >
+                                                        <EyeIcon size={12} />
+                                                    </button>
+                                                ) : null}
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
@@ -366,6 +381,34 @@ export function AssetLibrary({
                                                     <TrashIcon size={12} />
                                                 </button>
                                             </div>
+                                        </>
+                                    );
+
+                                    if (isFont) {
+                                        return (
+                                            <div
+                                                key={asset._id}
+                                                className="bg-checkerboard group relative max-w-25 cursor-default overflow-hidden rounded-md border border-border bg-background opacity-90"
+                                                title={asset.name}
+                                            >
+                                                {cardContent}
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <button
+                                            key={asset._id}
+                                            onClick={() =>
+                                                addAssetAsLayer({
+                                                    ...asset,
+                                                    url: asset.url ? `/api/assets/${asset.url}` : ''
+                                                })
+                                            }
+                                            className="bg-checkerboard group relative max-w-25 cursor-pointer overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-primary"
+                                            title={asset.name}
+                                        >
+                                            {cardContent}
                                         </button>
                                     );
                                 })}
