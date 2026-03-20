@@ -81,7 +81,7 @@ export function EditorSlate() {
 
     // Shadow ref — keeps binary-updated positions for the fast-path.
     // Binary updates mutate this directly (no React re-render).
-    const layersRef = useRef<LayerWithEditorState[]>([]);
+    const layersRef = useRef<Map<number, LayerWithEditorState>>(new Map());
     useEffect(() => {
         layersRef.current = layers;
     }, [layers]);
@@ -118,7 +118,7 @@ export function EditorSlate() {
                     }
 
                     // Shadow state — so React reads accurate coords on next render
-                    const shadowLayer = layersRef.current.find((l) => l.numericId === id);
+                    const shadowLayer = layersRef.current.get(id);
                     if (shadowLayer) {
                         shadowLayer.config.cx = cx;
                         shadowLayer.config.cy = cy;
@@ -143,9 +143,7 @@ export function EditorSlate() {
 
             if (e.key === 'Delete') store.deleteSelectedLayer();
             if (e.key === 'Escape') store.deselectAllLayers();
-            const currentSelected = store.layers.find(
-                (l) => l.numericId === parseInt(store.selectedLayerIds[0])
-            );
+            const currentSelected = store.layers.get(parseInt(store.selectedLayerIds[0]));
             if (!currentSelected) return;
 
             const newLayerState = { ...currentSelected, config: { ...currentSelected.config } };
@@ -299,8 +297,7 @@ export function EditorSlate() {
             const assetUrl = `${window.location.origin}/api/assets/${assetFilename}`;
 
             // Grab freshest config from shadow state (user may have moved the preview)
-            const freshestLayer =
-                layersRef.current.find((l) => l.numericId === numericId) || optimisticLayer;
+            const freshestLayer = layersRef.current.get(numericId) || optimisticLayer;
 
             // 4. Lock it in with preserved transformations
             const finalizedLayer = { ...freshestLayer, url: assetUrl, isUploading: false };
@@ -337,7 +334,7 @@ export function EditorSlate() {
 
     const handleTransform = (e: Pick<KonvaEventObject<Event>, 'target'>, numericId: number) => {
         const node = e.target as Konva.Shape;
-        const layer = layersRef.current.find((l) => l.numericId === numericId);
+        const layer = layersRef.current.get(numericId);
         if (!node || !layer) return;
 
         // Scale baking for image/map layers
@@ -390,7 +387,7 @@ export function EditorSlate() {
             const node = e.target;
 
             // Must use layersRef — has binary-updated positions
-            const layerToUpdate = layersRef.current.find((l) => l.numericId === numericId);
+            const layerToUpdate = layersRef.current.get(numericId);
             if (!layerToUpdate) return;
 
             if (
@@ -668,7 +665,7 @@ export function EditorSlate() {
                             );
                         })} */}
 
-                            {[...layers]
+                            {Array.from(layers.values())
                                 .sort((a, b) => a.config.zIndex - b.config.zIndex)
                                 .map((layer) => {
                                     const isHidden = !layer.config.visible;

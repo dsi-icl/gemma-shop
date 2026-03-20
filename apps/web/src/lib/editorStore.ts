@@ -30,7 +30,7 @@ export interface EditorState {
     projectId: string | null;
     projectName: string | null;
     parentSaveMessage: string | null;
-    layers: LayerWithEditorState[];
+    layers: Map<number, LayerWithEditorState>;
     selectedLayerIds: string[];
     slides: Slide[];
     activeSlideId: string | null;
@@ -157,7 +157,7 @@ export const useEditorStore =
                   projectId: null,
                   projectName: null,
                   parentSaveMessage: null,
-                  layers: [],
+                  layers: new Map(),
                   selectedLayerIds: [],
                   slides: [],
                   activeSlideId: null,
@@ -193,7 +193,7 @@ export const useEditorStore =
                       set({
                           projectId,
                           commitId,
-                          layers: [],
+                          layers: new Map(),
                           slides: [],
                           activeSlideId: null,
                           saveStatus: 'idle',
@@ -265,12 +265,12 @@ export const useEditorStore =
                       _nextId = layers.reduce((max, l) => Math.max(max, l.numericId), 0) + 5;
                       _nextZIndex =
                           layers.reduce((max, l) => Math.max(max, l.config.zIndex), 0) + 5;
-                      set({ layers });
+                      set({ layers: new Map(layers.map((l) => [l.numericId, l])) });
                   },
 
                   upsertLayer: (layer) =>
                       set((s) => {
-                          const isNew = !s.layers.find((l) => l.numericId === layer.numericId);
+                          const isNew = !s.layers.has(layer.numericId);
 
                           // Multiple editors may interfere — build 5-degree tolerance
                           if (layer.numericId >= _nextId) _nextId = layer.numericId + 5;
@@ -281,50 +281,59 @@ export const useEditorStore =
                                       : _nextZIndex + 5;
                           }
 
-                          const filtered = s.layers.filter((l) => l.numericId !== layer.numericId);
-                          return { layers: [...filtered, layer] };
+                          const newLayers = new Map(s.layers);
+                          newLayers.set(layer.numericId, layer);
+                          return { layers: newLayers };
                       }),
 
                   removeLayer: (numericId) => {
-                      set((s) => ({
-                          layers: s.layers.filter((l) => l.numericId !== numericId),
-                          selectedLayerIds: s.selectedLayerIds.filter(
-                              (id) => id !== numericId.toString()
-                          )
-                      }));
+                      set((s) => {
+                          const newLayers = new Map(s.layers);
+                          newLayers.delete(numericId);
+                          return {
+                              layers: newLayers,
+                              selectedLayerIds: s.selectedLayerIds.filter(
+                                  (id) => id !== numericId.toString()
+                              )
+                          };
+                      });
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({ type: 'delete_layer', numericId });
                       get().markDirty();
                   },
 
                   updateProgress: (numericId, progress) =>
-                      set((s) => ({
-                          layers: s.layers.map((l) =>
-                              l.numericId === numericId ? { ...l, progress } : l
-                          )
-                      })),
+                      set((s) => {
+                          const layer = s.layers.get(numericId);
+                          if (!layer) return s;
+                          const newLayers = new Map(s.layers);
+                          newLayers.set(numericId, { ...layer, progress });
+                          return { layers: newLayers };
+                      }),
 
                   updateLayerConfig: (numericId, config) => {
-                      set((s) => ({
-                          layers: s.layers.map((l) =>
-                              l.numericId === numericId ? { ...l, config } : l
-                          )
-                      }));
+                      set((s) => {
+                          const layer = s.layers.get(numericId);
+                          if (!layer) return s;
+                          const newLayers = new Map(s.layers);
+                          newLayers.set(numericId, { ...layer, config });
+                          return { layers: newLayers };
+                      });
                       get().markDirty();
                   },
 
                   toggleLayerVisibility: (numericId) => {
-                      const layer = get().layers.find((l) => l.numericId === numericId);
+                      const layer = get().layers.get(numericId);
                       if (!layer) return;
                       const updatedLayer = {
                           ...layer,
                           config: { ...layer.config, visible: !layer.config.visible }
                       };
-                      set((s) => ({
-                          layers: s.layers.map((l) =>
-                              l.numericId === numericId ? updatedLayer : l
-                          )
-                      }));
+                      set((s) => {
+                          const newLayers = new Map(s.layers);
+                          newLayers.set(numericId, updatedLayer);
+                          return { layers: newLayers };
+                      });
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({ type: 'upsert_layer', layer: updatedLayer });
                       get().markDirty();
@@ -338,14 +347,15 @@ export const useEditorStore =
 
                   toggleLayerSelection: (id, isShiftClick, isCtrlClick) => {
                       const { layers, lastSelectedLayerId } = get();
+                      const layersArray = Array.from(layers.values());
                       if (isShiftClick && lastSelectedLayerId) {
-                          const lastIndex = layers.findIndex(
+                          const lastIndex = layersArray.findIndex(
                               (l) => l.numericId.toString() === lastSelectedLayerId
                           );
-                          const currentIndex = layers.findIndex(
+                          const currentIndex = layersArray.findIndex(
                               (l) => l.numericId.toString() === id
                           );
-                          const inBetween = layers.slice(
+                          const inBetween = layersArray.slice(
                               Math.min(lastIndex, currentIndex),
                               Math.max(lastIndex, currentIndex) + 1
                           );
@@ -369,7 +379,7 @@ export const useEditorStore =
                               return { selectedLayerIds: newSelection };
                           });
                       } else {
-                          const selectedLayer = layers.find((l) => l.numericId.toString() === id);
+                          const selectedLayer = layers.get(parseInt(id));
                           const newState: Partial<EditorState> = {
                               selectedLayerIds: [id]
                           };
@@ -397,16 +407,14 @@ export const useEditorStore =
                           const newState: Partial<EditorState> = { strokeColor };
                           if (s.selectedLayerIds.length > 0) {
                               const numericId = parseInt(s.selectedLayerIds[0]);
-                              newState.layers = s.layers.map((l) => {
-                                  if (l.numericId === numericId) {
-                                      if (l.type === 'line') return { ...l, strokeColor };
-                                      if (l.type === 'shape') return { ...l, strokeColor };
-                                  }
-                                  return l;
-                              });
-                              const newLayerState = s.layers.find((l) => l.numericId === numericId);
-                              if (newLayerState) {
-                                  sendLayerUpdate(newLayerState, 'setStrokeColor');
+                              const layer = s.layers.get(numericId);
+                              if (layer && (layer.type === 'line' || layer.type === 'shape')) {
+                                  const newLayers = new Map(s.layers);
+                                  newLayers.set(numericId, { ...layer, strokeColor });
+                                  newState.layers = newLayers;
+                              }
+                              if (layer) {
+                                  sendLayerUpdate(layer, 'setStrokeColor');
                               }
                           }
                           return newState;
@@ -418,18 +426,15 @@ export const useEditorStore =
                           const newState: Partial<EditorState> = { strokeWidth };
                           if (s.selectedLayerIds.length > 0) {
                               const numericId = parseInt(s.selectedLayerIds[0]);
-                              newState.layers = s.layers.map((l) => {
-                                  if (l.numericId === numericId) {
-                                      if (l.type === 'line') return { ...l, strokeWidth };
-                                      if (l.type === 'shape') return { ...l, strokeWidth };
+                              const layer = s.layers.get(numericId);
+                              if (layer) {
+                                  if (layer.type === 'line' || layer.type === 'shape') {
+                                      const updatedLayer = { ...layer, strokeWidth };
+                                      const newLayers = new Map(s.layers);
+                                      newLayers.set(numericId, updatedLayer);
+                                      newState.layers = newLayers;
+                                      sendLayerUpdate(updatedLayer, 'setStrokeWidth');
                                   }
-                                  return l;
-                              });
-                              const newLayerState = newState.layers.find(
-                                  (l) => l.numericId === numericId
-                              );
-                              if (newLayerState) {
-                                  sendLayerUpdate(newLayerState, 'setStrokeWidth');
                               }
                           }
                           return newState;
@@ -441,18 +446,15 @@ export const useEditorStore =
                           const newState: Partial<EditorState> = { strokeDash };
                           if (s.selectedLayerIds.length > 0) {
                               const numericId = parseInt(s.selectedLayerIds[0]);
-                              newState.layers = s.layers.map((l) => {
-                                  if (l.numericId === numericId) {
-                                      if (l.type === 'line') return { ...l, strokeDash };
-                                      if (l.type === 'shape') return { ...l, strokeDash };
+                              const layer = s.layers.get(numericId);
+                              if (layer) {
+                                  if (layer.type === 'line' || layer.type === 'shape') {
+                                      const updatedLayer = { ...layer, strokeDash };
+                                      const newLayers = new Map(s.layers);
+                                      newLayers.set(numericId, updatedLayer);
+                                      newState.layers = newLayers;
+                                      sendLayerUpdate(updatedLayer, 'setStrokeDash');
                                   }
-                                  return l;
-                              });
-                              const newLayerState = newState.layers.find(
-                                  (l) => l.numericId === numericId
-                              );
-                              if (newLayerState) {
-                                  sendLayerUpdate(newLayerState, 'setStrokeDash');
                               }
                           }
                           return newState;
@@ -464,14 +466,13 @@ export const useEditorStore =
                           const newState: Partial<EditorState> = { shapeFill: fill };
                           if (s.selectedLayerIds.length > 0) {
                               const numericId = parseInt(s.selectedLayerIds[0]);
-                              newState.layers = s.layers.map((l) =>
-                                  l.numericId === numericId ? { ...l, fill } : l
-                              );
-                              const newLayerState = newState.layers.find(
-                                  (l) => l.numericId === numericId
-                              );
-                              if (newLayerState) {
-                                  sendLayerUpdate(newLayerState, 'setShapeFill');
+                              const layer = s.layers.get(numericId);
+                              if (layer) {
+                                  const updatedLayer = { ...layer, fill };
+                                  const newLayers = new Map(s.layers);
+                                  newLayers.set(numericId, updatedLayer);
+                                  newState.layers = newLayers;
+                                  sendLayerUpdate(updatedLayer, 'setShapeFill');
                               }
                           }
                           return newState;
@@ -511,10 +512,11 @@ export const useEditorStore =
                       const numericId = parseInt(selectedLayerIds[0]);
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({ type: 'delete_layer', numericId });
-                      set((s) => ({
-                          layers: s.layers.filter((l) => l.numericId !== numericId),
-                          selectedLayerIds: []
-                      }));
+                      set((s) => {
+                          const newLayers = new Map(s.layers);
+                          newLayers.delete(numericId);
+                          return { layers: newLayers, selectedLayerIds: [] };
+                      });
                       get().markDirty();
                   },
 
@@ -522,7 +524,7 @@ export const useEditorStore =
                       const s = get();
                       if (!s.selectedLayerIds.length) return;
                       const numericId = parseInt(s.selectedLayerIds[0]);
-                      const layer = s.layers.find((l) => l.numericId === numericId);
+                      const layer = s.layers.get(numericId);
                       if (!layer) return;
 
                       const alreadyOnTop = layer.config.zIndex === _nextZIndex;
@@ -531,11 +533,9 @@ export const useEditorStore =
                       const updatedConfig = { ...layer.config, zIndex: newZIndex };
                       const updatedLayer = { ...layer, config: updatedConfig };
 
-                      set({
-                          layers: s.layers.map((l) =>
-                              l.numericId === numericId ? updatedLayer : l
-                          )
-                      });
+                      const newLayers = new Map(s.layers);
+                      newLayers.set(numericId, updatedLayer);
+                      set({ layers: newLayers });
 
                       sendLayerUpdate(updatedLayer, 'bringToFront');
                       get().markDirty();
@@ -545,10 +545,10 @@ export const useEditorStore =
                       const s = get();
                       if (!s.selectedLayerIds.length) return;
                       const numericId = parseInt(s.selectedLayerIds[0]);
-                      const layer = s.layers.find((l) => l.numericId === numericId);
+                      const layer = s.layers.get(numericId);
                       if (!layer) return;
 
-                      const minZIndex = s.layers.reduce(
+                      const minZIndex = Array.from(s.layers.values()).reduce(
                           (min, l) => Math.min(min, l.config.zIndex),
                           Infinity
                       );
@@ -557,11 +557,9 @@ export const useEditorStore =
                       const updatedConfig = { ...layer.config, zIndex: newZIndex };
                       const updatedLayer = { ...layer, config: updatedConfig };
 
-                      set({
-                          layers: s.layers.map((l) =>
-                              l.numericId === numericId ? updatedLayer : l
-                          )
-                      });
+                      const newLayers = new Map(s.layers);
+                      newLayers.set(numericId, updatedLayer);
+                      set({ layers: newLayers });
 
                       sendLayerUpdate(updatedLayer, 'sendToBack');
                       get().markDirty();
@@ -589,10 +587,11 @@ export const useEditorStore =
                           textHtml: '<p>New Text</p>'
                       };
 
-                      set((s) => ({
-                          layers: [...s.layers, newLayer],
-                          selectedLayerIds: [numericId.toString()]
-                      }));
+                      set((s) => {
+                          const newLayers = new Map(s.layers);
+                          newLayers.set(numericId, newLayer);
+                          return { layers: newLayers, selectedLayerIds: [numericId.toString()] };
+                      });
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
@@ -630,10 +629,11 @@ export const useEditorStore =
                           }
                       };
 
-                      set((s) => ({
-                          layers: [...s.layers, newLayer],
-                          selectedLayerIds: [numericId.toString()]
-                      }));
+                      set((s) => {
+                          const newLayers = new Map(s.layers);
+                          newLayers.set(numericId, newLayer);
+                          return { layers: newLayers, selectedLayerIds: [numericId.toString()] };
+                      });
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
@@ -670,10 +670,11 @@ export const useEditorStore =
                           strokeWidth
                       };
 
-                      set((s) => ({
-                          layers: [...s.layers, newLayer],
-                          selectedLayerIds: [numericId.toString()]
-                      }));
+                      set((s) => {
+                          const newLayers = new Map(s.layers);
+                          newLayers.set(numericId, newLayer);
+                          return { layers: newLayers, selectedLayerIds: [numericId.toString()] };
+                      });
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
@@ -731,10 +732,11 @@ export const useEditorStore =
                           strokeWidth,
                           strokeDash
                       };
-                      set((s) => ({
-                          layers: [...s.layers, newLayer],
-                          selectedLayerIds: [numericId.toString()]
-                      }));
+                      set((s) => {
+                          const newLayers = new Map(s.layers);
+                          newLayers.set(numericId, newLayer);
+                          return { layers: newLayers, selectedLayerIds: [numericId.toString()] };
+                      });
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
@@ -747,7 +749,7 @@ export const useEditorStore =
                   clearStage: () => {
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({ type: 'clear_stage' });
-                      set({ layers: [], selectedLayerIds: [] });
+                      set({ layers: new Map(), selectedLayerIds: [] });
                       get().markDirty();
                   },
                   reboot: () => {
@@ -764,7 +766,7 @@ export const useEditorStore =
                           }
                       }));
 
-                      set({ layers: updatedLayers });
+                      set({ layers: new Map(updatedLayers.map((l) => [l.numericId, l])) });
 
                       updatedLayers.forEach((layer) => {
                           sendLayerUpdate(layer, 'reorderLayers');
@@ -911,10 +913,16 @@ const unsubJson = engine.subscribeToJson((data) => {
         store.upsertLayer(data.layer);
     } else if (data.type === 'delete_layer') {
         // Remote delete — only update local state, don't re-broadcast
-        useEditorStore.setState((s) => ({
-            layers: s.layers.filter((l) => l.numericId !== data.numericId),
-            selectedLayerIds: s.selectedLayerIds.filter((id) => id !== data.numericId.toString())
-        }));
+        useEditorStore.setState((s) => {
+            const newLayers = new Map(s.layers);
+            newLayers.delete(data.numericId);
+            return {
+                layers: newLayers,
+                selectedLayerIds: s.selectedLayerIds.filter(
+                    (id) => id !== data.numericId.toString()
+                )
+            };
+        });
     } else if (data.type === 'processing_progress') {
         store.updateProgress(data.numericId, data.progress);
     } else if (data.type === 'slides_updated') {

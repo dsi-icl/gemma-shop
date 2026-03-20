@@ -68,7 +68,7 @@ export function AssetLibrary({
                 if (matchingAsset) {
                     const assetUrl = matchingAsset.url;
                     const prefixedUrl = `/api/assets/${assetUrl}`;
-                    for (const layer of [...store.layers]) {
+                    for (const layer of store.layers.values()) {
                         if (
                             (layer.type === 'image' || layer.type === 'video') &&
                             (layer.url === assetUrl || layer.url === prefixedUrl)
@@ -90,7 +90,7 @@ export function AssetLibrary({
 
     const handleDeleteClick = useCallback((asset: { _id: string; name: string; url: string }) => {
         const { layers } = useEditorStore.getState();
-        const inUse = layers.some(
+        const inUse = Array.from(layers.values()).some(
             (l) =>
                 (l.type === 'image' || l.type === 'video') &&
                 (l.url === asset.url || l.url === `/api/assets/${asset.url}`)

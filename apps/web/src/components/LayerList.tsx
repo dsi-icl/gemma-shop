@@ -18,7 +18,9 @@ export function LayerList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
     const reorderLayers = useEditorStore((s) => s.reorderLayers);
     const toggleLayerSelection = useEditorStore((s) => s.toggleLayerSelection);
 
-    const sortedLayers = [...layers].sort((a, b) => b.config.zIndex - a.config.zIndex);
+    const sortedLayers = Array.from(layers.values()).sort(
+        (a, b) => b.config.zIndex - a.config.zIndex
+    );
 
     const toggleCollapse = () => {
         if (collapsed) onExpand?.();
@@ -52,9 +54,7 @@ export function LayerList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
                         selectedIds={selectedLayerIds}
                         onReorder={(reorderedItems) => {
                             const newLayers = reorderedItems.map((item) => {
-                                const existingLayer = layers.find(
-                                    (l) => l.numericId.toString() === item.id
-                                );
+                                const existingLayer = layers.get(parseInt(item.id));
                                 if (!existingLayer) {
                                     throw new Error('Could not find existing layer');
                                 }

@@ -66,7 +66,7 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                 className="m-auto block w-fit cursor-pointer bg-[#222]"
             >
                 <Layer>
-                    {[...layers]
+                    {Array.from(layers.values())
                         .sort((a, b) => a.config.zIndex - b.config.zIndex)
                         .filter((shape) => shape.config.visible)
                         .map((shape) => {

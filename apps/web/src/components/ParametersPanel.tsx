@@ -25,9 +25,7 @@ export function ParametersPanel({
     const markDirty = useEditorStore((s) => s.markDirty);
 
     const selectedLayer =
-        selectedLayerIds.length === 1
-            ? layers.find((l) => l.numericId.toString() === selectedLayerIds[0])
-            : null;
+        selectedLayerIds.length === 1 ? (layers.get(parseInt(selectedLayerIds[0])) ?? null) : null;
 
     const toggleCollapse = () => {
         if (collapsed) onExpand?.();
@@ -41,11 +39,11 @@ export function ParametersPanel({
             const newConfig = { ...selectedLayer.config, [field]: value };
             const updatedLayer = { ...selectedLayer, config: newConfig };
 
-            useEditorStore.setState((s) => ({
-                layers: s.layers.map((l) =>
-                    l.numericId === selectedLayer.numericId ? updatedLayer : l
-                )
-            }));
+            useEditorStore.setState((s) => {
+                const newLayers = new Map(s.layers);
+                newLayers.set(selectedLayer.numericId, updatedLayer);
+                return { layers: newLayers };
+            });
 
             throttle(
                 () => {

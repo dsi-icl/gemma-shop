@@ -64,7 +64,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
     // not on every other layer mutation
     const activeLayer = useEditorStore((s) => {
         const id = s.selectedLayerIds[0];
-        return id ? (s.layers.find((l) => l.numericId === parseInt(id)) ?? null) : null;
+        return id ? (s.layers.get(parseInt(id)) ?? null) : null;
     });
 
     // Actions — stable references across renders, never trigger re-renders on their own
