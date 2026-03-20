@@ -2,7 +2,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/pop
 import { Slider } from '@repo/ui/components/slider';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { ToggleGroup, ToggleGroupItem } from '@repo/ui/components/toggle-group';
-import { throttle } from '@tanstack/pacer';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useEditorStore } from '~/lib/editorStore';

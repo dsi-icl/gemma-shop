@@ -124,13 +124,13 @@ export default function ToolbarPlugin() {
         setBgColor(color);
     };
 
-    const applyFontFamily = (family: string) => {
-        applyStyle('font-family', family);
-    };
+    // const applyFontFamily = (family: string) => {
+    //     applyStyle('font-family', family);
+    // };
 
-    const applyFontSize = (size: string) => {
-        applyStyle('font-size', `${size}px`);
-    };
+    // const applyFontSize = (size: string) => {
+    //     applyStyle('font-size', `${size}px`);
+    // };
 
     return (
         <div
@@ -259,6 +259,8 @@ export default function ToolbarPlugin() {
                 <HighlighterIcon size={32} style={{ color: bgColor }} weight="fill" />
             </ColorPickerPopover>
             <Separator orientation="vertical" className="mx-1 h-6" />
+
+            {/* Add missing font select box here */}
 
             {/* <div className="flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">Font</span>

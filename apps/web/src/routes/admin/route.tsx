@@ -6,7 +6,6 @@ import {
     MonitorIcon,
     UsersIcon
 } from '@phosphor-icons/react';
-import { useAuthSuspense } from '@repo/auth/tanstack/hooks';
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router';
 

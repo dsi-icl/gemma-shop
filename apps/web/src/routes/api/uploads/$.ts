@@ -167,7 +167,6 @@ const tusServer = new Server({
     datastore: new FileStore({ directory: UPLOAD_DIR }),
     async onUploadFinish(req, upload) {
         const tusFilePath = join(UPLOAD_DIR, upload.id);
-        const host = req.headers.get('host') ?? 'localhost:3000';
 
         try {
             const originalName = upload.metadata?.filename ?? upload.id;

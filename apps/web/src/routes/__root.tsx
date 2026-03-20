@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
 import { Toaster } from '@repo/ui/components/sonner';
 import { ThemeProvider } from '@repo/ui/lib/theme-provider';
-import { TanStackDevtools } from '@tanstack/react-devtools';
-import { formDevtoolsPlugin } from '@tanstack/react-form-devtools';
-import { ReactQueryDevtoolsPanel } from '@tanstack/react-query-devtools';
+// import { TanStackDevtools } from '@tanstack/react-devtools';
+// import { formDevtoolsPlugin } from '@tanstack/react-form-devtools';
+// import { ReactQueryDevtoolsPanel } from '@tanstack/react-query-devtools';
+// import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 import {
     createRootRouteWithContext,
     HeadContent,
@@ -12,7 +13,6 @@ import {
     Scripts,
     useRouterState
 } from '@tanstack/react-router';
-import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 
 import extraHead from '~/assets/extraHead.json';
 import { Footer } from '~/components/Footer';

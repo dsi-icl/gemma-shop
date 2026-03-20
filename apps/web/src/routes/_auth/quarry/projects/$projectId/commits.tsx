@@ -221,7 +221,9 @@ function CommitsTab() {
                             try {
                                 const commitDate = new Date(commit.updatedAt ?? commit.createdAt);
                                 displayDate = formatRelativeDate(commitDate);
-                            } catch (_e) {}
+                            } catch (e) {
+                                console.error('Invalid date could not be converted', e);
+                            }
                             return (
                                 <TableRow key={commit._id}>
                                     <TableCell className="h-12 w-6 px-0 py-0!">

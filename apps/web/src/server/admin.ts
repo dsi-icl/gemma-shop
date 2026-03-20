@@ -1,8 +1,7 @@
 import '@tanstack/react-start/server-only';
 import { db } from '@repo/db';
-import { ObjectId } from 'mongodb';
 
-import { allEditors, peerCounts, wallBindings, wallsByWallId } from '~/lib/busState';
+import { peerCounts, wallsByWallId } from '~/lib/busState';
 
 import { listPublicAssets, deletePublicAsset } from './projects';
 
