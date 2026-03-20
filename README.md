@@ -1,5 +1,9 @@
 # GemmaShop
 
+This is an application for collaborative multi-tenant managing, editing and runnging presentation decks for a large multi-node video wall. Decks are a composition of slides made of typed layers. The application uses a message bus in two separate modes to drive a serialized and fast path data flows for high performance real-time coordinating of `editors`, `controllers` and `walls` endpoints.
+
+## Code organisation
+
 A monorepo for GemmaShop MVP
 
 - [Turborepo](https://turborepo.com/) + [bun](https://bun.sh/)
