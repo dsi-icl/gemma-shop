@@ -1,5 +1,5 @@
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $patchStyleText } from '@lexical/selection';
+import { $getSelectionStyleValueForProperty, $patchStyleText } from '@lexical/selection';
 import { mergeRegister } from '@lexical/utils';
 import {
     ArrowClockwiseIcon,
@@ -16,6 +16,7 @@ import {
     TextUnderlineIcon
 } from '@phosphor-icons/react';
 import { Separator } from '@repo/ui/components/separator';
+import { SymmetricSlider } from '@repo/ui/components/symmetric-slider';
 import { TipButton } from '@repo/ui/components/tip-button';
 import {
     $getSelection,
@@ -31,10 +32,34 @@ import {
 } from 'lexical';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useEditorStore } from '~/lib/editorStore';
+import { emToVirtualPx, TEXT_BASE_FONT_SIZE_PX, virtualPxToEm } from '~/lib/textRenderConfig';
+
 import { ColorPickerPopover } from '../ColourPicker';
 
 const DEFAULT_FONT_COLOR = '#FFFFFFFF';
 const DEFAULT_BG_COLOR = '#333333FF';
+const FONT_SIZE_MIN = 10;
+const FONT_SIZE_MAX = 1000;
+
+function clampFontSize(px: number): number {
+    return Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, px));
+}
+
+function parseFontSizeToEm(fontSizeRaw: string): number | null {
+    const value = fontSizeRaw.trim().toLowerCase();
+    if (!value) return null;
+    if (value.endsWith('em')) {
+        const em = Number.parseFloat(value.slice(0, -2));
+        return Number.isFinite(em) && em > 0 ? em : null;
+    }
+    if (value.endsWith('px')) {
+        const px = Number.parseFloat(value.slice(0, -2));
+        return Number.isFinite(px) && px > 0 ? px / TEXT_BASE_FONT_SIZE_PX : null;
+    }
+    const numeric = Number.parseFloat(value);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric / TEXT_BASE_FONT_SIZE_PX : null;
+}
 
 export default function ToolbarPlugin() {
     const [editor] = useLexicalComposerContext();
@@ -47,6 +72,24 @@ export default function ToolbarPlugin() {
     const [isStrikethrough, setIsStrikethrough] = useState(false);
     const [color, setColor] = useState(DEFAULT_FONT_COLOR);
     const [bgColor, setBgColor] = useState(DEFAULT_BG_COLOR);
+    const [fontSizePx, setFontSizePx] = useState(TEXT_BASE_FONT_SIZE_PX);
+    const [fontSizeInput, setFontSizeInput] = useState(String(TEXT_BASE_FONT_SIZE_PX));
+    const [fontSizeMixed, setFontSizeMixed] = useState(false);
+    const [isFontSizeInteracting, setIsFontSizeInteracting] = useState(false);
+    const activeScaleX = useEditorStore((s) => {
+        const id = s.editingTextLayerId;
+        if (!id) return 1;
+        const layer = s.layers.get(id);
+        if (!layer || layer.type !== 'text') return 1;
+        return layer.config.scaleX || 1;
+    });
+    const activeScaleY = useEditorStore((s) => {
+        const id = s.editingTextLayerId;
+        if (!id) return 1;
+        const layer = s.layers.get(id);
+        if (!layer || layer.type !== 'text') return 1;
+        return layer.config.scaleY || 1;
+    });
 
     const $updateToolbar = useCallback(() => {
         const selection = $getSelection();
@@ -68,8 +111,23 @@ export default function ToolbarPlugin() {
             });
             setColor(_color);
             setBgColor(_bgColor);
+
+            if (!isFontSizeInteracting) {
+                const fontSizeValue = $getSelectionStyleValueForProperty(
+                    selection,
+                    'font-size',
+                    ''
+                );
+                const parsedEm = parseFontSizeToEm(fontSizeValue);
+                const effectivePx = clampFontSize(
+                    Math.round(emToVirtualPx(parsedEm ?? 1, activeScaleX, activeScaleY))
+                );
+                setFontSizePx(effectivePx);
+                setFontSizeInput(String(effectivePx));
+                setFontSizeMixed(!selection.isCollapsed() && !fontSizeValue);
+            }
         }
-    }, []);
+    }, [activeScaleX, activeScaleY, isFontSizeInteracting]);
 
     useEffect(() => {
         return mergeRegister(
@@ -106,11 +164,13 @@ export default function ToolbarPlugin() {
     }, [editor, $updateToolbar]);
 
     const applyStyle = (property: string, value: string) => {
-        editor.update(() => {
-            const selection = $getSelection();
-            if ($isRangeSelection(selection)) {
-                $patchStyleText(selection, { [property]: value });
-            }
+        editor.focus(() => {
+            editor.update(() => {
+                const selection = $getSelection();
+                if ($isRangeSelection(selection)) {
+                    $patchStyleText(selection, { [property]: value });
+                }
+            });
         });
     };
 
@@ -122,6 +182,15 @@ export default function ToolbarPlugin() {
     const applyBgColor = (color: string) => {
         applyStyle('background-color', color);
         setBgColor(color);
+    };
+
+    const applyFontSizePx = (nextPx: number) => {
+        const clampedPx = clampFontSize(Math.round(nextPx));
+        const em = virtualPxToEm(clampedPx, activeScaleX, activeScaleY);
+        applyStyle('font-size', `${Math.max(0.01, em).toFixed(4)}em`);
+        setFontSizePx(clampedPx);
+        setFontSizeInput(String(clampedPx));
+        setFontSizeMixed(false);
     };
 
     // const applyFontFamily = (family: string) => {
@@ -259,6 +328,48 @@ export default function ToolbarPlugin() {
                 <HighlighterIcon size={32} style={{ color: bgColor }} weight="fill" />
             </ColorPickerPopover>
             <Separator orientation="vertical" className="mx-1 h-6" />
+            <div className="flex min-w-56 items-center gap-2 px-1">
+                <span className="text-xs text-muted-foreground">Size</span>
+                <input
+                    type="number"
+                    min={FONT_SIZE_MIN}
+                    max={FONT_SIZE_MAX}
+                    value={fontSizeMixed ? '' : fontSizeInput}
+                    placeholder={fontSizeMixed ? 'Mixed' : undefined}
+                    className="h-7 w-18 rounded border border-border bg-background px-2 text-xs"
+                    onChange={(e) => {
+                        setFontSizeMixed(false);
+                        setFontSizeInput(e.target.value);
+                    }}
+                    onBlur={() => {
+                        const parsed = Number.parseFloat(fontSizeInput);
+                        if (Number.isFinite(parsed)) applyFontSizePx(parsed);
+                        else setFontSizeInput(String(fontSizePx));
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            const parsed = Number.parseFloat(fontSizeInput);
+                            if (Number.isFinite(parsed)) applyFontSizePx(parsed);
+                        }
+                    }}
+                    aria-label="Font Size (virtual px)"
+                />
+                <div
+                    className="w-28"
+                    onPointerDownCapture={() => {
+                        editor.focus();
+                    }}
+                >
+                    <SymmetricSlider
+                        value={fontSizePx}
+                        min={FONT_SIZE_MIN}
+                        max={FONT_SIZE_MAX}
+                        step={1}
+                        onValueChange={applyFontSizePx}
+                        onInteractionChange={setIsFontSizeInteracting}
+                    />
+                </div>
+            </div>
 
             {/* Add missing font select box here */}
 

@@ -122,6 +122,16 @@ Gemma Cast lets multiple users edit decks in real time and publish synchronized 
 - Video sync timestamps are authoritative server-side once playback starts
 - Autosave only updates mutable HEAD context
 
+## Text Rendering Model
+
+- Text styling is authored in Lexical HTML and rendered through both:
+    - editor DOM,
+    - canvas via SVG `foreignObject`,
+    - wall DOM renderer.
+- Baseline text context (font family, base font size, line-height, padding) is centralized in `apps/web/src/lib/textRenderConfig.ts` and reused by all renderers to avoid drift.
+- Font size in toolbar is displayed as virtual `px` for UX, but stored as `em` in inline styles for scale-safe persistence.
+- Canonical text scale for font-size conversion uses `scaleY` by design. Alternative considered: isotropic average `sqrt(scaleX * scaleY)`.
+
 ## Known Technical Debt (Current)
 
 - High complexity hotspots:

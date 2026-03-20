@@ -3,6 +3,7 @@ import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useEditorStore } from '~/lib/editorStore';
 import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
@@ -17,15 +18,28 @@ export function TextEditor({
     onMeasuredHeight?: (height: number) => void;
 }) {
     const rootRef = useRef<HTMLDivElement | null>(null);
-    const layer = useEditorStore((s) => s.layers.get(layerId));
+    const layerMetrics = useEditorStore(
+        useShallow((s) => {
+            const layer = s.layers.get(layerId);
+            if (!layer || layer.type !== 'text') {
+                return { logicalWidth: 800, logicalHeight: 400, scaleX: 1, scaleY: 1 };
+            }
+            return {
+                logicalWidth: layer.config.width,
+                logicalHeight: layer.config.height,
+                scaleX: layer.config.scaleX,
+                scaleY: layer.config.scaleY
+            };
+        })
+    );
     const [windowSize, setWindowSize] = useState({
         width: typeof window === 'undefined' ? 1920 : window.innerWidth,
         height: typeof window === 'undefined' ? 1080 : window.innerHeight
     });
-    const logicalWidth = layer?.type === 'text' ? layer.config.width : 800;
-    const logicalHeight = layer?.type === 'text' ? layer.config.height : 400;
-    const layerScaleX = layer?.type === 'text' ? layer.config.scaleX : 1;
-    const layerScaleY = layer?.type === 'text' ? layer.config.scaleY : 1;
+    const logicalWidth = layerMetrics.logicalWidth;
+    const logicalHeight = layerMetrics.logicalHeight;
+    const layerScaleX = layerMetrics.scaleX;
+    const layerScaleY = layerMetrics.scaleY;
     const safeWidth = Math.max(100, Math.round(logicalWidth));
     const safeHeight = Math.max(80, Math.round(logicalHeight));
     const safeScaleX = Math.max(0.05, layerScaleX);

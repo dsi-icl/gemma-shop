@@ -24,6 +24,11 @@
     padding: 15px 10px;
 }
 
+.editor-input ::selection {
+    color: inherit;
+    background-color: rgba(36, 36, 36);
+}
+
 .editor-placeholder {
     overflow: hidden;
     position: absolute;

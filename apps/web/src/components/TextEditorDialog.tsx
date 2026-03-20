@@ -2,6 +2,7 @@
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
 import { useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { EditorEngine } from '~/lib/editorEngine';
 import { useEditorStore } from '~/lib/editorStore';
@@ -15,26 +16,38 @@ interface TextEditorDialogProps {
 }
 
 export function TextEditorDialog({ layerId, open, onOpenChange }: TextEditorDialogProps) {
-    const layer = useEditorStore((s) => s.layers.get(layerId));
+    const textLayerMeta = useEditorStore(
+        useShallow((s) => {
+            const layer = s.layers.get(layerId);
+            if (!layer || layer.type !== 'text') return null;
+            return {
+                numericId: layer.numericId,
+                height: layer.config.height
+            };
+        })
+    );
     const latestMeasuredHeightRef = useRef<number | null>(null);
     const openSyncDoneRef = useRef(false);
     const engine = EditorEngine.getInstance();
-
-    const isText = layer?.type === 'text';
 
     const commitMeasuredHeight = (
         origin: 'text_editor_open' | 'text_editor_close',
         measured?: number
     ) => {
-        if (!isText) return;
+        if (!textLayerMeta) return;
         const nextHeight = Math.max(
             40,
-            Math.round(measured ?? latestMeasuredHeightRef.current ?? layer.config.height)
+            Math.round(measured ?? latestMeasuredHeightRef.current ?? textLayerMeta.height)
         );
-        if (Math.abs(nextHeight - layer.config.height) <= 1) return;
+        if (Math.abs(nextHeight - textLayerMeta.height) <= 1) return;
 
-        const updatedLayer = { ...layer, config: { ...layer.config, height: nextHeight } };
-        useEditorStore.getState().updateLayerConfig(layer.numericId, updatedLayer.config);
+        const liveLayer = useEditorStore.getState().layers.get(layerId);
+        if (!liveLayer || liveLayer.type !== 'text') return;
+        const updatedLayer = {
+            ...liveLayer,
+            config: { ...liveLayer.config, height: nextHeight }
+        };
+        useEditorStore.getState().updateLayerConfig(liveLayer.numericId, updatedLayer.config);
         engine.sendJSON({
             type: 'upsert_layer',
             origin,

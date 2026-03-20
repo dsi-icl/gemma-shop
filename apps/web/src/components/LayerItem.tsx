@@ -11,7 +11,8 @@ import {
     TrashIcon,
     RectangleIcon,
     ShapesIcon,
-    CircleIcon
+    CircleIcon,
+    GlobeIcon
 } from '@phosphor-icons/react';
 import { TipButton } from '@repo/ui/components/tip-button';
 import React from 'react';
@@ -41,6 +42,8 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                 return <GraphIcon size={20} weight="bold" />;
             case 'map':
                 return <MapTrifoldIcon size={20} weight="bold" />;
+            case 'web':
+                return <GlobeIcon size={20} weight="bold" />;
             case 'shape': {
                 switch ((layer as Extract<LayerWithEditorState, { type: 'shape' }>).shape) {
                     case 'circle':
@@ -70,6 +73,8 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                 return 'Graph';
             case 'map':
                 return 'Map';
+            case 'web':
+                return (layer as Extract<LayerWithEditorState, { type: 'web' }>).url;
             case 'shape': {
                 switch ((layer as Extract<LayerWithEditorState, { type: 'shape' }>).shape) {
                     case 'circle':

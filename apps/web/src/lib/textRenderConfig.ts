@@ -11,3 +11,23 @@ export const TEXT_BASE_STYLE = {
     padding: `${TEXT_BASE_PADDING_PX}px`,
     boxSizing: 'border-box' as const
 };
+
+/**
+ * Canonical text scale for physical-size calculations.
+ * We intentionally use Y scale to match vertical glyph sizing on wall/editor.
+ * Alternative considered: sqrt(scaleX * scaleY) for isotropic averaging.
+ */
+export function getCanonicalTextScale(scaleX: number, scaleY: number): number {
+    void scaleX;
+    return Math.max(0.01, Number.isFinite(scaleY) ? scaleY : 1);
+}
+
+export function virtualPxToEm(virtualPx: number, scaleX: number, scaleY: number): number {
+    const scale = getCanonicalTextScale(scaleX, scaleY);
+    return virtualPx / (TEXT_BASE_FONT_SIZE_PX * scale);
+}
+
+export function emToVirtualPx(em: number, scaleX: number, scaleY: number): number {
+    const scale = getCanonicalTextScale(scaleX, scaleY);
+    return em * TEXT_BASE_FONT_SIZE_PX * scale;
+}
