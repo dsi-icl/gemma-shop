@@ -384,21 +384,35 @@ export function EditorSlate() {
 
         if (layer.type === 'text') {
             const activeAnchor = trRef.current?.getActiveAnchor() ?? '';
-            const isSideAnchor = activeAnchor === 'middle-left' || activeAnchor === 'middle-right';
-            const mode: 'side' | 'corner' = isSideAnchor ? 'side' : 'corner';
+            const isHorizontalEdge =
+                activeAnchor === 'middle-left' || activeAnchor === 'middle-right';
+            const isVerticalEdge =
+                activeAnchor === 'top-center' || activeAnchor === 'bottom-center';
+            const isReflowEdge = isHorizontalEdge || isVerticalEdge;
+            const mode: 'reflow' | 'corner' = isReflowEdge ? 'reflow' : 'corner';
             node.setAttr('textTransformMode', mode);
 
-            if (mode === 'side') {
+            if (mode === 'reflow') {
                 const oldAbsTransform = node.getAbsoluteTransform().copy();
                 const originWorld = oldAbsTransform.point({ x: 0, y: 0 });
                 const oldScaleX = layer.config.scaleX || 1;
                 const oldScaleY = layer.config.scaleY || 1;
-                const effectiveScaleX = node.scaleX();
-                const newWidth = Math.max(20, (node.width() * effectiveScaleX) / oldScaleX);
+                let nextWidth = node.width();
+                let nextHeight = node.height();
 
-                node.width(newWidth);
-                node.offsetX(newWidth / 2);
-                node.offsetY(node.height() / 2);
+                if (isHorizontalEdge) {
+                    const effectiveScaleX = node.scaleX();
+                    nextWidth = Math.max(20, (node.width() * effectiveScaleX) / oldScaleX);
+                }
+                if (isVerticalEdge) {
+                    const effectiveScaleY = node.scaleY();
+                    nextHeight = Math.max(20, (node.height() * effectiveScaleY) / oldScaleY);
+                }
+
+                node.width(nextWidth);
+                node.height(nextHeight);
+                node.offsetX(nextWidth / 2);
+                node.offsetY(nextHeight / 2);
                 node.scaleX(oldScaleX);
                 node.scaleY(oldScaleY);
 
@@ -413,6 +427,29 @@ export function EditorSlate() {
                     const localDelta = parentTransform.point({ x: dx, y: dy });
                     node.position({ x: node.x() + localDelta.x, y: node.y() + localDelta.y });
                 }
+
+                // TODO See if this can be further optimised so that we can propagate to the other editors too
+                // It is s goo compromise for now
+                // Immediate local mirror update for live reflow while dragging.
+                // We still broadcast binary updates so all peers stay in sync.
+                const mirroredConfig: Layer['config'] = {
+                    ...layer.config,
+                    cx: Math.round(node.x()),
+                    cy: Math.round(node.y()),
+                    width: Math.max(20, Math.round(node.width())),
+                    height: Math.max(20, Math.round(node.height())),
+                    scaleX: oldScaleX,
+                    scaleY: oldScaleY,
+                    rotation: Math.round(node.rotation())
+                };
+                layer.config = mirroredConfig;
+                useEditorStore.setState((s) => {
+                    const current = s.layers.get(numericId);
+                    if (!current || current.type !== 'text') return s;
+                    const newLayers = new Map(s.layers);
+                    newLayers.set(numericId, { ...current, config: mirroredConfig });
+                    return { layers: newLayers };
+                });
             }
 
             node.getLayer()?.batchDraw();
@@ -470,7 +507,7 @@ export function EditorSlate() {
             // Must use layersRef — has binary-updated positions
             const layerToUpdate = layersRef.current.get(numericId);
             if (!layerToUpdate) return;
-            const textMode = node.getAttr('textTransformMode') as 'side' | 'corner' | undefined;
+            const textMode = node.getAttr('textTransformMode') as 'reflow' | 'corner' | undefined;
 
             if (
                 isSnapping &&
@@ -491,17 +528,17 @@ export function EditorSlate() {
                 width: Math.round(node.width()),
                 height: Math.round(node.height()),
                 scaleX:
-                    layerToUpdate.type === 'text' && textMode === 'side'
+                    layerToUpdate.type === 'text' && textMode === 'reflow'
                         ? layerToUpdate.config.scaleX
                         : Math.round(node.scaleX() * 1000) / 1000,
                 scaleY:
-                    layerToUpdate.type === 'text' && textMode === 'side'
+                    layerToUpdate.type === 'text' && textMode === 'reflow'
                         ? layerToUpdate.config.scaleY
                         : Math.round(node.scaleY() * 1000) / 1000,
                 rotation: Math.round(node.rotation())
             };
 
-            if (layerToUpdate.type === 'text' && textMode === 'side') {
+            if (layerToUpdate.type === 'text' && textMode === 'reflow') {
                 node.scaleX(updatedConfig.scaleX);
                 node.scaleY(updatedConfig.scaleY);
             }
@@ -967,10 +1004,12 @@ export function EditorSlate() {
                                     if (selected?.type !== 'text') return undefined;
                                     return [
                                         'top-left',
+                                        'top-center',
                                         'top-right',
                                         'middle-left',
                                         'middle-right',
                                         'bottom-left',
+                                        'bottom-center',
                                         'bottom-right'
                                     ] as const;
                                 })()}
