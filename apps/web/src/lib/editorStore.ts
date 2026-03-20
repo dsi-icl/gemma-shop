@@ -163,7 +163,6 @@ export const useEditorStore =
                   slides: [],
                   activeSlideId: null,
                   selectedSlides: [],
-                  copiedSlide: null,
                   lastSelectedSlide: null,
                   lastSelectedLayerId: null,
                   showSpacePreview: false,
@@ -264,10 +263,8 @@ export const useEditorStore =
                   },
 
                   hydrate: (layers) => {
-                      const maxId =
-                          layers.length > 0 ? Math.max(...layers.map((l) => l.numericId)) : 0;
-                      const maxZ =
-                          layers.length > 0 ? Math.max(...layers.map((l) => l.config.zIndex)) : 0;
+                      const maxId = layers.reduce((max, l) => Math.max(max, l.numericId), 0);
+                      const maxZ = layers.reduce((max, l) => Math.max(max, l.config.zIndex), 0);
                       set({ layers, nextId: maxId + 5, nextZIndex: maxZ + 5 });
                   },
 
@@ -561,7 +558,10 @@ export const useEditorStore =
                       const layer = s.layers.find((l) => l.numericId === numericId);
                       if (!layer) return;
 
-                      const minZIndex = Math.min(...s.layers.map((l) => l.config.zIndex));
+                      const minZIndex = s.layers.reduce(
+                          (min, l) => Math.min(min, l.config.zIndex),
+                          Infinity
+                      );
                       const newZIndex =
                           layer.config.zIndex === minZIndex ? minZIndex : minZIndex - 1;
                       const updatedConfig = { ...layer.config, zIndex: newZIndex };
@@ -703,7 +703,6 @@ export const useEditorStore =
                       let minY: number | null = null;
                       let maxX: number | null = null;
                       let maxY: number | null = null;
-                      let svgPoints = [];
                       for (let i = 0; i < line.length; i += 2) {
                           const x = line[i];
                           const y = line[i + 1];
@@ -717,7 +716,6 @@ export const useEditorStore =
                           if (x > maxX) maxX = x;
                           if (y < minY) minY = y;
                           if (y > maxY) maxY = y;
-                          svgPoints.push(`${line[i]},${line[i + 1]}`);
                       }
                       if (minX === null || minY === null || maxX === null || maxY === null)
                           return null;
@@ -914,9 +912,8 @@ export const useEditorStore =
 if (typeof window !== 'undefined') window.__EDITOR_STORE__ = useEditorStore;
 
 // The engine pushes WebSocket JSON messages directly into the store.
-// TODO This is causing memory leak in development as subscriptions are not being cleaned
 const engine = EditorEngine.getInstance();
-engine.subscribeToJson((data) => {
+const unsubJson = engine.subscribeToJson((data) => {
     const store = useEditorStore.getState();
     if (data.type === 'hydrate') {
         store.hydrate(data.layers);
@@ -943,12 +940,8 @@ engine.subscribeToJson((data) => {
         }
     } else if (data.type === 'asset_added') {
         // New asset uploaded (by any editor or mobile) — invalidate React Query cache
-        console.log(
-            `[EditorStore] asset_added received: projectId=${data.projectId}, store.projectId=${store.projectId}`
-        );
         if (data.projectId === store.projectId) {
             import('~/router').then(({ queryClient }) => {
-                console.log(`[EditorStore] Invalidating asset query for project ${data.projectId}`);
                 queryClient.invalidateQueries({
                     queryKey: projectAssetsQueryOptions(data.projectId).queryKey
                 });
@@ -958,14 +951,12 @@ engine.subscribeToJson((data) => {
 });
 
 // Wire connection status into the store
-// TODO This is causing memory leak in development as subscriptions are not being cleaned
-engine.onConnectionStatusChange((status) => {
+const unsubStatus = engine.onConnectionStatusChange((status) => {
     useEditorStore.setState({ connectionStatus: status });
 });
 
 // Wire save responses from the bus back into the store
-// TODO This is causing memory leak in development as subscriptions are not being cleaned
-engine.subscribeToSaveResponse((data) => {
+const unsubSave = engine.subscribeToSaveResponse((data) => {
     const store = useEditorStore.getState();
     if (data.success) {
         useEditorStore.setState({
@@ -993,6 +984,9 @@ engine.subscribeToSaveResponse((data) => {
 if (import.meta.hot) {
     import.meta.hot.accept();
     import.meta.hot.dispose((data) => {
+        unsubJson();
+        unsubStatus();
+        unsubSave();
         data.editorState = useEditorStore.getState();
     });
     if (import.meta.hot.data.editorState) {
