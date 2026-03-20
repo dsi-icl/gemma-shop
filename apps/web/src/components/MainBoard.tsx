@@ -21,8 +21,6 @@ function TextEditorWrapper() {
     const editingTextLayerId = useEditorStore((s) => s.editingTextLayerId);
     const stopTextEditing = useEditorStore((s) => s.stopTextEditing);
 
-    console.log('Rerender of TextEditorWrapper');
-
     if (editingTextLayerId === null) return null;
     return (
         <TextEditorDialog
