@@ -27,6 +27,7 @@ export class WallEngine {
     // Clock Sync State
     private clockOffset = 0;
     private bestRTT = Infinity;
+    private rttResetTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Render State
     public layers = new Map<number, LayerWithWallEngineState>();
@@ -141,10 +142,11 @@ export class WallEngine {
             this.bestRTT = rtt;
             this.clockOffset = (data.t1 - data.t0 + (data.t2 - Date.now())) / 2;
         }
-        // Periodically reset bestRTT to allow for network environment changes
-        setTimeout(() => {
+        // Periodically reset bestRTT to allow network environment changes to register.
+        if (this.rttResetTimer) clearTimeout(this.rttResetTimer);
+        this.rttResetTimer = setTimeout(() => {
             this.bestRTT = Infinity;
-        }, 10000);
+        }, 5000);
     }
 
     // --- MESSAGE ROUTING ---
