@@ -5,6 +5,7 @@ import type { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-konva';
 
+import { applyKonvaFilters } from '~/lib/konvaFilters';
 import type { LayerWithEditorState } from '~/lib/types';
 
 /** Pick the best variant URL for the given display width */
@@ -58,6 +59,10 @@ export function KonvaStaticImage({
         };
         i.src = variantUrl;
     }, [variantUrl, layer.type]);
+
+    useEffect(() => {
+        applyKonvaFilters(imageRef.current, layer.config.filters);
+    }, [layer.config.filters, img, layer.config.width, layer.config.height]);
 
     return (
         <Image

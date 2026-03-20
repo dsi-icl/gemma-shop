@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 
 import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { getDOGridLines } from '~/lib/editorHelpers';
+import { applyKonvaFilters } from '~/lib/konvaFilters';
 import { textHtmlToImage } from '~/lib/textToCanvas';
 import type { LayerWithEditorState } from '~/lib/types';
 import { $createBranchHead } from '~/server/projects.fns';
@@ -49,6 +50,7 @@ function ReadOnlyMediaLayer({
     layer: Extract<LayerWithEditorState, { type: 'image' | 'video' | 'web' }>;
 }) {
     const [img, setImg] = useState<HTMLImageElement | null>(null);
+    const imageRef = useRef<Konva.Image>(null);
 
     const mediaUrl = useMemo(() => {
         if (layer.type === 'image') return layer.url;
@@ -74,9 +76,14 @@ function ReadOnlyMediaLayer({
         i.src = mediaUrl;
     }, [mediaUrl]);
 
+    useEffect(() => {
+        applyKonvaFilters(imageRef.current, layer.config.filters);
+    }, [layer.config.filters, img, layer.config.width, layer.config.height]);
+
     if (img) {
         return (
             <Image
+                ref={imageRef}
                 image={img}
                 x={layer.config.cx}
                 y={layer.config.cy}
@@ -102,6 +109,7 @@ function ReadOnlyMediaLayer({
         ctx?.putImageData(imageData, 0, 0);
         return (
             <Image
+                ref={imageRef}
                 image={offscreenCanvas}
                 x={layer.config.cx}
                 y={layer.config.cy}
@@ -136,6 +144,7 @@ function ReadOnlyMediaLayer({
 
 function ReadOnlyTextLayer({ layer }: { layer: Extract<LayerWithEditorState, { type: 'text' }> }) {
     const [img, setImg] = useState<HTMLImageElement | null>(null);
+    const imageRef = useRef<Konva.Image>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -150,6 +159,10 @@ function ReadOnlyTextLayer({ layer }: { layer: Extract<LayerWithEditorState, { t
             cancelled = true;
         };
     }, [layer.textHtml, layer.config.width, layer.config.height]);
+
+    useEffect(() => {
+        applyKonvaFilters(imageRef.current, layer.config.filters);
+    }, [layer.config.filters, img, layer.config.width, layer.config.height]);
 
     if (!img) {
         return (
@@ -171,6 +184,7 @@ function ReadOnlyTextLayer({ layer }: { layer: Extract<LayerWithEditorState, { t
 
     return (
         <Image
+            ref={imageRef}
             image={img}
             x={layer.config.cx}
             y={layer.config.cy}

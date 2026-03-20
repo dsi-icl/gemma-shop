@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Group, Image, Rect, Text } from 'react-konva';
 
 import { EditorEngine } from '~/lib/editorEngine';
+import { applyKonvaFilters } from '~/lib/konvaFilters';
 import type { LayerWithEditorState } from '~/lib/types';
 
 export function KonvaVideo({
@@ -69,8 +70,15 @@ export function KonvaVideo({
 
     // Seamlessly toggle loop without unmounting the video
     useEffect(() => {
+        // oxlint-disable-next-line react-hooks-js/immutability
         if (videoElement) videoElement.loop = layer.loop ?? true;
     }, [layer.loop, videoElement]);
+
+    useEffect(() => {
+        // Avoid caching live video frames; apply filters only to static image fallback/upload states.
+        if (imgElement) applyKonvaFilters(imageRef.current, layer.config.filters);
+        else applyKonvaFilters(imageRef.current, undefined);
+    }, [imgElement, layer.config.filters, layer.config.width, layer.config.height]);
 
     // 3. Playback Loop (Completely bypasses React state for 60fps performance)
     useEffect(() => {

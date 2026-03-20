@@ -5,6 +5,7 @@ import type { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Rect } from 'react-konva';
 
+import { applyKonvaFilters } from '~/lib/konvaFilters';
 import type { LayerWithEditorState } from '~/lib/types';
 
 /** Pick the best variant URL for the given display width */
@@ -38,6 +39,7 @@ export function KonvaWebLayer({
 }) {
     const [img, setImg] = useState<HTMLImageElement | null>(null);
     const imageRef = useRef<Konva.Image>(null);
+    const rectRef = useRef<Konva.Rect>(null);
 
     const variantUrl = useMemo(() => {
         if (!layer.stillImage) return null;
@@ -58,6 +60,10 @@ export function KonvaWebLayer({
         };
         i.src = variantUrl;
     }, [variantUrl]);
+
+    useEffect(() => {
+        applyKonvaFilters(img ? imageRef.current : rectRef.current, layer.config.filters);
+    }, [img, layer.config.filters, layer.config.width, layer.config.height]);
 
     const commonProps = {
         id: layer.numericId.toString(),
@@ -85,5 +91,5 @@ export function KonvaWebLayer({
         return <Image ref={imageRef} image={img} {...commonProps} />;
     }
 
-    return <Rect {...commonProps} fill="#334" stroke="#556" strokeWidth={2} />;
+    return <Rect ref={rectRef} {...commonProps} fill="#334" stroke="#556" strokeWidth={2} />;
 }

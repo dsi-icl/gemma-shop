@@ -1,10 +1,11 @@
 import { decode, isBlurhashValid } from 'blurhash';
 import Konva from 'konva';
-import { useState, RefObject, useEffect } from 'react';
+import { useState, RefObject, useEffect, useRef } from 'react';
 import { Circle, KonvaNodeEvents, Layer, Line, Rect, Stage, Image } from 'react-konva';
 
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
+import { applyKonvaFilters } from '~/lib/konvaFilters';
 import { textHtmlToImage } from '~/lib/textToCanvas';
 import type { LayerWithEditorState } from '~/lib/types';
 
@@ -31,6 +32,7 @@ function PreviewMediaLayer({
     stageScaleFactor: number;
 }) {
     const [img, setImg] = useState<HTMLImageElement | null>(null);
+    const imageRef = useRef<Konva.Image>(null);
 
     const mediaUrl =
         shape.type === 'image'
@@ -57,9 +59,14 @@ function PreviewMediaLayer({
         i.src = mediaUrl;
     }, [mediaUrl]);
 
+    useEffect(() => {
+        applyKonvaFilters(imageRef.current, shape.config.filters);
+    }, [shape.config.filters, img, shape.config.width, shape.config.height]);
+
     if (mediaUrl && img) {
         return (
             <Image
+                ref={imageRef}
                 image={img}
                 x={shape.config.cx * stageScaleFactor}
                 y={shape.config.cy * stageScaleFactor}
@@ -83,6 +90,7 @@ function PreviewMediaLayer({
         ctx?.putImageData(imageData, 0, 0);
         return (
             <Image
+                ref={imageRef}
                 image={offscreenCanvas}
                 x={shape.config.cx * stageScaleFactor}
                 y={shape.config.cy * stageScaleFactor}
@@ -119,6 +127,7 @@ function PreviewTextLayer({
     stageScaleFactor: number;
 }) {
     const [img, setImg] = useState<HTMLImageElement | null>(null);
+    const imageRef = useRef<Konva.Image>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -134,9 +143,14 @@ function PreviewTextLayer({
         };
     }, [shape.textHtml, shape.config.width, shape.config.height]);
 
+    useEffect(() => {
+        applyKonvaFilters(imageRef.current, shape.config.filters);
+    }, [shape.config.filters, img, shape.config.width, shape.config.height]);
+
     if (img) {
         return (
             <Image
+                ref={imageRef}
                 image={img}
                 x={shape.config.cx * stageScaleFactor}
                 y={shape.config.cy * stageScaleFactor}

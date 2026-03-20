@@ -14,8 +14,25 @@ const LayerPositionStateSchema = z.object({
 
 export type LayerPositionState = z.infer<typeof LayerPositionStateSchema>;
 
+const LayerFilterStateSchema = z.object({
+    enabled: z.boolean().default(false),
+    grayscale: z.boolean().default(false),
+    invert: z.boolean().default(false),
+    brightness: z.number().default(100),
+    contrast: z.number().default(100),
+    hueRotate: z.number().default(0),
+    saturation: z.number().default(100),
+    blur: z.number().default(0)
+});
+
+export type LayerFilterState = z.infer<typeof LayerFilterStateSchema>;
+
 const LayerConfigStateSchema = z
-    .object({ zIndex: z.number(), visible: z.boolean().default(true) })
+    .object({
+        zIndex: z.number(),
+        visible: z.boolean().default(true),
+        filters: LayerFilterStateSchema.optional()
+    })
     .extend(LayerPositionStateSchema.shape);
 
 const LayerPlaybackStateSchema = z.object({

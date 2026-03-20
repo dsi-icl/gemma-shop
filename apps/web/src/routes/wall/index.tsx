@@ -5,6 +5,7 @@ import { useEffect, useState, useMemo, type CSSProperties } from 'react';
 
 import { MapWrapper } from '~/components/MapWrapper';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
+import { toCssFilterString } from '~/lib/layerFilters';
 import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
 import type { LayerWithWallComponentState } from '~/lib/types';
 import { WallEngine, type Viewport } from '~/lib/wallEngine';
@@ -139,6 +140,7 @@ function WallApp() {
                     // transition: 'all .1s ease-out',
                     width: `${layer.config.width}px`,
                     height: `${layer.config.height}px`,
+                    filter: toCssFilterString(layer.config.filters),
                     zIndex: layer.config.zIndex
                 } as CSSProperties
             };
