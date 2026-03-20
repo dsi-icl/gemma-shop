@@ -2,7 +2,7 @@ import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'react-konva';
 
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
@@ -67,6 +67,12 @@ export function EditorSlate() {
     const lastDist = useRef<number | null>(null);
     const lastAngle = useRef<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const sortedLayers = useMemo(
+        () => Array.from(layers.values()).sort((a, b) => a.config.zIndex - b.config.zIndex),
+        [layers]
+    );
+    const selectedLayerIdSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
 
     // useEffect(() => {
     //     if (stageWrapper.current && stageInstance.current) {
@@ -665,183 +671,178 @@ export function EditorSlate() {
                             );
                         })} */}
 
-                            {Array.from(layers.values())
-                                .sort((a, b) => a.config.zIndex - b.config.zIndex)
-                                .map((layer) => {
-                                    const isHidden = !layer.config.visible;
-                                    const isSelected = selectedLayerIds.includes(
-                                        layer.numericId.toString()
+                            {sortedLayers.map((layer) => {
+                                const isHidden = !layer.config.visible;
+                                const isSelected = selectedLayerIdSet.has(
+                                    layer.numericId.toString()
+                                );
+                                if (isHidden && !isSelected) return null;
+
+                                const hiddenOpacity = isHidden ? 0.3 : 1;
+
+                                const props = {
+                                    listening: !isDrawing,
+                                    isPinching,
+                                    opacity: hiddenOpacity,
+                                    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+                                        toggleLayerSelection(
+                                            layer.numericId.toString(),
+                                            e.evt.shiftKey,
+                                            e.evt.ctrlKey || e.evt.metaKey
+                                        );
+                                    },
+                                    onTransform: (e: KonvaEventObject<Event>) =>
+                                        handleTransform(e, layer.numericId),
+                                    onTransformEnd: (e: KonvaEventObject<Event>) =>
+                                        handleTransformEnd(e, layer.numericId)
+                                };
+
+                                if (layer.type === 'image') {
+                                    return (
+                                        <KonvaStaticImage
+                                            key={`spi_${layer.numericId}`}
+                                            layer={layer}
+                                            {...props}
+                                        />
                                     );
-                                    if (isHidden && !isSelected) return null;
-
-                                    const hiddenOpacity = isHidden ? 0.3 : 1;
-
-                                    const props = {
-                                        listening: !isDrawing,
-                                        isPinching,
+                                }
+                                if (layer.type === 'video')
+                                    return (
+                                        <KonvaVideo
+                                            key={`vid_${layer.numericId}`}
+                                            layer={layer}
+                                            {...props}
+                                        />
+                                    );
+                                if (layer.type === 'text') {
+                                    return (
+                                        <KonvaTextLayer
+                                            key={`txt_${layer.numericId}`}
+                                            layer={layer}
+                                            isPinching={props.isPinching}
+                                            opacity={hiddenOpacity}
+                                            onSelect={props.onSelect}
+                                            onDblClick={() => startTextEditing(layer.numericId)}
+                                            onTransform={props.onTransform}
+                                            onTransformEnd={props.onTransformEnd}
+                                        />
+                                    );
+                                }
+                                if (layer.type === 'graph') {
+                                    return (
+                                        <RoyStaticRenderer
+                                            key={`roy_${layer.numericId}`}
+                                            layer={layer}
+                                            {...props}
+                                        />
+                                    );
+                                }
+                                if (layer.type === 'map') {
+                                    return (
+                                        <Rect
+                                            key={`map_${layer.numericId}`}
+                                            layer={layer}
+                                            fill={'#f00'}
+                                            id={layer.numericId.toString()}
+                                            x={layer.config.cx}
+                                            y={layer.config.cy}
+                                            width={layer.config.width}
+                                            height={layer.config.height}
+                                            scaleX={layer.config.scaleX}
+                                            scaleY={layer.config.scaleY}
+                                            offsetX={layer.config.width / 2}
+                                            offsetY={layer.config.height / 2}
+                                            rotation={layer.config.rotation}
+                                            opacity={hiddenOpacity}
+                                            draggable={!props.isPinching}
+                                            onClick={props.onSelect}
+                                            onTap={props.onSelect}
+                                            onDragMove={props.onTransform}
+                                            onTransform={props.onTransform}
+                                            onDragEnd={props.onTransformEnd}
+                                            onTransformEnd={props.onTransformEnd}
+                                        />
+                                    );
+                                }
+                                if (layer.type === 'shape') {
+                                    const commonProps = {
+                                        id: layer.numericId.toString(),
+                                        x: layer.config.cx,
+                                        y: layer.config.cy,
+                                        rotation: layer.config.rotation,
+                                        scaleX: layer.config.scaleX,
+                                        scaleY: layer.config.scaleY,
                                         opacity: hiddenOpacity,
-                                        onSelect: (
-                                            e: KonvaEventObject<MouseEvent | TouchEvent>
-                                        ) => {
-                                            toggleLayerSelection(
-                                                layer.numericId.toString(),
-                                                e.evt.shiftKey,
-                                                e.evt.ctrlKey || e.evt.metaKey
-                                            );
-                                        },
-                                        onTransform: (e: KonvaEventObject<Event>) =>
-                                            handleTransform(e, layer.numericId),
-                                        onTransformEnd: (e: KonvaEventObject<Event>) =>
-                                            handleTransformEnd(e, layer.numericId)
+                                        draggable: !props.isPinching,
+                                        onClick: props.onSelect,
+                                        onTap: props.onSelect,
+                                        onDragMove: props.onTransform,
+                                        onTransform: props.onTransform,
+                                        onDragEnd: props.onTransformEnd,
+                                        onTransformEnd: props.onTransformEnd,
+                                        fill: layer.fill,
+                                        stroke: layer.strokeColor,
+                                        strokeWidth: layer.strokeWidth
                                     };
 
-                                    if (layer.type === 'image') {
-                                        return (
-                                            <KonvaStaticImage
-                                                key={`spi_${layer.numericId}`}
-                                                layer={layer}
-                                                {...props}
-                                            />
-                                        );
-                                    }
-                                    if (layer.type === 'video')
-                                        return (
-                                            <KonvaVideo
-                                                key={`vid_${layer.numericId}`}
-                                                layer={layer}
-                                                {...props}
-                                            />
-                                        );
-                                    if (layer.type === 'text') {
-                                        return (
-                                            <KonvaTextLayer
-                                                key={`txt_${layer.numericId}`}
-                                                layer={layer}
-                                                isPinching={props.isPinching}
-                                                opacity={hiddenOpacity}
-                                                onSelect={props.onSelect}
-                                                onDblClick={() => startTextEditing(layer.numericId)}
-                                                onTransform={props.onTransform}
-                                                onTransformEnd={props.onTransformEnd}
-                                            />
-                                        );
-                                    }
-                                    if (layer.type === 'graph') {
-                                        return (
-                                            <RoyStaticRenderer
-                                                key={`roy_${layer.numericId}`}
-                                                layer={layer}
-                                                {...props}
-                                            />
-                                        );
-                                    }
-                                    if (layer.type === 'map') {
+                                    if (layer.shape === 'rectangle') {
                                         return (
                                             <Rect
-                                                key={`map_${layer.numericId}`}
-                                                layer={layer}
-                                                fill={'#f00'}
-                                                id={layer.numericId.toString()}
-                                                x={layer.config.cx}
-                                                y={layer.config.cy}
+                                                key={`shape_${layer.numericId}`}
+                                                {...commonProps}
                                                 width={layer.config.width}
                                                 height={layer.config.height}
-                                                scaleX={layer.config.scaleX}
-                                                scaleY={layer.config.scaleY}
                                                 offsetX={layer.config.width / 2}
                                                 offsetY={layer.config.height / 2}
-                                                rotation={layer.config.rotation}
-                                                opacity={hiddenOpacity}
-                                                draggable={!props.isPinching}
-                                                onClick={props.onSelect}
-                                                onTap={props.onSelect}
-                                                onDragMove={props.onTransform}
-                                                onTransform={props.onTransform}
-                                                onDragEnd={props.onTransformEnd}
-                                                onTransformEnd={props.onTransformEnd}
-                                            />
-                                        );
-                                    }
-                                    if (layer.type === 'shape') {
-                                        const commonProps = {
-                                            id: layer.numericId.toString(),
-                                            x: layer.config.cx,
-                                            y: layer.config.cy,
-                                            rotation: layer.config.rotation,
-                                            scaleX: layer.config.scaleX,
-                                            scaleY: layer.config.scaleY,
-                                            opacity: hiddenOpacity,
-                                            draggable: !props.isPinching,
-                                            onClick: props.onSelect,
-                                            onTap: props.onSelect,
-                                            onDragMove: props.onTransform,
-                                            onTransform: props.onTransform,
-                                            onDragEnd: props.onTransformEnd,
-                                            onTransformEnd: props.onTransformEnd,
-                                            fill: layer.fill,
-                                            stroke: layer.strokeColor,
-                                            strokeWidth: layer.strokeWidth
-                                        };
-
-                                        if (layer.shape === 'rectangle') {
-                                            return (
-                                                <Rect
-                                                    key={`shape_${layer.numericId}`}
-                                                    {...commonProps}
-                                                    width={layer.config.width}
-                                                    height={layer.config.height}
-                                                    offsetX={layer.config.width / 2}
-                                                    offsetY={layer.config.height / 2}
-                                                    dash={layer.strokeDash}
-                                                    dashOffset={(layer.strokeDash[0] ?? 0) / 2}
-                                                    lineCap="round"
-                                                    lineJoin="round"
-                                                />
-                                            );
-                                        }
-                                        if (layer.shape === 'circle') {
-                                            return (
-                                                <Circle
-                                                    key={`shape_${layer.numericId}`}
-                                                    {...commonProps}
-                                                    offsetX={layer.config.width / 2}
-                                                    offsetY={layer.config.height / 2}
-                                                    radius={layer.config.width / 2}
-                                                    dash={layer.strokeDash}
-                                                    lineCap="round"
-                                                    lineJoin="round"
-                                                />
-                                            );
-                                        }
-                                    }
-                                    if (layer.type === 'line') {
-                                        return (
-                                            <Line
-                                                key={`lin_${layer.numericId}`}
-                                                listening={true}
-                                                opacity={hiddenOpacity}
-                                                points={layer.line}
-                                                stroke={layer.strokeColor}
-                                                strokeWidth={layer.strokeWidth}
                                                 dash={layer.strokeDash}
-                                                dashEnabled={true}
-                                                tension={0.4}
-                                                shadowForStrokeEnabled={
-                                                    selectedLayerIds[0] ===
-                                                    layer.numericId.toString()
-                                                }
-                                                shadowColor="#00a1ff"
-                                                shadowBlur={10}
-                                                shadowOffsetY={20}
-                                                shadowOffsetX={20}
-                                                shadowOpacity={1}
+                                                dashOffset={(layer.strokeDash[0] ?? 0) / 2}
                                                 lineCap="round"
                                                 lineJoin="round"
                                             />
                                         );
                                     }
-                                    return null;
-                                })}
+                                    if (layer.shape === 'circle') {
+                                        return (
+                                            <Circle
+                                                key={`shape_${layer.numericId}`}
+                                                {...commonProps}
+                                                offsetX={layer.config.width / 2}
+                                                offsetY={layer.config.height / 2}
+                                                radius={layer.config.width / 2}
+                                                dash={layer.strokeDash}
+                                                lineCap="round"
+                                                lineJoin="round"
+                                            />
+                                        );
+                                    }
+                                }
+                                if (layer.type === 'line') {
+                                    return (
+                                        <Line
+                                            key={`lin_${layer.numericId}`}
+                                            listening={true}
+                                            opacity={hiddenOpacity}
+                                            points={layer.line}
+                                            stroke={layer.strokeColor}
+                                            strokeWidth={layer.strokeWidth}
+                                            dash={layer.strokeDash}
+                                            dashEnabled={true}
+                                            tension={0.4}
+                                            shadowForStrokeEnabled={
+                                                selectedLayerIds[0] === layer.numericId.toString()
+                                            }
+                                            shadowColor="#00a1ff"
+                                            shadowBlur={10}
+                                            shadowOffsetY={20}
+                                            shadowOffsetX={20}
+                                            shadowOpacity={1}
+                                            lineCap="round"
+                                            lineJoin="round"
+                                        />
+                                    );
+                                }
+                                return null;
+                            })}
                             {currentLine.length > 3 && (
                                 <Line
                                     key="new-line"
