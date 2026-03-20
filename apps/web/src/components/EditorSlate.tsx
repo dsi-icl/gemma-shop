@@ -367,12 +367,18 @@ export function EditorSlate() {
             const uploadId = response.uploadURL?.split('/').pop() ?? '';
             const assetFilename = isImage ? `${uploadId}${ext}` : `${uploadId}.mp4`;
             const assetUrl = `${window.location.origin}/api/assets/${assetFilename}`;
+            const stillImageFilename = isImage ? undefined : `${uploadId}_preview.jpg`;
 
             // Grab freshest config from shadow state (user may have moved the preview)
             const freshestLayer = layersRef.current.get(numericId) || optimisticLayer;
 
             // 4. Lock it in with preserved transformations
-            const finalizedLayer = { ...freshestLayer, url: assetUrl, isUploading: false };
+            const finalizedLayer = {
+                ...freshestLayer,
+                url: assetUrl,
+                isUploading: false,
+                ...(stillImageFilename ? { stillImage: stillImageFilename } : {})
+            };
 
             useEditorStore.getState().upsertLayer(finalizedLayer);
             engine.setPlayback(numericId, defaultPlayback);

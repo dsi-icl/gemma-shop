@@ -31,6 +31,7 @@ const LayerSchema = z.discriminatedUnion('type', [
         .object({
             type: z.literal('video'),
             url: z.string(),
+            stillImage: z.string().optional(),
             loop: z.boolean(),
             duration: z.number(),
             rvfcActive: z.boolean(),

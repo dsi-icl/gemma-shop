@@ -4,6 +4,7 @@ import { useState, RefObject, useEffect } from 'react';
 import { Circle, KonvaNodeEvents, Layer, Rect, Stage, Image, Line } from 'react-konva';
 
 import { getDOGridLines } from '~/lib/editorHelpers';
+import { textHtmlToImage } from '~/lib/textToCanvas';
 import type { LayerWithEditorState } from '~/lib/types';
 
 type SlatePreviewProps = {
@@ -14,6 +15,155 @@ type SlatePreviewProps = {
 };
 
 const PREVIEW_SCALE = 0.15;
+
+function deriveVideoStillImageFilename(url: string): string | null {
+    if (!url.startsWith('/api/assets/')) return null;
+    const filename = url.split('/').pop() ?? '';
+    const base = filename.replace(/\.[^.]+$/, '');
+    return base ? `${base}_preview.jpg` : null;
+}
+
+function PreviewMediaLayer({
+    shape,
+    stageScaleFactor
+}: {
+    shape: Extract<LayerWithEditorState, { type: 'image' | 'video' | 'web' }>;
+    stageScaleFactor: number;
+}) {
+    const [img, setImg] = useState<HTMLImageElement | null>(null);
+
+    const mediaUrl =
+        shape.type === 'image'
+            ? shape.url
+            : shape.type === 'video'
+              ? shape.stillImage
+                  ? `/api/assets/${shape.stillImage}`
+                  : (() => {
+                        const fallbackStill = deriveVideoStillImageFilename(shape.url);
+                        return fallbackStill ? `/api/assets/${fallbackStill}` : null;
+                    })()
+              : shape.stillImage
+                ? `/api/assets/${shape.stillImage}`
+                : null;
+
+    useEffect(() => {
+        if (!mediaUrl) return;
+        const i = new window.Image();
+        if (!mediaUrl.startsWith('blob:') && !mediaUrl.startsWith('data:')) {
+            i.crossOrigin = 'anonymous';
+        }
+        i.onload = () => setImg(i);
+        i.onerror = () => setImg(null);
+        i.src = mediaUrl;
+    }, [mediaUrl]);
+
+    if (mediaUrl && img) {
+        return (
+            <Image
+                image={img}
+                x={shape.config.cx * stageScaleFactor}
+                y={shape.config.cy * stageScaleFactor}
+                width={shape.config.width * stageScaleFactor}
+                height={shape.config.height * stageScaleFactor}
+                offsetX={(shape.config.width * stageScaleFactor) / 2}
+                offsetY={(shape.config.height * stageScaleFactor) / 2}
+                rotation={shape.config.rotation}
+                listening={false}
+            />
+        );
+    }
+
+    if (shape.blurhash && isBlurhashValid(shape.blurhash)) {
+        const pixels = decode(shape.blurhash, 100, 100) as Uint8ClampedArray<ArrayBuffer>;
+        const imageData = new ImageData(pixels, 100, 100);
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = 100;
+        offscreenCanvas.height = 100;
+        const ctx = offscreenCanvas.getContext('2d');
+        ctx?.putImageData(imageData, 0, 0);
+        return (
+            <Image
+                image={offscreenCanvas}
+                x={shape.config.cx * stageScaleFactor}
+                y={shape.config.cy * stageScaleFactor}
+                width={shape.config.width * stageScaleFactor}
+                height={shape.config.height * stageScaleFactor}
+                offsetX={(shape.config.width * stageScaleFactor) / 2}
+                offsetY={(shape.config.height * stageScaleFactor) / 2}
+                rotation={shape.config.rotation}
+                listening={false}
+            />
+        );
+    }
+
+    return (
+        <Rect
+            x={shape.config.cx * stageScaleFactor}
+            y={shape.config.cy * stageScaleFactor}
+            width={shape.config.width * stageScaleFactor}
+            height={shape.config.height * stageScaleFactor}
+            offsetX={(shape.config.width * stageScaleFactor) / 2}
+            offsetY={(shape.config.height * stageScaleFactor) / 2}
+            rotation={shape.config.rotation}
+            fill="#555"
+            listening={false}
+        />
+    );
+}
+
+function PreviewTextLayer({
+    shape,
+    stageScaleFactor
+}: {
+    shape: Extract<LayerWithEditorState, { type: 'text' }>;
+    stageScaleFactor: number;
+}) {
+    const [img, setImg] = useState<HTMLImageElement | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        textHtmlToImage(shape.textHtml ?? '', shape.config.width, shape.config.height)
+            .then((rendered) => {
+                if (!cancelled) setImg(rendered);
+            })
+            .catch(() => {
+                if (!cancelled) setImg(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [shape.textHtml, shape.config.width, shape.config.height]);
+
+    if (img) {
+        return (
+            <Image
+                image={img}
+                x={shape.config.cx * stageScaleFactor}
+                y={shape.config.cy * stageScaleFactor}
+                width={shape.config.width * stageScaleFactor}
+                height={shape.config.height * stageScaleFactor}
+                offsetX={(shape.config.width * stageScaleFactor) / 2}
+                offsetY={(shape.config.height * stageScaleFactor) / 2}
+                rotation={shape.config.rotation}
+                listening={false}
+            />
+        );
+    }
+
+    return (
+        <Rect
+            x={shape.config.cx * stageScaleFactor}
+            y={shape.config.cy * stageScaleFactor}
+            width={shape.config.width * stageScaleFactor}
+            height={shape.config.height * stageScaleFactor}
+            offsetX={(shape.config.width * stageScaleFactor) / 2}
+            offsetY={(shape.config.height * stageScaleFactor) / 2}
+            rotation={shape.config.rotation}
+            fill="#555"
+            listening={false}
+        />
+    );
+}
 
 export function ViewerSlatePreview({
     stageSlot,
@@ -135,35 +285,24 @@ export function ViewerSlatePreview({
                                     );
                             }
                             if (
-                                (shape.type === 'image' ||
-                                    shape.type === 'video' ||
-                                    shape.type === 'web') &&
-                                shape.blurhash &&
-                                isBlurhashValid(shape.blurhash)
+                                shape.type === 'image' ||
+                                shape.type === 'video' ||
+                                shape.type === 'web'
                             ) {
-                                const pixels = decode(
-                                    shape.blurhash,
-                                    100,
-                                    100
-                                ) as Uint8ClampedArray<ArrayBuffer>;
-                                const imageData = new ImageData(pixels, 100, 100);
-                                const offscreenCanvas = document.createElement('canvas');
-                                offscreenCanvas.width = 100;
-                                offscreenCanvas.height = 100;
-                                const ctx = offscreenCanvas.getContext('2d');
-                                ctx?.putImageData(imageData, 0, 0);
                                 return (
-                                    <Image
+                                    <PreviewMediaLayer
                                         key={shape.numericId}
-                                        image={offscreenCanvas}
-                                        x={shape.config.cx * stageScaleFactor}
-                                        y={shape.config.cy * stageScaleFactor}
-                                        width={shape.config.width * stageScaleFactor}
-                                        height={shape.config.height * stageScaleFactor}
-                                        offsetX={(shape.config.width * stageScaleFactor) / 2}
-                                        offsetY={(shape.config.height * stageScaleFactor) / 2}
-                                        rotation={shape.config.rotation}
-                                        listening={false}
+                                        shape={shape}
+                                        stageScaleFactor={stageScaleFactor}
+                                    />
+                                );
+                            }
+                            if (shape.type === 'text') {
+                                return (
+                                    <PreviewTextLayer
+                                        key={shape.numericId}
+                                        shape={shape}
+                                        stageScaleFactor={stageScaleFactor}
                                     />
                                 );
                             }
