@@ -1,10 +1,21 @@
-# GemmaShop
+# Gemma Cast
 
-This is an application for collaborative multi-tenant managing, editing and runnging presentation decks for a large multi-node video wall. Decks are a composition of slides made of typed layers. The application uses a message bus in two separate modes to drive a serialized and fast path data flows for high performance real-time coordinating of `editors`, `controllers` and `walls` endpoints.
+Collaborative, multi-tenant presentation system for large video walls.
 
-## Code organisation
+Gemma Cast lets multiple users edit decks in real time and publish synchronized output to distributed wall nodes. The platform is optimized for low-latency editing, fast wall playback, and commit-based versioning.
 
-A monorepo for GemmaShop MVP
+## What It Does
+
+- Real-time collaborative editing of slide-based decks
+- Multi-endpoint runtime with specialized clients:
+    - `editor`: authoring UI
+    - `wall`: render node
+    - `controller`: wall binding/orchestration
+    - `roy`: specialized graph/telemetry client
+- Commit graph with mutable head + immutable snapshot history
+- Asset pipeline for image/video upload, processing, and live broadcast to editors
+
+## Tech Stack
 
 - [Turborepo](https://turborepo.com/) + [bun](https://bun.sh/)
 - [React 19](https://react.dev) + [React Compiler](https://react.dev/learn/react-compiler)
@@ -15,9 +26,11 @@ A monorepo for GemmaShop MVP
 - [Better Auth](https://www.better-auth.com/)
 - [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) + [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html)
 
+## Repository Layout
+
 ```sh
 ├── apps
-│    ├── web                    # TanStack Start web app
+│    ├── web                    # TanStack Start web app + Nitro websocket routes
 ├── packages
 │    ├── auth                   # Better Auth
 │    ├── db                     # MongoDB
@@ -30,26 +43,117 @@ A monorepo for GemmaShop MVP
 └── README.md
 ```
 
-## Running in Development
+## Core Runtime Architecture
 
-To run this software in development, make sure to have Bun installed and a running instance of MongoDB replica set.
+### 1) WebSocket Bus (`apps/web/src/addons/routes/bus.ts` + `apps/web/src/lib/busState.ts`)
 
-Check for environment variables to be set (.env)
+- Tracks peers by role (`editor`, `wall`, `controller`, `roy`)
+- Interns `(projectId, commitId, slideId)` into numeric `ScopeId`
+- Maintains in-memory scope layer state for fast relay/hydrate
+- Runs periodic loops:
+    - VSYNC sync loop for active videos
+    - Autosave loop for dirty scopes
+    - Stale-peer reaper loop
+- Broadcast bridges:
+    - `__BROADCAST_EDITORS__` for processing progress
+    - `__BROADCAST_ASSET_ADDED__` for newly created assets
 
-Run `bun run dev`
+### 2) Editor State (`apps/web/src/lib/editorStore.ts`)
 
-## Running in Production
+- Zustand store for layers, slides, selection, and tool state
+- Handles optimistic updates and server synchronization
+- Uses throttled layer update sends to reduce network chatter
 
-TBD
+### 3) Upload Pipeline (`apps/web/src/routes/api/uploads/$.ts`)
 
-## Entry points
+- Tus upload ingestion
+- Media type detection and post-processing
+- Image path:
+    - Copy original
+    - Blurhash compute
+    - WebP size variant generation
+- Video path:
+    - FFmpeg transcode to MP4
+    - Preview frame extraction
+    - Blurhash + variant generation from preview
+- Inserts asset metadata and broadcasts to active editors
 
-The application has multiple entry-points which are conditionned by the target deployment. The home page will currently have links to a few :
+### 4) Persistence and Versioning
 
-- /gallery _For the list of project_
-- /quary _For project management_
-- /quary/editor _Specifically for editing_
-- /wall _For client rendering nodes (needs to be provided with query parameters c and r)_
+- Projects, commits, assets in MongoDB
+- Mutable HEAD commit used for active editing/autosave
+- Manual save creates immutable snapshot and advances chain pointer
+- Slide metadata updates persist independently from layer payloads
+
+## Data Model Notes
+
+- `projects`: ownership/collaborators, `headCommitId`, `publishedCommitId`
+- `commits`: graph nodes with `parentId`, `content.slides[*].layers`
+- `assets`: media metadata, URLs, preview/blurhash, variants, visibility
+
+## Local Development
+
+### Prerequisites
+
+- Bun
+- MongoDB replica set
+- Environment variables configured in `.env`
+
+### Commands
+
+- Install deps: `bun install`
+- Run all dev targets: `bun run dev`
+- Run web only: `bun run dev:web`
+- Lint: `bun run lint`
+- Format: `bun run format`
+- Quality checks: `bun run check`
+
+## Main applicatioin entry points
+
+- `/gallery` project listing
+- `/quary` project management
+- `/quary/editor` editor flow
+- `/wall` wall node endpoint (query params `c`, `r`, `w`)
+
+## Operational Invariants
+
+- Scope identity is `(projectId, commitId, slideId)` and must remain stable
+- Bus cleanup must not delete active scopes (editors/walls present)
+- Video sync timestamps are authoritative server-side once playback starts
+- Autosave only updates mutable HEAD context
+
+## Known Technical Debt (Current)
+
+- High complexity hotspots:
+    - `EditorSlate`
+    - `Toolbar`
+    - upload route `onUploadFinish`
+    - upload route `detectMediaType`
+
+## Development considerations
+
+### Safe Order for Refactors
+
+1. Pure performance internals with no API changes
+2. Dead code removal guarded by lint/tests
+3. Component decomposition and behavior-preserving rewrites
+4. Optional protocol/index optimizations
+
+### Do-Not-Break Checklist
+
+- Wall hydration on bind/unbind
+- Active video sync consistency
+- Autosave and manual save semantics
+- Asset creation + editor broadcast
+- Commit history and branch promotion flows
+
+### Suggested Validation After any Changes
+
+- Lint + type checks
+- Upload image/video and verify asset records
+- Multi-editor sync test on same scope
+- Wall bind/unbind + hydrate verification
+- Manual save + publish/unpublish regression pass
 
 ## License
 
