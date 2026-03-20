@@ -394,9 +394,15 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
             {/* Empty — text editing moved to dialog via double-click or toolbar button */}
             <div
                 id="toolbar"
-                className="flex h-11 items-center gap-1 border-t border-b border-border bg-card/50 px-2 py-1"
+                className="flex h-11 min-h-11 items-center gap-1 border-t border-b border-border bg-card/50 px-2 py-1"
             >
-                {activeLayer && <span className="px-2 text-xs">{activeLayer.type}</span>}
+                {activeLayer ? (
+                    <span className="px-2 text-xs">{activeLayer.type}</span>
+                ) : (
+                    <span className="px-2 text-xs text-muted-foreground">
+                        Select a layer to access tools
+                    </span>
+                )}
 
                 {/* ── Layer Ordering ── */}
                 {activeLayer && (

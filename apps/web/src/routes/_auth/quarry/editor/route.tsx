@@ -6,7 +6,7 @@ export const Route = createFileRoute('/_auth/quarry/editor')({
 
 function AppLayout() {
     return (
-        <div className="container flex min-h-svh min-w-full flex-col pt-18 pb-13">
+        <div className="container flex h-full max-h-full min-h-0 w-full max-w-full min-w-full flex-col overflow-hidden pt-18 pb-13">
             <Outlet />
         </div>
     );

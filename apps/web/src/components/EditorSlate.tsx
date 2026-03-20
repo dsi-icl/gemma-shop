@@ -2,7 +2,7 @@ import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'react-konva';
 
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
@@ -67,7 +67,7 @@ export function EditorSlate() {
     const strokeDash = useEditorStore((s) => s.strokeDash);
     const strokeWidth = useEditorStore((s) => s.strokeWidth);
 
-    const [stageScaleFactor, _setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
+    const [stageScaleFactor, setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
     const [isPinching, setIsPinching] = useState(false);
     const [currentLine, setCurrentLine] = useState<Array<number>>([]);
     const editingTextLayerId = useEditorStore((s) => s.editingTextLayerId);
@@ -89,16 +89,28 @@ export function EditorSlate() {
     );
     const selectedLayerIdSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
 
-    // useEffect(() => {
-    //     if (stageWrapper.current && stageInstance.current) {
-    //         const realHeight = SCREEN_H * ROWS;
-    //         const { clientHeight } = stageWrapper.current;
-    //         const scale = 1 / (realHeight / clientHeight);
-    //         setStageScaleFactor(scale);
-    //         stageInstance.current.scale({ x: scale, y: scale });
-    //         stageInstance.current.batchDraw();
-    //     }
-    // }, [stageWrapper, stageInstance]);
+    useLayoutEffect(() => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+
+        const logicalHeight = SCREEN_H * ROWS;
+        const minScale = 0.01;
+
+        const recomputeScale = () => {
+            const availableHeight = slot.clientHeight;
+            if (availableHeight <= 0) return;
+            const maxVerticalScale = Math.max(minScale, availableHeight / logicalHeight);
+            const nextScale = Math.min(STAGE_SCALE_FACTOR, maxVerticalScale);
+            setStageScaleFactor((prev) => (Math.abs(prev - nextScale) < 0.0005 ? prev : nextScale));
+        };
+
+        recomputeScale();
+
+        const observer = new ResizeObserver(recomputeScale);
+        observer.observe(slot);
+
+        return () => observer.disconnect();
+    }, []);
 
     // Shadow ref — keeps binary-updated positions for the fast-path.
     // Binary updates mutate this directly (no React re-render).
@@ -854,11 +866,11 @@ export function EditorSlate() {
                 stageInstance={stageInstance}
                 stageScaleFactor={stageScaleFactor}
             />
-            <div ref={stageWrapper} className="flex grow flex-col">
+            <div ref={stageWrapper} className="flex min-h-0 grow flex-col overflow-hidden">
                 <div
                     ref={stageSlot}
                     id="slate"
-                    className="h-fit overflow-auto border-b border-border bg-black"
+                    className="min-h-0 grow overflow-x-auto overflow-y-hidden border-b border-border bg-black"
                 >
                     <Stage
                         ref={stageInstance}
@@ -1133,7 +1145,6 @@ export function EditorSlate() {
                 }}
             /> */}
                 </div>
-                <div className="h-fit grow"></div>
             </div>
             {/* {stageInstance.current ? (
                 <DOPreview imageUrl={stageInstance.current.toDataURL()} />

@@ -76,14 +76,17 @@ function SlideEditor() {
     return (
         <ResizablePanelGroup
             orientation="horizontal"
-            className="grow overflow-hidden font-sans text-foreground"
+            className="h-full min-h-0 w-full overflow-hidden font-sans text-foreground"
         >
-            <ResizablePanel>
+            <ResizablePanel className="min-h-0 overflow-hidden">
                 <MainBoard />
             </ResizablePanel>
             <ResizableHandle />
-            <ResizablePanel defaultSize={300} minSize={200}>
-                <ResizablePanelGroup orientation="vertical" className="h-full bg-card/50">
+            <ResizablePanel defaultSize={300} minSize={200} className="min-h-0 overflow-hidden">
+                <ResizablePanelGroup
+                    orientation="vertical"
+                    className="h-full min-h-0 overflow-hidden bg-card/50"
+                >
                     <ResizablePanel
                         collapsible
                         collapsedSize={titleBarSize}
