@@ -12,6 +12,7 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     scopedState: new Map<ScopeId, ScopeState>(),
     scopeKeyToId: new Map<string, ScopeId>(),
     scopeIdToKey: new Map<ScopeId, string>(),
+    commitToScopeIds: new Map<string, Set<ScopeId>>(),
     nextScopeId: 1
 };
 (process as any).__BUS_HMR__ = _hmr;
@@ -19,6 +20,7 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
 export const scopedState: Map<ScopeId, ScopeState> = _hmr.scopedState;
 const scopeKeyToId: Map<string, ScopeId> = _hmr.scopeKeyToId;
 const scopeIdToKey: Map<ScopeId, string> = _hmr.scopeIdToKey;
+const commitToScopeIds: Map<string, Set<ScopeId>> = _hmr.commitToScopeIds;
 
 // Intern a (projectId, commitId, slideId) triple into a numeric ScopeId
 export function internScope(projectId: string, commitId: string, slideId: string): ScopeId {
@@ -33,7 +35,6 @@ export function internScope(projectId: string, commitId: string, slideId: string
 }
 
 export function scopeLabel(id: ScopeId): string {
-    console.log('scopeIdToKey', scopeIdToKey);
     return scopeIdToKey.get(id) ?? `<unknown:${id}>`;
 }
 
@@ -220,6 +221,13 @@ export function getOrCreateScope(
             hydrateCache: null
         };
         scopedState.set(scopeId, scope);
+
+        let scopeIds = commitToScopeIds.get(commitId);
+        if (!scopeIds) {
+            scopeIds = new Set();
+            commitToScopeIds.set(commitId, scopeIds);
+        }
+        scopeIds.add(scopeId);
     }
     return scope;
 }
@@ -367,30 +375,39 @@ export function broadcastToScope(scopeId: ScopeId, data: GSMessage, exclude?: Pe
 
 /** Broadcast a payload to all editors whose scope matches a given commitId (across all slides). */
 export function broadcastToEditorsByCommit(commitId: string, payload: string, exclude?: PeerEntry) {
-    for (const [scopeId, scope] of scopedState) {
-        if (scope.commitId === commitId) {
-            const set = editorsByScope.get(scopeId);
-            if (!set) continue;
-            for (const entry of set) {
-                if (entry !== exclude) entry.peer.send(payload);
-            }
+    const scopeIds = commitToScopeIds.get(commitId);
+    if (!scopeIds) return;
+    for (const scopeId of scopeIds) {
+        const set = editorsByScope.get(scopeId);
+        if (!set) continue;
+        for (const entry of set) {
+            if (entry !== exclude) entry.peer.send(payload);
+        }
+    }
+}
+
+function notifyControllersByWallIds(wallIds: Set<string>, payload: string) {
+    for (const wallId of wallIds) {
+        const entries = controllersByWallId.get(wallId);
+        if (!entries) continue;
+        for (const entry of entries) {
+            entry.peer.send(payload);
         }
     }
 }
 
 /** Notify all controllers whose wall is bound to any scope with the given commitId. */
 export function notifyControllersByCommit(commitId: string, payload: string) {
-    const notified = new Set<string>();
-    for (const [wallId, scopeId] of wallBindings) {
-        const scope = scopedState.get(scopeId);
-        if (scope?.commitId === commitId && !notified.has(wallId)) {
-            notified.add(wallId);
-            const entries = controllersByWallId.get(wallId);
-            if (entries) {
-                for (const entry of entries) entry.peer.send(payload);
-            }
-        }
+    const scopeIds = commitToScopeIds.get(commitId);
+    if (!scopeIds) return;
+
+    const wallIds = new Set<string>();
+    for (const scopeId of scopeIds) {
+        const watchers = scopeWatchers.get(scopeId);
+        if (!watchers) continue;
+        for (const wallId of watchers) wallIds.add(wallId);
     }
+    notifyControllersByWallIds(wallIds, payload);
 }
 
 // Hydrate all wall peers for a given wallId with their bound scope's layers
@@ -668,6 +685,12 @@ async function executeScopeCleanup(scopeId: ScopeId) {
     // Purge scope state
     scopedState.delete(scopeId);
 
+    const scopeIds = commitToScopeIds.get(scope.commitId);
+    if (scopeIds) {
+        scopeIds.delete(scopeId);
+        if (scopeIds.size === 0) commitToScopeIds.delete(scope.commitId);
+    }
+
     // Purge interning maps
     const key = scopeIdToKey.get(scopeId);
     if (key) {
@@ -908,8 +931,9 @@ export async function persistSlideMetadata(
         });
 
         // Add any new slides that don't exist yet (empty layers)
+        const existingSlideIds = new Set(existingSlides.map((s) => s.id));
         for (const meta of slides) {
-            if (!existingSlides.some((s) => s.id === meta.id)) {
+            if (!existingSlideIds.has(meta.id)) {
                 updatedSlides.push({ id: meta.id, order: meta.order, name: meta.name, layers: [] });
             }
         }
