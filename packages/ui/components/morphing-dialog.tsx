@@ -313,13 +313,23 @@ export type MorphingDialogImageProps = {
     src?: string;
     alt: string;
     className?: string;
+    state?: 'opened' | 'closed';
     style?: React.CSSProperties;
 };
 
-function MorphingDialogImage({ src, alt, className, style }: MorphingDialogImageProps) {
+function MorphingDialogImage({
+    src,
+    alt,
+    className,
+    style,
+    state = 'opened'
+}: MorphingDialogImageProps) {
     const { uniqueId } = useMorphingDialog();
 
-    if (!src) return <AnimatedBlurPattern seed={alt} height={200} />;
+    if (!src)
+        return (
+            <AnimatedBlurPattern key={src} seed={alt} height={200} animate={state === 'closed'} />
+        );
     return (
         <motion.img
             src={`/api/assets/${src}`}

@@ -45,6 +45,7 @@ export function ProjectCard({ project, onLoadProject }: ProjectCardProps) {
                 <MorphingDialogImage
                     src={project.imageUrl}
                     alt={project.name}
+                    state={'closed'}
                     className="h-48 w-full object-cover"
                 />
                 <div className="flex grow flex-col justify-between p-3">
@@ -86,6 +87,7 @@ export function ProjectCard({ project, onLoadProject }: ProjectCardProps) {
                     <MorphingDialogImage
                         src={project.imageUrl}
                         alt={project.name}
+                        state={'opened'}
                         className="h-full w-full"
                     />
                     <div className="p-6">

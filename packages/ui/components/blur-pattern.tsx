@@ -14,6 +14,7 @@ type Props = {
     width?: number;
     height?: number;
     blobs?: number;
+    animate?: boolean;
 };
 
 function hashString(str: string) {
@@ -53,7 +54,13 @@ function easeOutCubic(t: number) {
     return 1 - Math.pow(1 - t, 3);
 }
 
-export default function AnimatedBlurPattern({ seed, width = 400, height = 400, blobs = 6 }: Props) {
+export default function AnimatedBlurPattern({
+    seed,
+    width = 400,
+    height = 400,
+    blobs = 6,
+    animate = true
+}: Props) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const currentBlobs = useRef<Blob[]>([]);
     const targetBlobs = useRef<Blob[]>([]);
@@ -78,7 +85,7 @@ export default function AnimatedBlurPattern({ seed, width = 400, height = 400, b
         }
     };
 
-    const animate = (ctx: CanvasRenderingContext2D, start: Blob[], end: Blob[]) => {
+    const runAnimate = (ctx: CanvasRenderingContext2D, start: Blob[], end: Blob[]) => {
         const duration = 900;
         const startTime = performance.now();
 
@@ -118,7 +125,7 @@ export default function AnimatedBlurPattern({ seed, width = 400, height = 400, b
             const next = generateBlobs(newSeed, blobs, width, height);
 
             if (currentBlobs.current.length === 0) {
-                currentBlobs.current = next.map((b) => ({ ...b, a: 0 }));
+                currentBlobs.current = next.map((b) => ({ ...b, a: animate ? 0 : 1 }));
                 draw(ctx, currentBlobs.current);
                 // oxlint-disable-next-line
                 updateSeed?.(newSeed);
@@ -126,9 +133,9 @@ export default function AnimatedBlurPattern({ seed, width = 400, height = 400, b
             }
 
             targetBlobs.current = next;
-            animate(ctx, currentBlobs.current, targetBlobs.current);
+            if (animate) runAnimate(ctx, currentBlobs.current, targetBlobs.current);
         },
-        { wait: 300 }
+        { wait: animate ? 300 : 0 }
     );
 
     useEffect(() => {
