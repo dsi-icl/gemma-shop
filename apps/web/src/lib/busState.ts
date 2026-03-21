@@ -113,6 +113,7 @@ export const allEditors = new Set<PeerEntry>();
 
 // wallId → ScopeId: which content a wall displays
 export const wallBindings = new Map<string, ScopeId>();
+export const wallBindingSources = new Map<string, 'live' | 'gallery'>();
 
 // scopeId → Set<wallId>: reverse index used only for binding cleanup
 export const scopeWatchers = new Map<ScopeId, Set<string>>();
@@ -312,7 +313,7 @@ export function getHydratePayload(scopeId: ScopeId): string {
     return scope.hydrateCache;
 }
 
-export function bindWall(wallId: string, scopeId: ScopeId) {
+export function bindWall(wallId: string, scopeId: ScopeId, source: 'live' | 'gallery' = 'live') {
     const oldScopeId = wallBindings.get(wallId);
 
     // Tear down old binding
@@ -334,6 +335,7 @@ export function bindWall(wallId: string, scopeId: ScopeId) {
     }
 
     wallBindings.set(wallId, scopeId);
+    wallBindingSources.set(wallId, source);
     cancelScopeCleanup(scopeId);
 
     // Wire up new binding
@@ -374,6 +376,7 @@ export function unbindWall(wallId: string) {
         scheduleScopeCleanup(oldScopeId);
     }
     wallBindings.delete(wallId);
+    wallBindingSources.delete(wallId);
 }
 
 const BACKPRESSURE_THRESHOLD = 65536; // 64KB

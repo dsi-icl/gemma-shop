@@ -997,8 +997,18 @@ const unsubJson = engine.subscribeToJson((data) => {
             return next;
         });
     } else if (data.type === 'wall_binding_status') {
-        const currentlyBound = useEditorStore.getState().boundWallId;
-        if (currentlyBound === data.wallId && !data.bound) {
+        const state = useEditorStore.getState();
+        const currentlyBound = state.boundWallId;
+        const matchesCurrentScope =
+            data.bound &&
+            data.projectId === state.projectId &&
+            data.commitId === state.commitId &&
+            data.slideId === state.activeSlideId;
+
+        if (matchesCurrentScope) {
+            useEditorStore.setState({ boundWallId: data.wallId });
+            engine.boundWallId = data.wallId;
+        } else if (currentlyBound === data.wallId) {
             useEditorStore.setState({ boundWallId: null });
             engine.boundWallId = null;
         }

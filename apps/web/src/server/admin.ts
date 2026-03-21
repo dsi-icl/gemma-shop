@@ -208,6 +208,7 @@ export async function adminUnbindWall(wallId: string) {
                 boundProjectId: null,
                 boundCommitId: null,
                 boundSlideId: null,
+                boundSource: null,
                 updatedAt: new Date().toISOString()
             }
         }

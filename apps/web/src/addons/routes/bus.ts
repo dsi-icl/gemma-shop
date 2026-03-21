@@ -6,6 +6,7 @@ import {
     peers,
     scopedState,
     wallBindings,
+    wallBindingSources,
     wallsByWallId,
     editorsByScope,
     allEditors,
@@ -121,7 +122,8 @@ function syncWallNodeCountToDb(wallId: string) {
                     ? {
                           boundProjectId: null,
                           boundCommitId: null,
-                          boundSlideId: null
+                          boundSlideId: null,
+                          boundSource: null
                       }
                     : {})
             },
@@ -345,7 +347,7 @@ handlers.set('bind_wall', ({ data }) => {
 
         const scopeId = internScope(data.projectId, data.commitId, resolvedSlideId);
         const scope = getOrCreateScope(scopeId, data.projectId, data.commitId, resolvedSlideId);
-        bindWall(data.wallId, scopeId);
+        bindWall(data.wallId, scopeId, 'live');
 
         const finish = () => {
             hydrateWallNodes(data.wallId);
@@ -367,6 +369,7 @@ handlers.set('bind_wall', ({ data }) => {
                     boundProjectId: data.projectId,
                     boundCommitId: data.commitId,
                     boundSlideId: resolvedSlideId,
+                    boundSource: 'live',
                     updatedAt: new Date().toISOString()
                 },
                 $setOnInsert: {
@@ -398,6 +401,7 @@ handlers.set('unbind_wall', ({ data }) => {
                 boundProjectId: null,
                 boundCommitId: null,
                 boundSlideId: null,
+                boundSource: null,
                 updatedAt: new Date().toISOString()
             }
         }
@@ -652,6 +656,32 @@ export default defineWebSocketHandler({
 
     close(peer) {
         const meta = unregisterPeer(peer.id);
+        if (meta?.specimen === 'editor') {
+            const remainingEditors = editorsByScope.get(meta.scopeId)?.size ?? 0;
+            if (remainingEditors <= 0) {
+                for (const [wallId, boundScopeId] of wallBindings) {
+                    if (boundScopeId !== meta.scopeId) continue;
+                    if (wallBindingSources.get(wallId) !== 'live') continue;
+
+                    unbindWall(wallId);
+                    hydrateWallNodes(wallId);
+                    notifyControllers(wallId, false);
+                    void db.collection('walls').updateOne(
+                        { wallId },
+                        {
+                            $set: {
+                                boundProjectId: null,
+                                boundCommitId: null,
+                                boundSlideId: null,
+                                boundSource: null,
+                                updatedAt: new Date().toISOString()
+                            }
+                        }
+                    );
+                    broadcastWallBindingToEditors(wallId);
+                }
+            }
+        }
         if (meta?.specimen === 'wall') {
             broadcastWallNodeCountToEditors(meta.wallId);
             broadcastWallBindingToEditors(meta.wallId);

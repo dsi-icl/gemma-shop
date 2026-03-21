@@ -70,7 +70,7 @@ export async function bindWallToScope(
 
     const scopeId = internScope(projectId, commitId, resolvedSlideId);
     const scope = getOrCreateScope(scopeId, projectId, commitId, resolvedSlideId);
-    bindWall(wallId, scopeId);
+    bindWall(wallId, scopeId, 'gallery');
 
     // Auto-seed from DB if scope is fresh, then hydrate walls
     if (scope.layers.size === 0) {
@@ -87,6 +87,7 @@ export async function bindWallToScope(
                 boundProjectId: projectId,
                 boundCommitId: commitId,
                 boundSlideId: resolvedSlideId,
+                boundSource: 'gallery',
                 updatedAt: new Date().toISOString()
             }
         },

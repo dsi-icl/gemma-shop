@@ -251,7 +251,6 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
         const { projectId, commitId, activeSlideId } = useEditorStore.getState();
         if (!projectId || !commitId || !activeSlideId) return;
         engine.bindWall(wallId, projectId, commitId, activeSlideId);
-        useEditorStore.setState({ boundWallId: wallId });
     };
 
     const handleWallUnbind = () => {
