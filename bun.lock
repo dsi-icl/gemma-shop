@@ -26,6 +26,7 @@
         "@dnd-kit/modifiers": "catalog:",
         "@dnd-kit/sortable": "catalog:",
         "@fontsource-variable/inter": "catalog:",
+        "@lexical/headless": "catalog:",
         "@lexical/html": "catalog:",
         "@lexical/link": "catalog:",
         "@lexical/list": "catalog:",
@@ -199,6 +200,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@fontsource-variable/inter": "^5.2.8",
+    "@lexical/headless": "^0.42.0",
     "@lexical/html": "^0.42.0",
     "@lexical/link": "^0.42.0",
     "@lexical/list": "^0.42.0",
@@ -608,6 +610,8 @@
     "@lexical/extension": ["@lexical/extension@0.42.0", "", { "dependencies": { "@lexical/utils": "0.42.0", "@preact/signals-core": "^1.11.0", "lexical": "0.42.0" } }, "sha512-rkZq/h8d1BenKRqU4t/zQUVfY/RinMX1Tz7t+Ee3ss0sk+kzP4W+URXNAxpn7r39Vn6wrFBqmCziah3dLAIqPw=="],
 
     "@lexical/hashtag": ["@lexical/hashtag@0.42.0", "", { "dependencies": { "@lexical/text": "0.42.0", "@lexical/utils": "0.42.0", "lexical": "0.42.0" } }, "sha512-WOg5nFOfhabNBXzEIutdWDj+TUHtJEezj6w8jyYDGqZ31gu0cgrXSeV8UIynz/1oj+rpzEeEB7P6ODnwgjt7qA=="],
+
+    "@lexical/headless": ["@lexical/headless@0.42.0", "", { "dependencies": { "happy-dom": "^20.0.0", "lexical": "0.42.0" } }, "sha512-/bfeYhRn82IWfZZkn9XW37cfEOVjKZyjVrKfXNgI14gBvdMuX9aN5CSmr4yEusIJJ4svLzKV0STuMWEopn6Iag=="],
 
     "@lexical/history": ["@lexical/history@0.42.0", "", { "dependencies": { "@lexical/extension": "0.42.0", "@lexical/utils": "0.42.0", "lexical": "0.42.0" } }, "sha512-YfCZ1ICUt6BCg2ncJWFMuS4yftnB7FEHFRf3qqTSTf6oGZ4IZfzabMNEy47xybUuf7FXBbdaCKJrc/zOM+wGxw=="],
 
