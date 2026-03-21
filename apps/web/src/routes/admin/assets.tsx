@@ -305,15 +305,49 @@ function AdminAssetsTab() {
                             {isFontAsset(asset) ? (
                                 <FontPlaceholder name={asset.name} className="h-16 w-16" />
                             ) : (
-                                <ProjectImage
-                                    src={asset.previewUrl ?? asset.url}
-                                    blurhash={asset.blurhash}
-                                    sizes={asset.sizes}
-                                    alt={asset.name}
-                                    className="h-16 w-16 rounded-md"
-                                    imgClassName="cursor-pointer object-cover"
-                                    onClick={() => openPreview(asset)}
-                                />
+                                <div className="group relative h-16 w-16 overflow-hidden rounded-md">
+                                    <ProjectImage
+                                        src={asset.previewUrl ?? asset.url}
+                                        blurhash={asset.blurhash}
+                                        sizes={asset.sizes}
+                                        alt={asset.name}
+                                        className="h-16 w-16 rounded-md"
+                                        imgClassName="cursor-pointer object-cover"
+                                        onClick={() => openPreview(asset)}
+                                    />
+                                    <div className="absolute top-0.5 right-0.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openPreview(asset);
+                                            }}
+                                            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
+                                            title="Preview"
+                                        >
+                                            <EyeIcon size={12} />
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDownload(asset);
+                                            }}
+                                            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
+                                            title="Download"
+                                        >
+                                            <DownloadIcon size={12} />
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteAssetMutation.mutate(asset._id);
+                                            }}
+                                            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
+                                            title="Delete"
+                                        >
+                                            <TrashIcon size={12} />
+                                        </button>
+                                    </div>
+                                </div>
                             )}
                             <div className="flex-1">
                                 <div className="font-medium">{asset.name}</div>
@@ -374,34 +408,47 @@ function AdminAssetsTab() {
                                     onClick={() => openPreview(asset)}
                                 />
                             )}
-                            <div className="absolute inset-0 flex items-center justify-center gap-1 rounded-lg bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                                <Button
-                                    variant="secondary"
-                                    size="icon-sm"
-                                    onClick={() => openPreview(asset)}
-                                    disabled={isFontAsset(asset)}
-                                    title="Preview"
-                                >
-                                    <EyeIcon />
-                                </Button>
-                                <Button
-                                    variant="secondary"
-                                    size="icon-sm"
-                                    onClick={() => handleDownload(asset)}
-                                    title="Download"
-                                >
-                                    <DownloadIcon />
-                                </Button>
-                                <Button
-                                    variant="destructive"
-                                    size="icon-sm"
-                                    onClick={() => deleteAssetMutation.mutate(asset._id)}
-                                    disabled={deleteAssetMutation.isPending}
-                                    title="Delete"
-                                >
-                                    <TrashIcon />
-                                </Button>
-                            </div>
+                            {!isFontAsset(asset) ? (
+                                <>
+                                    <div className="absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <span className="block truncate text-[10px] text-white">
+                                            {asset.name}
+                                        </span>
+                                    </div>
+                                    <div className="absolute top-0.5 right-0.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openPreview(asset);
+                                            }}
+                                            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
+                                            title="Preview"
+                                        >
+                                            <EyeIcon size={12} />
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDownload(asset);
+                                            }}
+                                            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
+                                            title="Download"
+                                        >
+                                            <DownloadIcon size={12} />
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteAssetMutation.mutate(asset._id);
+                                            }}
+                                            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
+                                            title="Delete"
+                                        >
+                                            <TrashIcon size={12} />
+                                        </button>
+                                    </div>
+                                </>
+                            ) : null}
                         </div>
                     ))}
                 </div>
