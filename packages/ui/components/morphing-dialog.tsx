@@ -322,7 +322,7 @@ function MorphingDialogImage({ src, alt, className, style }: MorphingDialogImage
     if (!src) return <AnimatedBlurPattern seed={alt} height={200} />;
     return (
         <motion.img
-            src={src}
+            src={`/api/assets/${src}`}
             alt={alt}
             className={cn(className)}
             layoutId={`dialog-img-${uniqueId}`}
