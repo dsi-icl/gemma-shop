@@ -48,17 +48,14 @@ export function ProjectImage({
     onClick
 }: ProjectImageProps) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const [loaded, setLoaded] = useState(false);
+    const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
     const [measuredWidth, setMeasuredWidth] = useState(0);
     const maxWidthRef = useRef(0);
 
-    // Reset loaded state when src changes
-    const prevSrcRef = useRef(src);
-    if (prevSrcRef.current !== src) {
-        prevSrcRef.current = src;
-        setLoaded(false);
+    // Reset measurement accumulator when source identity changes.
+    useEffect(() => {
         maxWidthRef.current = 0;
-    }
+    }, [src]);
 
     // Measure container with ResizeObserver
     useEffect(() => {
@@ -81,38 +78,48 @@ export function ProjectImage({
     }, []);
 
     const selectedSrc = selectSrc(src, sizes, measuredWidth, forceOriginal);
+    const loaded = loadedSrc === selectedSrc;
 
-    const handleLoad = useCallback(() => setLoaded(true), []);
+    const handleLoad = useCallback(() => setLoadedSrc(selectedSrc), [selectedSrc]);
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLImageElement>) => {
+            if (!onClick) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick(e as unknown as React.MouseEvent);
+            }
+        },
+        [onClick]
+    );
 
     return (
         <div
             ref={containerRef}
             className={cn('bg-checkerboard relative overflow-hidden', className)}
         >
-            {/* TODO This is not working correctly, we need to look at sorting out the blurhash position and the image cover later */}
-            <img
-                src={selectedSrc}
-                alt={alt}
-                loading="lazy"
-                className={cn(
-                    'block h-full w-full object-contain transition-opacity duration-300',
-                    loaded ? 'opacity-100' : 'opacity-0',
-                    imgClassName
-                )}
-                onLoad={handleLoad}
-                onClick={onClick}
-            />
             {blurhash && (
                 <Blurhash
                     hash={blurhash}
                     width={500}
                     height={500}
-                    className={cn(
-                        'absolute inset-0 h-full! w-full! transition-opacity duration-300',
-                        loaded ? 'pointer-events-none opacity-0' : 'opacity-100'
-                    )}
+                    className="pointer-events-none absolute inset-0 h-full! w-full! opacity-100"
                 />
             )}
+            <img
+                src={selectedSrc}
+                alt={alt}
+                loading="lazy"
+                className={cn(
+                    'bg-checkerboard absolute inset-0 z-10 block h-full w-full object-cover transition-opacity duration-300',
+                    loaded ? 'opacity-100' : 'opacity-0',
+                    imgClassName
+                )}
+                onLoad={handleLoad}
+                onClick={onClick}
+                onKeyDown={handleKeyDown}
+                role={onClick ? 'button' : undefined}
+                tabIndex={onClick ? 0 : undefined}
+            />
         </div>
     );
 }

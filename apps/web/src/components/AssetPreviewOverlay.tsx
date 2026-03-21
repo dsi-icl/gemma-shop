@@ -1,8 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Blurhash } from 'react-blurhash';
 import { createPortal } from 'react-dom';
-
-import { ProjectImage } from './ProjectImage';
 
 interface AssetPreviewOverlayProps {
     src: string;
@@ -13,6 +12,24 @@ interface AssetPreviewOverlayProps {
     onClose: () => void;
 }
 
+function selectPreviewImageSrc(
+    src: string,
+    sizes: number[] | undefined,
+    viewportWidth: number,
+    viewportHeight: number
+): string {
+    const prefixed = src.startsWith('/api/assets/') ? src : `/api/assets/${src}`;
+    if (!sizes?.length) return prefixed;
+
+    const filename = prefixed.split('/').pop() ?? '';
+    const baseId = filename.replace(/\.[^.]+$/, '').replace(/_\d+$/, '');
+    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio ?? 1) : 1;
+    const targetPx = Math.ceil(Math.min(viewportWidth, viewportHeight) * dpr);
+    const sorted = [...sizes].sort((a, b) => a - b);
+    const match = sorted.find((s) => s >= targetPx) ?? sorted[sorted.length - 1];
+    return `/api/assets/${baseId}_${match}.webp`;
+}
+
 function AssetPreviewOverlayInner({
     src,
     name,
@@ -21,45 +38,109 @@ function AssetPreviewOverlayInner({
     sizes,
     onClose
 }: AssetPreviewOverlayProps) {
+    const [viewport, setViewport] = useState(() => ({
+        width: typeof window !== 'undefined' ? window.innerWidth : 1920,
+        height: typeof window !== 'undefined' ? window.innerHeight : 1080
+    }));
+    const [mediaLoaded, setMediaLoaded] = useState(false);
+    const [imageSrc, setImageSrc] = useState(src);
+
+    useEffect(() => {
+        setMediaLoaded(false);
+    }, [src, isVideo]);
+
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
         };
+        const handleResize = () => {
+            setViewport({ width: window.innerWidth, height: window.innerHeight });
+        };
+
         window.addEventListener('keydown', handleKey);
-        return () => window.removeEventListener('keydown', handleKey);
+        window.addEventListener('resize', handleResize);
+        document.body.style.overflow = 'hidden';
+        return () => {
+            window.removeEventListener('keydown', handleKey);
+            window.removeEventListener('resize', handleResize);
+            document.body.style.overflow = '';
+        };
     }, [onClose]);
+
+    const selectedImageSrc = useMemo(() => {
+        if (isVideo) return src;
+        return selectPreviewImageSrc(src, sizes, viewport.width * 0.92, viewport.height * 0.92);
+    }, [isVideo, src, sizes, viewport.height, viewport.width]);
+
+    useEffect(() => {
+        setImageSrc(selectedImageSrc);
+    }, [selectedImageSrc]);
+
+    const fallbackSrc = src.startsWith('/api/assets/') ? src : `/api/assets/${src}`;
+    const frameStyle = {
+        width: Math.max(320, Math.floor(viewport.width * 0.92)),
+        height: Math.max(180, Math.floor(viewport.height * 0.92))
+    };
 
     return createPortal(
         <div
-            className="fixed inset-0 z-10000 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+            className="fixed inset-0 z-10000 flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm"
             onClick={onClose}
+            onKeyDown={(e) => {
+                if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') onClose();
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Preview ${name}`}
+            tabIndex={-1}
         >
             <motion.div
-                className="max-h-[90vh] max-w-[90vw]"
+                className="relative flex items-center justify-center"
                 onClick={(e) => e.stopPropagation()}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
             >
-                {isVideo ? (
-                    <video
-                        src={src}
-                        controls
-                        autoPlay
-                        className="max-h-[90vh] max-w-[90vw] rounded-lg"
-                    />
-                ) : (
-                    <ProjectImage
-                        src={src}
-                        blurhash={blurhash}
-                        sizes={sizes}
-                        forceOriginal
-                        alt={name}
-                        className="max-h-[90vh] max-w-[90vw] rounded-lg"
-                        imgClassName="object-contain"
-                    />
-                )}
+                <div className="relative overflow-hidden rounded-lg" style={frameStyle}>
+                    {blurhash ? (
+                        <Blurhash
+                            hash={blurhash}
+                            width={500}
+                            height={500}
+                            className="pointer-events-none absolute inset-0 h-full! w-full! opacity-100"
+                        />
+                    ) : null}
+
+                    {isVideo ? (
+                        <video
+                            src={fallbackSrc}
+                            controls
+                            autoPlay
+                            className={`absolute inset-0 z-20 h-full w-full object-contain transition-opacity duration-300 ${
+                                mediaLoaded ? 'opacity-100' : 'opacity-0'
+                            }`}
+                            onLoadedData={() => setMediaLoaded(true)}
+                        >
+                            <track kind="captions" />
+                        </video>
+                    ) : (
+                        <img
+                            src={imageSrc}
+                            alt={name}
+                            className={`bg-checkerboard absolute inset-0 z-20 block h-full w-full object-contain transition-opacity duration-300 ${
+                                mediaLoaded ? 'opacity-100' : 'opacity-0'
+                            }`}
+                            onLoad={() => setMediaLoaded(true)}
+                            onError={() => {
+                                if (imageSrc !== fallbackSrc) {
+                                    setImageSrc(fallbackSrc);
+                                    setMediaLoaded(false);
+                                }
+                            }}
+                        />
+                    )}
+                </div>
             </motion.div>
             <motion.div
                 className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 text-xs text-white/70"
@@ -77,7 +158,8 @@ function AssetPreviewOverlayInner({
 
 /** Wrap with AnimatePresence — render when `preview` is non-null, pass `null` to unmount with exit animation. */
 export function AssetPreviewOverlay(props: AssetPreviewOverlayProps | null) {
-    return <AssetPreviewOverlayInner {...(props as AssetPreviewOverlayProps)} />;
+    if (!props) return null;
+    return <AssetPreviewOverlayInner {...props} />;
 }
 
 /** Use this at the render site for proper enter/exit animations. */
