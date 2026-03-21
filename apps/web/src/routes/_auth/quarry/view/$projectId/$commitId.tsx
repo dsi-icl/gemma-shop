@@ -23,7 +23,7 @@ import type { LayerWithEditorState } from '~/lib/types';
 import { $createBranchHead } from '~/server/projects.fns';
 import { commitQueryOptions, projectQueryOptions } from '~/server/projects.queries';
 
-const STAGE_SCALE_FACTOR = 0.15;
+const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 const COLS = 16;
@@ -207,7 +207,7 @@ function CommitViewer() {
     const navigate = useNavigate();
     const stageSlot = useRef<HTMLDivElement>(null);
     const stageInstance = useRef<Konva.Stage>(null);
-    const [stageScaleFactor, setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
+    const [stageScaleFactor, setStageScaleFactor] = useState(DEFAULT_STAGE_SCALE_FACTOR);
     const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
     const [branching, setBranching] = useState(false);
 
@@ -241,8 +241,9 @@ function CommitViewer() {
             const availableHeight = slot.clientHeight;
             if (availableHeight <= 0) return;
             const maxVerticalScale = Math.max(minScale, availableHeight / logicalHeight);
-            const nextScale = Math.min(STAGE_SCALE_FACTOR, maxVerticalScale);
-            setStageScaleFactor((prev) => (Math.abs(prev - nextScale) < 0.0005 ? prev : nextScale));
+            setStageScaleFactor((prev) =>
+                Math.abs(prev - maxVerticalScale) < 0.0005 ? prev : maxVerticalScale
+            );
         };
 
         recomputeScale();

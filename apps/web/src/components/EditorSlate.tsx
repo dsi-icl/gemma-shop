@@ -22,7 +22,7 @@ import { SlatePreview } from './SlatePreview';
 
 const engine = EditorEngine.getInstance();
 
-const STAGE_SCALE_FACTOR = 0.15;
+const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 // Square snap grid aligned with physical screen boundaries:
@@ -67,7 +67,7 @@ export function EditorSlate() {
     const strokeDash = useEditorStore((s) => s.strokeDash);
     const strokeWidth = useEditorStore((s) => s.strokeWidth);
 
-    const [stageScaleFactor, setStageScaleFactor] = useState(STAGE_SCALE_FACTOR);
+    const [stageScaleFactor, setStageScaleFactor] = useState(DEFAULT_STAGE_SCALE_FACTOR);
     const [isPinching, setIsPinching] = useState(false);
     const [currentLine, setCurrentLine] = useState<Array<number>>([]);
     const editingTextLayerId = useEditorStore((s) => s.editingTextLayerId);
@@ -100,8 +100,9 @@ export function EditorSlate() {
             const availableHeight = slot.clientHeight;
             if (availableHeight <= 0) return;
             const maxVerticalScale = Math.max(minScale, availableHeight / logicalHeight);
-            const nextScale = Math.min(STAGE_SCALE_FACTOR, maxVerticalScale);
-            setStageScaleFactor((prev) => (Math.abs(prev - nextScale) < 0.0005 ? prev : nextScale));
+            setStageScaleFactor((prev) =>
+                Math.abs(prev - maxVerticalScale) < 0.0005 ? prev : maxVerticalScale
+            );
         };
 
         recomputeScale();
