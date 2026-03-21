@@ -4,6 +4,7 @@ import {
     peers,
     scopedState,
     wallBindings,
+    wallsByWallId,
     editorsByScope,
     allEditors,
     activeVideos,
@@ -44,6 +45,7 @@ import {
     broadcastToEditorsByCommit,
     notifyControllersByCommit,
     broadcastAssetToEditorsByProject,
+    getWallNodeCount,
     // layerNodes,
     // canSendNonCritical,
     EMPTY_HYDRATE,
@@ -90,6 +92,33 @@ interface HandlerCtx {
 type Handler = (ctx: HandlerCtx) => void;
 
 const handlers = new Map<string, Handler>();
+
+function broadcastWallNodeCountToEditors(wallId: string) {
+    const payload = JSON.stringify({
+        type: 'wall_node_count',
+        wallId,
+        connectedNodes: getWallNodeCount(wallId)
+    } satisfies GSMessage);
+    for (const entry of allEditors) {
+        entry.peer.send(payload);
+    }
+}
+
+function broadcastWallBindingToEditors(wallId: string) {
+    const boundScope = wallBindings.get(wallId);
+    const scope = boundScope !== undefined ? scopedState.get(boundScope) : null;
+    const payload = JSON.stringify({
+        type: 'wall_binding_status',
+        wallId,
+        bound: boundScope !== undefined,
+        ...(scope
+            ? { projectId: scope.projectId, commitId: scope.commitId, slideId: scope.slideId }
+            : {})
+    } satisfies GSMessage);
+    for (const entry of allEditors) {
+        entry.peer.send(payload);
+    }
+}
 
 handlers.set('rehydrate_please', ({ entry }) => {
     const { meta } = entry;
@@ -263,6 +292,8 @@ handlers.set('bind_wall', ({ data }) => {
     } else {
         finish();
     }
+    broadcastWallBindingToEditors(data.wallId);
+    broadcastWallNodeCountToEditors(data.wallId);
 
     console.log(
         `[WS] Wall ${data.wallId} bound to scope=${makeScopeLabel(data.projectId, data.commitId, data.slideId)}`
@@ -273,6 +304,8 @@ handlers.set('unbind_wall', ({ data }) => {
     unbindWall(data.wallId);
     hydrateWallNodes(data.wallId);
     notifyControllers(data.wallId, false);
+    broadcastWallBindingToEditors(data.wallId);
+    broadcastWallNodeCountToEditors(data.wallId);
     console.log(`[WS] Wall ${data.wallId} unbound`);
 });
 
@@ -340,9 +373,61 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
             // Fresh scope — auto-seed from DB so the editor gets layers immediately
             seedScopeFromDb(scopeId).then(() => {
                 peer.send(getHydratePayload(scopeId));
+                for (const wallId of wallsByWallId.keys()) {
+                    peer.send(
+                        JSON.stringify({
+                            type: 'wall_node_count',
+                            wallId,
+                            connectedNodes: getWallNodeCount(wallId)
+                        } satisfies GSMessage)
+                    );
+                    const boundScope = wallBindings.get(wallId);
+                    const bound = boundScope !== undefined;
+                    const s = bound ? scopedState.get(boundScope) : null;
+                    peer.send(
+                        JSON.stringify({
+                            type: 'wall_binding_status',
+                            wallId,
+                            bound,
+                            ...(s
+                                ? {
+                                      projectId: s.projectId,
+                                      commitId: s.commitId,
+                                      slideId: s.slideId
+                                  }
+                                : {})
+                        } satisfies GSMessage)
+                    );
+                }
             });
         } else {
             peer.send(getHydratePayload(scopeId));
+            for (const wallId of wallsByWallId.keys()) {
+                peer.send(
+                    JSON.stringify({
+                        type: 'wall_node_count',
+                        wallId,
+                        connectedNodes: getWallNodeCount(wallId)
+                    } satisfies GSMessage)
+                );
+                const boundScope = wallBindings.get(wallId);
+                const bound = boundScope !== undefined;
+                const s = bound ? scopedState.get(boundScope) : null;
+                peer.send(
+                    JSON.stringify({
+                        type: 'wall_binding_status',
+                        wallId,
+                        bound,
+                        ...(s
+                            ? {
+                                  projectId: s.projectId,
+                                  commitId: s.commitId,
+                                  slideId: s.slideId
+                              }
+                            : {})
+                    } satisfies GSMessage)
+                );
+            }
         }
 
         console.log(
@@ -365,6 +450,8 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
         peer.send(boundScope !== undefined ? getHydratePayload(boundScope) : EMPTY_HYDRATE);
 
         // if (boundScope !== undefined) recomputeAllLayerNodes(boundScope);
+        broadcastWallNodeCountToEditors(parsed.wallId);
+        broadcastWallBindingToEditors(parsed.wallId);
 
         console.log(
             `[WS] Wall joined wallId=${parsed.wallId} ` +
@@ -464,7 +551,11 @@ export default defineWebSocketHandler({
     },
 
     close(peer) {
-        unregisterPeer(peer.id);
+        const meta = unregisterPeer(peer.id);
+        if (meta?.specimen === 'wall') {
+            broadcastWallNodeCountToEditors(meta.wallId);
+            broadcastWallBindingToEditors(meta.wallId);
+        }
         logPeerCounts();
     },
 

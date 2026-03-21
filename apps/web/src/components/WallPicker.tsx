@@ -4,10 +4,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/pop
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { useEditorStore } from '~/lib/editorStore';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
 function WallList({ onSelect }: { onSelect: (wallId: string) => void }) {
     const { data: walls = [], isLoading } = useQuery(wallsQueryOptions());
+    const liveNodeCounts = useEditorStore((s) => s.wallNodeCounts);
 
     if (isLoading) {
         return (
@@ -25,28 +27,31 @@ function WallList({ onSelect }: { onSelect: (wallId: string) => void }) {
 
     return (
         <div className="flex flex-col gap-1">
-            {walls.map((wall) => (
-                <button
-                    key={wall._id}
-                    onClick={() => onSelect(wall.wallId)}
-                    className="flex cursor-pointer items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-                >
-                    <div>
-                        <div className="font-medium">{wall.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                            {wall.connectedNodes} node{wall.connectedNodes !== 1 ? 's' : ''}
-                            {wall.boundProjectId && ' · bound'}
+            {walls.map((wall) => {
+                const connectedNodes = liveNodeCounts[wall.wallId] ?? wall.connectedNodes;
+                return (
+                    <button
+                        key={wall._id}
+                        onClick={() => onSelect(wall.wallId)}
+                        className="flex cursor-pointer items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+                    >
+                        <div>
+                            <div className="font-medium">{wall.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                                {connectedNodes} node{connectedNodes !== 1 ? 's' : ''}
+                                {wall.boundProjectId && ' · bound'}
+                            </div>
                         </div>
-                    </div>
-                    <MonitorIcon
-                        size={16}
-                        weight={wall.connectedNodes > 0 ? 'fill' : 'regular'}
-                        className={
-                            wall.connectedNodes > 0 ? 'text-green-500' : 'text-muted-foreground'
-                        }
-                    />
-                </button>
-            ))}
+                        <MonitorIcon
+                            size={16}
+                            weight={connectedNodes > 0 ? 'fill' : 'regular'}
+                            className={
+                                connectedNodes > 0 ? 'text-green-500' : 'text-muted-foreground'
+                            }
+                        />
+                    </button>
+                );
+            })}
         </div>
     );
 }

@@ -50,6 +50,7 @@ export interface EditorState {
 
     // ── Wall binding ──
     boundWallId: string | null;
+    wallNodeCounts: Record<string, number>;
 
     // ── Connection state ──
     connectionStatus: ConnectionStatus;
@@ -178,6 +179,7 @@ export const useEditorStore =
 
                   // ── Wall binding ──
                   boundWallId: null,
+                  wallNodeCounts: {},
 
                   // ── Connection state ──
                   connectionStatus: 'connecting' as ConnectionStatus,
@@ -982,6 +984,23 @@ const unsubJson = engine.subscribeToJson((data) => {
                     queryKey: projectAssetsQueryOptions(data.projectId).queryKey
                 });
             });
+        }
+    } else if (data.type === 'wall_node_count') {
+        useEditorStore.setState((s) => {
+            const next: Partial<EditorState> = {
+                wallNodeCounts: { ...s.wallNodeCounts, [data.wallId]: data.connectedNodes }
+            };
+            if (s.boundWallId === data.wallId && data.connectedNodes <= 0) {
+                next.boundWallId = null;
+                engine.boundWallId = null;
+            }
+            return next;
+        });
+    } else if (data.type === 'wall_binding_status') {
+        const currentlyBound = useEditorStore.getState().boundWallId;
+        if (currentlyBound === data.wallId && !data.bound) {
+            useEditorStore.setState({ boundWallId: null });
+            engine.boundWallId = null;
         }
     }
 });
