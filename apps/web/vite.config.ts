@@ -18,7 +18,11 @@ export default defineConfig({
     },
     plugins: [
         ttfPlugin(),
-        devtools(),
+        devtools({
+            // Avoid runtime console serialization loops in complex React/Nitro error paths.
+            // Keeps devtools available while disabling the console-pipe injection.
+            consolePiping: { enabled: false }
+        }),
         tanstackStart(),
         // https://tanstack.com/start/latest/docs/framework/react/guide/hosting
         nitro({
