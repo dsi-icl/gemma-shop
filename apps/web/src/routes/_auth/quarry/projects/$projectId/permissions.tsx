@@ -3,6 +3,13 @@ import type { Collaborator, CollaboratorRole } from '@repo/db/schema';
 import { Button } from '@repo/ui/components/button';
 import { Input } from '@repo/ui/components/input';
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
+} from '@repo/ui/components/select';
+import {
     Table,
     TableBody,
     TableCell,
@@ -86,15 +93,16 @@ function PermissionsTab() {
                     placeholder="collaborator@example.com"
                     className="flex-1"
                 />
-                <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as CollaboratorRole)}
-                    className="h-9 rounded-4xl border border-input bg-input/30 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                    <option value="viewer">Viewer</option>
-                    <option value="editor">Editor</option>
-                    <option value="owner">Owner</option>
-                </select>
+                <Select value={role} onValueChange={(value) => setRole(value as CollaboratorRole)}>
+                    <SelectTrigger className="w-32">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                        <SelectItem value="viewer">Viewer</SelectItem>
+                        <SelectItem value="editor">Editor</SelectItem>
+                        <SelectItem value="owner">Owner</SelectItem>
+                    </SelectContent>
+                </Select>
                 <Button type="button" variant="outline" size="sm" onClick={addCollaborator}>
                     <PlusIcon />
                     Add
@@ -115,22 +123,26 @@ function PermissionsTab() {
                             <TableRow key={c.email}>
                                 <TableCell>{c.email}</TableCell>
                                 <TableCell>
-                                    <select
+                                    <Select
                                         value={c.role}
-                                        onChange={(e) =>
-                                            changeRole(c.email, e.target.value as CollaboratorRole)
+                                        onValueChange={(value) =>
+                                            changeRole(c.email, value as CollaboratorRole)
                                         }
                                         disabled={
                                             c.role === 'owner' &&
                                             collaborators.filter((x) => x.role === 'owner')
                                                 .length <= 1
                                         }
-                                        className="rounded-lg border border-input bg-transparent px-2 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
                                     >
-                                        <option value="viewer">Viewer</option>
-                                        <option value="editor">Editor</option>
-                                        <option value="owner">Owner</option>
-                                    </select>
+                                        <SelectTrigger className="w-32 rounded-lg bg-transparent">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent align="start">
+                                            <SelectItem value="viewer">Viewer</SelectItem>
+                                            <SelectItem value="editor">Editor</SelectItem>
+                                            <SelectItem value="owner">Owner</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </TableCell>
                                 <TableCell>
                                     {!(

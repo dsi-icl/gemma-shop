@@ -25,20 +25,29 @@ function InfoTab() {
     });
 
     return (
-        <ProjectForm
-            defaultValues={{
-                name: project.name,
-                authorOrganisation: project.authorOrganisation,
-                description: project.description,
-                tags: project.tags.filter((t) => t !== 'public'),
-                heroImages: project.heroImages,
-                collaborators: project.collaborators
-            }}
-            onSubmit={(data) => mutation.mutate({ ...data, _id: projectId })}
-            isSubmitting={mutation.isPending}
-            submitLabel="Save changes"
-            autoSave
-            autoSaveDelayMs={1200}
-        />
+        <div className="flex flex-col gap-6">
+            <div>
+                <h3 className="mb-1 text-base font-medium">Project Information</h3>
+                <p className="text-sm text-muted-foreground">
+                    Manage projects metadata and gallery images.
+                </p>
+            </div>
+            <ProjectForm
+                projectId={projectId}
+                defaultValues={{
+                    name: project.name,
+                    authorOrganisation: project.authorOrganisation,
+                    description: project.description,
+                    tags: project.tags.filter((t) => t !== 'public'),
+                    heroImages: project.heroImages,
+                    collaborators: project.collaborators
+                }}
+                onSubmit={(data) => mutation.mutate({ ...data, _id: projectId })}
+                isSubmitting={mutation.isPending}
+                submitLabel="Save changes"
+                autoSave
+                autoSaveDelayMs={1200}
+            />
+        </div>
     );
 }

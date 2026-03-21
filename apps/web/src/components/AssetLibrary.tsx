@@ -1,5 +1,5 @@
 import {
-    CaretDownIcon,
+    CheckIcon,
     DownloadIcon,
     EyeIcon,
     ImageIcon,
@@ -18,9 +18,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-import { EditorEngine } from '~/lib/editorEngine';
-import { useEditorStore } from '~/lib/editorStore';
-import type { Layer, LayerWithEditorState } from '~/lib/types';
 import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
 
@@ -34,19 +31,32 @@ function isFontAsset(asset: { name: string; mimeType?: string }): boolean {
 
 interface AssetLibraryProps {
     projectId: string;
-    titleBarSize?: number;
-    collapsed?: boolean;
-    onCollapse?: () => void;
-    onExpand?: () => void;
+    mode?: 'editor' | 'picker';
+    pickerFilter?: 'image' | 'media';
+    selectedAssetUrls?: string[];
+    onSelectAsset?: (asset: AssetLibraryAsset) => void;
+    onDeleteAsset?: (asset: AssetLibraryAsset) => Promise<void> | void;
 }
+
+export type AssetLibraryAsset = {
+    _id: string;
+    name: string;
+    url: string;
+    mimeType?: string;
+    blurhash?: string;
+    sizes?: number[];
+    previewUrl?: string;
+};
 
 export function AssetLibrary({
     projectId,
-    titleBarSize = 40,
-    collapsed,
-    onCollapse,
-    onExpand
+    mode = 'editor',
+    pickerFilter = 'media',
+    selectedAssetUrls = [],
+    onSelectAsset,
+    onDeleteAsset
 }: AssetLibraryProps) {
+    const isPicker = mode === 'picker';
     const { data: assets = [] } = useQuery(projectAssetsQueryOptions(projectId));
     const sortedAssets = useMemo(() => {
         const media: typeof assets = [];
@@ -55,13 +65,21 @@ export function AssetLibrary({
             if (isFontAsset(asset)) fonts.push(asset);
             else media.push(asset);
         }
-        return [...media, ...fonts];
-    }, [assets]);
+        const sorted = [...media, ...fonts];
+        if (!isPicker) return sorted;
+        if (pickerFilter === 'image')
+            return sorted.filter(
+                (asset) =>
+                    !isFontAsset(asset) &&
+                    !isVideoAsset(asset as { name: string; mimeType?: string })
+            );
+        return sorted.filter((asset) => !isFontAsset(asset));
+    }, [assets, isPicker, pickerFilter]);
     const queryClient = useQueryClient();
     const [deleteTarget, setDeleteTarget] = useState<{
         id: string;
         name: string;
-        inUse: boolean;
+        asset: AssetLibraryAsset;
     } | null>(null);
     const [preview, setPreview] = useState<{
         src: string;
@@ -72,26 +90,14 @@ export function AssetLibrary({
     } | null>(null);
 
     const deleteAssetMutation = useMutation({
-        mutationFn: $deleteAsset,
-        onSuccess: () => {
-            // Remove any layers using this asset's URL
-            if (deleteTarget) {
-                const store = useEditorStore.getState();
-                const matchingAsset = assets.find((a) => a._id === deleteTarget.id);
-                if (matchingAsset) {
-                    const assetUrl = matchingAsset.url;
-                    const prefixedUrl = `/api/assets/${assetUrl}`;
-                    for (const layer of store.layers.values()) {
-                        if (
-                            (layer.type === 'image' || layer.type === 'video') &&
-                            (layer.url === assetUrl || layer.url === prefixedUrl)
-                        ) {
-                            // removeLayer updates state + sends delete_layer to bus
-                            store.removeLayer(layer.numericId);
-                        }
-                    }
-                }
+        mutationFn: async (asset: AssetLibraryAsset) => {
+            if (onDeleteAsset) {
+                await onDeleteAsset(asset);
+                return;
             }
+            await $deleteAsset({ data: { id: asset._id } });
+        },
+        onSuccess: () => {
             queryClient.invalidateQueries({
                 queryKey: projectAssetsQueryOptions(projectId).queryKey
             });
@@ -101,14 +107,8 @@ export function AssetLibrary({
         onError: (e) => toast.error(e.message)
     });
 
-    const handleDeleteClick = useCallback((asset: { _id: string; name: string; url: string }) => {
-        const { layers } = useEditorStore.getState();
-        const inUse = Array.from(layers.values()).some(
-            (l) =>
-                (l.type === 'image' || l.type === 'video') &&
-                (l.url === asset.url || l.url === `/api/assets/${asset.url}`)
-        );
-        setDeleteTarget({ id: asset._id, name: asset.name, inUse });
+    const handleDeleteClick = useCallback((asset: AssetLibraryAsset) => {
+        setDeleteTarget({ id: asset._id, name: asset.name, asset });
     }, []);
 
     const handleUploadComplete = useCallback(() => {
@@ -117,129 +117,7 @@ export function AssetLibrary({
         });
     }, [projectId, queryClient]);
 
-    const addAssetAsLayer = useCallback(
-        async (asset: {
-            name: string;
-            url: string;
-            mimeType?: string;
-            blurhash?: string;
-            sizes?: number[];
-        }) => {
-            const isVideo =
-                asset.mimeType?.startsWith('video/') ||
-                /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name) ||
-                /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.url);
-
-            const store = useEditorStore.getState();
-            const engine = EditorEngine.getInstance();
-            const numericId = store.allocateId();
-            const zIndex = store.allocateZIndex();
-
-            let mediaWidth = 800;
-            let mediaHeight = 600;
-            let duration = 0;
-
-            if (isVideo) {
-                try {
-                    const vid = document.createElement('video');
-                    vid.muted = true;
-                    vid.playsInline = true;
-                    vid.crossOrigin = 'anonymous';
-                    vid.src = asset.url;
-                    await new Promise<void>((resolve, reject) => {
-                        vid.onloadeddata = () => resolve();
-                        vid.onerror = () => reject(new Error('Failed to load video'));
-                    });
-                    mediaWidth = vid.videoWidth || mediaWidth;
-                    mediaHeight = vid.videoHeight || mediaHeight;
-                    duration = vid.duration || 0;
-                    vid.removeAttribute('src');
-                    vid.load();
-                } catch {
-                    // use defaults
-                }
-            } else {
-                try {
-                    const img = new window.Image();
-                    img.crossOrigin = 'anonymous';
-                    img.src = asset.url;
-                    await new Promise<void>((resolve) => {
-                        img.onload = () => resolve();
-                        img.onerror = () => resolve();
-                    });
-                    mediaWidth = img.naturalWidth || mediaWidth;
-                    mediaHeight = img.naturalHeight || mediaHeight;
-                } catch {
-                    // use defaults
-                }
-            }
-
-            const config: Layer['config'] = {
-                cx: mediaWidth / 2,
-                cy: mediaHeight / 2,
-                width: mediaWidth,
-                height: mediaHeight,
-                rotation: 0,
-                scaleX: 1,
-                scaleY: 1,
-                zIndex,
-                visible: true
-            };
-
-            const defaultPlayback: Extract<Layer, { type: 'video' }>['playback'] = {
-                status: 'paused',
-                anchorMediaTime: 0,
-                anchorServerTime: engine.getServerTime()
-            };
-
-            const layerBase = {
-                numericId,
-                url: asset.url,
-                config,
-                isUploading: false,
-                progress: 100
-            };
-
-            let layer:
-                | Extract<LayerWithEditorState, { type: 'image' }>
-                | Extract<LayerWithEditorState, { type: 'video' }>;
-            if (isVideo) {
-                layer = {
-                    type: 'video',
-                    playback: defaultPlayback,
-                    rvfcActive: false,
-                    duration,
-                    loop: true,
-                    blurhash: asset.blurhash ?? '',
-                    sizes: asset.sizes,
-                    ...layerBase
-                };
-            } else {
-                layer = {
-                    type: 'image',
-                    blurhash: asset.blurhash ?? '',
-                    sizes: asset.sizes,
-                    ...layerBase
-                };
-            }
-
-            store.upsertLayer(layer);
-            store.toggleLayerSelection(numericId.toString(), false, false);
-
-            engine.sendJSON({
-                type: 'upsert_layer',
-                origin: 'assetLibrary',
-                layer
-            });
-            store.markDirty();
-        },
-        []
-    );
-
-    const toggleCollapse = () => {
-        if (collapsed) onExpand?.();
-        else onCollapse?.();
-    };
+    const normalizeAssetUrl = (url: string) => url.replace(/^\/api\/assets\//, '');
 
     const uploadTrigger = (
         <button className="group relative flex aspect-square w-full max-w-25 cursor-pointer flex-col justify-center overflow-hidden rounded-md border border-border bg-background text-center align-middle transition-colors hover:border-primary">
@@ -257,87 +135,90 @@ export function AssetLibrary({
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-muted/30">
-            <button
-                onClick={toggleCollapse}
-                className="flex shrink-0 cursor-pointer items-center justify-between border-b border-border bg-muted/50 px-4"
-                style={{ height: titleBarSize }}
-            >
-                <h2 className="flex items-center gap-2 text-sm font-semibold">
-                    <ImageIcon size={18} weight="bold" /> Media
-                </h2>
-                <CaretDownIcon
-                    size={14}
-                    weight="bold"
-                    className={`text-muted-foreground transition-transform ${collapsed ? '' : 'rotate-180'}`}
-                />
-            </button>
-
-            {!collapsed && (
-                <div className="flex flex-1 flex-col overflow-y-auto p-2">
-                    {sortedAssets.length === 0 && (
+            <div className="flex flex-1 flex-col overflow-y-auto p-2">
+                {sortedAssets.length === 0 &&
+                    (isPicker ? (
+                        <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
+                            No assets available
+                        </div>
+                    ) : (
                         <UploadDialog
                             projectId={projectId}
                             trigger={emptyTrigger}
                             onUploadComplete={handleUploadComplete}
                         />
-                    )}
+                    ))}
 
-                    {sortedAssets.length > 0 && (
-                        <>
-                            <div
-                                className="grid gap-1.5"
-                                style={{
-                                    gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))'
-                                }}
-                            >
+                {sortedAssets.length > 0 && (
+                    <>
+                        <div
+                            className="grid gap-1.5"
+                            style={{
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))'
+                            }}
+                        >
+                            {!isPicker ? (
                                 <UploadDialog
                                     key={'upload-dialog'}
                                     projectId={projectId}
                                     trigger={uploadTrigger}
                                     onUploadComplete={handleUploadComplete}
                                 />
-                                {sortedAssets.map((asset) => {
-                                    const isVideo =
-                                        asset.mimeType?.startsWith('video/') ||
-                                        /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name);
-                                    const isFont = isFontAsset(asset);
-                                    const thumbIdentifier = isVideo
-                                        ? (asset.previewUrl ?? asset.url)
-                                        : asset.url;
+                            ) : null}
+                            {sortedAssets.map((asset) => {
+                                const isVideo =
+                                    asset.mimeType?.startsWith('video/') ||
+                                    /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name);
+                                const isFont = isFontAsset(asset);
+                                const isSelected =
+                                    isPicker &&
+                                    selectedAssetUrls
+                                        .map(normalizeAssetUrl)
+                                        .includes(normalizeAssetUrl(asset.url));
+                                const thumbIdentifier = isVideo
+                                    ? (asset.previewUrl ?? asset.url)
+                                    : asset.url;
 
-                                    const cardContent = (
-                                        <>
-                                            {isFont ? (
-                                                <div className="flex aspect-square flex-col items-center justify-center gap-1 bg-muted text-muted-foreground [--checker-size:10px]">
-                                                    <span className="rounded bg-background px-1.5 py-0.5 text-[9px] font-semibold tracking-wide">
-                                                        WOFF2
-                                                    </span>
-                                                    <span className="max-w-[90%] truncate text-[10px]">
-                                                        {asset.name.replace(/\.woff2$/i, '')}
-                                                    </span>
-                                                </div>
-                                            ) : thumbIdentifier ? (
-                                                <ProjectImage
-                                                    src={thumbIdentifier}
-                                                    blurhash={asset.blurhash}
-                                                    sizes={asset.sizes}
-                                                    alt={asset.name}
-                                                    className="aspect-square w-full [--checker-size:10px]"
-                                                    imgClassName="object-cover"
-                                                />
-                                            ) : (
-                                                <div className="flex aspect-square items-center justify-center bg-muted">
-                                                    <ImageIcon
-                                                        size={24}
-                                                        className="text-muted-foreground"
-                                                    />
-                                                </div>
-                                            )}
-                                            <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                                <span className="block truncate text-[10px] text-white">
-                                                    {asset.name}
+                                const cardContent = (
+                                    <>
+                                        {isFont ? (
+                                            <div className="flex aspect-square flex-col items-center justify-center gap-1 bg-muted text-muted-foreground [--checker-size:10px]">
+                                                <span className="rounded bg-background px-1.5 py-0.5 text-[9px] font-semibold tracking-wide">
+                                                    WOFF2
+                                                </span>
+                                                <span className="max-w-[90%] truncate text-[10px]">
+                                                    {asset.name.replace(/\.woff2$/i, '')}
                                                 </span>
                                             </div>
+                                        ) : thumbIdentifier ? (
+                                            <ProjectImage
+                                                src={thumbIdentifier}
+                                                blurhash={asset.blurhash}
+                                                sizes={asset.sizes}
+                                                alt={asset.name}
+                                                className="aspect-square w-full [--checker-size:10px]"
+                                                imgClassName="object-cover"
+                                            />
+                                        ) : (
+                                            <div className="flex aspect-square items-center justify-center bg-muted">
+                                                <ImageIcon
+                                                    size={24}
+                                                    className="text-muted-foreground"
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                            <span className="block truncate text-[10px] text-white">
+                                                {asset.name}
+                                            </span>
+                                        </div>
+                                        {isPicker ? (
+                                            isSelected ? (
+                                                <span className="absolute top-0.5 right-0.5 rounded-full bg-primary p-1 text-primary-foreground">
+                                                    <CheckIcon size={11} />
+                                                </span>
+                                            ) : null
+                                        ) : (
                                             <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                                                 {!isFont ? (
                                                     <button
@@ -381,89 +262,82 @@ export function AssetLibrary({
                                                     <TrashIcon size={12} />
                                                 </button>
                                             </div>
-                                        </>
-                                    );
+                                        )}
+                                    </>
+                                );
 
-                                    if (isFont) {
-                                        return (
-                                            <div
-                                                key={asset._id}
-                                                className="bg-checkerboard group relative max-w-25 cursor-default overflow-hidden rounded-md border border-border bg-background opacity-90"
-                                                title={asset.name}
-                                            >
-                                                {cardContent}
-                                            </div>
-                                        );
-                                    }
-
+                                if (isFont) {
                                     return (
-                                        <button
+                                        <div
                                             key={asset._id}
-                                            onClick={() =>
-                                                addAssetAsLayer({
-                                                    ...asset,
-                                                    url: asset.url ? `/api/assets/${asset.url}` : ''
-                                                })
-                                            }
-                                            className="bg-checkerboard group relative max-w-25 cursor-pointer overflow-hidden rounded-md border border-border bg-background transition-colors hover:border-primary"
+                                            className="bg-checkerboard group relative max-w-25 cursor-default overflow-hidden rounded-md border border-border bg-background opacity-90"
                                             title={asset.name}
                                         >
                                             {cardContent}
-                                        </button>
+                                        </div>
                                     );
-                                })}
-                            </div>
-                        </>
-                    )}
-                </div>
-            )}
-
-            <AssetPreviewPortal preview={preview} onClose={() => setPreview(null)} />
-
-            <Dialog
-                open={deleteTarget !== null}
-                onOpenChange={(open) => {
-                    if (!open) setDeleteTarget(null);
-                }}
-            >
-                <DialogContent className="w-80 p-5">
-                    <DialogTitle>Delete asset</DialogTitle>
-                    <DialogDescription className="mt-1">
-                        {deleteTarget?.inUse ? (
-                            <>
-                                <strong>{deleteTarget.name}</strong> is currently used in a layer on
-                                this slide. The layer will be removed. Are you sure?
-                            </>
-                        ) : (
-                            <>
-                                Are you sure you want to delete{' '}
-                                <strong>{deleteTarget?.name}</strong>?
-                            </>
-                        )}
-                    </DialogDescription>
-                    <div className="mt-4 flex justify-end gap-2">
-                        <DialogClose>
-                            <Button variant="outline" size="sm">
-                                Cancel
-                            </Button>
-                        </DialogClose>
-                        <Button
-                            variant="destructive"
-                            size="sm"
-                            disabled={deleteAssetMutation.isPending}
-                            onClick={() => {
-                                if (deleteTarget) {
-                                    deleteAssetMutation.mutate({
-                                        data: { id: deleteTarget.id }
-                                    });
                                 }
-                            }}
-                        >
-                            {deleteAssetMutation.isPending ? 'Deleting...' : 'Delete'}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+
+                                return (
+                                    <button
+                                        key={asset._id}
+                                        onClick={() => {
+                                            onSelectAsset?.(asset);
+                                        }}
+                                        className={`bg-checkerboard group relative max-w-25 cursor-pointer overflow-hidden rounded-md border bg-background transition-colors hover:border-primary ${
+                                            isSelected
+                                                ? 'border-primary ring-2 ring-primary/40'
+                                                : 'border-border'
+                                        }`}
+                                        title={asset.name}
+                                    >
+                                        {cardContent}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {!isPicker ? (
+                <AssetPreviewPortal preview={preview} onClose={() => setPreview(null)} />
+            ) : null}
+
+            {!isPicker ? (
+                <Dialog
+                    open={deleteTarget !== null}
+                    onOpenChange={(open) => {
+                        if (!open) setDeleteTarget(null);
+                    }}
+                >
+                    <DialogContent className="w-80 p-5">
+                        <DialogTitle>Delete asset</DialogTitle>
+                        <DialogDescription className="mt-1">
+                            Are you sure you want to delete <strong>{deleteTarget?.name}</strong>?
+                        </DialogDescription>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <DialogClose>
+                                <Button variant="outline" size="sm">
+                                    Cancel
+                                </Button>
+                            </DialogClose>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={deleteAssetMutation.isPending}
+                                onClick={() => {
+                                    if (deleteTarget) {
+                                        deleteAssetMutation.mutate(deleteTarget.asset);
+                                    }
+                                }}
+                            >
+                                {deleteAssetMutation.isPending ? 'Deleting...' : 'Delete'}
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            ) : null}
         </div>
     );
 }

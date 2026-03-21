@@ -1,18 +1,27 @@
-import { TrashIcon, UploadIcon } from '@phosphor-icons/react';
+import { ImageIcon, TrashIcon } from '@phosphor-icons/react';
 import type { CreateProjectInput } from '@repo/db/schema';
 import { Button } from '@repo/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components/card';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogTitle
+} from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { TagInput } from '@repo/ui/components/tag-input';
 import { Textarea } from '@repo/ui/components/textarea';
 import { useForm } from '@tanstack/react-form';
-import Uppy from '@uppy/core';
-import Tus from '@uppy/tus';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
+import { AssetLibrary } from '~/components/AssetLibrary';
+import { ProjectImage } from '~/components/ProjectImage';
+
 interface ProjectFormProps {
+    projectId?: string;
     defaultValues?: Partial<CreateProjectInput>;
     onSubmit: (data: CreateProjectInput) => void;
     isSubmitting?: boolean;
@@ -22,6 +31,7 @@ interface ProjectFormProps {
 }
 
 export function ProjectForm({
+    projectId,
     defaultValues,
     onSubmit,
     isSubmitting,
@@ -29,8 +39,8 @@ export function ProjectForm({
     autoSave = false,
     autoSaveDelayMs = 1200
 }: ProjectFormProps) {
-    const [uploading, setUploading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+    const [heroSelectionDraft, setHeroSelectionDraft] = useState<string[] | null>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastSubmittedSignatureRef = useRef('');
 
@@ -80,10 +90,7 @@ export function ProjectForm({
         if (!autoSave) return;
         flushAutoSave();
         autoSaveTimerRef.current = setTimeout(() => {
-            if (isSubmitting) {
-                scheduleAutoSave();
-                return;
-            }
+            if (isSubmitting) return;
             submitNow();
         }, autoSaveDelayMs);
     }, [autoSave, autoSaveDelayMs, flushAutoSave, isSubmitting, submitNow]);
@@ -98,37 +105,10 @@ export function ProjectForm({
         };
     }, [flushAutoSave]);
 
-    const handleUpload = useCallback(
-        async (files: FileList) => {
-            setUploading(true);
-            const uppy = new Uppy({ restrictions: { allowedFileTypes: ['image/*'] } }).use(Tus, {
-                endpoint: '/api/uploads/',
-                chunkSize: 5 * 1024 * 1024
-            });
-
-            const newUrls: string[] = [];
-            for (const file of Array.from(files)) {
-                uppy.addFile({ name: file.name, type: file.type, data: file });
-            }
-
-            uppy.on('upload-success', (_file, response) => {
-                if (response.uploadURL) {
-                    newUrls.push(response.uploadURL);
-                }
-            });
-
-            try {
-                await uppy.upload();
-                form.setFieldValue('heroImages', [...form.getFieldValue('heroImages'), ...newUrls]);
-                scheduleAutoSave();
-            } catch {
-                // errors handled by uppy events
-            } finally {
-                setUploading(false);
-                uppy.destroy();
-            }
-        },
-        [form, scheduleAutoSave]
+    const normalizeHero = useCallback((value: string) => value.replace(/^\/api\/assets\//, ''), []);
+    const getNormalizedHeroSelection = useCallback(
+        () => form.getFieldValue('heroImages').map(normalizeHero),
+        [form, normalizeHero]
     );
 
     const removeImage = (index: number) => {
@@ -136,6 +116,16 @@ export function ProjectForm({
             'heroImages',
             form.getFieldValue('heroImages').filter((_, i) => i !== index)
         );
+        scheduleAutoSave();
+    };
+
+    const toggleHeroImage = (assetUrl: string) => {
+        const normalized = normalizeHero(assetUrl);
+        const current = heroSelectionDraft ?? getNormalizedHeroSelection();
+        const exists = current.includes(normalized);
+        const next = exists ? current.filter((u) => u !== normalized) : [...current, normalized];
+        setHeroSelectionDraft(next);
+        form.setFieldValue('heroImages', next);
         scheduleAutoSave();
     };
 
@@ -149,135 +139,127 @@ export function ProjectForm({
             }}
             className="flex flex-col gap-6"
         >
-            <div className="grid gap-4">
-                <form.Field
-                    name="name"
-                    validators={{
-                        onChange: z.string().min(1, 'Project name is required.')
-                    }}
-                >
-                    {(field) => (
-                        <div className="grid gap-2">
-                            <Label htmlFor={field.name}>Project name *</Label>
-                            <Input
-                                id={field.name}
-                                value={field.state.value}
-                                onBlur={field.handleBlur}
-                                onChange={(e) => {
-                                    field.handleChange(e.target.value);
-                                    scheduleAutoSave();
-                                }}
-                                placeholder="My Video Wall Project"
-                            />
-                            {field.state.meta.errors ? (
-                                <em className="text-xs text-red-500">
-                                    {field.state.meta.errors.map((e) => e?.message).join(', ')}
-                                </em>
-                            ) : null}
-                        </div>
-                    )}
-                </form.Field>
-
-                <form.Field
-                    name="authorOrganisation"
-                    validators={{
-                        onChange: z.string().min(1, 'Author/Organisation is required.')
-                    }}
-                >
-                    {(field) => (
-                        <div className="grid gap-2">
-                            <Label htmlFor={field.name}>Author / Organisation *</Label>
-                            <Input
-                                id={field.name}
-                                value={field.state.value}
-                                onBlur={field.handleBlur}
-                                onChange={(e) => {
-                                    field.handleChange(e.target.value);
-                                    scheduleAutoSave();
-                                }}
-                                placeholder="Dept. of Physics"
-                            />
-                            {field.state.meta.errors ? (
-                                <em className="text-xs text-red-500">
-                                    {field.state.meta.errors.map((e) => e?.message).join(', ')}
-                                </em>
-                            ) : null}
-                        </div>
-                    )}
-                </form.Field>
-
-                <form.Field name="description">
-                    {(field) => (
-                        <div className="grid gap-2">
-                            <Label htmlFor={field.name}>Description</Label>
-                            <Textarea
-                                id={field.name}
-                                value={field.state.value}
-                                onBlur={field.handleBlur}
-                                onChange={(e) => {
-                                    field.handleChange(e.target.value);
-                                    scheduleAutoSave();
-                                }}
-                                placeholder="Describe your project..."
-                                rows={4}
-                            />
-                        </div>
-                    )}
-                </form.Field>
-
-                <form.Field name="tags">
-                    {(field) => (
-                        <div className="grid gap-2">
-                            <Label htmlFor={field.name}>Tags</Label>
-                            <TagInput
-                                value={field.state.value}
-                                onValueChange={(next) => {
-                                    field.handleChange(next);
-                                    scheduleAutoSave();
-                                }}
-                                placeholder="Type a tag and press Enter"
-                            />
-                        </div>
-                    )}
-                </form.Field>
-            </div>
-
-            <Card size="sm">
-                <CardHeader>
-                    <CardTitle>Hero Images</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                            if (e.target.files?.length) {
-                                handleUpload(e.target.files);
-                            }
+            <div className="grid gap-6 lg:grid-cols-12">
+                <div className="grid gap-4 lg:col-span-8">
+                    <form.Field
+                        name="name"
+                        validators={{
+                            onChange: z.string().min(1, 'Project name is required.')
                         }}
-                    />
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
                     >
-                        <UploadIcon />
-                        {uploading ? 'Uploading...' : 'Upload images'}
-                    </Button>
+                        {(field) => (
+                            <div className="grid gap-2">
+                                <Label htmlFor={field.name}>Name *</Label>
+                                <Input
+                                    id={field.name}
+                                    value={field.state.value}
+                                    onBlur={field.handleBlur}
+                                    onChange={(e) => {
+                                        field.handleChange(e.target.value);
+                                        scheduleAutoSave();
+                                    }}
+                                    placeholder="My Video Wall Project"
+                                />
+                                {field.state.meta.errors ? (
+                                    <em className="text-xs text-red-500">
+                                        {field.state.meta.errors.map((e) => e?.message).join(', ')}
+                                    </em>
+                                ) : null}
+                            </div>
+                        )}
+                    </form.Field>
+
+                    <form.Field
+                        name="authorOrganisation"
+                        validators={{
+                            onChange: z.string().min(1, 'Author/Organisation is required.')
+                        }}
+                    >
+                        {(field) => (
+                            <div className="grid gap-2">
+                                <Label htmlFor={field.name}>Author / Organisation *</Label>
+                                <Input
+                                    id={field.name}
+                                    value={field.state.value}
+                                    onBlur={field.handleBlur}
+                                    onChange={(e) => {
+                                        field.handleChange(e.target.value);
+                                        scheduleAutoSave();
+                                    }}
+                                    placeholder="Dept. of Physics"
+                                />
+                                {field.state.meta.errors ? (
+                                    <em className="text-xs text-red-500">
+                                        {field.state.meta.errors.map((e) => e?.message).join(', ')}
+                                    </em>
+                                ) : null}
+                            </div>
+                        )}
+                    </form.Field>
+
+                    <form.Field name="description">
+                        {(field) => (
+                            <div className="grid gap-2">
+                                <Label htmlFor={field.name}>Description</Label>
+                                <Textarea
+                                    id={field.name}
+                                    value={field.state.value}
+                                    onBlur={field.handleBlur}
+                                    onChange={(e) => {
+                                        field.handleChange(e.target.value);
+                                        scheduleAutoSave();
+                                    }}
+                                    placeholder="Describe your project..."
+                                    rows={4}
+                                />
+                            </div>
+                        )}
+                    </form.Field>
+
+                    <form.Field name="tags">
+                        {(field) => (
+                            <div className="grid gap-2">
+                                <Label htmlFor={field.name}>Tags</Label>
+                                <TagInput
+                                    value={field.state.value}
+                                    onValueChange={(next) => {
+                                        field.handleChange(next);
+                                        scheduleAutoSave();
+                                    }}
+                                    placeholder="Type a tag and press Enter"
+                                />
+                            </div>
+                        )}
+                    </form.Field>
+                </div>
+
+                <div className="flex flex-col gap-4 lg:col-span-4">
+                    <div className="flex flex-col justify-between gap-4">
+                        <Label>Hero Images</Label>
+                        <div className="flex items-center justify-between gap-4">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setAssetPickerOpen(true)}
+                                disabled={!projectId}
+                            >
+                                <ImageIcon />
+                                Choose from library
+                            </Button>
+                        </div>
+                    </div>
                     <form.Field name="heroImages">
                         {(field) =>
                             field.state.value.length > 0 && (
                                 <div className="mt-3 grid grid-cols-3 gap-2">
                                     {field.state.value.map((url, i) => (
                                         <div key={url} className="group relative">
-                                            <img
+                                            <ProjectImage
                                                 src={url}
                                                 alt={`Hero ${i + 1}`}
-                                                className="h-24 w-full rounded-lg object-cover"
+                                                className="h-24 w-full rounded-lg"
+                                                imgClassName="object-cover"
                                             />
                                             <button
                                                 type="button"
@@ -292,10 +274,55 @@ export function ProjectForm({
                             )
                         }
                     </form.Field>
-                </CardContent>
-            </Card>
+                    {!projectId ? (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                            Save the project first to access its asset library.
+                        </p>
+                    ) : null}
+                </div>
+            </div>
 
-            <div className="flex justify-end">
+            <Dialog
+                open={assetPickerOpen}
+                onOpenChange={(nextOpen) => {
+                    setAssetPickerOpen(nextOpen);
+                    if (nextOpen) setHeroSelectionDraft(getNormalizedHeroSelection());
+                    else setHeroSelectionDraft(null);
+                }}
+            >
+                <DialogContent className="max-w-5xl overflow-hidden p-0">
+                    <div className="border-b border-border px-5 py-4">
+                        <DialogTitle>Select Hero Images</DialogTitle>
+                        <DialogDescription className="mt-1">
+                            Click images to add or remove them from the Hero Images list.
+                        </DialogDescription>
+                    </div>
+                    <div className="bg-muted/20 px-5 py-4">
+                        {projectId ? (
+                            <div className="h-[68vh] max-h-[68vh] overflow-hidden rounded-2xl border border-border bg-background">
+                                <AssetLibrary
+                                    projectId={projectId}
+                                    mode="picker"
+                                    pickerFilter="image"
+                                    selectedAssetUrls={
+                                        heroSelectionDraft ?? getNormalizedHeroSelection()
+                                    }
+                                    onSelectAsset={(asset) => toggleHeroImage(asset.url)}
+                                />
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                Save the project first to access its asset library.
+                            </p>
+                        )}
+                    </div>
+                    <div className="flex justify-end border-t border-border px-5 py-3">
+                        <DialogClose render={<Button type="button">Done</Button>} />
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <div className="flex justify-start">
                 <Button type="submit" disabled={isSubmitting || !form.state.isValid}>
                     {isSubmitting ? 'Saving...' : submitLabel}
                 </Button>

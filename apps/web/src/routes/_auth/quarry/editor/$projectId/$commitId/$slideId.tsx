@@ -7,7 +7,7 @@ import { createFileRoute, useParams } from '@tanstack/react-router';
 import { useCallback, useEffect, useState } from 'react';
 import { usePanelRef } from 'react-resizable-panels';
 
-import { AssetLibrary } from '~/components/AssetLibrary';
+import { AssetLibraryPanel } from '~/components/AssetLibraryPanel';
 import { LayerList } from '~/components/LayerList';
 import { MainBoard } from '~/components/MainBoard';
 import { ParametersPanel } from '~/components/ParametersPanel';
@@ -139,7 +139,7 @@ function SlideEditor() {
                         panelRef={mediaPanelRef}
                         onResize={({ inPixels }) => setMediaCollapsed(inPixels <= titleBarSize)}
                     >
-                        <AssetLibrary
+                        <AssetLibraryPanel
                             projectId={projectId}
                             titleBarSize={titleBarSize}
                             collapsed={mediaCollapsed}
