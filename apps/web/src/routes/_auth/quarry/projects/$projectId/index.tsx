@@ -19,7 +19,6 @@ function InfoTab() {
         mutationFn: (data: Parameters<typeof $updateProject>[0]['data']) =>
             $updateProject({ data }),
         onSuccess: () => {
-            toast.success('Project updated');
             queryClient.invalidateQueries({ queryKey: ['projects'] });
         },
         onError: (e) => toast.error(e.message)
@@ -38,6 +37,8 @@ function InfoTab() {
             onSubmit={(data) => mutation.mutate({ ...data, _id: projectId })}
             isSubmitting={mutation.isPending}
             submitLabel="Save changes"
+            autoSave
+            autoSaveDelayMs={1200}
         />
     );
 }
