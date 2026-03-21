@@ -66,6 +66,7 @@
             "class-variance-authority": "^0.7.1",
             "clsx": "^2.1.1",
             "date-fns": "^4.1.0",
+            "embla-carousel-react": "^v9.0.0-rc01",
             "eslint-plugin-react-hooks": "^7.0.1",
             "eslint-plugin-turbo": "^2.8.20",
             "happy-dom": "^20.8.4",
