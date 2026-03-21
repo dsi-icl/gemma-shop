@@ -27,6 +27,9 @@ const RoyGraphServerFrameSchema = z.object({
 export type RoyGraphServerFrame = z.infer<typeof RoyGraphServerFrameSchema>;
 
 function getCameraFromURL() {
+    if (typeof window === 'undefined') {
+        return { cx: 50, cy: 500, zoom: 0.2 };
+    }
     const params = new URLSearchParams(window.location.search);
 
     const cx = Number(params.get('cx'));

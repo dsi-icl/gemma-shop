@@ -20,18 +20,21 @@ export const Route = createFileRoute('/wall/')({
 
 function WallApp() {
     const [layers, setLayers] = useState<LayerWithWallComponentState[]>([]);
+    const isClient = typeof window !== 'undefined';
     const wallId = useMemo(() => {
+        if (!isClient) return null;
         const params = new URLSearchParams(window.location.search);
         return params.get('w');
-    }, []);
+    }, [isClient]);
 
     const myViewport = useMemo<Viewport>(() => {
+        if (!isClient) return { x: 0, y: 0, w: SCREEN_W, h: SCREEN_H };
         const params = new URLSearchParams(window.location.search);
         const col = parseInt(params.get('c') || '0');
         const row = parseInt(params.get('r') || '0');
 
         return { x: col * SCREEN_W, y: row * SCREEN_H, w: SCREEN_W, h: SCREEN_H };
-    }, []);
+    }, [isClient]);
 
     // Initialize Engine with this screen's specific physical location
     const engine = useMemo(
@@ -122,7 +125,7 @@ function WallApp() {
         };
     }, [engine, myViewport]);
 
-    if (!engine) return;
+    if (!engine) return null;
 
     const stage = layers
         .filter((layer) => layer.config.visible)

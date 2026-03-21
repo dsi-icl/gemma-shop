@@ -1,13 +1,17 @@
 let socket: WebSocket | null = null;
 
-const WEBSOCKET_ROY_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/roy`;
+const getRoyBusUrl = (): string => {
+    if (typeof window === 'undefined') return 'ws://localhost:3670/roy';
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    return `${protocol}://${window.location.host}/roy`;
+};
 
 export function getWS(): WebSocket {
     if (socket) {
         return socket;
     }
 
-    socket = new WebSocket(WEBSOCKET_ROY_BUS);
+    socket = new WebSocket(getRoyBusUrl());
     socket.binaryType = 'arraybuffer';
 
     socket.onopen = () => {

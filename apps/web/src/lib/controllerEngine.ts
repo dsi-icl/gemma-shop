@@ -3,7 +3,11 @@
 import { ReconnectingWebSocket } from './reconnectingWs';
 import { GSMessageSchema, type GSMessage } from './types';
 
-const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
+const getGemmaBusUrl = (): string => {
+    if (typeof window === 'undefined') return 'ws://localhost:3670/bus';
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    return `${protocol}://${window.location.host}/bus`;
+};
 
 type BindingStatus = {
     bound: boolean;
@@ -25,7 +29,7 @@ export class ControllerEngine {
 
     private constructor(wallId: string) {
         this.wallId = wallId;
-        this.rws = new ReconnectingWebSocket(WEBSOCKET_GEMMA_BUS, {
+        this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
             binaryType: 'arraybuffer',
             onOpen: () => {
                 console.log('Controller Engine: Connected to Server');
@@ -69,6 +73,9 @@ export class ControllerEngine {
     }
 
     public static getInstance(wallId: string): ControllerEngine {
+        if (typeof window === 'undefined') {
+            throw new Error('ControllerEngine can only be used in the browser');
+        }
         if (!window.__CONTROLLER_ENGINE__ || window.__CONTROLLER_ENGINE__.wallId !== wallId) {
             window.__CONTROLLER_ENGINE__?.destroy();
             window.__CONTROLLER_ENGINE__ = new ControllerEngine(wallId);

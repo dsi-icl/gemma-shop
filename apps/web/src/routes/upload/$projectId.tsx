@@ -26,7 +26,10 @@ interface FileProgress {
 
 function MobileUpload() {
     const { projectId } = Route.useParams();
-    const token = new URLSearchParams(window.location.search).get('token');
+    const token =
+        typeof window === 'undefined'
+            ? null
+            : new URLSearchParams(window.location.search).get('token');
 
     const [validating, setValidating] = useState(true);
     const [valid, setValid] = useState(false);

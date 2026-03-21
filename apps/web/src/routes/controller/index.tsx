@@ -26,10 +26,12 @@ interface SlideEntry {
 }
 
 function ControllerApp() {
+    const isClient = typeof window !== 'undefined';
     const wallId = useMemo(() => {
+        if (!isClient) return null;
         const params = new URLSearchParams(window.location.search);
         return params.get('w');
-    }, []);
+    }, [isClient]);
 
     const engine = useMemo(() => (wallId ? ControllerEngine.getInstance(wallId) : null), [wallId]);
 
@@ -175,6 +177,6 @@ function ControllerApp() {
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        window.__CONTROLLER_RELOADING__ = true;
+        if (typeof window !== 'undefined') window.__CONTROLLER_RELOADING__ = true;
     });
 }

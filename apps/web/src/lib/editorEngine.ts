@@ -5,7 +5,11 @@ import { throttle } from '@tanstack/pacer';
 import { type ConnectionStatus, ReconnectingWebSocket } from './reconnectingWs';
 import { GSMessageSchema, type GSMessage, type Layer } from './types';
 
-const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
+const getGemmaBusUrl = (): string => {
+    if (typeof window === 'undefined') return 'ws://localhost:3670/bus';
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    return `${protocol}://${window.location.host}/bus`;
+};
 
 type SaveResponseCallback = (data: Extract<GSMessage, { type: 'stage_save_response' }>) => void;
 type ServerMessageCallback = (data: GSMessage) => void;
@@ -44,7 +48,7 @@ export class EditorEngine {
     private currentSlideId: string | null = null;
 
     private constructor() {
-        this.rws = new ReconnectingWebSocket(WEBSOCKET_GEMMA_BUS, {
+        this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
             binaryType: 'arraybuffer',
             onOpen: () => {
                 console.log('Editor Engine: Connected to Server');
@@ -150,6 +154,9 @@ export class EditorEngine {
     }
 
     public static getInstance(): EditorEngine {
+        if (typeof window === 'undefined') {
+            throw new Error('EditorEngine can only be used in the browser');
+        }
         if (!window.__EDITOR_ENGINE__) {
             window.__EDITOR_ENGINE__ = new EditorEngine();
         }

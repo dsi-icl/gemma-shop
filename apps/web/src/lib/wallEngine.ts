@@ -8,7 +8,11 @@ import {
     type LayerWithWallEngineState
 } from './types';
 
-const WEBSOCKET_GEMMA_BUS = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bus`;
+const getGemmaBusUrl = (): string => {
+    if (typeof window === 'undefined') return 'ws://localhost:3670/bus';
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    return `${protocol}://${window.location.host}/bus`;
+};
 const LAYER_ANIMATION_DURATION = 100;
 
 export interface Viewport {
@@ -39,7 +43,7 @@ export class WallEngine {
         this.wallId = wallId;
         this.viewport = viewport;
 
-        this.rws = new ReconnectingWebSocket(WEBSOCKET_GEMMA_BUS, {
+        this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
             binaryType: 'arraybuffer',
             onOpen: () => {
                 console.log('Wall Engine: Connected to Master Server');
@@ -84,6 +88,9 @@ export class WallEngine {
 
     // --- SINGLETON ACCESSOR ---
     public static getInstance(wallId: string, viewport?: Viewport): WallEngine {
+        if (typeof window === 'undefined') {
+            throw new Error('WallEngine can only be used in the browser');
+        }
         // Escape Vite's module scope by anchoring the Singleton to the Window
         if (!window.__WALL_ENGINE__) {
             if (!viewport) throw new Error('Viewport must be provided on first initialization');
