@@ -20,6 +20,42 @@ const auditLogs = db.collection('audit_logs');
 const assets = db.collection('assets');
 const commits = db.collection('commits');
 
+function serializeForClient<T>(value: T): T {
+    if (value instanceof ObjectId) {
+        return value.toHexString() as T;
+    }
+    if (value instanceof Date) {
+        return value.toISOString() as T;
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => serializeForClient(item)) as T;
+    }
+    if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            out[k] = serializeForClient(v);
+        }
+        return out as T;
+    }
+    return value;
+}
+
+function idToString(value: unknown): string {
+    if (value instanceof ObjectId) return value.toHexString();
+    if (typeof value === 'string') return value;
+    if (value === null || value === undefined) return '';
+    return JSON.stringify(value);
+}
+
+function scalarToString(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+        return `${value}`;
+    }
+    if (value === null || value === undefined) return '';
+    return JSON.stringify(value);
+}
+
 export async function listProjects(userEmail: string, includeArchived = false) {
     const filter: Record<string, unknown> = {
         $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }]
@@ -407,7 +443,9 @@ export async function getAuditLogs(projectId: string): Promise<SerializedAuditLo
         projectId: d.projectId.toString(),
         actorId: String(d.actorId ?? ''),
         action: String(d.action ?? ''),
-        changes: (d.changes as SerializedAuditLog['changes']) ?? null,
+        changes:
+            (d.changes ? (serializeForClient(d.changes) as SerializedAuditLog['changes']) : null) ??
+            null,
         createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt)
     }));
 }
@@ -589,30 +627,30 @@ function assertCanEdit(doc: Record<string, unknown>, userEmail: string) {
 }
 
 function serializeAsset(doc: Record<string, unknown>): Asset {
-    return {
+    return serializeForClient({
         ...doc,
-        _id: doc._id!.toString(),
-        projectId: doc.projectId!.toString()
-    } as Asset;
+        _id: idToString(doc._id),
+        projectId: idToString(doc.projectId)
+    } as Asset);
 }
 
 function serializeProject(doc: Record<string, unknown>): Project {
-    return {
+    return serializeForClient({
         ...doc,
-        _id: doc._id!.toString(),
-        headCommitId: doc.headCommitId?.toString() ?? null,
-        publishedCommitId: doc.publishedCommitId?.toString() ?? null
-    } as Project;
+        _id: idToString(doc._id),
+        headCommitId: doc.headCommitId ? idToString(doc.headCommitId) : null,
+        publishedCommitId: doc.publishedCommitId ? idToString(doc.publishedCommitId) : null
+    } as Project);
 }
 
 function serializeCommit(doc: Record<string, unknown>): SerializedCommitWithContent {
     const content = doc.content as SerializedCommitWithContent['content'];
-    return {
-        _id: doc._id!.toString(),
-        projectId: doc.projectId!.toString(),
-        parentId: doc.parentId?.toString() ?? null,
-        authorId: doc.authorId?.toString() ?? null,
-        message: String(doc.message ?? ''),
+    return serializeForClient({
+        _id: idToString(doc._id),
+        projectId: idToString(doc.projectId),
+        parentId: doc.parentId ? idToString(doc.parentId) : null,
+        authorId: doc.authorId ? idToString(doc.authorId) : null,
+        message: scalarToString(doc.message),
         isMutableHead: Boolean(doc.isMutableHead),
         isAutoSave: Boolean(doc.isAutoSave),
         firstSlideId: content?.slides?.[0]?.id ?? null,
@@ -621,5 +659,5 @@ function serializeCommit(doc: Record<string, unknown>): SerializedCommitWithCont
         updatedAt:
             doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : String(doc.updatedAt),
         content
-    };
+    });
 }

@@ -1,3 +1,5 @@
+import { db } from '@repo/db';
+import { ObjectId } from 'mongodb';
 import { defineWebSocketHandler } from 'nitro/h3';
 
 import {
@@ -46,6 +48,8 @@ import {
     notifyControllersByCommit,
     broadcastAssetToEditorsByProject,
     getWallNodeCount,
+    markIncomingBinary,
+    markIncomingJson,
     // layerNodes,
     // canSendNonCritical,
     EMPTY_HYDRATE,
@@ -102,6 +106,55 @@ function broadcastWallNodeCountToEditors(wallId: string) {
     for (const entry of allEditors) {
         entry.peer.send(payload);
     }
+}
+
+function syncWallNodeCountToDb(wallId: string) {
+    const connectedNodes = getWallNodeCount(wallId);
+    const hasLiveBinding = wallBindings.has(wallId);
+    void db.collection('walls').updateOne(
+        { wallId },
+        {
+            $set: {
+                connectedNodes,
+                lastSeen: new Date().toISOString(),
+                ...(!hasLiveBinding
+                    ? {
+                          boundProjectId: null,
+                          boundCommitId: null,
+                          boundSlideId: null
+                      }
+                    : {})
+            },
+            $setOnInsert: {
+                wallId,
+                name: wallId,
+                createdAt: new Date().toISOString()
+            }
+        },
+        { upsert: true }
+    );
+}
+
+async function resolveBoundSlideId(
+    projectId: string,
+    commitId: string,
+    requestedSlideId: string
+): Promise<string | null> {
+    let commit: any = null;
+    try {
+        commit = await db
+            .collection('commits')
+            .findOne(
+                { _id: new ObjectId(commitId), projectId: new ObjectId(projectId) },
+                { projection: { 'content.slides.id': 1 } }
+            );
+    } catch {
+        return null;
+    }
+    if (!commit) return null;
+    const slides = (commit.content?.slides as Array<{ id?: string }>) ?? [];
+    if (slides.some((s) => s.id === requestedSlideId)) return requestedSlideId;
+    return slides[0]?.id ?? null;
 }
 
 function broadcastWallBindingToEditors(wallId: string) {
@@ -277,33 +330,78 @@ handlers.set('stage_save', ({ entry, data, scopeId }) => {
 });
 
 handlers.set('bind_wall', ({ data }) => {
-    const scopeId = internScope(data.projectId, data.commitId, data.slideId);
-    const scope = getOrCreateScope(scopeId, data.projectId, data.commitId, data.slideId);
-    bindWall(data.wallId, scopeId);
+    void (async () => {
+        const resolvedSlideId = await resolveBoundSlideId(
+            data.projectId,
+            data.commitId,
+            data.slideId
+        );
+        if (!resolvedSlideId) {
+            console.warn(
+                `[WS] Refusing bind_wall for ${data.wallId}: no valid slide for ${makeScopeLabel(data.projectId, data.commitId, data.slideId)}`
+            );
+            return;
+        }
 
-    const finish = () => {
-        hydrateWallNodes(data.wallId);
-        notifyControllers(data.wallId, true, data.projectId, data.commitId, data.slideId);
-    };
+        const scopeId = internScope(data.projectId, data.commitId, resolvedSlideId);
+        const scope = getOrCreateScope(scopeId, data.projectId, data.commitId, resolvedSlideId);
+        bindWall(data.wallId, scopeId);
 
-    if (scope.layers.size === 0) {
-        // Fresh scope — auto-seed from DB before hydrating walls
-        seedScopeFromDb(scopeId).then(finish);
-    } else {
-        finish();
-    }
-    broadcastWallBindingToEditors(data.wallId);
-    broadcastWallNodeCountToEditors(data.wallId);
+        const finish = () => {
+            hydrateWallNodes(data.wallId);
+            notifyControllers(data.wallId, true, data.projectId, data.commitId, resolvedSlideId);
+        };
 
-    console.log(
-        `[WS] Wall ${data.wallId} bound to scope=${makeScopeLabel(data.projectId, data.commitId, data.slideId)}`
-    );
+        if (scope.layers.size === 0) {
+            // Fresh scope — auto-seed from DB before hydrating walls
+            await seedScopeFromDb(scopeId);
+            finish();
+        } else {
+            finish();
+        }
+
+        await db.collection('walls').updateOne(
+            { wallId: data.wallId },
+            {
+                $set: {
+                    boundProjectId: data.projectId,
+                    boundCommitId: data.commitId,
+                    boundSlideId: resolvedSlideId,
+                    updatedAt: new Date().toISOString()
+                },
+                $setOnInsert: {
+                    wallId: data.wallId,
+                    name: data.wallId,
+                    createdAt: new Date().toISOString()
+                }
+            },
+            { upsert: true }
+        );
+
+        broadcastWallBindingToEditors(data.wallId);
+        broadcastWallNodeCountToEditors(data.wallId);
+
+        console.log(
+            `[WS] Wall ${data.wallId} bound to scope=${makeScopeLabel(data.projectId, data.commitId, resolvedSlideId)}`
+        );
+    })();
 });
 
 handlers.set('unbind_wall', ({ data }) => {
     unbindWall(data.wallId);
     hydrateWallNodes(data.wallId);
     notifyControllers(data.wallId, false);
+    void db.collection('walls').updateOne(
+        { wallId: data.wallId },
+        {
+            $set: {
+                boundProjectId: null,
+                boundCommitId: null,
+                boundSlideId: null,
+                updatedAt: new Date().toISOString()
+            }
+        }
+    );
     broadcastWallBindingToEditors(data.wallId);
     broadcastWallNodeCountToEditors(data.wallId);
     console.log(`[WS] Wall ${data.wallId} unbound`);
@@ -452,6 +550,7 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
         // if (boundScope !== undefined) recomputeAllLayerNodes(boundScope);
         broadcastWallNodeCountToEditors(parsed.wallId);
         broadcastWallBindingToEditors(parsed.wallId);
+        syncWallNodeCountToDb(parsed.wallId);
 
         console.log(
             `[WS] Wall joined wallId=${parsed.wallId} ` +
@@ -491,6 +590,7 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
 // ── Binary message handler ──────────────────────────────────────────────────
 
 function handleBinary(peer: import('crossws').Peer, rawData: ArrayBuffer) {
+    markIncomingBinary();
     const view = new DataView(rawData);
     const opcode = view.getUint8(0);
 
@@ -555,6 +655,7 @@ export default defineWebSocketHandler({
         if (meta?.specimen === 'wall') {
             broadcastWallNodeCountToEditors(meta.wallId);
             broadcastWallBindingToEditors(meta.wallId);
+            syncWallNodeCountToDb(meta.wallId);
         }
         logPeerCounts();
     },
@@ -572,6 +673,7 @@ export default defineWebSocketHandler({
 
             try {
                 const data = JSON.parse(rawText);
+                markIncomingJson();
 
                 if (!hasType(data)) {
                     console.warn(`[WS] Invalid message from peer ${peer.id}: missing type`);

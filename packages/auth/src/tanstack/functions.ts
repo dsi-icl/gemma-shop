@@ -3,9 +3,35 @@ import { getRequest, setResponseHeader } from '@tanstack/react-start/server';
 
 import { auth } from '../auth';
 
+function serializeForClient<T>(value: T): T {
+    if (value instanceof Date) {
+        return value.toISOString() as T;
+    }
+    if (
+        value &&
+        typeof value === 'object' &&
+        '_bsontype' in (value as Record<string, unknown>) &&
+        (value as Record<string, unknown>)._bsontype === 'ObjectId' &&
+        typeof (value as { toHexString?: unknown }).toHexString === 'function'
+    ) {
+        return (value as unknown as { toHexString: () => string }).toHexString() as T;
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => serializeForClient(item)) as T;
+    }
+    if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            out[k] = serializeForClient(v);
+        }
+        return out as T;
+    }
+    return value;
+}
+
 export const $getUser = createServerFn({ method: 'GET' }).handler(async () => {
     const user = await _getUser();
-    return user;
+    return serializeForClient(user);
 });
 
 interface GetUserServerQuery {

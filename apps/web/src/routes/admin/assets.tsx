@@ -1,138 +1,339 @@
-import { TrashIcon, UploadSimpleIcon } from '@phosphor-icons/react';
+import {
+    DownloadIcon,
+    EyeIcon,
+    ListIcon,
+    RowsIcon,
+    SquaresFourIcon,
+    TrashIcon
+} from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
 import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogTitle
-} from '@repo/ui/components/dialog';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow
+} from '@repo/ui/components/table';
+import { useLocalStorageValue } from '@repo/ui/hooks/use-localstorage-value';
+import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
+import { AssetPreviewPortal, downloadAsset, isVideoAsset } from '~/components/AssetPreviewOverlay';
 import { ProjectImage } from '~/components/ProjectImage';
 import { UploadDialog } from '~/components/UploadDialog';
-import { PUBLIC_ASSET_PROJECT_ID } from '~/lib/serverVariables';
-import { $adminDeletePublicAsset } from '~/server/admin.fns';
+import { PUBLIC_ASSET_PROJECT_ID } from '~/lib/constants';
+import { $adminDeletePublicAsset, $adminGetUploadToken } from '~/server/admin.fns';
 import { adminPublicAssetsQueryOptions } from '~/server/admin.queries';
+import { $revokeUploadToken } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/admin/assets')({
-    component: AdminAssets
+    component: AdminAssetsPage,
+    loader: ({ context }) => {
+        context.queryClient.ensureQueryData(adminPublicAssetsQueryOptions());
+    }
 });
 
-function AdminAssets() {
-    const { data: assets = [], isLoading } = useQuery(adminPublicAssetsQueryOptions());
-    const queryClient = useQueryClient();
-    const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+type View = 'list' | 'list-preview' | 'grid';
 
-    const deleteMutation = useMutation({
+function AdminAssetsSkeleton() {
+    return (
+        <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between">
+                <div>
+                    <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+                    <div className="mt-2 h-4 w-80 animate-pulse rounded bg-muted" />
+                </div>
+                <div className="h-9 w-36 animate-pulse rounded bg-muted" />
+            </div>
+            <div className="h-64 animate-pulse rounded-2xl border border-border bg-muted/30" />
+        </div>
+    );
+}
+
+function AdminAssetsTab() {
+    const { data: assets } = useSuspenseQuery({
+        ...adminPublicAssetsQueryOptions(),
+        refetchInterval: 5000
+    });
+    const queryClient = useQueryClient();
+    const [view, setView] = useLocalStorageValue<View>('assets-view', 'list');
+    const [hydrated] = useState(() => typeof window !== 'undefined');
+    const [preview, setPreview] = useState<{
+        src: string;
+        name: string;
+        isVideo: boolean;
+        blurhash?: string;
+        sizes?: number[];
+    } | null>(null);
+
+    const deleteAssetMutation = useMutation({
         mutationFn: (id: string) => $adminDeletePublicAsset({ data: { id } }),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['admin', 'public-assets'] });
+            queryClient.invalidateQueries({
+                queryKey: adminPublicAssetsQueryOptions().queryKey
+            });
             toast.success('Asset deleted');
-            setDeleteTarget(null);
         },
         onError: (e: any) => toast.error(e.message)
     });
 
-    const uploadTrigger = (
-        <button className="group relative flex aspect-square w-full max-w-25 cursor-pointer flex-col justify-center overflow-hidden rounded-md border border-border bg-background text-center align-middle transition-colors hover:border-primary">
-            <UploadSimpleIcon size={16} className="w-full" />
-            <span className="text-xs">Upload</span>
-        </button>
-    );
+    const handleUploadComplete = useCallback(() => {
+        queryClient.invalidateQueries({
+            queryKey: adminPublicAssetsQueryOptions().queryKey
+        });
+    }, [queryClient]);
+
+    const openPreview = (asset: {
+        url: string;
+        name: string;
+        mimeType?: string;
+        blurhash?: string;
+        sizes?: number[];
+    }) => {
+        const isVideo = isVideoAsset(asset);
+        setPreview({
+            src: `/api/assets/${asset.url}`,
+            name: asset.name,
+            isVideo,
+            blurhash: asset.blurhash,
+            sizes: asset.sizes
+        });
+    };
+
+    const handleDownload = (asset: { url: string; name: string }) => {
+        downloadAsset(`/api/assets/${asset.url}`, asset.name);
+    };
+
+    const uploadTrigger = <Button variant="outline">Upload media</Button>;
+
+    if (!hydrated) {
+        return <AdminAssetsSkeleton />;
+    }
 
     return (
-        <div>
-            <h1 className="mb-1 text-xl font-semibold">Public Assets</h1>
-            <p className="mb-4 text-sm text-muted-foreground">
-                Assets uploaded here are visible in every project's media library.
-            </p>
-            <div
-                className="grid gap-1.5"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}
-            >
-                <UploadDialog
-                    projectId={PUBLIC_ASSET_PROJECT_ID}
-                    trigger={uploadTrigger}
-                    onUploadComplete={() =>
-                        queryClient.invalidateQueries({ queryKey: ['admin', 'public-assets'] })
-                    }
-                />
-
-                {assets.map((asset: any) => {
-                    const isVideo =
-                        asset.mimeType?.startsWith('video/') ||
-                        /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name);
-                    const thumb = isVideo ? (asset.previewUrl ?? asset.url) : asset.url;
-                    return (
-                        <div
-                            key={asset._id}
-                            className="group relative max-w-25 overflow-hidden rounded-md border border-border bg-background"
-                            title={asset.name}
-                        >
-                            {thumb ? (
-                                <ProjectImage
-                                    src={thumb}
-                                    blurhash={asset.blurhash}
-                                    sizes={asset.sizes}
-                                    alt={asset.name}
-                                    className="aspect-square w-full"
-                                    imgClassName="object-cover"
-                                />
-                            ) : (
-                                <div className="flex aspect-square items-center justify-center bg-muted text-xs text-muted-foreground">
-                                    {asset.name}
-                                </div>
-                            )}
-                            <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                <span className="block truncate text-[10px] text-white">
-                                    {asset.name}
-                                </span>
-                            </div>
-                            <button
-                                onClick={() => setDeleteTarget({ id: asset._id, name: asset.name })}
-                                className="absolute top-0.5 right-0.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive"
-                                title="Delete"
-                            >
-                                <TrashIcon size={12} />
-                            </button>
-                        </div>
-                    );
-                })}
-            </div>
-            {isLoading && <div className="mt-4 text-sm text-muted-foreground">Loading...</div>}
-            <Dialog
-                open={deleteTarget !== null}
-                onOpenChange={(open) => {
-                    if (!open) setDeleteTarget(null);
-                }}
-            >
-                <DialogContent className="w-80 p-5">
-                    <DialogTitle>Delete public asset</DialogTitle>
-                    <DialogDescription className="mt-1">
-                        Delete <strong>{deleteTarget?.name}</strong>? This will remove it from all
-                        projects' libraries.
-                    </DialogDescription>
-                    <div className="mt-4 flex justify-end gap-2">
-                        <DialogClose>
-                            <Button variant="outline" size="sm">
-                                Cancel
-                            </Button>
-                        </DialogClose>
+        <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between">
+                <div>
+                    <h3 className="mb-1 text-base font-medium">Public Media Library</h3>
+                    <p className="text-sm text-muted-foreground">
+                        Assets uploaded here are visible in every project's media library.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 rounded-lg border p-1">
                         <Button
-                            variant="destructive"
-                            size="sm"
-                            disabled={deleteMutation.isPending}
-                            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+                            variant={view === 'list' ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setView('list')}
                         >
-                            {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                            <ListIcon />
+                        </Button>
+                        <Button
+                            variant={view === 'list-preview' ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setView('list-preview')}
+                        >
+                            <RowsIcon />
+                        </Button>
+                        <Button
+                            variant={view === 'grid' ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setView('grid')}
+                        >
+                            <SquaresFourIcon />
                         </Button>
                     </div>
-                </DialogContent>
-            </Dialog>
+                    <UploadDialog
+                        projectId={PUBLIC_ASSET_PROJECT_ID}
+                        trigger={uploadTrigger}
+                        createTokenFn={() => $adminGetUploadToken()}
+                        revokeTokenFn={(token) => $revokeUploadToken({ data: { token } })}
+                        onUploadComplete={handleUploadComplete}
+                    />
+                </div>
+            </div>
+
+            {assets.length === 0 && (
+                <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed text-muted-foreground">
+                    <p>No public assets yet</p>
+                    <UploadDialog
+                        projectId={PUBLIC_ASSET_PROJECT_ID}
+                        trigger={
+                            <button className="cursor-pointer text-xs text-primary hover:underline">
+                                Upload some assets to get started
+                            </button>
+                        }
+                        createTokenFn={() => $adminGetUploadToken()}
+                        revokeTokenFn={(token) => $revokeUploadToken({ data: { token } })}
+                        onUploadComplete={handleUploadComplete}
+                    />
+                </div>
+            )}
+
+            {view === 'list' && assets.length > 0 && (
+                <div className="overflow-hidden rounded-2xl border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Size</TableHead>
+                                <TableHead>Created At</TableHead>
+                                <TableHead className="w-28" />
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {assets.map((asset: any) => (
+                                <TableRow key={asset._id}>
+                                    <TableCell className="font-medium">{asset.name}</TableCell>
+                                    <TableCell>{(asset.size / 1024).toFixed(2)} KB</TableCell>
+                                    <TableCell>
+                                        {new Date(asset.createdAt).toLocaleString()}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-0.5">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => openPreview(asset)}
+                                                title="Preview"
+                                            >
+                                                <EyeIcon />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => handleDownload(asset)}
+                                                title="Download"
+                                            >
+                                                <DownloadIcon />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() =>
+                                                    deleteAssetMutation.mutate(asset._id)
+                                                }
+                                                disabled={deleteAssetMutation.isPending}
+                                                title="Delete"
+                                            >
+                                                <TrashIcon />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
+
+            {view === 'list-preview' && assets.length > 0 && (
+                <div className="flex flex-col gap-2">
+                    {assets.map((asset: any) => (
+                        <div
+                            key={asset._id}
+                            className="flex items-center gap-3 rounded-lg border p-2"
+                        >
+                            <ProjectImage
+                                src={asset.previewUrl ?? asset.url}
+                                blurhash={asset.blurhash}
+                                sizes={asset.sizes}
+                                alt={asset.name}
+                                className="h-16 w-16 rounded-md"
+                                imgClassName="cursor-pointer object-cover"
+                                onClick={() => openPreview(asset)}
+                            />
+                            <div className="flex-1">
+                                <div className="font-medium">{asset.name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                    {(asset.size / 1024).toFixed(2)} KB
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-0.5">
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => openPreview(asset)}
+                                    title="Preview"
+                                >
+                                    <EyeIcon />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => handleDownload(asset)}
+                                    title="Download"
+                                >
+                                    <DownloadIcon />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => deleteAssetMutation.mutate(asset._id)}
+                                    disabled={deleteAssetMutation.isPending}
+                                    title="Delete"
+                                >
+                                    <TrashIcon />
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {view === 'grid' && assets.length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                    {assets.map((asset: any) => (
+                        <div key={asset._id} className="group relative">
+                            <ProjectImage
+                                src={asset.previewUrl ?? asset.url}
+                                blurhash={asset.blurhash}
+                                sizes={asset.sizes}
+                                alt={asset.name}
+                                className="aspect-square w-full rounded-lg"
+                                imgClassName="cursor-pointer object-cover"
+                                onClick={() => openPreview(asset)}
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center gap-1 rounded-lg bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                                <Button
+                                    variant="secondary"
+                                    size="icon-sm"
+                                    onClick={() => openPreview(asset)}
+                                    title="Preview"
+                                >
+                                    <EyeIcon />
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    size="icon-sm"
+                                    onClick={() => handleDownload(asset)}
+                                    title="Download"
+                                >
+                                    <DownloadIcon />
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    size="icon-sm"
+                                    onClick={() => deleteAssetMutation.mutate(asset._id)}
+                                    disabled={deleteAssetMutation.isPending}
+                                    title="Delete"
+                                >
+                                    <TrashIcon />
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <AssetPreviewPortal preview={preview} onClose={() => setPreview(null)} />
         </div>
     );
+}
+
+function AdminAssetsPage() {
+    return <AdminAssetsTab />;
 }

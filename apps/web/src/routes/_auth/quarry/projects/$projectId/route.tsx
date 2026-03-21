@@ -1,4 +1,12 @@
-import { ArrowLeftIcon, PencilSimpleIcon } from '@phosphor-icons/react';
+import {
+    ArrowLeftIcon,
+    ClockIcon,
+    FolderIcon,
+    GitBranchIcon,
+    ImageIcon,
+    PencilSimpleIcon,
+    UsersIcon
+} from '@phosphor-icons/react';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
@@ -26,12 +34,12 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId')({
 const TAB_ORDER = { info: 0, permissions: 1, commits: 2, history: 3, assets: 4 } as const;
 type TabKey = keyof typeof TAB_ORDER;
 
-const TABS: { key: TabKey; label: string; to: string }[] = [
-    { key: 'info', label: 'Project Info', to: '.' },
-    { key: 'permissions', label: 'Permissions', to: './permissions' },
-    { key: 'commits', label: 'Commits', to: './commits' },
-    { key: 'history', label: 'History', to: './history' },
-    { key: 'assets', label: 'Assets', to: './assets' }
+const TABS: { key: TabKey; label: string; to: string; icon: any }[] = [
+    { key: 'info', label: 'Project Info', to: '.', icon: FolderIcon },
+    { key: 'permissions', label: 'Permissions', to: './permissions', icon: UsersIcon },
+    { key: 'commits', label: 'Commits', to: './commits', icon: GitBranchIcon },
+    { key: 'history', label: 'History', to: './history', icon: ClockIcon },
+    { key: 'assets', label: 'Assets', to: './assets', icon: ImageIcon }
 ];
 
 const slidePanelVariants = {
@@ -69,7 +77,7 @@ function ProjectLayout() {
     });
 
     return (
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto w-full max-w-6xl">
             <div className="mb-6 flex items-center gap-3">
                 <Button
                     render={<Link to="/quarry" />}
@@ -121,7 +129,10 @@ function ProjectLayout() {
                 <TabsList variant="line">
                     {TABS.map((tab) => (
                         <TabsTrigger key={tab.key} value={tab.key}>
-                            {tab.label}
+                            <span className="flex items-center gap-1.5">
+                                <tab.icon size={14} />
+                                {tab.label}
+                            </span>
                         </TabsTrigger>
                     ))}
                 </TabsList>

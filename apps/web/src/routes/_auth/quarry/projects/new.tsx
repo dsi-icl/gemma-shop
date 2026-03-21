@@ -28,7 +28,7 @@ function NewProject() {
     });
 
     return (
-        <div className="mx-auto w-full max-w-2xl">
+        <div className="mx-auto w-full max-w-6xl">
             <h2 className="mb-6 text-xl font-semibold">Create New Project</h2>
             <ProjectForm
                 onSubmit={(data) => mutation.mutate(data)}

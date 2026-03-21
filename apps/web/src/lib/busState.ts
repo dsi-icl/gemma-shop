@@ -22,6 +22,53 @@ const scopeKeyToId: Map<string, ScopeId> = _hmr.scopeKeyToId;
 const scopeIdToKey: Map<ScopeId, string> = _hmr.scopeIdToKey;
 const commitToScopeIds: Map<string, Set<ScopeId>> = _hmr.commitToScopeIds;
 
+const _telemetry = (process as any).__BUS_TELEMETRY__ ?? {
+    incomingJson: 0,
+    incomingBinary: 0,
+    outgoingJson: 0,
+    outgoingBinary: 0,
+    videoSyncFrames: 0,
+    videoSyncEntries: 0,
+    startedAt: Date.now()
+};
+(process as any).__BUS_TELEMETRY__ = _telemetry;
+
+function markOutgoing(jsonRecipients: number, binaryRecipients: number) {
+    if (jsonRecipients > 0) _telemetry.outgoingJson += jsonRecipients;
+    if (binaryRecipients > 0) _telemetry.outgoingBinary += binaryRecipients;
+}
+
+export function markIncomingJson() {
+    _telemetry.incomingJson += 1;
+}
+
+export function markIncomingBinary() {
+    _telemetry.incomingBinary += 1;
+}
+
+export function getBusRuntimeTelemetry() {
+    let dirtyScopes = 0;
+    let layerCount = 0;
+    for (const scope of scopedState.values()) {
+        if (scope.dirty) dirtyScopes += 1;
+        layerCount += scope.layers.size;
+    }
+
+    return {
+        incomingJson: _telemetry.incomingJson,
+        incomingBinary: _telemetry.incomingBinary,
+        outgoingJson: _telemetry.outgoingJson,
+        outgoingBinary: _telemetry.outgoingBinary,
+        videoSyncFrames: _telemetry.videoSyncFrames,
+        videoSyncEntries: _telemetry.videoSyncEntries,
+        activeVideos: activeVideos.size,
+        scopes: scopedState.size,
+        dirtyScopes,
+        layers: layerCount,
+        startedAt: _telemetry.startedAt
+    };
+}
+
 // Intern a (projectId, commitId, slideId) triple into a numeric ScopeId
 export function internScope(projectId: string, commitId: string, slideId: string): ScopeId {
     const raw = makeScopeLabel(projectId, commitId, slideId);
@@ -342,15 +389,21 @@ export function canSendNonCritical(peer: Peer): boolean {
 }
 
 export function sendJSON(peer: Peer, data: GSMessage) {
+    markOutgoing(1, 0);
     peer.send(JSON.stringify(data));
 }
 
 export function broadcastToEditorsRaw(scopeId: ScopeId, payload: string, exclude?: PeerEntry) {
     const set = editorsByScope.get(scopeId);
     if (!set) return;
+    let sent = 0;
     for (const entry of set) {
-        if (entry !== exclude) entry.peer.send(payload);
+        if (entry !== exclude) {
+            entry.peer.send(payload);
+            sent += 1;
+        }
     }
+    markOutgoing(sent, 0);
 }
 
 export function broadcastToEditors(scopeId: ScopeId, data: GSMessage, exclude?: PeerEntry) {
@@ -361,6 +414,7 @@ export function broadcastToWallsRaw(scopeId: ScopeId, payload: string) {
     const set = wallPeersByScope.get(scopeId);
     if (!set) return;
     for (const entry of set) entry.peer.send(payload);
+    markOutgoing(set.size, 0);
 }
 
 export function broadcastToWalls(scopeId: ScopeId, data: GSMessage) {
@@ -370,9 +424,14 @@ export function broadcastToWalls(scopeId: ScopeId, data: GSMessage) {
 export function broadcastToWallsBinary(scopeId: ScopeId, data: ArrayBuffer) {
     const set = wallPeersByScope.get(scopeId);
     if (!set) return;
+    let sent = 0;
     for (const entry of set) {
-        if (canSendNonCritical(entry.peer)) entry.peer.send(data);
+        if (canSendNonCritical(entry.peer)) {
+            entry.peer.send(data);
+            sent += 1;
+        }
     }
+    markOutgoing(0, sent);
 }
 
 export function broadcastToScopeRaw(scopeId: ScopeId, payload: string, exclude?: PeerEntry) {
@@ -390,23 +449,31 @@ export function broadcastToScope(scopeId: ScopeId, data: GSMessage, exclude?: Pe
 export function broadcastToEditorsByCommit(commitId: string, payload: string, exclude?: PeerEntry) {
     const scopeIds = commitToScopeIds.get(commitId);
     if (!scopeIds) return;
+    let sent = 0;
     for (const scopeId of scopeIds) {
         const set = editorsByScope.get(scopeId);
         if (!set) continue;
         for (const entry of set) {
-            if (entry !== exclude) entry.peer.send(payload);
+            if (entry !== exclude) {
+                entry.peer.send(payload);
+                sent += 1;
+            }
         }
     }
+    markOutgoing(sent, 0);
 }
 
 function notifyControllersByWallIds(wallIds: Set<string>, payload: string) {
+    let sent = 0;
     for (const wallId of wallIds) {
         const entries = controllersByWallId.get(wallId);
         if (!entries) continue;
         for (const entry of entries) {
             entry.peer.send(payload);
+            sent += 1;
         }
     }
+    markOutgoing(sent, 0);
 }
 
 /** Notify all controllers whose wall is bound to any scope with the given commitId. */
@@ -431,6 +498,7 @@ export function hydrateWallNodes(wallId: string) {
     const wallPeers = wallsByWallId.get(wallId);
     if (!wallPeers) return;
     for (const entry of wallPeers) entry.peer.send(payload);
+    markOutgoing(wallPeers.size, 0);
 }
 
 // Notify all controllers for a wallId about binding status
@@ -454,6 +522,7 @@ export function notifyControllers(
     } satisfies GSMessage);
 
     for (const entry of entries) entry.peer.send(payload);
+    markOutgoing(entries.size, 0);
 }
 
 // Track a video as actively playing (called from video_play handler)
@@ -547,9 +616,14 @@ export function sendVideoSyncToRelevantWalls(
     const targets = wallPeersByScope.get(scopeId);
     // const targets = layerNodes.get(numericId) ?? wallPeersByScope.get(scopeId);
     if (targets) {
+        let sent = 0;
         for (const entry of targets) {
-            if (canSendNonCritical(entry.peer)) entry.peer.send(frame);
+            if (canSendNonCritical(entry.peer)) {
+                entry.peer.send(frame);
+                sent += 1;
+            }
         }
+        markOutgoing(0, sent);
     }
 }
 // VSYNC batch: for each wall peer, collect all intersecting active videos,  encode into a single binary VIDEO_SYNC frame, and send
@@ -609,7 +683,10 @@ export function broadcastVideoSyncBatchToWalls(
     // Encode and send one binary frame per peer
     for (const [pe, entries] of peerBatches) {
         pe.peer.send(encodeVideoSyncBinary(entries));
+        _telemetry.videoSyncFrames += 1;
+        _telemetry.videoSyncEntries += entries.length;
     }
+    markOutgoing(0, peerBatches.size);
 }
 
 // Encode video sync entries into binary VIDEO_SYNC frame.
@@ -987,6 +1064,7 @@ export function broadcastAssetToEditorsByProject(
             }
         }
     }
+    markOutgoing(sent, 0);
     console.log(
         `[Bus] asset_added broadcast: projectId=${projectId}, sent to ${sent} editor(s), scopes=${scopedState.size}`
     );

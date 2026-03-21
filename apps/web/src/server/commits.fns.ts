@@ -4,6 +4,26 @@ import { createServerFn } from '@tanstack/react-start';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 
+function serializeForClient<T>(value: T): T {
+    if (value instanceof ObjectId) {
+        return value.toHexString() as T;
+    }
+    if (value instanceof Date) {
+        return value.toISOString() as T;
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => serializeForClient(item)) as T;
+    }
+    if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            out[k] = serializeForClient(v);
+        }
+        return out as T;
+    }
+    return value;
+}
+
 export const revertToVersion = createServerFn({ method: 'POST' })
     .inputValidator(
         z.object({
@@ -117,14 +137,16 @@ export const getProjectHistory = createServerFn({ method: 'GET' })
         );
 
         return {
-            headCommitId: project.headCommitId.toString(),
-            commits: cleanHistory.map((c) => ({
-                id: c._id.toString(),
-                parentId: c.parentId?.toString() || null,
-                message: c.message,
-                authorId: c.authorId.toString(),
-                createdAt: c.createdAt,
-                isAutoSave: c.isAutoSave || false
-            }))
+            headCommitId: project.headCommitId ? project.headCommitId.toString() : null,
+            commits: cleanHistory.map((c) =>
+                serializeForClient({
+                    id: c._id.toString(),
+                    parentId: c.parentId?.toString() || null,
+                    message: String(c.message ?? ''),
+                    authorId: c.authorId?.toString?.() ?? '',
+                    createdAt: c.createdAt,
+                    isAutoSave: c.isAutoSave || false
+                })
+            )
         };
     });

@@ -8,8 +8,9 @@ import { FileStore } from '@tus/file-store';
 import { Server } from '@tus/server';
 import { ObjectId } from 'mongodb';
 
+import { PUBLIC_ASSET_PROJECT_ID } from '~/lib/constants';
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
-import { UPLOAD_DIR, TMP_DIR, ASSET_DIR, PUBLIC_ASSET_PROJECT_ID } from '~/lib/serverVariables';
+import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
 
 const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff']);

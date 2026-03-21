@@ -1,17 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { format } from 'date-fns';
 
 import { adminProjectsQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/projects')({
-    component: AdminProjects
+    component: AdminProjects,
+    loader: ({ context }) => {
+        context.queryClient.ensureQueryData(adminProjectsQueryOptions());
+    }
 });
 
 function AdminProjects() {
-    const { data: projects = [], isLoading } = useQuery(adminProjectsQueryOptions());
-
-    if (isLoading) return <div className="text-sm text-muted-foreground">Loading...</div>;
+    const { data: projects = [] } = useSuspenseQuery(adminProjectsQueryOptions());
 
     return (
         <div>

@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only';
 import { db } from '@repo/db';
 import type { Wall } from '@repo/db/schema';
+import { ObjectId } from 'mongodb';
 
 import {
     bindWall,
@@ -13,17 +14,39 @@ import {
 } from '~/lib/busState';
 
 const walls = db.collection('walls');
+const commits = db.collection('commits');
+
+function serializeForClient<T>(value: T): T {
+    if (value instanceof ObjectId) {
+        return value.toHexString() as T;
+    }
+    if (value instanceof Date) {
+        return value.toISOString() as T;
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => serializeForClient(item)) as T;
+    }
+    if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            out[k] = serializeForClient(v);
+        }
+        return out as T;
+    }
+    return value;
+}
 
 function serializeWall(doc: any): Wall {
-    return { ...doc, _id: doc._id.toHexString() };
+    return serializeForClient({ ...doc, _id: doc._id.toHexString() });
 }
 
 export async function listWalls() {
     const docs = await walls.find().sort({ lastSeen: -1 }).toArray();
     return docs.map((doc) => {
         const wall = serializeWall(doc);
-        // Override stale MongoDB counter with live in-memory count
-        wall.connectedNodes = getWallNodeCount(wall.wallId);
+        // Prefer persisted DB counter so this works across workers/processes.
+        // Keep an in-process fallback for local/dev consistency.
+        wall.connectedNodes = Number(doc.connectedNodes ?? getWallNodeCount(wall.wallId) ?? 0);
         return wall;
     });
 }
@@ -34,8 +57,19 @@ export async function bindWallToScope(
     commitId: string,
     slideId: string
 ) {
-    const scopeId = internScope(projectId, commitId, slideId);
-    const scope = getOrCreateScope(scopeId, projectId, commitId, slideId);
+    const commit = await commits.findOne(
+        { _id: new ObjectId(commitId), projectId: new ObjectId(projectId) },
+        { projection: { 'content.slides.id': 1 } }
+    );
+    if (!commit) throw new Error('Commit not found for project');
+
+    const slides = (commit.content?.slides as Array<{ id?: string }>) ?? [];
+    const requestedExists = slides.some((s) => s.id === slideId);
+    const resolvedSlideId = requestedExists ? slideId : (slides[0]?.id ?? null);
+    if (!resolvedSlideId) throw new Error('Commit has no slides to bind');
+
+    const scopeId = internScope(projectId, commitId, resolvedSlideId);
+    const scope = getOrCreateScope(scopeId, projectId, commitId, resolvedSlideId);
     bindWall(wallId, scopeId);
 
     // Auto-seed from DB if scope is fresh, then hydrate walls
@@ -43,11 +77,19 @@ export async function bindWallToScope(
         await seedScopeFromDb(scopeId);
     }
     hydrateWallNodes(wallId);
-    notifyControllers(wallId, true, projectId, commitId, slideId);
+    notifyControllers(wallId, true, projectId, commitId, resolvedSlideId);
 
     // Persist binding in DB
     await walls.updateOne(
         { wallId },
-        { $set: { boundProjectId: projectId, boundCommitId: commitId, boundSlideId: slideId } }
+        {
+            $set: {
+                boundProjectId: projectId,
+                boundCommitId: commitId,
+                boundSlideId: resolvedSlideId,
+                updatedAt: new Date().toISOString()
+            }
+        },
+        { upsert: true }
     );
 }

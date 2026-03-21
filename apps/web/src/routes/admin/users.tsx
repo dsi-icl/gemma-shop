@@ -1,7 +1,7 @@
 import { ProhibitIcon, ShieldCheckIcon } from '@phosphor-icons/react';
 import authClient from '@repo/auth/auth-client';
 import { Button } from '@repo/ui/components/button';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -9,11 +9,14 @@ import { toast } from 'sonner';
 import { adminUsersQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/users')({
-    component: AdminUsers
+    component: AdminUsers,
+    loader: ({ context }) => {
+        context.queryClient.ensureQueryData(adminUsersQueryOptions());
+    }
 });
 
 function AdminUsers() {
-    const { data: users = [], isLoading } = useQuery(adminUsersQueryOptions());
+    const { data: users = [] } = useSuspenseQuery(adminUsersQueryOptions());
     const queryClient = useQueryClient();
 
     const banMutation = useMutation({
@@ -30,8 +33,6 @@ function AdminUsers() {
         },
         onError: (e: any) => toast.error(e.message)
     });
-
-    if (isLoading) return <div className="text-sm text-muted-foreground">Loading...</div>;
 
     return (
         <div>
@@ -68,9 +69,16 @@ function AdminUsers() {
                                     {user.banned ? (
                                         <span className="text-xs text-destructive">Banned</span>
                                     ) : (
-                                        <span className="text-xs text-green-600 dark:text-green-400">
-                                            Active
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-green-600 dark:text-green-400">
+                                                Active
+                                            </span>
+                                            {user.isActiveSession && (
+                                                <span className="text-[10px] text-muted-foreground">
+                                                    Session live
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </td>
                                 <td className="px-4 py-3">

@@ -24,6 +24,8 @@ interface UploadDialogProps {
     projectId: string;
     trigger: React.ReactNode;
     onUploadComplete?: () => void;
+    createTokenFn?: (projectId: string) => Promise<{ token: string; expiresAt: number }>;
+    revokeTokenFn?: (token: string) => Promise<void>;
 }
 
 interface FileProgress {
@@ -40,7 +42,13 @@ function isWoff2File(file: File): boolean {
     );
 }
 
-export function UploadDialog({ projectId, trigger, onUploadComplete }: UploadDialogProps) {
+export function UploadDialog({
+    projectId,
+    trigger,
+    onUploadComplete,
+    createTokenFn,
+    revokeTokenFn
+}: UploadDialogProps) {
     const [open, setOpen] = useState(false);
     const [token, setToken] = useState<string | null>(null);
     const [tokenExpiresAt, setTokenExpiresAt] = useState<number>(0);
@@ -51,37 +59,51 @@ export function UploadDialog({ projectId, trigger, onUploadComplete }: UploadDia
     const fileInputRef = useRef<HTMLInputElement>(null);
     const uppyRef = useRef<Uppy | null>(null);
 
-    // Create/destroy upload token with dialog lifecycle
-    useEffect(() => {
-        if (!open) {
-            // Revoke token when dialog closes
-            if (token) {
-                $revokeUploadToken({ data: { token } }).catch(() => {});
-                setToken(null);
-                setQrDataUrl(null);
+    const resetDialogState = useCallback(
+        (tokenToRevoke?: string | null) => {
+            if (tokenToRevoke) {
+                const revoke = revokeTokenFn
+                    ? revokeTokenFn(tokenToRevoke)
+                    : $revokeUploadToken({ data: { token: tokenToRevoke } });
+                revoke.catch(() => {});
             }
-            // Cleanup uppy
             if (uppyRef.current) {
                 uppyRef.current.destroy();
                 uppyRef.current = null;
             }
+            setToken(null);
+            setQrDataUrl(null);
             setFiles([]);
-            return;
-        }
+        },
+        [revokeTokenFn]
+    );
 
-        // Create token when dialog opens
-        $createUploadToken({ data: { projectId } }).then((result) => {
-            setToken(result.token);
-            setTokenExpiresAt(result.expiresAt);
+    // Create upload token when dialog opens
+    useEffect(() => {
+        if (!open) return;
 
-            const url = `${window.location.origin}/upload/${projectId}?token=${result.token}`;
-            QRCode.toDataURL(url, {
-                width: 200,
-                margin: 1,
-                color: { dark: '#000', light: '#fff' }
-            }).then((dataUrl) => setQrDataUrl(dataUrl));
-        });
-    }, [open, projectId]);
+        const create = createTokenFn
+            ? createTokenFn(projectId)
+            : $createUploadToken({ data: { projectId } });
+
+        create
+            .then((result) => {
+                setToken(result.token);
+                setTokenExpiresAt(result.expiresAt);
+
+                const url = `${window.location.origin}/upload/${projectId}?token=${result.token}`;
+                QRCode.toDataURL(url, {
+                    width: 200,
+                    margin: 1,
+                    color: { dark: '#000', light: '#fff' }
+                }).then((dataUrl) => setQrDataUrl(dataUrl));
+            })
+            .catch((error: any) => {
+                toast.error(error?.message ?? 'Failed to create upload token');
+                setToken(null);
+                setQrDataUrl(null);
+            });
+    }, [open, projectId, createTokenFn]);
 
     // Countdown timer
     useEffect(() => {
@@ -192,7 +214,15 @@ export function UploadDialog({ projectId, trigger, onUploadComplete }: UploadDia
     );
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                if (!nextOpen) {
+                    resetDialogState(token);
+                }
+                setOpen(nextOpen);
+            }}
+        >
             <DialogTrigger nativeButton={false} render={<div />}>
                 {trigger}
             </DialogTrigger>

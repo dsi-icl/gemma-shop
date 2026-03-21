@@ -45,6 +45,7 @@ function AssetsTab() {
     const queryClient = useQueryClient();
 
     const [view, setView] = useLocalStorageValue<View>('assets-view', 'list');
+    const [hydrated] = useState(() => typeof window !== 'undefined');
     const [preview, setPreview] = useState<{
         src: string;
         name: string;
@@ -93,6 +94,21 @@ function AssetsTab() {
     };
 
     const uploadTrigger = <Button variant="outline">Upload media</Button>;
+
+    if (!hydrated) {
+        return (
+            <div className="flex flex-col gap-4">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+                        <div className="mt-2 h-4 w-80 animate-pulse rounded bg-muted" />
+                    </div>
+                    <div className="h-9 w-36 animate-pulse rounded bg-muted" />
+                </div>
+                <div className="h-64 animate-pulse rounded-2xl border border-border bg-muted/30" />
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col gap-4">
