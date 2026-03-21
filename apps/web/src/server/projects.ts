@@ -75,6 +75,30 @@ export async function listPublishedProjects() {
     return docs.map(serializeProject);
 }
 
+export async function listKnownTags(userEmail: string): Promise<string[]> {
+    const docs = await projects
+        .find({
+            $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }]
+        })
+        .project({ tags: 1 })
+        .toArray();
+
+    const usage = new Map<string, number>();
+    for (const doc of docs) {
+        const tags = Array.isArray(doc.tags) ? doc.tags : [];
+        for (const raw of tags) {
+            if (typeof raw !== 'string') continue;
+            const tag = raw.trim().toLowerCase();
+            if (!tag || tag === 'public') continue;
+            usage.set(tag, (usage.get(tag) ?? 0) + 1);
+        }
+    }
+
+    return Array.from(usage.entries())
+        .sort((a, b) => (b[1] === a[1] ? a[0].localeCompare(b[0]) : b[1] - a[1]))
+        .map(([tag]) => tag);
+}
+
 export async function listAssets(projectId: string, userEmail: string) {
     const project = await getProject(projectId);
     if (!project) throw new Error('Project not found');

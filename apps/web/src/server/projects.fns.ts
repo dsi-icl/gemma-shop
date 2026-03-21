@@ -19,6 +19,7 @@ import {
     getProject,
     getProjectCommits,
     listAssets,
+    listKnownTags,
     listProjects,
     listPublishedProjects,
     promoteBranchHead,
@@ -37,6 +38,12 @@ export const $listProjects = createServerFn({ method: 'GET' })
 export const $listPublishedProjects = createServerFn({ method: 'GET' }).handler(async () => {
     return listPublishedProjects();
 });
+
+export const $listKnownTags = createServerFn({ method: 'GET' })
+    .middleware([authMiddleware])
+    .handler(async ({ context }) => {
+        return listKnownTags(context.user.email);
+    });
 
 export const $listAssets = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ projectId: z.string() }))

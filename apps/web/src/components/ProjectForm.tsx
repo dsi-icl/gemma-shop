@@ -1,7 +1,6 @@
 import { ImageIcon, TrashIcon } from '@phosphor-icons/react';
 import type { CreateProjectInput } from '@repo/db/schema';
 import { Button } from '@repo/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components/card';
 import {
     Dialog,
     DialogClose,
@@ -14,11 +13,13 @@ import { Label } from '@repo/ui/components/label';
 import { TagInput } from '@repo/ui/components/tag-input';
 import { Textarea } from '@repo/ui/components/textarea';
 import { useForm } from '@tanstack/react-form';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { AssetLibrary } from '~/components/AssetLibrary';
 import { ProjectImage } from '~/components/ProjectImage';
+import { projectTagSuggestionsQueryOptions } from '~/server/projects.queries';
 
 interface ProjectFormProps {
     projectId?: string;
@@ -43,6 +44,7 @@ export function ProjectForm({
     const [heroSelectionDraft, setHeroSelectionDraft] = useState<string[] | null>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastSubmittedSignatureRef = useRef('');
+    const { data: tagSuggestions = [] } = useQuery(projectTagSuggestionsQueryOptions());
 
     const form = useForm({
         defaultValues: {
@@ -227,6 +229,7 @@ export function ProjectForm({
                                         scheduleAutoSave();
                                     }}
                                     placeholder="Type a tag and press Enter"
+                                    suggestions={tagSuggestions}
                                 />
                             </div>
                         )}

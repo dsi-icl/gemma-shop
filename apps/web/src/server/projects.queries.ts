@@ -7,6 +7,7 @@ import {
     $getProject,
     $getProjectCommits,
     $listAssets,
+    $listKnownTags,
     $listProjects,
     $listPublishedProjects
 } from './projects.fns';
@@ -33,6 +34,12 @@ export const publishedProjectsQueryOptions = () =>
     queryOptions({
         queryKey: ['projects', 'published'],
         queryFn: () => $listPublishedProjects()
+    });
+
+export const projectTagSuggestionsQueryOptions = () =>
+    queryOptions({
+        queryKey: ['projects', 'tags', 'suggestions'],
+        queryFn: () => $listKnownTags()
     });
 
 export const auditLogsQueryOptions = (projectId: string) =>
