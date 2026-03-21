@@ -128,7 +128,7 @@ function AssetPreviewOverlayInner({
                         <img
                             src={imageSrc}
                             alt={name}
-                            className={`bg-checkerboard absolute inset-0 z-20 block h-full w-full object-contain transition-opacity duration-300 ${
+                            className={`bg-checkerboard absolute inset-0 z-20 m-auto block h-auto max-h-full w-auto max-w-full object-contain transition-opacity duration-300 ${
                                 mediaLoaded ? 'opacity-100' : 'opacity-0'
                             }`}
                             onLoad={() => setMediaLoaded(true)}
