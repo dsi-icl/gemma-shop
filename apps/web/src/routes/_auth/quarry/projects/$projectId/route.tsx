@@ -77,13 +77,14 @@ function ProjectLayout() {
     });
 
     return (
-        <div className="mx-auto flex min-h-svh w-full max-w-6xl flex-col px-6 pt-18 pb-6">
+        <div className="mx-auto -mt-24 flex min-h-svh w-full max-w-6xl flex-col px-6 pt-18 pb-6">
             <div className="mb-6 flex items-center gap-3">
                 <Button
                     render={<Link to="/quarry" />}
                     variant="ghost"
                     size="icon-sm"
                     nativeButton={false}
+                    className="w-5 justify-start"
                 >
                     <ArrowLeftIcon />
                 </Button>
