@@ -275,7 +275,7 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
 
                 {/* ── Add Content ── */}
                 <div className="flex items-center gap-0.5">
-                    <TipButton tip="Upload media" onClick={() => fileInputRef.current?.click()}>
+                    <TipButton tip="Upload assets" onClick={() => fileInputRef.current?.click()}>
                         <ImageIcon />
                     </TipButton>
                     <Popover>

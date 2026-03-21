@@ -230,7 +230,7 @@ export function UploadDialog({
                 <div className="flex items-center justify-between border-b border-border px-6 py-4">
                     <DialogTitle className="flex items-center gap-2">
                         <CloudArrowUpIcon size={20} weight="bold" />
-                        Upload Media
+                        Upload Assets
                     </DialogTitle>
                     <DialogClose className="cursor-pointer rounded p-1 text-muted-foreground hover:text-foreground">
                         <XIcon size={16} weight="bold" />

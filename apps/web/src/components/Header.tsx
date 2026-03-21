@@ -57,7 +57,7 @@ function HeaderAuthSection() {
 
 export function Header() {
     return (
-        <header className="absolute top-0 left-0 flex min-w-screen items-center justify-end gap-2 p-4">
+        <header className="absolute top-0 left-0 flex w-full items-center justify-end gap-2 p-4">
             <Link to="/" className="flex grow flex-row gap-3 font-mono">
                 Gemma Shop
             </Link>

@@ -1,6 +1,8 @@
 import {
     DownloadIcon,
     EyeIcon,
+    FileTextIcon,
+    ImageIcon,
     ListIcon,
     RowsIcon,
     SquaresFourIcon,
@@ -18,7 +20,7 @@ import {
 import { useLocalStorageValue } from '@repo/ui/hooks/use-localstorage-value';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AssetPreviewPortal, downloadAsset, isVideoAsset } from '~/components/AssetPreviewOverlay';
@@ -35,6 +37,38 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId/assets')
 });
 
 type View = 'list' | 'list-preview' | 'grid';
+type KindFilter = 'media' | 'font';
+
+function isFontAsset(asset: { name: string; mimeType?: string }) {
+    return asset.mimeType === 'font/woff2' || /\.woff2$/i.test(asset.name);
+}
+
+function sortAssetsFontsLast<T extends { name: string; mimeType?: string }>(items: T[]): T[] {
+    const media: T[] = [];
+    const fonts: T[] = [];
+    for (const item of items) {
+        if (isFontAsset(item)) fonts.push(item);
+        else media.push(item);
+    }
+    return [...media, ...fonts];
+}
+
+function FontPlaceholder({ name, className = '' }: { name: string; className?: string }) {
+    return (
+        <div
+            className={`flex items-center justify-center rounded-md bg-muted text-muted-foreground ${className}`}
+        >
+            <div className="flex flex-col items-center gap-1">
+                <span className="rounded bg-background px-1.5 py-0.5 text-[9px] font-semibold tracking-wide">
+                    WOFF2
+                </span>
+                <span className="max-w-[90%] truncate text-[10px]">
+                    {name.replace(/\.woff2$/i, '')}
+                </span>
+            </div>
+        </div>
+    );
+}
 
 function AssetsTab() {
     const { projectId } = Route.useParams();
@@ -45,6 +79,10 @@ function AssetsTab() {
     const queryClient = useQueryClient();
 
     const [view, setView] = useLocalStorageValue<View>('assets-view', 'list');
+    const [kindFilter, setKindFilter] = useLocalStorageValue<KindFilter>(
+        'project-assets-kind-filter',
+        'media'
+    );
     const [hydrated] = useState(() => typeof window !== 'undefined');
     const [preview, setPreview] = useState<{
         src: string;
@@ -53,6 +91,13 @@ function AssetsTab() {
         blurhash?: string;
         sizes?: number[];
     } | null>(null);
+
+    const displayedAssets = useMemo(() => {
+        const sorted = sortAssetsFontsLast(assets as any[]);
+        return sorted.filter((asset) =>
+            kindFilter === 'font' ? isFontAsset(asset) : !isFontAsset(asset)
+        );
+    }, [assets, kindFilter]);
 
     const deleteAssetMutation = useMutation({
         mutationFn: $deleteAsset,
@@ -79,6 +124,7 @@ function AssetsTab() {
         blurhash?: string;
         sizes?: number[];
     }) => {
+        if (isFontAsset(asset)) return;
         const isVideo = isVideoAsset(asset);
         setPreview({
             src: `/api/assets/${asset.url}`,
@@ -93,7 +139,7 @@ function AssetsTab() {
         downloadAsset(`/api/assets/${asset.url}`, asset.name);
     };
 
-    const uploadTrigger = <Button variant="outline">Upload media</Button>;
+    const uploadTrigger = <Button variant="outline">Upload assets</Button>;
 
     if (!hydrated) {
         return (
@@ -120,6 +166,22 @@ function AssetsTab() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 rounded-lg border p-1">
+                        <Button
+                            variant={kindFilter === 'media' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            onClick={() => setKindFilter('media')}
+                        >
+                            <ImageIcon size={14} /> Media
+                        </Button>
+                        <Button
+                            variant={kindFilter === 'font' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            onClick={() => setKindFilter('font')}
+                        >
+                            <FileTextIcon size={14} /> Fonts
+                        </Button>
+                    </div>
                     <div className="flex items-center gap-1 rounded-lg border p-1">
                         <Button
                             variant={view === 'list' ? 'secondary' : 'ghost'}
@@ -151,14 +213,14 @@ function AssetsTab() {
                 </div>
             </div>
 
-            {assets.length === 0 && (
+            {displayedAssets.length === 0 && (
                 <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed text-muted-foreground">
-                    <p>No assets yet</p>
+                    <p>{kindFilter === 'font' ? 'No fonts yet' : 'No media assets yet'}</p>
                     <UploadDialog
                         projectId={projectId}
                         trigger={
                             <button className="cursor-pointer text-xs text-primary hover:underline">
-                                Upload some assets to get started
+                                Upload assets to get started
                             </button>
                         }
                         onUploadComplete={handleUploadComplete}
@@ -166,21 +228,23 @@ function AssetsTab() {
                 </div>
             )}
 
-            {view === 'list' && assets.length > 0 && (
+            {view === 'list' && displayedAssets.length > 0 && (
                 <div className="overflow-hidden rounded-2xl border">
                     <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
+                                <TableHead>Type</TableHead>
                                 <TableHead>Size</TableHead>
                                 <TableHead>Created At</TableHead>
                                 <TableHead className="w-28" />
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {assets.map((asset) => (
+                            {displayedAssets.map((asset) => (
                                 <TableRow key={asset._id}>
                                     <TableCell className="font-medium">{asset.name}</TableCell>
+                                    <TableCell>{isFontAsset(asset) ? 'font' : 'media'}</TableCell>
                                     <TableCell>{(asset.size / 1024).toFixed(2)} KB</TableCell>
                                     <TableCell>
                                         {new Date(asset.createdAt).toLocaleString()}
@@ -191,6 +255,7 @@ function AssetsTab() {
                                                 variant="ghost"
                                                 size="icon-sm"
                                                 onClick={() => openPreview(asset)}
+                                                disabled={isFontAsset(asset)}
                                                 title="Preview"
                                             >
                                                 <EyeIcon />
@@ -225,22 +290,26 @@ function AssetsTab() {
                 </div>
             )}
 
-            {view === 'list-preview' && assets.length > 0 && (
+            {view === 'list-preview' && displayedAssets.length > 0 && (
                 <div className="flex flex-col gap-2">
-                    {assets.map((asset) => (
+                    {displayedAssets.map((asset) => (
                         <div
                             key={asset._id}
                             className="flex items-center gap-3 rounded-lg border p-2"
                         >
-                            <ProjectImage
-                                src={asset.previewUrl ?? asset.url}
-                                blurhash={asset.blurhash}
-                                sizes={asset.sizes}
-                                alt={asset.name}
-                                className="h-16 w-16 rounded-md"
-                                imgClassName="cursor-pointer object-cover"
-                                onClick={() => openPreview(asset)}
-                            />
+                            {isFontAsset(asset) ? (
+                                <FontPlaceholder name={asset.name} className="h-16 w-16" />
+                            ) : (
+                                <ProjectImage
+                                    src={asset.previewUrl ?? asset.url}
+                                    blurhash={asset.blurhash}
+                                    sizes={asset.sizes}
+                                    alt={asset.name}
+                                    className="h-16 w-16 rounded-md"
+                                    imgClassName="cursor-pointer object-cover"
+                                    onClick={() => openPreview(asset)}
+                                />
+                            )}
                             <div className="flex-1">
                                 <div className="font-medium">{asset.name}</div>
                                 <div className="text-xs text-muted-foreground">
@@ -252,6 +321,7 @@ function AssetsTab() {
                                     variant="ghost"
                                     size="icon-sm"
                                     onClick={() => openPreview(asset)}
+                                    disabled={isFontAsset(asset)}
                                     title="Preview"
                                 >
                                     <EyeIcon />
@@ -281,24 +351,32 @@ function AssetsTab() {
                 </div>
             )}
 
-            {view === 'grid' && assets.length > 0 && (
+            {view === 'grid' && displayedAssets.length > 0 && (
                 <div className="grid grid-cols-4 gap-2">
-                    {assets.map((asset) => (
+                    {displayedAssets.map((asset) => (
                         <div key={asset._id} className="group relative">
-                            <ProjectImage
-                                src={asset.previewUrl ?? asset.url}
-                                blurhash={asset.blurhash}
-                                sizes={asset.sizes}
-                                alt={asset.name}
-                                className="--check-size=5px aspect-square w-full rounded-lg"
-                                imgClassName="cursor-pointer object-cover"
-                                onClick={() => openPreview(asset)}
-                            />
+                            {isFontAsset(asset) ? (
+                                <FontPlaceholder
+                                    name={asset.name}
+                                    className="aspect-square w-full"
+                                />
+                            ) : (
+                                <ProjectImage
+                                    src={asset.previewUrl ?? asset.url}
+                                    blurhash={asset.blurhash}
+                                    sizes={asset.sizes}
+                                    alt={asset.name}
+                                    className="--check-size=5px aspect-square w-full rounded-lg"
+                                    imgClassName="cursor-pointer object-cover"
+                                    onClick={() => openPreview(asset)}
+                                />
+                            )}
                             <div className="absolute inset-0 flex items-center justify-center gap-1 rounded-lg bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
                                 <Button
                                     variant="secondary"
                                     size="icon-sm"
                                     onClick={() => openPreview(asset)}
+                                    disabled={isFontAsset(asset)}
                                     title="Preview"
                                 >
                                     <EyeIcon />

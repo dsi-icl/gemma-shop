@@ -77,7 +77,7 @@ function ProjectLayout() {
     });
 
     return (
-        <div className="mx-auto w-full max-w-6xl">
+        <div className="mx-auto flex min-h-svh w-full max-w-6xl flex-col px-6 pt-18 pb-6">
             <div className="mb-6 flex items-center gap-3">
                 <Button
                     render={<Link to="/quarry" />}
