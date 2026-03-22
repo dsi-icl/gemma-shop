@@ -1,13 +1,16 @@
 import { Clock } from '@repo/ui/components/clock';
+import { useLocation } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
 export function Footer() {
-    const isClient = typeof window !== 'undefined';
+    const searchStr = useLocation({
+        select: (location) => location.searchStr
+    });
+
     const mountLocation = useMemo(() => {
-        if (!isClient) return undefined;
-        const params = new URLSearchParams(window.location.search);
+        const params = new URLSearchParams(searchStr);
         return params.get('l');
-    }, [isClient]);
+    }, [searchStr]);
 
     if (mountLocation === 'gallery') return null;
 

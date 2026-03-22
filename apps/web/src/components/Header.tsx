@@ -4,7 +4,7 @@ import { useAuthSuspense } from '@repo/auth/tanstack/hooks';
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Button } from '@repo/ui/components/button';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useRouter } from '@tanstack/react-router';
+import { Link, useLocation, useNavigate, useRouter } from '@tanstack/react-router';
 import { Suspense, useMemo } from 'react';
 
 import { KeyboardToggle } from './KeyboardToggle';
@@ -56,12 +56,14 @@ function HeaderAuthSection() {
 }
 
 export function Header() {
-    const isClient = typeof window !== 'undefined';
+    const searchStr = useLocation({
+        select: (location) => location.searchStr
+    });
+
     const mountLocation = useMemo(() => {
-        if (!isClient) return undefined;
-        const params = new URLSearchParams(window.location.search);
+        const params = new URLSearchParams(searchStr);
         return params.get('l');
-    }, [isClient]);
+    }, [searchStr]);
 
     if (mountLocation === 'gallery') return null;
 
