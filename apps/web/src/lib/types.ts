@@ -171,7 +171,11 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('rehydrate_please') }),
     z.object({
         type: z.literal('upsert_layer'),
-        origin: z.string().optional(),
+        origin: z
+            .literal('controller')
+            .or(z.literal('editor'))
+            .or(z.literal('yjs_sync'))
+            .optional(),
         layer: LayerSchema
     }),
     z.object({ type: z.literal('delete_layer'), numericId: z.number() }),

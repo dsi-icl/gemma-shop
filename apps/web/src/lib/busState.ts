@@ -26,8 +26,7 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     activeVideos: new Map<number, { scopeId: ScopeId; layer: Layer }>(),
     peerCounts: { editor: 0, wall: 0, controller: 0, roy: 0 },
     lastPingSeen: new Map<string, number>(),
-    scopeCleanupTimers: new Map<ScopeId, ReturnType<typeof setTimeout>>(),
-    transientLayerIdsByScope: new Map<ScopeId, Set<number>>()
+    scopeCleanupTimers: new Map<ScopeId, ReturnType<typeof setTimeout>>()
 };
 (process as any).__BUS_HMR__ = _hmr;
 
@@ -293,34 +292,6 @@ export function getOrCreateScope(
         scopeIds.add(scopeId);
     }
     return scope;
-}
-
-const transientLayerIdsByScope: Map<ScopeId, Set<number>> = _hmr.transientLayerIdsByScope;
-
-export function markLayerTransient(scopeId: ScopeId, numericId: number) {
-    let set = transientLayerIdsByScope.get(scopeId);
-    if (!set) {
-        set = new Set<number>();
-        transientLayerIdsByScope.set(scopeId, set);
-    }
-    set.add(numericId);
-}
-
-export function clearLayerTransient(scopeId: ScopeId, numericId: number) {
-    const set = transientLayerIdsByScope.get(scopeId);
-    if (!set) return;
-    set.delete(numericId);
-    if (set.size === 0) transientLayerIdsByScope.delete(scopeId);
-}
-
-export function clearTransientLayersForScope(scopeId: ScopeId) {
-    transientLayerIdsByScope.delete(scopeId);
-}
-
-function getPersistentLayers(scopeId: ScopeId, layers: Layer[]): Layer[] {
-    const transientIds = transientLayerIdsByScope.get(scopeId);
-    if (!transientIds || transientIds.size === 0) return layers;
-    return layers.filter((layer) => !transientIds.has(layer.numericId));
 }
 
 export function deleteYDocForLayer(scopeId: ScopeId, numericId: number) {
@@ -838,7 +809,6 @@ async function executeScopeCleanup(scopeId: ScopeId) {
     editorsByScope.delete(scopeId);
     wallPeersByScope.delete(scopeId);
     scopeWatchers.delete(scopeId);
-    transientLayerIdsByScope.delete(scopeId);
 }
 
 // Resolve the ScopeId for a peer (editors directly, walls/controllers via binding)
@@ -946,7 +916,7 @@ export async function buildSlidesSnapshot(
         }
     }
 
-    const currentLayers = getPersistentLayers(scopeId, Array.from(scope.layers.values()));
+    const currentLayers = Array.from(scope.layers.values());
     let slideFound = false;
     const updatedSlides = existingSlides.map((slide) => {
         if (slide.id === scope.slideId) {
