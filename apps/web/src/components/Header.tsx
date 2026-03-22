@@ -5,7 +5,7 @@ import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Button } from '@repo/ui/components/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
 
 import { KeyboardToggle } from './KeyboardToggle';
 import { ThemeToggle } from './ThemeToggle';
@@ -56,6 +56,15 @@ function HeaderAuthSection() {
 }
 
 export function Header() {
+    const isClient = typeof window !== 'undefined';
+    const mountLocation = useMemo(() => {
+        if (!isClient) return undefined;
+        const params = new URLSearchParams(window.location.search);
+        return params.get('l');
+    }, [isClient]);
+
+    if (mountLocation === 'gallery') return null;
+
     return (
         <header className="absolute top-0 left-0 flex w-full items-center justify-end gap-2 p-4">
             <Link to="/" className="flex grow flex-row gap-3 font-mono">

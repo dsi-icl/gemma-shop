@@ -1,16 +1,196 @@
-'use client';
-
-import { CircleNotchIcon, MonitorIcon, SpinnerGapIcon } from '@phosphor-icons/react';
+import { CircleNotchIcon, SlideshowIcon } from '@phosphor-icons/react';
+import {
+    ResizableHandle,
+    ResizablePanel,
+    ResizablePanelGroup
+} from '@repo/ui/components/resizable';
 import { cn } from '@repo/ui/lib/utils';
-import { createFileRoute } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createFileRoute, useLocation } from '@tanstack/react-router';
+import { decode, isBlurhashValid } from 'blurhash';
+import Konva from 'konva';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Stage, Layer as KonvaLayer, Rect, Circle, Line, Image } from 'react-konva';
 
+import { ControllerToolbar } from '~/components/ControllerToolbar';
+import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { ControllerEngine } from '~/lib/controllerEngine';
+import { applyKonvaFilters } from '~/lib/konvaFilters';
+import { textHtmlToImage } from '~/lib/textToCanvas';
+import type { LayerWithEditorState } from '~/lib/types';
 import { $getCommit } from '~/server/projects.fns';
 
+const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
+const SCREEN_W = 1920;
+const SCREEN_H = 1080;
+const COLS = 16;
+const ROWS = 4;
+
 export const Route = createFileRoute('/controller/')({
-    component: ControllerApp
+    component: CommitViewer
 });
+
+function deriveVideoStillImageFilename(url: string): string | null {
+    if (!url.startsWith('/api/assets/')) return null;
+    const filename = url.split('/').pop() ?? '';
+    const base = filename.replace(/\.[^.]+$/, '');
+    return base ? `${base}_preview.jpg` : null;
+}
+
+function ReadOnlyMediaLayer({
+    layer
+}: {
+    layer: Extract<LayerWithEditorState, { type: 'image' | 'video' | 'web' }>;
+}) {
+    const [img, setImg] = useState<HTMLImageElement | null>(null);
+    const imageRef = useRef<Konva.Image>(null);
+
+    const mediaUrl = useMemo(() => {
+        if (layer.type === 'image') return layer.url;
+        if (layer.type === 'video') {
+            const stillName = layer.stillImage ?? deriveVideoStillImageFilename(layer.url);
+            return stillName ? `/api/assets/${stillName}` : null;
+        }
+        const stillName = layer.stillImage;
+        return stillName ? `/api/assets/${stillName}` : null;
+    }, [layer]);
+
+    useEffect(() => {
+        if (!mediaUrl) {
+            setImg(null);
+            return;
+        }
+        const i = new window.Image();
+        if (!mediaUrl.startsWith('blob:') && !mediaUrl.startsWith('data:')) {
+            i.crossOrigin = 'anonymous';
+        }
+        i.onload = () => setImg(i);
+        i.onerror = () => setImg(null);
+        i.src = mediaUrl;
+    }, [mediaUrl]);
+
+    useEffect(() => {
+        applyKonvaFilters(imageRef.current, layer.config.filters);
+    }, [layer.config.filters, img, layer.config.width, layer.config.height]);
+
+    if (img) {
+        return (
+            <Image
+                ref={imageRef}
+                image={img}
+                x={layer.config.cx}
+                y={layer.config.cy}
+                width={layer.config.width}
+                height={layer.config.height}
+                scaleX={layer.config.scaleX}
+                scaleY={layer.config.scaleY}
+                offsetX={layer.config.width / 2}
+                offsetY={layer.config.height / 2}
+                rotation={layer.config.rotation}
+                listening={false}
+            />
+        );
+    }
+
+    if (layer.blurhash && isBlurhashValid(layer.blurhash)) {
+        const pixels = decode(layer.blurhash, 100, 100) as Uint8ClampedArray<ArrayBuffer>;
+        const imageData = new ImageData(pixels, 100, 100);
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = 100;
+        offscreenCanvas.height = 100;
+        const ctx = offscreenCanvas.getContext('2d');
+        ctx?.putImageData(imageData, 0, 0);
+        return (
+            <Image
+                ref={imageRef}
+                image={offscreenCanvas}
+                x={layer.config.cx}
+                y={layer.config.cy}
+                width={layer.config.width}
+                height={layer.config.height}
+                scaleX={layer.config.scaleX}
+                scaleY={layer.config.scaleY}
+                offsetX={layer.config.width / 2}
+                offsetY={layer.config.height / 2}
+                rotation={layer.config.rotation}
+                listening={false}
+            />
+        );
+    }
+
+    return (
+        <Rect
+            x={layer.config.cx}
+            y={layer.config.cy}
+            width={layer.config.width}
+            height={layer.config.height}
+            scaleX={layer.config.scaleX}
+            scaleY={layer.config.scaleY}
+            offsetX={layer.config.width / 2}
+            offsetY={layer.config.height / 2}
+            rotation={layer.config.rotation}
+            fill="#555"
+            listening={false}
+        />
+    );
+}
+
+function ReadOnlyTextLayer({ layer }: { layer: Extract<LayerWithEditorState, { type: 'text' }> }) {
+    const [img, setImg] = useState<HTMLImageElement | null>(null);
+    const imageRef = useRef<Konva.Image>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        textHtmlToImage(layer.textHtml ?? '', layer.config.width, layer.config.height)
+            .then((rendered) => {
+                if (!cancelled) setImg(rendered);
+            })
+            .catch(() => {
+                if (!cancelled) setImg(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [layer.textHtml, layer.config.width, layer.config.height]);
+
+    useEffect(() => {
+        applyKonvaFilters(imageRef.current, layer.config.filters);
+    }, [layer.config.filters, img, layer.config.width, layer.config.height]);
+
+    if (!img) {
+        return (
+            <Rect
+                x={layer.config.cx}
+                y={layer.config.cy}
+                width={layer.config.width}
+                height={layer.config.height}
+                scaleX={layer.config.scaleX}
+                scaleY={layer.config.scaleY}
+                offsetX={layer.config.width / 2}
+                offsetY={layer.config.height / 2}
+                rotation={layer.config.rotation}
+                fill="#555"
+                listening={false}
+            />
+        );
+    }
+
+    return (
+        <Image
+            ref={imageRef}
+            image={img}
+            x={layer.config.cx}
+            y={layer.config.cy}
+            width={layer.config.width}
+            height={layer.config.height}
+            scaleX={layer.config.scaleX}
+            scaleY={layer.config.scaleY}
+            offsetX={layer.config.width / 2}
+            offsetY={layer.config.height / 2}
+            rotation={layer.config.rotation}
+            listening={false}
+        />
+    );
+}
 
 interface BindingStatus {
     bound: boolean;
@@ -23,20 +203,26 @@ interface SlideEntry {
     id: string;
     name: string;
     order: number;
+    layers: LayerWithEditorState[];
     layerCount: number;
 }
 
-function ControllerApp() {
-    const isClient = typeof window !== 'undefined';
+function CommitViewer() {
+    const stageSlot = useRef<HTMLDivElement>(null);
+    const stageInstance = useRef<Konva.Stage>(null);
+    const [stageScaleFactor, setStageScaleFactor] = useState(DEFAULT_STAGE_SCALE_FACTOR);
+    const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
+    const searchStr = useLocation({
+        select: (location) => location.searchStr
+    });
     const { wallId, mountLocation } = useMemo(() => {
-        if (!isClient) return { wallId: undefined, mountLocation: undefined };
-        const params = new URLSearchParams(window.location.search);
+        const params = new URLSearchParams(searchStr);
         return { wallId: params.get('w'), mountLocation: params.get('l') };
-    }, [isClient]);
+    }, [searchStr]);
 
-    const shouldHideHeaderAndFooter = mountLocation === 'gallery';
+    const showHideHeadAndFoot = mountLocation === 'gallery';
+
     const engine = useMemo(() => (wallId ? ControllerEngine.getInstance(wallId) : null), [wallId]);
-
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
     const [slides, setSlides] = useState<SlideEntry[]>([]);
     const [loadingSlides, setLoadingSlides] = useState(false);
@@ -100,116 +286,288 @@ function ControllerApp() {
         }
     }, [engine]);
 
-    if (wallId === undefined) {
-        return (
-            <div
-                className={cn(
-                    'container flex min-h-svh min-w-full flex-col items-center justify-center bg-background',
-                    shouldHideHeaderAndFooter
-                        ? 'fixed top-0 right-0 bottom-0 left-0 z-100 h-full w-full pt-0 pb-0'
-                        : 'pt-18 pb-13'
-                )}
-            >
-                <div className="flex h-full w-full items-center justify-center">
-                    <CircleNotchIcon className="animate-spin" />
-                </div>
-            </div>
-        );
-    }
+    // Default to first slide
+    useEffect(() => {
+        if (!activeSlideId && slides.length > 0) {
+            setActiveSlideId(slides[0].id);
+        }
+    }, [activeSlideId, slides]);
 
-    if (!wallId) {
+    const activeLayers = useMemo(() => {
+        const slide = slides.find((s) => s.id === activeSlideId);
+        if (slide && binding.projectId && binding.commitId) {
+            engine?.bindSlide(binding.projectId, binding.commitId, slide.id);
+
+            return (slide?.layers ?? []) as LayerWithEditorState[];
+        }
+        return [];
+    }, [binding, slides, activeSlideId, engine]);
+
+    const sortedLayers = useMemo(
+        () => [...activeLayers].sort((a, b) => a.config.zIndex - b.config.zIndex),
+        [activeLayers]
+    );
+
+    useLayoutEffect(() => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+
+        const logicalHeight = SCREEN_H * ROWS;
+        const minScale = 0.01;
+
+        const recomputeScale = () => {
+            const availableHeight = slot.clientHeight;
+            if (availableHeight <= 0) return;
+            const maxVerticalScale = Math.max(minScale, availableHeight / logicalHeight);
+            setStageScaleFactor((prev) =>
+                Math.abs(prev - maxVerticalScale) < 0.0005 ? prev : maxVerticalScale
+            );
+        };
+
+        recomputeScale();
+        const observer = new ResizeObserver(recomputeScale);
+        observer.observe(slot);
+
+        return () => observer.disconnect();
+    }, []);
+
+    if (loadingSlides)
         return (
             <div
                 className={cn(
-                    'container flex min-h-svh min-w-full flex-col items-center justify-center bg-background',
-                    shouldHideHeaderAndFooter
-                        ? 'fixed top-0 right-0 bottom-0 left-0 z-100 h-full w-full pt-0 pb-0'
+                    'container flex h-full max-h-full min-h-0 min-w-full flex-col items-center justify-center overflow-hidden bg-background',
+                    showHideHeadAndFoot
+                        ? 'fixed inset-0 top-0 right-0 bottom-0 left-0 z-1000! p-0'
                         : 'pt-18 pb-13'
                 )}
             >
-                <div className="flex h-full w-full items-center justify-center">
-                    <p className="text-muted-foreground">
-                        Missing wall ID. Use <code>?w=WALL_ID</code> in the URL.
-                    </p>
-                </div>
+                <CircleNotchIcon className="animate-spin" />
             </div>
         );
-    }
 
     return (
         <div
             className={cn(
-                'container flex min-h-svh min-w-full flex-col',
-                shouldHideHeaderAndFooter
-                    ? 'fixed top-0 right-0 bottom-0 left-0 z-50 h-full w-full pt-0 pb-0'
+                'container flex h-full max-h-full min-h-0 min-w-full flex-col overflow-hidden bg-background',
+                showHideHeadAndFoot
+                    ? 'fixed inset-0 top-0 right-0 bottom-0 left-0 z-1000! p-0'
                     : 'pt-18 pb-13'
             )}
         >
-            <div className="flex h-full flex-col bg-black text-white">
-                {/* Header */}
-                <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-                    <MonitorIcon size={20} weight="fill" className="text-green-500" />
-                    <span className="text-sm font-medium">Controller</span>
-                    <span className="text-xs text-white/50">{wallId}</span>
-                </div>
+            <ResizablePanelGroup
+                orientation="horizontal"
+                className="h-full min-h-0 w-full overflow-hidden font-sans text-foreground"
+            >
+                <ResizablePanel className="min-h-0 overflow-hidden">
+                    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+                        <div className="flex min-h-0 flex-1 overflow-hidden">
+                            {/* Canvas area */}
+                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                                <ControllerToolbar />
 
-                {/* Content */}
-                <div className="flex-1 p-4">
-                    {!binding.bound ? (
-                        <div className="flex flex-col items-center justify-center gap-2 py-12 text-white/50">
-                            <MonitorIcon size={32} />
-                            <p className="text-sm">No project loaded on this wall</p>
-                            <p className="text-xs">Load a project from the gallery or editor</p>
-                        </div>
-                    ) : loadingSlides ? (
-                        <div className="flex items-center justify-center py-12">
-                            <SpinnerGapIcon size={24} className="animate-spin text-white/50" />
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-2">
-                            <div className="mb-2 text-xs text-white/50">
-                                Slides ({slides.length})
+                                <ViewerSlatePreview
+                                    stageSlot={stageSlot}
+                                    stageInstance={stageInstance}
+                                    stageScaleFactor={stageScaleFactor}
+                                    layers={sortedLayers}
+                                />
+                                <div
+                                    ref={stageSlot}
+                                    className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-black"
+                                >
+                                    <Stage
+                                        ref={stageInstance}
+                                        width={COLS * SCREEN_W * stageScaleFactor}
+                                        height={ROWS * SCREEN_H * stageScaleFactor}
+                                        scaleX={stageScaleFactor}
+                                        scaleY={stageScaleFactor}
+                                    >
+                                        <KonvaLayer>
+                                            {sortedLayers
+                                                .filter((layer) => layer.config.visible)
+                                                .map((layer) => {
+                                                    if (layer.type === 'image') {
+                                                        return (
+                                                            <ReadOnlyMediaLayer
+                                                                key={`img_${layer.numericId}`}
+                                                                layer={layer}
+                                                            />
+                                                        );
+                                                    }
+                                                    if (layer.type === 'video') {
+                                                        return (
+                                                            <ReadOnlyMediaLayer
+                                                                key={`vid_${layer.numericId}`}
+                                                                layer={layer}
+                                                            />
+                                                        );
+                                                    }
+                                                    if (layer.type === 'web') {
+                                                        return (
+                                                            <ReadOnlyMediaLayer
+                                                                key={`web_${layer.numericId}`}
+                                                                layer={layer}
+                                                            />
+                                                        );
+                                                    }
+                                                    if (layer.type === 'text') {
+                                                        return (
+                                                            <ReadOnlyTextLayer
+                                                                key={`txt_${layer.numericId}`}
+                                                                layer={layer}
+                                                            />
+                                                        );
+                                                    }
+                                                    if (layer.type === 'shape') {
+                                                        const common = {
+                                                            x: layer.config.cx,
+                                                            y: layer.config.cy,
+                                                            rotation: layer.config.rotation,
+                                                            scaleX: layer.config.scaleX,
+                                                            scaleY: layer.config.scaleY,
+                                                            fill: layer.fill,
+                                                            stroke: layer.strokeColor,
+                                                            strokeWidth: layer.strokeWidth,
+                                                            listening: false as const
+                                                        };
+                                                        if (layer.shape === 'rectangle') {
+                                                            return (
+                                                                <Rect
+                                                                    key={`shape_${layer.numericId}`}
+                                                                    {...common}
+                                                                    width={layer.config.width}
+                                                                    height={layer.config.height}
+                                                                    offsetX={layer.config.width / 2}
+                                                                    offsetY={
+                                                                        layer.config.height / 2
+                                                                    }
+                                                                    dash={layer.strokeDash}
+                                                                />
+                                                            );
+                                                        }
+                                                        if (layer.shape === 'circle') {
+                                                            return (
+                                                                <Circle
+                                                                    key={`shape_${layer.numericId}`}
+                                                                    {...common}
+                                                                    offsetX={layer.config.width / 2}
+                                                                    offsetY={
+                                                                        layer.config.height / 2
+                                                                    }
+                                                                    radius={layer.config.width / 2}
+                                                                    dash={layer.strokeDash}
+                                                                />
+                                                            );
+                                                        }
+                                                    }
+                                                    if (layer.type === 'line') {
+                                                        return (
+                                                            <Line
+                                                                key={`lin_${layer.numericId}`}
+                                                                points={layer.line}
+                                                                stroke={layer.strokeColor}
+                                                                strokeWidth={layer.strokeWidth}
+                                                                dash={layer.strokeDash}
+                                                                dashEnabled={true}
+                                                                tension={0.4}
+                                                                lineCap="round"
+                                                                lineJoin="round"
+                                                                listening={false}
+                                                            />
+                                                        );
+                                                    }
+                                                    if (layer.type === 'map') {
+                                                        return (
+                                                            <Rect
+                                                                key={`map_${layer.numericId}`}
+                                                                x={layer.config.cx}
+                                                                y={layer.config.cy}
+                                                                width={layer.config.width}
+                                                                height={layer.config.height}
+                                                                scaleX={layer.config.scaleX}
+                                                                scaleY={layer.config.scaleY}
+                                                                offsetX={layer.config.width / 2}
+                                                                offsetY={layer.config.height / 2}
+                                                                rotation={layer.config.rotation}
+                                                                fill="#1f2937"
+                                                                stroke="#334155"
+                                                                strokeWidth={2}
+                                                                listening={false}
+                                                            />
+                                                        );
+                                                    }
+                                                    if (layer.type === 'graph') {
+                                                        return (
+                                                            <Rect
+                                                                key={`roy_${layer.numericId}`}
+                                                                x={layer.config.cx}
+                                                                y={layer.config.cy}
+                                                                width={layer.config.width}
+                                                                height={layer.config.height}
+                                                                scaleX={layer.config.scaleX}
+                                                                scaleY={layer.config.scaleY}
+                                                                offsetX={layer.config.width / 2}
+                                                                offsetY={layer.config.height / 2}
+                                                                rotation={layer.config.rotation}
+                                                                fill="#111827"
+                                                                stroke="#374151"
+                                                                strokeWidth={2}
+                                                                listening={false}
+                                                            />
+                                                        );
+                                                    }
+                                                    // Fallback placeholder
+                                                    return (
+                                                        <Rect
+                                                            key={`fallback_${layer.numericId}`}
+                                                            x={layer.config.cx}
+                                                            y={layer.config.cy}
+                                                            width={layer.config.width}
+                                                            height={layer.config.height}
+                                                            offsetX={layer.config.width / 2}
+                                                            offsetY={layer.config.height / 2}
+                                                            rotation={layer.config.rotation}
+                                                            fill="#555"
+                                                            listening={false}
+                                                        />
+                                                    );
+                                                })}
+                                        </KonvaLayer>
+                                    </Stage>
+                                </div>
                             </div>
+                        </div>
+                    </div>
+                </ResizablePanel>
+                <ResizableHandle />
+                <ResizablePanel defaultSize={300} minSize={200} className="min-h-0 overflow-hidden">
+                    {/* Slide list sidebar */}
+                    <div className="flex h-full min-h-0 w-full flex-col border-l border-border">
+                        <div className="flex h-13 shrink-0 cursor-pointer items-center justify-between border-b border-border bg-muted/50 px-4">
+                            <h2 className="flex items-center gap-2 text-sm font-semibold">
+                                <SlideshowIcon size={18} weight="bold" /> Slides
+                            </h2>
+                        </div>
+                        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
                             {slides
                                 .sort((a, b) => a.order - b.order)
-                                .map((slide, idx) => (
+                                .map((slide) => (
                                     <button
                                         key={slide.id}
-                                        onClick={() => {
-                                            if (binding.projectId && binding.commitId) {
-                                                engine?.bindSlide(
-                                                    binding.projectId,
-                                                    binding.commitId,
-                                                    slide.id
-                                                );
-                                            }
-                                        }}
-                                        className={`cursor-pointer rounded-lg border px-4 py-3 text-left transition-colors ${
-                                            binding.slideId === slide.id
-                                                ? 'border-green-500 bg-green-500/10'
-                                                : 'border-white/10 hover:border-white/30 hover:bg-white/5'
+                                        onClick={() => setActiveSlideId(slide.id)}
+                                        className={`w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-card/50 ${
+                                            activeSlideId === slide.id
+                                                ? 'bg-primary/10 text-primary'
+                                                : 'text-muted-foreground hover:bg-accent'
                                         }`}
                                     >
-                                        <div className="text-sm font-medium">
-                                            Slide {idx + 1}: {slide.name ?? 'Untitled'}
-                                        </div>
-                                        <div className="text-xs text-white/50">
-                                            {slide.layerCount} layer
-                                            {slide.layerCount !== 1 ? 's' : ''}
-                                        </div>
+                                        <span className="font-medium">Slide {slide.name}</span>
                                     </button>
                                 ))}
                         </div>
-                    )}
-                </div>
-            </div>
+                    </div>
+                </ResizablePanel>
+            </ResizablePanelGroup>
         </div>
     );
-}
-
-// --- VITE HMR DEFENSE STRATEGY ---
-if (import.meta.hot) {
-    import.meta.hot.dispose(() => {
-        if (typeof window !== 'undefined') window.__CONTROLLER_RELOADING__ = true;
-    });
 }

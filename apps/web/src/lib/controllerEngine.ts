@@ -18,7 +18,15 @@ type BindingStatus = {
 
 type BindingCallback = (status: BindingStatus) => void;
 type HydrateCallback = (layers: Extract<GSMessage, { type: 'hydrate' }>['layers']) => void;
-type SlidesUpdatedCallback = (slides: Array<{ id: string; order: number; name: string }>) => void;
+type SlidesUpdatedCallback = (
+    slides: Array<{
+        id: string;
+        order: number;
+        name: string;
+        layers: Extract<GSMessage, { type: 'hydrate' }>['layers'];
+    }>
+) => void;
+type ServerMessageCallback = (data: GSMessage) => void;
 
 export class ControllerEngine {
     private rws: ReconnectingWebSocket;
@@ -26,6 +34,7 @@ export class ControllerEngine {
     private bindingCallbacks = new Set<BindingCallback>();
     private hydrateCallbacks = new Set<HydrateCallback>();
     private slidesUpdatedCallbacks = new Set<SlidesUpdatedCallback>();
+    private messageCallbacks = new Set<ServerMessageCallback>();
 
     private constructor(wallId: string) {
         this.wallId = wallId;
@@ -42,6 +51,7 @@ export class ControllerEngine {
             onMessage: (event) => {
                 if (typeof event.data !== 'string') return;
                 const data = GSMessageSchema.parse(JSON.parse(event.data));
+                this.messageCallbacks.forEach((cb) => cb(data));
 
                 if (data.type === 'wall_binding_status') {
                     this.bindingCallbacks.forEach((cb) =>
@@ -89,6 +99,7 @@ export class ControllerEngine {
         this.bindingCallbacks.clear();
         this.hydrateCallbacks.clear();
         this.slidesUpdatedCallbacks.clear();
+        this.messageCallbacks.clear();
     }
 
     public sendJSON = (data: GSMessage) => {
@@ -124,6 +135,13 @@ export class ControllerEngine {
         this.slidesUpdatedCallbacks.add(cb);
         return () => {
             this.slidesUpdatedCallbacks.delete(cb);
+        };
+    }
+
+    public onMessage(cb: ServerMessageCallback) {
+        this.messageCallbacks.add(cb);
+        return () => {
+            this.messageCallbacks.delete(cb);
         };
     }
 }

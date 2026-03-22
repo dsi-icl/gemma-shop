@@ -33,6 +33,8 @@ import {
     registerActiveVideo,
     unregisterActiveVideo,
     clearActiveVideosForScope,
+    clearLayerTransient,
+    clearTransientLayersForScope,
     // recomputeLayerNodes,
     // recomputeAllLayerNodes,
     sendVideoSyncToRelevantWalls,
@@ -41,6 +43,7 @@ import {
     // clearLayerNodesForScope,
     invalidateHydrateCache,
     getHydratePayload,
+    markLayerTransient,
     touchPing,
     reapStalePeers,
     persistSlideMetadata,
@@ -85,6 +88,10 @@ pongView.setUint8(0, OP.CLOCK_PONG);
 
 function hasType(raw: unknown): raw is { type: string; [k: string]: unknown } {
     return typeof raw === 'object' && raw !== null && typeof (raw as any).type === 'string';
+}
+
+function isControllerTransientOrigin(origin: unknown): boolean {
+    return origin === 'controller_draw';
 }
 
 function toArrayBufferView(data: Uint8Array | Buffer): ArrayBuffer {
@@ -209,6 +216,7 @@ handlers.set('clear_stage', ({ entry, scopeId }) => {
         scope.layers.clear();
         scope.dirty = true;
     }
+    clearTransientLayersForScope(scopeId);
     clearActiveVideosForScope(scopeId);
     // clearLayerNodesForScope(scopeId);
     invalidateHydrateCache(scopeId);
@@ -218,6 +226,12 @@ handlers.set('clear_stage', ({ entry, scopeId }) => {
 handlers.set('upsert_layer', ({ entry, data, scopeId, rawText }) => {
     const layer = data.layer;
     if (typeof layer?.numericId !== 'number') return;
+    if (entry.meta.specimen !== 'editor' && !isControllerTransientOrigin(data.origin)) {
+        console.warn(
+            `[WS] Ignoring non-editor upsert_layer from ${entry.meta.specimen} (origin=${String(data.origin ?? '')})`
+        );
+        return;
+    }
 
     let relayPayload = rawText;
 
@@ -234,6 +248,11 @@ handlers.set('upsert_layer', ({ entry, data, scopeId, rawText }) => {
     if (scopeId !== null) {
         const scope = scopedState.get(scopeId);
         if (scope) {
+            if (entry.meta.specimen !== 'editor' || isControllerTransientOrigin(data.origin)) {
+                markLayerTransient(scopeId, layer.numericId);
+            } else {
+                clearLayerTransient(scopeId, layer.numericId);
+            }
             scope.layers.set(layer.numericId, layer);
             scope.dirty = true;
         }
@@ -248,6 +267,7 @@ handlers.set('delete_layer', ({ entry, data, scopeId, rawText }) => {
     const scope = scopedState.get(scopeId);
     if (scope) {
         scope.layers.delete(data.numericId);
+        clearLayerTransient(scopeId, data.numericId);
         scope.dirty = true;
         deleteYDocForLayer(scopeId, data.numericId);
     }
@@ -264,6 +284,7 @@ handlers.set('seed_scope', ({ entry, data, scopeId }) => {
 
     // Replace all layers wholesale
     scope.layers.clear();
+    clearTransientLayersForScope(scopeId);
     for (const layer of data.layers) {
         if (typeof layer?.numericId === 'number') {
             scope.layers.set(layer.numericId, layer);
