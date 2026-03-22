@@ -53,6 +53,8 @@ export function ProjectForm({
             description: '',
             tags: [],
             heroImages: [],
+            customControlUrl: '',
+            customRenderUrl: '',
             collaborators: [],
             ...defaultValues
         },
@@ -68,6 +70,8 @@ export function ProjectForm({
             description: form.getFieldValue('description'),
             tags: form.getFieldValue('tags'),
             heroImages: form.getFieldValue('heroImages'),
+            customControlUrl: form.getFieldValue('customControlUrl') || undefined,
+            customRenderUrl: form.getFieldValue('customRenderUrl') || undefined,
             collaborators: form.getFieldValue('collaborators')
         }),
         [form]
@@ -230,6 +234,40 @@ export function ProjectForm({
                                     }}
                                     placeholder="Type a tag and press Enter"
                                     suggestions={tagSuggestions}
+                                />
+                            </div>
+                        )}
+                    </form.Field>
+
+                    <form.Field name="customControlUrl">
+                        {(field) => (
+                            <div className="grid gap-2">
+                                <Label htmlFor={field.name}>Custom Control URL</Label>
+                                <Input
+                                    id={field.name}
+                                    value={field.state.value}
+                                    onBlur={field.handleBlur}
+                                    onChange={(e) => {
+                                        field.handleChange(e.target.value);
+                                        scheduleAutoSave();
+                                    }}
+                                />
+                            </div>
+                        )}
+                    </form.Field>
+
+                    <form.Field name="customRenderUrl">
+                        {(field) => (
+                            <div className="grid hidden gap-2">
+                                <Label htmlFor={field.name}>Custom Render URL</Label>
+                                <Input
+                                    id={field.name}
+                                    value={field.state.value}
+                                    onBlur={field.handleBlur}
+                                    onChange={(e) => {
+                                        field.handleChange(e.target.value);
+                                        scheduleAutoSave();
+                                    }}
                                 />
                             </div>
                         )}

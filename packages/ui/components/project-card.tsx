@@ -23,6 +23,7 @@ export interface Project {
     description: string;
     tags: string[];
     imageUrl?: string;
+    customControlUrl?: string;
 }
 
 interface ProjectCardProps {
@@ -35,6 +36,29 @@ interface ProjectCardProps {
         isBound?: boolean;
     }>;
     onLoadProject?: (wallId: string) => Promise<boolean | void>;
+}
+
+function buildControllerUrl(customControlUrl: string | undefined, wallId: string): string {
+    const fallback = `/controller/?l=gallery&w=${encodeURIComponent(wallId)}`;
+    const raw = customControlUrl?.trim();
+    if (!raw) return fallback;
+
+    const withTokens = raw
+        .replaceAll('{wallId}', encodeURIComponent(wallId))
+        .replaceAll('{mountLocation}', 'gallery');
+
+    try {
+        const isAbsolute = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(withTokens);
+        const url = new URL(withTokens, 'http://local');
+
+        if (!url.searchParams.has('l')) url.searchParams.set('l', 'gallery');
+        if (!url.searchParams.has('w')) url.searchParams.set('w', wallId);
+
+        if (isAbsolute) return url.toString();
+        return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+        return fallback;
+    }
 }
 
 function ProjectCardDialogBody({
@@ -99,11 +123,9 @@ function ProjectCardDialogBody({
     }, [isFullscreen, hasController, controllerMounted]);
 
     const controllerUrl = useMemo(
-        () => (activeWallId ? `/controller/?l=gallery&w=${encodeURIComponent(activeWallId)}` : ''),
-        [activeWallId]
+        () => (activeWallId ? buildControllerUrl(project.customControlUrl, activeWallId) : ''),
+        [activeWallId, project.customControlUrl]
     );
-
-    console.log('controllerUrl', controllerUrl);
 
     return (
         <>
@@ -111,7 +133,7 @@ function ProjectCardDialogBody({
                 className={`grid h-full min-h-0 w-full ${panelClassName} transition-all duration-300`}
             >
                 <div
-                    className={`min-w-0 overflow-hidden border-r border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-900/40 ${
+                    className={`min-w-0 overflow-hidden border-r ${
                         isFullscreen && hasController
                             ? 'opacity-100'
                             : 'pointer-events-none opacity-0'
@@ -134,10 +156,10 @@ function ProjectCardDialogBody({
                         className="h-52 w-full object-cover"
                     />
                     <div className="p-6">
-                        <MorphingDialogTitle className="text-2xl text-zinc-950 dark:text-zinc-50">
+                        <MorphingDialogTitle className="text-2xl">
                             {project.name}
                         </MorphingDialogTitle>
-                        <MorphingDialogSubtitle className="text-zinc-700 dark:text-zinc-400">
+                        <MorphingDialogSubtitle className="text-sm">
                             {project.author}
                         </MorphingDialogSubtitle>
 
@@ -157,12 +179,10 @@ function ProjectCardDialogBody({
                                 exit: { opacity: 0, scale: 0.8, y: 100 }
                             }}
                         >
-                            <p className="mt-2 text-zinc-500 dark:text-zinc-500">
-                                {project.description}
-                            </p>
+                            <p className="mt-2 opacity-50">{project.description}</p>
 
                             {showWallPicker ? (
-                                <div className="mt-5 rounded-md border border-zinc-200 p-2 dark:border-zinc-700">
+                                <div className="mt-5 rounded-md border">
                                     <div className="mb-2 text-xs font-medium text-muted-foreground">
                                         Select a wall
                                     </div>
@@ -174,7 +194,7 @@ function ProjectCardDialogBody({
                                                     type="button"
                                                     disabled={isLoadingWall}
                                                     onClick={() => handleSelectWall(wall.id)}
-                                                    className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-zinc-100 disabled:opacity-60 dark:hover:bg-zinc-800"
+                                                    className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm transition-colors"
                                                 >
                                                     <span>{wall.name}</span>
                                                     <span className="text-xs text-muted-foreground">
@@ -219,7 +239,7 @@ function ProjectCardDialogBody({
                 </div>
             </div>
             <MorphingDialogMinimize />
-            <MorphingDialogClose className="text-zinc-50" />
+            <MorphingDialogClose />
         </>
     );
 }
@@ -242,7 +262,7 @@ export function ProjectCard({
                 style={{
                     borderRadius: '12px'
                 }}
-                className="flex max-w-67.5 flex-col overflow-hidden border border-zinc-950/10 bg-white dark:border-zinc-50/10 dark:bg-zinc-900"
+                className="flex w-full flex-col overflow-hidden border"
             >
                 <MorphingDialogImage
                     src={project.imageUrl}
@@ -250,20 +270,18 @@ export function ProjectCard({
                     state={'closed'}
                     className="h-48 w-full object-cover"
                 />
-                <div className="flex grow flex-col justify-between p-3">
+                <div className="flex w-full grow flex-col justify-between p-3">
                     <div>
                         <div className="flex items-start justify-between">
                             <div className="text-left">
-                                <MorphingDialogTitle className="text-zinc-950 dark:text-zinc-50">
-                                    {project.name}
-                                </MorphingDialogTitle>
-                                <MorphingDialogSubtitle className="text-zinc-700 dark:text-zinc-400">
+                                <MorphingDialogTitle>{project.name}</MorphingDialogTitle>
+                                <MorphingDialogSubtitle className="text-sm">
                                     {project.author}
                                 </MorphingDialogSubtitle>
                             </div>
                             <button
                                 type="button"
-                                className="relative ml-1 flex h-6 w-6 shrink-0 scale-100 appearance-none items-center justify-center rounded-lg border border-zinc-950/10 text-zinc-500 transition-colors select-none hover:bg-zinc-100 hover:text-zinc-800 focus-visible:ring-2 active:scale-[0.98] dark:border-zinc-50/10 dark:bg-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus-visible:ring-zinc-500"
+                                className="select-nonefocus-visible:ring-2 relative ml-1 flex h-6 w-6 shrink-0 scale-100 appearance-none items-center justify-center rounded-lg border transition-colors active:scale-[0.98]"
                                 aria-label="Open dialog"
                             >
                                 <EyeIcon size={12} />
@@ -284,7 +302,7 @@ export function ProjectCard({
                     style={{
                         borderRadius: '24px'
                     }}
-                    className="pointer-events-auto relative flex h-auto w-full flex-col overflow-hidden border border-zinc-950/10 bg-white sm:w-[500px] dark:border-zinc-50/10 dark:bg-zinc-900"
+                    className="pointer-events-auto relative flex h-auto w-full flex-col overflow-hidden border"
                 >
                     <ProjectCardDialogBody
                         project={project}

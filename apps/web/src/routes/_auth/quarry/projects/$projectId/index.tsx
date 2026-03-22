@@ -40,6 +40,8 @@ function InfoTab() {
                     description: project.description,
                     tags: project.tags.filter((t) => t !== 'public'),
                     heroImages: project.heroImages,
+                    customControlUrl: project.customControlUrl ?? '',
+                    customRenderUrl: project.customRenderUrl ?? '',
                     collaborators: project.collaborators
                 }}
                 onSubmit={(data) => mutation.mutate({ ...data, _id: projectId })}

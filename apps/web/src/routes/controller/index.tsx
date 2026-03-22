@@ -226,12 +226,23 @@ function CommitViewer() {
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
     const [slides, setSlides] = useState<SlideEntry[]>([]);
     const [loadingSlides, setLoadingSlides] = useState(false);
+    const lastRequestedBindRef = useRef<string | null>(null);
 
     // Listen for binding status from bus
     useEffect(() => {
         if (!engine) return;
         return engine.onBindingStatus((status) => {
-            setBinding(status);
+            setBinding((prev) => {
+                if (
+                    prev.bound === status.bound &&
+                    prev.projectId === status.projectId &&
+                    prev.commitId === status.commitId &&
+                    prev.slideId === status.slideId
+                ) {
+                    return prev;
+                }
+                return status;
+            });
         });
     }, [engine]);
 
@@ -258,8 +269,10 @@ function CommitViewer() {
     useEffect(() => {
         if (binding.bound && binding.commitId) {
             loadSlides(binding.commitId);
+            lastRequestedBindRef.current = null;
         } else {
             setSlides([]);
+            lastRequestedBindRef.current = null;
         }
     }, [binding.bound, binding.commitId, loadSlides]);
 
@@ -293,15 +306,23 @@ function CommitViewer() {
         }
     }, [activeSlideId, slides]);
 
+    useEffect(() => {
+        if (!engine || !binding.projectId || !binding.commitId || !activeSlideId) return;
+        const bindKey = `${binding.projectId}:${binding.commitId}:${activeSlideId}`;
+        if (lastRequestedBindRef.current === bindKey) return;
+        if (binding.slideId === activeSlideId) {
+            lastRequestedBindRef.current = bindKey;
+            return;
+        }
+
+        lastRequestedBindRef.current = bindKey;
+        engine.bindSlide(binding.projectId, binding.commitId, activeSlideId);
+    }, [engine, binding.projectId, binding.commitId, binding.slideId, activeSlideId]);
+
     const activeLayers = useMemo(() => {
         const slide = slides.find((s) => s.id === activeSlideId);
-        if (slide && binding.projectId && binding.commitId) {
-            engine?.bindSlide(binding.projectId, binding.commitId, slide.id);
-
-            return (slide?.layers ?? []) as LayerWithEditorState[];
-        }
-        return [];
-    }, [binding, slides, activeSlideId, engine]);
+        return (slide?.layers ?? []) as LayerWithEditorState[];
+    }, [slides, activeSlideId]);
 
     const sortedLayers = useMemo(
         () => [...activeLayers].sort((a, b) => a.config.zIndex - b.config.zIndex),
