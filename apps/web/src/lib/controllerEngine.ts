@@ -23,7 +23,6 @@ type SlidesUpdatedCallback = (
         id: string;
         order: number;
         name: string;
-        layers: Extract<GSMessage, { type: 'hydrate' }>['layers'];
     }>
 ) => void;
 type ServerMessageCallback = (data: GSMessage) => void;

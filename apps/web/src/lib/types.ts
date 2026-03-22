@@ -243,9 +243,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal('slides_updated'),
         commitId: z.string(),
-        slides: z.array(
-            z.object({ id: z.string(), order: z.number(), name: z.string(), layers: z.any() })
-        )
+        slides: z.array(z.object({ id: z.string(), order: z.number(), name: z.string() }))
     }),
     z.object({
         type: z.literal('asset_added'),

@@ -140,6 +140,10 @@ Gemma Cast lets multiple users edit decks in real time and publish synchronized 
     - upload route `onUploadFinish`
     - upload route `detectMediaType`
 
+### Known issues
+
+- While a controller is bound to a wall under active editor live broadcast, controller slide state can drift from scope reality; `slides_updated` metadata events are now partially reconciled client-side, but structural slide changes still require full commit refetch and can momentarily desync.
+
 ## Development considerations
 
 ### Safe Order for Refactors

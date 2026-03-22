@@ -61,6 +61,7 @@ function Controller() {
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
     const [slides, setSlides] = useState<SlideEntry[]>([]);
     const [loadingSlides, setLoadingSlides] = useState(false);
+    const slidesRef = useRef<SlideEntry[]>([]);
     const lastRequestedBindRef = useRef<string | null>(null);
 
     // Listen for binding status from bus
@@ -91,6 +92,7 @@ function Controller() {
             setSlides(
                 commitSlides.map((s) => ({
                     ...s,
+                    layers: s.layers,
                     layerCount: s.layers.length
                 }))
             );
@@ -111,18 +113,51 @@ function Controller() {
         }
     }, [binding.bound, binding.commitId, loadSlides]);
 
+    useEffect(() => {
+        slidesRef.current = slides;
+    }, [slides]);
+
     // Listen for live slide list updates from other editors
     useEffect(() => {
         if (!engine) return;
         return engine.onSlidesUpdated((updatedSlides) => {
-            setSlides((prev) =>
-                updatedSlides.map((s) => ({
-                    ...s,
-                    layerCount: prev.find((existing) => existing.id === s.id)?.layerCount ?? 0
-                }))
-            );
+            const currentSlides = slidesRef.current;
+
+            const nextIdSet = new Set(updatedSlides.map((s) => s.id));
+            const currentIdSet = new Set(currentSlides.map((s) => s.id));
+            const hasStructuralChange =
+                updatedSlides.length !== currentSlides.length ||
+                updatedSlides.some((s) => !currentIdSet.has(s.id)) ||
+                currentSlides.some((s) => !nextIdSet.has(s.id));
+
+            if (hasStructuralChange) {
+                if (binding.commitId) void loadSlides(binding.commitId);
+                return;
+            }
+
+            setSlides((prev) => {
+                const byId = new Map(prev.map((slide) => [slide.id, slide]));
+                return updatedSlides.map((updated) => {
+                    const existing = byId.get(updated.id);
+                    if (!existing) {
+                        // Safety fallback if local state drifted between event and state update.
+                        return {
+                            id: updated.id,
+                            name: updated.name,
+                            order: updated.order,
+                            layers: [],
+                            layerCount: 0
+                        };
+                    }
+                    return {
+                        ...existing,
+                        name: updated.name,
+                        order: updated.order
+                    };
+                });
+            });
         });
-    }, [engine]);
+    }, [engine, binding.commitId, loadSlides]);
 
     // HMR rehydrate
     useEffect(() => {
