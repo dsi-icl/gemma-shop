@@ -35,6 +35,7 @@ export class ControllerEngine {
     private hydrateCallbacks = new Set<HydrateCallback>();
     private slidesUpdatedCallbacks = new Set<SlidesUpdatedCallback>();
     private messageCallbacks = new Set<ServerMessageCallback>();
+    private lastBindSignature: string | null = null;
 
     private constructor(wallId: string) {
         this.wallId = wallId;
@@ -42,6 +43,7 @@ export class ControllerEngine {
             binaryType: 'arraybuffer',
             onOpen: () => {
                 console.log('Controller Engine: Connected to Server');
+                this.lastBindSignature = null;
                 this.sendJSON({
                     type: 'hello',
                     specimen: 'controller',
@@ -108,6 +110,9 @@ export class ControllerEngine {
 
     /** Navigate the bound wall to a different slide */
     public bindSlide(projectId: string, commitId: string, slideId: string) {
+        const signature = `${projectId}:${commitId}:${slideId}`;
+        if (this.lastBindSignature === signature) return;
+        this.lastBindSignature = signature;
         this.sendJSON({
             type: 'bind_wall',
             wallId: this.wallId,
