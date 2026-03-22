@@ -1,6 +1,7 @@
 'use client';
 
-import { MonitorIcon, SpinnerGapIcon } from '@phosphor-icons/react';
+import { CircleNotchIcon, MonitorIcon, SpinnerGapIcon } from '@phosphor-icons/react';
+import { cn } from '@repo/ui/lib/utils';
 import { createFileRoute } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -27,12 +28,13 @@ interface SlideEntry {
 
 function ControllerApp() {
     const isClient = typeof window !== 'undefined';
-    const wallId = useMemo(() => {
-        if (!isClient) return null;
+    const { wallId, mountLocation } = useMemo(() => {
+        if (!isClient) return { wallId: undefined, mountLocation: undefined };
         const params = new URLSearchParams(window.location.search);
-        return params.get('w');
+        return { wallId: params.get('w'), mountLocation: params.get('l') };
     }, [isClient]);
 
+    const shouldHideHeaderAndFooter = mountLocation === 'gallery';
     const engine = useMemo(() => (wallId ? ControllerEngine.getInstance(wallId) : null), [wallId]);
 
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
@@ -98,10 +100,34 @@ function ControllerApp() {
         }
     }, [engine]);
 
+    if (wallId === undefined) {
+        return (
+            <div
+                className={cn(
+                    'container flex min-h-svh min-w-full flex-col items-center justify-center bg-background',
+                    shouldHideHeaderAndFooter
+                        ? 'fixed top-0 right-0 bottom-0 left-0 z-100 h-full w-full pt-0 pb-0'
+                        : 'pt-18 pb-13'
+                )}
+            >
+                <div className="flex h-full w-full items-center justify-center">
+                    <CircleNotchIcon className="animate-spin" />
+                </div>
+            </div>
+        );
+    }
+
     if (!wallId) {
         return (
-            <div className="container flex min-h-svh min-w-full flex-col pt-18 pb-13">
-                <div className="flex h-full items-center justify-center bg-black text-white">
+            <div
+                className={cn(
+                    'container flex min-h-svh min-w-full flex-col items-center justify-center bg-background',
+                    shouldHideHeaderAndFooter
+                        ? 'fixed top-0 right-0 bottom-0 left-0 z-100 h-full w-full pt-0 pb-0'
+                        : 'pt-18 pb-13'
+                )}
+            >
+                <div className="flex h-full w-full items-center justify-center">
                     <p className="text-muted-foreground">
                         Missing wall ID. Use <code>?w=WALL_ID</code> in the URL.
                     </p>
@@ -111,7 +137,14 @@ function ControllerApp() {
     }
 
     return (
-        <div className="container flex min-h-svh min-w-full flex-col pt-18 pb-13">
+        <div
+            className={cn(
+                'container flex min-h-svh min-w-full flex-col',
+                shouldHideHeaderAndFooter
+                    ? 'fixed top-0 right-0 bottom-0 left-0 z-50 h-full w-full pt-0 pb-0'
+                    : 'pt-18 pb-13'
+            )}
+        >
             <div className="flex h-full flex-col bg-black text-white">
                 {/* Header */}
                 <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">

@@ -1,15 +1,12 @@
 import { Button } from '@repo/ui/components/button';
 import type { Project } from '@repo/ui/components/project-card';
-import { ProjectCard } from '@repo/ui/components/project-card';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
-import { WallPicker } from '~/components/WallPicker';
+import { GalleryProjectCard } from '~/components/GalleryProjectCard';
 import { publishedProjectsQueryOptions } from '~/server/projects.queries';
-import { $bindWall } from '~/server/walls.fns';
 
 export const Route = createFileRoute('/gallery/')({
     component: HomePage,
@@ -18,11 +15,10 @@ export const Route = createFileRoute('/gallery/')({
     }
 });
 
-type ProjectWithId = Project & { _id: string };
+type ProjectWithId = Project & { _id: string; publishedCommitId?: string | null };
 
 function HomePage() {
     const [activeTag, setActiveTag] = useState<string | null>(null);
-    const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
     const { data: publishedProjects = [] } = useQuery(publishedProjectsQueryOptions());
 
     const projectsData: ProjectWithId[] = useMemo(
@@ -33,6 +29,7 @@ function HomePage() {
                 author: p.authorOrganisation,
                 description: p.description,
                 tags: p.tags.filter((t) => t !== 'public'),
+                publishedCommitId: p.publishedCommitId,
                 imageUrl: p.heroImages[0] ?? ''
             })),
         [publishedProjects]
@@ -52,27 +49,6 @@ function HomePage() {
         if (!activeTag) return projectsData;
         return projectsData.filter((p) => p.tags.includes(activeTag));
     }, [activeTag, projectsData]);
-
-    const handleWallSelected = async (wallId: string) => {
-        if (!pendingProjectId) return;
-        const project = publishedProjects.find((p) => p._id === pendingProjectId);
-        if (!project?.publishedCommitId) return;
-        try {
-            await $bindWall({
-                data: {
-                    wallId,
-                    projectId: pendingProjectId,
-                    commitId: project.publishedCommitId,
-                    slideId: 'default'
-                }
-            });
-            toast.success('Project loaded on wall');
-        } catch (e: any) {
-            toast.error(e.message);
-        } finally {
-            setPendingProjectId(null);
-        }
-    };
 
     return (
         <div className="container mx-auto p-4 pt-24">
@@ -120,10 +96,7 @@ function HomePage() {
                                             bounce: 0.2
                                         }}
                                     >
-                                        <ProjectCard
-                                            project={project}
-                                            onLoadProject={() => setPendingProjectId(project._id)}
-                                        />
+                                        <GalleryProjectCard project={project} />
                                     </motion.div>
                                 ))}
                             </AnimatePresence>
@@ -131,13 +104,6 @@ function HomePage() {
                     )}
                 </main>
             </div>
-
-            {pendingProjectId && (
-                <WallPicker
-                    onSelect={handleWallSelected}
-                    onClose={() => setPendingProjectId(null)}
-                />
-            )}
         </div>
     );
 }

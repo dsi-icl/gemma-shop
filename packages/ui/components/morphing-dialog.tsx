@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowsOutSimpleIcon, CircleIcon, XIcon } from '@phosphor-icons/react';
+import { ArrowsInIcon, ArrowsOutSimpleIcon, XIcon } from '@phosphor-icons/react';
 import useClickOutside from '@repo/ui/hooks/use-click-outside';
 import { cn } from '@repo/ui/lib/utils';
 import { motion, AnimatePresence, MotionConfig, Transition, Variant } from 'motion/react';
@@ -314,11 +314,19 @@ function MorphingDialogContent({ children, className, style }: MorphingDialogCon
                 if (state === 'minimized') fullscreen();
             }}
         >
+            <div
+                className={cn(
+                    'h-full w-full',
+                    state === 'minimized' && 'pointer-events-none opacity-0'
+                )}
+            >
+                {children}
+            </div>
             {state === 'minimized' ? (
                 <button
                     type="button"
                     aria-label="Restore fullscreen dialog"
-                    className="flex h-full w-full items-center justify-center bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    className="absolute inset-0 z-10 flex h-full w-full items-center justify-center bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
                     onClick={(e) => {
                         e.stopPropagation();
                         fullscreen();
@@ -326,9 +334,7 @@ function MorphingDialogContent({ children, className, style }: MorphingDialogCon
                 >
                     <ArrowsOutSimpleIcon size={16} />
                 </button>
-            ) : (
-                children
-            )}
+            ) : null}
         </motion.div>
     );
 }
@@ -524,48 +530,28 @@ function MorphingDialogClose({ children, className, variants }: MorphingDialogCl
     );
 }
 
-function MorphingDialogStateControls({ className }: { className?: string }) {
-    const { state, fullscreen, minimize, close } = useMorphingDialog();
-    if (state === 'closed') return null;
+function MorphingDialogMinimize({ className, variants }: MorphingDialogCloseProps) {
+    const { state, minimize } = useMorphingDialog();
+    if (state !== 'fullscreen') return null;
 
     return (
-        <div className={cn('absolute top-3 left-3 z-10 flex gap-1', className)}>
-            {state === 'expanded' ? (
-                <button
-                    type="button"
-                    className="rounded bg-black/45 px-2 py-1 text-[10px] text-white hover:bg-black/60"
-                    onClick={fullscreen}
-                >
-                    Full
-                </button>
-            ) : null}
-            {state === 'fullscreen' ? (
-                <button
-                    type="button"
-                    className="rounded bg-black/45 px-2 py-1 text-[10px] text-white hover:bg-black/60"
-                    onClick={minimize}
-                >
-                    Min
-                </button>
-            ) : null}
-            {state !== 'minimized' ? (
-                <button
-                    type="button"
-                    className="rounded bg-black/45 px-2 py-1 text-[10px] text-white hover:bg-black/60"
-                    onClick={close}
-                >
-                    Close
-                </button>
-            ) : (
-                <span className="rounded bg-black/45 px-2 py-1 text-[10px] text-white/80">
-                    <CircleIcon size={8} weight="fill" />
-                </span>
-            )}
-        </div>
+        <motion.button
+            onClick={minimize}
+            type="button"
+            aria-label="Minimize dialog"
+            className={cn('absolute top-6 right-16 z-10 text-zinc-50', className)}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            variants={variants}
+        >
+            <ArrowsInIcon size={24} />
+        </motion.button>
     );
 }
 
 export {
+    useMorphingDialog,
     MorphingDialog,
     MorphingDialogTrigger,
     MorphingDialogContainer,
@@ -575,5 +561,5 @@ export {
     MorphingDialogSubtitle,
     MorphingDialogDescription,
     MorphingDialogImage,
-    MorphingDialogStateControls
+    MorphingDialogMinimize
 };
