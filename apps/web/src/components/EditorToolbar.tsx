@@ -425,7 +425,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                         </PopoverContent>
                     </Popover>
                 </div>
-                <Separator orientation="vertical" className="mx-1 h-6" />
+                <Separator orientation="vertical" className="mx-1 my-1 h-6" />
 
                 {/* ── Danger Zone ── */}
                 <div className="flex items-center gap-0.5">
@@ -466,7 +466,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 {/* ── Layer Ordering ── */}
                 {activeLayer && (
                     <>
-                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
                         <div className="flex items-center gap-0.5">
                             <TipButton tip="Bring to front" onClick={bringToFront}>
                                 <ArrowLineUpIcon />
@@ -670,7 +670,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 {/* ── Text ── */}
                 {isText && activeLayer && (
                     <>
-                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
                         <TipButton
                             tip="Edit text"
                             onClick={() => startTextEditing(activeLayer.numericId)}
@@ -683,7 +683,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 {/* ── Line ── */}
                 {isDrawing || isLine || isShape ? (
                     <>
-                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
                         <AppearanceToolbar />
                     </>
                 ) : null}
@@ -691,7 +691,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 {/* ── Web ── */}
                 {isWeb && activeLayer && (
                     <>
-                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
                         <Input
                             type="url"
                             placeholder="https://example.com"
@@ -723,13 +723,13 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 {/* ── Video Playback ── */}
                 {isVideo && activeLayer && !activeLayer.isUploading && (
                     <>
-                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
                         <PlaybackControls
                             key={`pc_${activeLayer.numericId}`}
                             layer={activeLayer as Extract<LayerWithEditorState, { type: 'video' }>}
                             engine={engine}
                         />
-                        <Separator orientation="vertical" className="mx-1 h-6" />
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
                         <VideoScrubber
                             key={`vs_${activeLayer.numericId}`}
                             layer={activeLayer as Extract<LayerWithEditorState, { type: 'video' }>}

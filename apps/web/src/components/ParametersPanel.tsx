@@ -192,7 +192,7 @@ export function ParametersPanel({
                                     <fieldset className="space-y-1.5">
                                         <div className="grid grid-cols-2 gap-2">
                                             <SideButtonNumberField
-                                                label="Scale"
+                                                label="Zoom"
                                                 allowWheelScrub={true}
                                                 step={0.1}
                                                 smallStep={0.01}

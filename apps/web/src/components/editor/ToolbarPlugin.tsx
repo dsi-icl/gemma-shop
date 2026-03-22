@@ -401,7 +401,7 @@ export default function ToolbarPlugin() {
             >
                 <HighlighterIcon size={32} style={{ color: bgColor }} weight="fill" />
             </ColorPickerPopover>
-            <Separator orientation="vertical" className="mx-1 h-6" />
+            <Separator orientation="vertical" className="mx-1 my-1 h-6" />
             <div className="flex min-w-56 items-center gap-2 px-1">
                 <span className="text-xs text-muted-foreground">Size</span>
                 <input
@@ -444,7 +444,7 @@ export default function ToolbarPlugin() {
                     />
                 </div>
             </div>
-            <Separator orientation="vertical" className="mx-1 h-6" />
+            <Separator orientation="vertical" className="mx-1 my-1 h-6" />
             <div className="flex items-center gap-2 px-1">
                 <span className="text-xs text-muted-foreground">Font</span>
                 <Select
