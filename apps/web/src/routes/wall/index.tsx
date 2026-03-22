@@ -262,31 +262,34 @@ function WallApp() {
                       : hasUsableUrl && frameability?.ok === true
                         ? normalizedUrl
                         : (fallbackFromPrecheck ?? '/web-nonet?l=wall');
+                const iframeProps = {
+                    ref: commonProps.ref,
+                    style: {
+                        ...commonProps.style,
+                        width: `${layer.config.width / webScale}px`,
+                        height: `${layer.config.height / webScale}px`,
+                        transform: `scale(${webScale})`,
+                        transformOrigin: '0 0'
+                    }
+                };
                 return (
-                    <div key={layer.numericId} {...commonProps}>
-                        <iframe
-                            src={iframeSrc}
-                            title={`Web layer ${layer.numericId}`}
-                            sandbox="allow-scripts allow-same-origin"
-                            onError={(e) => {
-                                const iframe = e.currentTarget;
-                                if (
-                                    !iframe.src.includes('/web-nonet') &&
-                                    !iframe.src.includes('/web-corsissue')
-                                ) {
-                                    iframe.src = '/web-nonet?l=wall';
-                                }
-                            }}
-                            className="bg-background"
-                            style={{
-                                border: 'none',
-                                width: `${layer.config.width / webScale}px`,
-                                height: `${layer.config.height / webScale}px`,
-                                transform: `scale(${webScale})`,
-                                transformOrigin: '0 0'
-                            }}
-                        />
-                    </div>
+                    <iframe
+                        key={layer.numericId}
+                        {...iframeProps}
+                        src={iframeSrc}
+                        title={`Web layer ${layer.numericId}`}
+                        sandbox="allow-scripts allow-same-origin"
+                        onError={(e) => {
+                            const iframe = e.currentTarget;
+                            if (
+                                !iframe.src.includes('/web-nonet') &&
+                                !iframe.src.includes('/web-corsissue')
+                            ) {
+                                iframe.src = '/web-nonet?l=wall';
+                            }
+                        }}
+                        className="bg-background"
+                    />
                 );
             }
 

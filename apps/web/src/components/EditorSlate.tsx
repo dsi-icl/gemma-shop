@@ -14,6 +14,7 @@ import { RoyStaticRenderer } from '~/components/roygraph/RoyStaticRenderer';
 import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
+import { fitSizeToViewport } from '~/lib/fitSizeToViewport';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
 
@@ -30,24 +31,6 @@ const SCREEN_H = 1080;
 const SNAP_GRID = 120;
 const COLS = 16;
 const ROWS = 4;
-
-function fitSizeToViewport(
-    width: number,
-    height: number,
-    viewportWidth: number,
-    viewportHeight: number,
-    marginRatio = 0.9
-): { width: number; height: number } {
-    const safeW = Math.max(1, width);
-    const safeH = Math.max(1, height);
-    const maxW = Math.max(1, viewportWidth * marginRatio);
-    const maxH = Math.max(1, viewportHeight * marginRatio);
-    const scale = Math.min(1, maxW / safeW, maxH / safeH);
-    return {
-        width: Math.round(safeW * scale),
-        height: Math.round(safeH * scale)
-    };
-}
 
 function normalizeRotationToQuadrant(rotation: number): number {
     return ((Math.round(rotation) % 360) + 360) % 360;

@@ -18,16 +18,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
+import { isFontAsset } from '~/lib/mediaUtils';
 import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
 
 import { AssetPreviewPortal, downloadAsset, isVideoAsset } from './AssetPreviewOverlay';
 import { ProjectImage } from './ProjectImage';
 import { UploadDialog } from './UploadDialog';
-
-function isFontAsset(asset: { name: string; mimeType?: string }): boolean {
-    return asset.mimeType === 'font/woff2' || /\.woff2$/i.test(asset.name);
-}
 
 interface AssetLibraryProps {
     projectId: string;

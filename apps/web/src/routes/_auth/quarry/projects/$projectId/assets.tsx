@@ -24,8 +24,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AssetPreviewPortal, downloadAsset, isVideoAsset } from '~/components/AssetPreviewOverlay';
+import { FontPlaceholder } from '~/components/FontPlaceholder';
 import { ProjectImage } from '~/components/ProjectImage';
 import { UploadDialog } from '~/components/UploadDialog';
+import { isFontAsset, sortAssetsFontsLast } from '~/lib/mediaUtils';
 import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
 
@@ -38,37 +40,6 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId/assets')
 
 type View = 'list' | 'list-preview' | 'grid';
 type KindFilter = 'media' | 'font';
-
-function isFontAsset(asset: { name: string; mimeType?: string }) {
-    return asset.mimeType === 'font/woff2' || /\.woff2$/i.test(asset.name);
-}
-
-function sortAssetsFontsLast<T extends { name: string; mimeType?: string }>(items: T[]): T[] {
-    const media: T[] = [];
-    const fonts: T[] = [];
-    for (const item of items) {
-        if (isFontAsset(item)) fonts.push(item);
-        else media.push(item);
-    }
-    return [...media, ...fonts];
-}
-
-function FontPlaceholder({ name, className = '' }: { name: string; className?: string }) {
-    return (
-        <div
-            className={`flex items-center justify-center rounded-md bg-muted text-muted-foreground ${className}`}
-        >
-            <div className="flex flex-col items-center gap-1">
-                <span className="rounded bg-background px-1.5 py-0.5 text-[9px] font-semibold tracking-wide">
-                    WOFF2
-                </span>
-                <span className="max-w-[90%] truncate text-[10px]">
-                    {name.replace(/\.woff2$/i, '')}
-                </span>
-            </div>
-        </div>
-    );
-}
 
 function AssetsTab() {
     const { projectId } = Route.useParams();

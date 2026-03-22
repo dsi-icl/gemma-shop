@@ -6,16 +6,14 @@ import {
 } from '@repo/ui/components/resizable';
 import { cn } from '@repo/ui/lib/utils';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
-import { decode, isBlurhashValid } from 'blurhash';
 import Konva from 'konva';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Stage, Layer as KonvaLayer, Rect, Circle, Line, Image } from 'react-konva';
+import { Stage, Layer as KonvaLayer, Rect, Circle, Line } from 'react-konva';
 
 import { ControllerToolbar } from '~/components/ControllerToolbar';
+import { ReadOnlyMediaLayer, ReadOnlyTextLayer } from '~/components/ReadOnlyLayers';
 import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { ControllerEngine } from '~/lib/controllerEngine';
-import { applyKonvaFilters } from '~/lib/konvaFilters';
-import { textHtmlToImage } from '~/lib/textToCanvas';
 import type { LayerWithEditorState } from '~/lib/types';
 import { $getCommit } from '~/server/projects.fns';
 
@@ -26,171 +24,8 @@ const COLS = 16;
 const ROWS = 4;
 
 export const Route = createFileRoute('/controller/')({
-    component: CommitViewer
+    component: Controller
 });
-
-function deriveVideoStillImageFilename(url: string): string | null {
-    if (!url.startsWith('/api/assets/')) return null;
-    const filename = url.split('/').pop() ?? '';
-    const base = filename.replace(/\.[^.]+$/, '');
-    return base ? `${base}_preview.jpg` : null;
-}
-
-function ReadOnlyMediaLayer({
-    layer
-}: {
-    layer: Extract<LayerWithEditorState, { type: 'image' | 'video' | 'web' }>;
-}) {
-    const [img, setImg] = useState<HTMLImageElement | null>(null);
-    const imageRef = useRef<Konva.Image>(null);
-
-    const mediaUrl = useMemo(() => {
-        if (layer.type === 'image') return layer.url;
-        if (layer.type === 'video') {
-            const stillName = layer.stillImage ?? deriveVideoStillImageFilename(layer.url);
-            return stillName ? `/api/assets/${stillName}` : null;
-        }
-        const stillName = layer.stillImage;
-        return stillName ? `/api/assets/${stillName}` : null;
-    }, [layer]);
-
-    useEffect(() => {
-        if (!mediaUrl) {
-            setImg(null);
-            return;
-        }
-        const i = new window.Image();
-        if (!mediaUrl.startsWith('blob:') && !mediaUrl.startsWith('data:')) {
-            i.crossOrigin = 'anonymous';
-        }
-        i.onload = () => setImg(i);
-        i.onerror = () => setImg(null);
-        i.src = mediaUrl;
-    }, [mediaUrl]);
-
-    useEffect(() => {
-        applyKonvaFilters(imageRef.current, layer.config.filters);
-    }, [layer.config.filters, img, layer.config.width, layer.config.height]);
-
-    if (img) {
-        return (
-            <Image
-                ref={imageRef}
-                image={img}
-                x={layer.config.cx}
-                y={layer.config.cy}
-                width={layer.config.width}
-                height={layer.config.height}
-                scaleX={layer.config.scaleX}
-                scaleY={layer.config.scaleY}
-                offsetX={layer.config.width / 2}
-                offsetY={layer.config.height / 2}
-                rotation={layer.config.rotation}
-                listening={false}
-            />
-        );
-    }
-
-    if (layer.blurhash && isBlurhashValid(layer.blurhash)) {
-        const pixels = decode(layer.blurhash, 100, 100) as Uint8ClampedArray<ArrayBuffer>;
-        const imageData = new ImageData(pixels, 100, 100);
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = 100;
-        offscreenCanvas.height = 100;
-        const ctx = offscreenCanvas.getContext('2d');
-        ctx?.putImageData(imageData, 0, 0);
-        return (
-            <Image
-                ref={imageRef}
-                image={offscreenCanvas}
-                x={layer.config.cx}
-                y={layer.config.cy}
-                width={layer.config.width}
-                height={layer.config.height}
-                scaleX={layer.config.scaleX}
-                scaleY={layer.config.scaleY}
-                offsetX={layer.config.width / 2}
-                offsetY={layer.config.height / 2}
-                rotation={layer.config.rotation}
-                listening={false}
-            />
-        );
-    }
-
-    return (
-        <Rect
-            x={layer.config.cx}
-            y={layer.config.cy}
-            width={layer.config.width}
-            height={layer.config.height}
-            scaleX={layer.config.scaleX}
-            scaleY={layer.config.scaleY}
-            offsetX={layer.config.width / 2}
-            offsetY={layer.config.height / 2}
-            rotation={layer.config.rotation}
-            fill="#555"
-            listening={false}
-        />
-    );
-}
-
-function ReadOnlyTextLayer({ layer }: { layer: Extract<LayerWithEditorState, { type: 'text' }> }) {
-    const [img, setImg] = useState<HTMLImageElement | null>(null);
-    const imageRef = useRef<Konva.Image>(null);
-
-    useEffect(() => {
-        let cancelled = false;
-        textHtmlToImage(layer.textHtml ?? '', layer.config.width, layer.config.height)
-            .then((rendered) => {
-                if (!cancelled) setImg(rendered);
-            })
-            .catch(() => {
-                if (!cancelled) setImg(null);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [layer.textHtml, layer.config.width, layer.config.height]);
-
-    useEffect(() => {
-        applyKonvaFilters(imageRef.current, layer.config.filters);
-    }, [layer.config.filters, img, layer.config.width, layer.config.height]);
-
-    if (!img) {
-        return (
-            <Rect
-                x={layer.config.cx}
-                y={layer.config.cy}
-                width={layer.config.width}
-                height={layer.config.height}
-                scaleX={layer.config.scaleX}
-                scaleY={layer.config.scaleY}
-                offsetX={layer.config.width / 2}
-                offsetY={layer.config.height / 2}
-                rotation={layer.config.rotation}
-                fill="#555"
-                listening={false}
-            />
-        );
-    }
-
-    return (
-        <Image
-            ref={imageRef}
-            image={img}
-            x={layer.config.cx}
-            y={layer.config.cy}
-            width={layer.config.width}
-            height={layer.config.height}
-            scaleX={layer.config.scaleX}
-            scaleY={layer.config.scaleY}
-            offsetX={layer.config.width / 2}
-            offsetY={layer.config.height / 2}
-            rotation={layer.config.rotation}
-            listening={false}
-        />
-    );
-}
 
 interface BindingStatus {
     bound: boolean;
@@ -207,7 +42,7 @@ interface SlideEntry {
     layerCount: number;
 }
 
-function CommitViewer() {
+function Controller() {
     const stageSlot = useRef<HTMLDivElement>(null);
     const stageInstance = useRef<Konva.Stage>(null);
     const [stageScaleFactor, setStageScaleFactor] = useState(DEFAULT_STAGE_SCALE_FACTOR);

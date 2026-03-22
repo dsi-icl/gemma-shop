@@ -3,28 +3,11 @@ import { useCallback } from 'react';
 
 import { EditorEngine } from '~/lib/editorEngine';
 import { useEditorStore } from '~/lib/editorStore';
+import { fitSizeToViewport } from '~/lib/fitSizeToViewport';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
 import { $deleteAsset } from '~/server/projects.fns';
 
 import { AssetLibrary, type AssetLibraryAsset } from './AssetLibrary';
-
-function fitSizeToViewport(
-    width: number,
-    height: number,
-    viewportWidth: number,
-    viewportHeight: number,
-    marginRatio = 0.9
-): { width: number; height: number } {
-    const safeW = Math.max(1, width);
-    const safeH = Math.max(1, height);
-    const maxW = Math.max(1, viewportWidth * marginRatio);
-    const maxH = Math.max(1, viewportHeight * marginRatio);
-    const scale = Math.min(1, maxW / safeW, maxH / safeH);
-    return {
-        width: Math.round(safeW * scale),
-        height: Math.round(safeH * scale)
-    };
-}
 
 interface AssetLibraryPanelProps {
     projectId: string;
