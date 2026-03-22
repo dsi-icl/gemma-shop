@@ -175,12 +175,21 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         layer: LayerSchema
     }),
     z.object({ type: z.literal('delete_layer'), numericId: z.number() }),
-    z.object({ type: z.literal('video_play'), numericId: z.number() }),
-    z.object({ type: z.literal('video_pause'), numericId: z.number() }),
+    z.object({
+        type: z.literal('video_play'),
+        numericId: z.number(),
+        issuedAt: z.number().optional()
+    }),
+    z.object({
+        type: z.literal('video_pause'),
+        numericId: z.number(),
+        issuedAt: z.number().optional()
+    }),
     z.object({
         type: z.literal('video_seek'),
         numericId: z.number(),
         mediaTime: z.number(),
+        issuedAt: z.number().optional(),
         playback: LayerPlaybackStateSchema.optional()
     }),
     z.object({

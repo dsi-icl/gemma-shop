@@ -41,6 +41,7 @@ export function PlaybackControls({
                                         type: 'video_seek',
                                         numericId: layer.numericId,
                                         mediaTime: 0,
+                                        issuedAt: Date.now(),
                                         playback
                                     });
                             }}
@@ -62,7 +63,8 @@ export function PlaybackControls({
                                 onClick={() =>
                                     engine.sendJSON({
                                         type: 'video_play',
-                                        numericId: layer.numericId
+                                        numericId: layer.numericId,
+                                        issuedAt: Date.now()
                                     })
                                 }
                             />
@@ -82,7 +84,8 @@ export function PlaybackControls({
                                 onClick={() =>
                                     engine.sendJSON({
                                         type: 'video_pause',
-                                        numericId: layer.numericId
+                                        numericId: layer.numericId,
+                                        issuedAt: Date.now()
                                     })
                                 }
                             />

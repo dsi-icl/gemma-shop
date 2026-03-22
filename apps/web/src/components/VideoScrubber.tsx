@@ -73,6 +73,7 @@ export function VideoScrubber({
                     type: 'video_seek',
                     numericId: layer.numericId,
                     mediaTime: parseFloat(seekInputRef.current.value),
+                    issuedAt: Date.now(),
                     playback
                 });
         }

@@ -113,6 +113,31 @@ interface HandlerCtx {
 type Handler = (ctx: HandlerCtx) => void;
 
 const handlers = new Map<string, Handler>();
+const lastPlaybackCommandAt = new Map<string, number>();
+
+function playbackCommandKey(scopeId: number, numericId: number): string {
+    return `${scopeId}:${numericId}`;
+}
+
+function shouldApplyPlaybackCommand(
+    scopeId: number,
+    numericId: number,
+    issuedAt: unknown
+): boolean {
+    const now = Date.now();
+    const fromClient = typeof issuedAt === 'number' && Number.isFinite(issuedAt) ? issuedAt : null;
+    // Protect against cross-device clock skew: trust client timestamp only if it is near server now.
+    const stamp = fromClient !== null && Math.abs(fromClient - now) <= 15_000 ? fromClient : now;
+    const key = playbackCommandKey(scopeId, numericId);
+    const prev = lastPlaybackCommandAt.get(key);
+    if (prev !== undefined && stamp < prev) return false;
+    lastPlaybackCommandAt.set(key, stamp);
+    return true;
+}
+
+function clearPlaybackCommand(scopeId: number, numericId: number) {
+    lastPlaybackCommandAt.delete(playbackCommandKey(scopeId, numericId));
+}
 
 function broadcastWallNodeCountToEditors(wallId: string) {
     const payload = JSON.stringify({
@@ -206,6 +231,9 @@ handlers.set('clear_stage', ({ entry, scopeId }) => {
     if (scopeId === null) return;
     const scope = scopedState.get(scopeId);
     if (scope) {
+        for (const numericId of scope.layers.keys()) {
+            clearPlaybackCommand(scopeId, numericId);
+        }
         scope.layers.clear();
         scope.dirty = true;
     }
@@ -257,6 +285,7 @@ handlers.set('delete_layer', ({ entry, data, scopeId, rawText }) => {
     const scope = scopedState.get(scopeId);
     if (scope) {
         scope.layers.delete(data.numericId);
+        clearPlaybackCommand(scopeId, data.numericId);
         scope.dirty = true;
         deleteYDocForLayer(scopeId, data.numericId);
     }
@@ -438,6 +467,7 @@ handlers.set('unbind_wall', ({ data }) => {
 
 handlers.set('video_play', ({ data, scopeId }) => {
     if (scopeId === null) return;
+    if (!shouldApplyPlaybackCommand(scopeId, data.numericId, data.issuedAt)) return;
     const layer = scopedState.get(scopeId)?.layers.get(data.numericId);
     if (layer?.type === 'video') {
         layer.playback.status = 'playing';
@@ -451,6 +481,7 @@ handlers.set('video_play', ({ data, scopeId }) => {
 
 handlers.set('video_pause', ({ data, scopeId }) => {
     if (scopeId === null) return;
+    if (!shouldApplyPlaybackCommand(scopeId, data.numericId, data.issuedAt)) return;
     const layer = scopedState.get(scopeId)?.layers.get(data.numericId);
     if (layer?.type === 'video' && layer.playback.status === 'playing') {
         let elapsed = (Date.now() - layer.playback.anchorServerTime) / 1000;
@@ -469,6 +500,7 @@ handlers.set('video_pause', ({ data, scopeId }) => {
 
 handlers.set('video_seek', ({ data, scopeId }) => {
     if (scopeId === null) return;
+    if (!shouldApplyPlaybackCommand(scopeId, data.numericId, data.issuedAt)) return;
     const layer = scopedState.get(scopeId)?.layers.get(data.numericId);
     if (layer?.type === 'video') {
         layer.playback.status = 'paused';
