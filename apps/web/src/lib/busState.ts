@@ -13,7 +13,20 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     scopeKeyToId: new Map<string, ScopeId>(),
     scopeIdToKey: new Map<ScopeId, string>(),
     commitToScopeIds: new Map<string, Set<ScopeId>>(),
-    nextScopeId: 1
+    nextScopeId: 1,
+    peers: new Map<string, PeerEntry>(),
+    editorsByScope: new Map<ScopeId, Set<PeerEntry>>(),
+    wallsByWallId: new Map<string, Set<PeerEntry>>(),
+    controllersByWallId: new Map<string, Set<PeerEntry>>(),
+    allEditors: new Set<PeerEntry>(),
+    wallBindings: new Map<string, ScopeId>(),
+    wallBindingSources: new Map<string, 'live' | 'gallery'>(),
+    scopeWatchers: new Map<ScopeId, Set<string>>(),
+    wallPeersByScope: new Map<ScopeId, Set<PeerEntry>>(),
+    activeVideos: new Map<number, { scopeId: ScopeId; layer: Layer }>(),
+    peerCounts: { editor: 0, wall: 0, controller: 0, roy: 0 },
+    lastPingSeen: new Map<string, number>(),
+    scopeCleanupTimers: new Map<ScopeId, ReturnType<typeof setTimeout>>()
 };
 (process as any).__BUS_HMR__ = _hmr;
 
@@ -97,41 +110,42 @@ export interface PeerEntry {
 }
 
 // Master peer registry: peerId → PeerEntry
-export const peers = new Map<string, PeerEntry>();
+export const peers: Map<string, PeerEntry> = _hmr.peers;
 
 // Editor scope index: scopeId → Set<PeerEntry> — direct refs, no map lookup in broadcast
-export const editorsByScope = new Map<ScopeId, Set<PeerEntry>>();
+export const editorsByScope: Map<ScopeId, Set<PeerEntry>> = _hmr.editorsByScope;
 
 // Wall peer index: wallId → Set<PeerEntry>
-export const wallsByWallId = new Map<string, Set<PeerEntry>>();
+export const wallsByWallId: Map<string, Set<PeerEntry>> = _hmr.wallsByWallId;
 
 // Controller index: wallId → Set<PeerEntry>
-export const controllersByWallId = new Map<string, Set<PeerEntry>>();
+export const controllersByWallId: Map<string, Set<PeerEntry>> = _hmr.controllersByWallId;
 
 // Flat set of every editor entry — for the __BROADCAST_EDITORS__ bridge
-export const allEditors = new Set<PeerEntry>();
+export const allEditors: Set<PeerEntry> = _hmr.allEditors;
 
 // wallId → ScopeId: which content a wall displays
-export const wallBindings = new Map<string, ScopeId>();
-export const wallBindingSources = new Map<string, 'live' | 'gallery'>();
+export const wallBindings: Map<string, ScopeId> = _hmr.wallBindings;
+export const wallBindingSources: Map<string, 'live' | 'gallery'> = _hmr.wallBindingSources;
 
 // scopeId → Set<wallId>: reverse index used only for binding cleanup
-export const scopeWatchers = new Map<ScopeId, Set<string>>();
+export const scopeWatchers: Map<ScopeId, Set<string>> = _hmr.scopeWatchers;
 
 /**
  * Flattened broadcast index: scopeId → Set<PeerEntry> of wall peers watching this scope.
  * Updated on bind/unbind/register/unregister (cold path) so broadcast (hot path) is one loop.
  */
-export const wallPeersByScope = new Map<ScopeId, Set<PeerEntry>>();
+export const wallPeersByScope: Map<ScopeId, Set<PeerEntry>> = _hmr.wallPeersByScope;
 
 // Active video registry for the VSYNC loop only playing videos are tracked
-export const activeVideos = new Map<number, { scopeId: ScopeId; layer: Layer }>();
+export const activeVideos: Map<number, { scopeId: ScopeId; layer: Layer }> = _hmr.activeVideos;
 
 /** Layer → wall peers whose viewport intersects the layer AABB. Updated on upsert/bind. */
 // export const layerNodes = new Map<number, Set<PeerEntry>>();
 
 /** Running peer counts — O(1) reads instead of iterating all peers */
-export const peerCounts = { editor: 0, wall: 0, controller: 0, roy: 0 };
+export const peerCounts: { editor: number; wall: number; controller: number; roy: number } =
+    _hmr.peerCounts;
 
 /** Live wall node count — O(1) read from in-memory index. */
 export function getWallNodeCount(wallId: string): number {
@@ -313,7 +327,7 @@ export function getHydratePayload(scopeId: ScopeId): string {
     return scope.hydrateCache;
 }
 
-export function bindWall(wallId: string, scopeId: ScopeId, source: 'live' | 'gallery' = 'live') {
+export function bindWall(wallId: string, scopeId: ScopeId, source: 'live' | 'gallery' = 'gallery') {
     const oldScopeId = wallBindings.get(wallId);
 
     // Tear down old binding
@@ -718,7 +732,7 @@ export function encodeVideoSyncBinary(
 }
 
 const SCOPE_CLEANUP_GRACE_MS = 5 * 60 * 1000; // 5 minutes
-const scopeCleanupTimers = new Map<ScopeId, ReturnType<typeof setTimeout>>();
+const scopeCleanupTimers: Map<ScopeId, ReturnType<typeof setTimeout>> = _hmr.scopeCleanupTimers;
 
 // Garbage collection if no editors or walls are watching a scope
 export function scheduleScopeCleanup(scopeId: ScopeId) {
@@ -813,7 +827,7 @@ export function resolveScopeId(meta: PeerMeta): ScopeId | null {
 const PING_TIMEOUT_MS = 15_000; // Force-close peers with no ping for 15s
 
 // Last clock-ping timestamp per peer. Updated in handleBinary CLOCK_PING handler
-export const lastPingSeen = new Map<string, number>();
+export const lastPingSeen: Map<string, number> = _hmr.lastPingSeen;
 
 // Mark a peer as having pinged
 export function touchPing(peerId: string) {
@@ -848,8 +862,7 @@ export function reapStalePeers(): number {
 
 export function logPeerCounts() {
     console.log(
-        `[WS] Peers: ${peerCounts.editor} editors, ${peerCounts.wall} walls, ` +
-            `${peerCounts.controller} controllers, ${peerCounts.roy} roys`
+        `[WS] Peers: ${peerCounts.editor} editors, ${peerCounts.wall} walls, ${peerCounts.controller} controllers, ${peerCounts.roy} roys`
     );
 }
 

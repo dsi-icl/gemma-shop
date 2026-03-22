@@ -87,6 +87,22 @@ function hasType(raw: unknown): raw is { type: string; [k: string]: unknown } {
     return typeof raw === 'object' && raw !== null && typeof (raw as any).type === 'string';
 }
 
+function toArrayBufferView(data: Uint8Array | Buffer): ArrayBuffer {
+    const out = new Uint8Array(data.byteLength);
+    out.set(data);
+    return out.buffer;
+}
+
+function firstNonWhitespaceByte(data: Uint8Array): number | null {
+    for (let i = 0; i < data.byteLength; i++) {
+        const c = data[i];
+        // ASCII whitespace: tab, lf, cr, space
+        if (c === 0x09 || c === 0x0a || c === 0x0d || c === 0x20) continue;
+        return c;
+    }
+    return null;
+}
+
 interface HandlerCtx {
     entry: PeerEntry;
     data: Record<string, any>;
@@ -691,14 +707,24 @@ export default defineWebSocketHandler({
     },
 
     message(peer, message) {
-        // ── Binary fast-path ─────────────────────────────────────────
-        if (message.rawData instanceof ArrayBuffer) {
-            handleBinary(peer, message.rawData);
+        const raw = message.rawData;
+
+        // ── Binary fast-path (ArrayBuffer) ───────────────────────────
+        if (raw instanceof ArrayBuffer) {
+            handleBinary(peer, raw);
             return;
         }
 
-        // ── JSON path ────────────────────────────────────────────────
-        if (message.rawData instanceof Buffer) {
+        // ── Mixed Buffer/Uint8Array path (text or binary) ────────────
+        if (raw instanceof Buffer || raw instanceof Uint8Array) {
+            const first = firstNonWhitespaceByte(raw);
+            const looksLikeJson = first === 0x7b || first === 0x5b; // '{' or '['
+
+            if (!looksLikeJson) {
+                handleBinary(peer, toArrayBufferView(raw));
+                return;
+            }
+
             const rawText = message.text();
 
             try {
@@ -748,6 +774,43 @@ export default defineWebSocketHandler({
                 } catch {
                     console.error(`[WS] Unparseable message from peer ${peer.id}:`, err);
                 }
+            }
+            return;
+        }
+
+        // ── JSON path (string payloads) ──────────────────────────────
+        if (typeof raw === 'string') {
+            try {
+                const data = JSON.parse(raw);
+                markIncomingJson();
+
+                if (!hasType(data)) {
+                    console.warn(`[WS] Invalid message from peer ${peer.id}: missing type`);
+                    return;
+                }
+
+                if (data.type === 'hello') {
+                    handleHello(peer, data);
+                    return;
+                }
+
+                const entry = peers.get(peer.id);
+                if (!entry) {
+                    console.warn(`[WS] Message from unregistered peer ${peer.id}, ignoring`);
+                    return;
+                }
+
+                const handler = handlers.get(data.type);
+                if (handler) {
+                    handler({
+                        entry,
+                        data,
+                        scopeId: resolveScopeId(entry.meta),
+                        rawText: raw
+                    });
+                }
+            } catch (err) {
+                console.error(`[WS] Unparseable string message from peer ${peer.id}:`, err);
             }
         }
     }
