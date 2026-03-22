@@ -115,6 +115,13 @@ export default function ToolbarPlugin() {
         if (!layer || layer.type !== 'text') return 1;
         return layer.config.scaleY || 1;
     });
+    const fontFamilyItems = [
+        ...projectFonts.map((font) => ({
+            label: font.family,
+            value: `project:${font.family}`
+        })),
+        ...SYSTEM_FONT_OPTIONS.map((opt) => ({ label: opt.label, value: opt.id }))
+    ];
 
     const $updateToolbar = useCallback(() => {
         const selection = $getSelection();
@@ -267,13 +274,17 @@ export default function ToolbarPlugin() {
         }
     };
 
-    // const applyFontFamily = (family: string) => {
-    //     applyStyle('font-family', family);
-    // };
+    const getFontFamilyCss = (optionId: string): string => {
+        const system = SYSTEM_FONT_OPTIONS.find((opt) => opt.id === optionId);
+        if (system) return system.css;
+        if (optionId.startsWith('project:')) {
+            const family = optionId.slice('project:'.length);
+            return `"${family}", system-ui, sans-serif`;
+        }
+        return 'system-ui, sans-serif';
+    };
 
-    // const applyFontSize = (size: string) => {
-    //     applyStyle('font-size', `${size}px`);
-    // };
+    const selectedFontItem = fontFamilyItems.find((item) => item.value === fontFamilyOptionId);
 
     return (
         <div
@@ -448,21 +459,35 @@ export default function ToolbarPlugin() {
             <div className="flex items-center gap-2 px-1">
                 <span className="text-xs text-muted-foreground">Font</span>
                 <Select
+                    items={fontFamilyItems}
                     value={fontFamilyOptionId}
                     onValueChange={applyFontFamilyOption}
                     onOpenChange={() => editor.focus()}
                 >
                     <SelectTrigger size="sm" className="w-44 rounded border-border bg-background">
-                        <SelectValue>{fontFamilyMixed ? 'Mixed' : null}</SelectValue>
+                        <SelectValue>
+                            {fontFamilyMixed ? (
+                                'Mixed'
+                            ) : selectedFontItem ? (
+                                <span
+                                    style={{ fontFamily: getFontFamilyCss(selectedFontItem.value) }}
+                                >
+                                    {selectedFontItem.label}
+                                </span>
+                            ) : null}
+                        </SelectValue>
                     </SelectTrigger>
                     <SelectContent align="start">
                         {projectFonts.length > 0 ? (
                             <SelectGroup>
-                                <SelectLabel>Assets</SelectLabel>
+                                <SelectLabel>Custom Fonts</SelectLabel>
                                 {projectFonts.map((font) => (
                                     <SelectItem
                                         key={`project:${font.family}`}
                                         value={`project:${font.family}`}
+                                        style={{
+                                            fontFamily: getFontFamilyCss(`project:${font.family}`)
+                                        }}
                                     >
                                         {font.family}
                                     </SelectItem>
@@ -472,7 +497,11 @@ export default function ToolbarPlugin() {
                         <SelectGroup>
                             <SelectLabel>System</SelectLabel>
                             {SYSTEM_FONT_OPTIONS.map((opt) => (
-                                <SelectItem key={opt.id} value={opt.id}>
+                                <SelectItem
+                                    key={opt.id}
+                                    value={opt.id}
+                                    style={{ fontFamily: getFontFamilyCss(opt.id) }}
+                                >
                                     {opt.label}
                                 </SelectItem>
                             ))}

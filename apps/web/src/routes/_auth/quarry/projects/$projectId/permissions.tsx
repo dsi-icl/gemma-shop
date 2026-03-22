@@ -5,7 +5,9 @@ import { Input } from '@repo/ui/components/input';
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectLabel,
     SelectTrigger,
     SelectValue
 } from '@repo/ui/components/select';
@@ -70,6 +72,11 @@ function PermissionsTab() {
         mutation.mutate(updated);
     };
 
+    const items = [
+        { label: 'Viewer', value: 'viewer' },
+        { label: 'Editor', value: 'editor' },
+        { label: 'Owner', value: 'owner' }
+    ];
     return (
         <div className="flex flex-col gap-6">
             <div>
@@ -93,14 +100,23 @@ function PermissionsTab() {
                     placeholder="collaborator@example.com"
                     className="flex-1"
                 />
-                <Select value={role} onValueChange={(value) => setRole(value as CollaboratorRole)}>
-                    <SelectTrigger className="w-32">
+                <Select
+                    items={items}
+                    value={role}
+                    onValueChange={(value) => setRole(value as CollaboratorRole)}
+                >
+                    <SelectTrigger className="w-full max-w-48">
                         <SelectValue />
                     </SelectTrigger>
-                    <SelectContent align="end">
-                        <SelectItem value="viewer">Viewer</SelectItem>
-                        <SelectItem value="editor">Editor</SelectItem>
-                        <SelectItem value="owner">Owner</SelectItem>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectLabel>Permission</SelectLabel>
+                            {items.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
                     </SelectContent>
                 </Select>
                 <Button type="button" variant="outline" size="sm" onClick={addCollaborator}>
@@ -124,7 +140,8 @@ function PermissionsTab() {
                                 <TableCell>{c.email}</TableCell>
                                 <TableCell>
                                     <Select
-                                        value={c.role}
+                                        items={items}
+                                        value={role}
                                         onValueChange={(value) =>
                                             changeRole(c.email, value as CollaboratorRole)
                                         }
@@ -134,13 +151,18 @@ function PermissionsTab() {
                                                 .length <= 1
                                         }
                                     >
-                                        <SelectTrigger className="w-32 rounded-lg bg-transparent">
+                                        <SelectTrigger className="w-full max-w-48">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent align="start">
-                                            <SelectItem value="viewer">Viewer</SelectItem>
-                                            <SelectItem value="editor">Editor</SelectItem>
-                                            <SelectItem value="owner">Owner</SelectItem>
+                                        <SelectContent>
+                                            <SelectGroup>
+                                                <SelectLabel>Permission</SelectLabel>
+                                                {items.map((item) => (
+                                                    <SelectItem key={item.value} value={item.value}>
+                                                        {item.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
                                         </SelectContent>
                                     </Select>
                                 </TableCell>
