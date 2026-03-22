@@ -48,6 +48,7 @@ export function ProjectImage({
     onClick
 }: ProjectImageProps) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const imgRef = useRef<HTMLImageElement>(null);
     const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
     const [measuredWidth, setMeasuredWidth] = useState(0);
     const maxWidthRef = useRef(0);
@@ -92,6 +93,22 @@ export function ProjectImage({
         [onClick]
     );
 
+    useEffect(() => {
+        const el = imgRef.current;
+        if (!el) return;
+        const onSelected =
+            el.currentSrc === selectedSrc ||
+            el.src === selectedSrc ||
+            el.currentSrc.endsWith(selectedSrc) ||
+            el.src.endsWith(selectedSrc);
+        if (!onSelected) return;
+        if (el.complete && el.naturalWidth > 0) {
+            requestAnimationFrame(() => {
+                setLoadedSrc(selectedSrc);
+            });
+        }
+    }, [selectedSrc]);
+
     return (
         <div
             ref={containerRef}
@@ -106,6 +123,7 @@ export function ProjectImage({
                 />
             )}
             <img
+                ref={imgRef}
                 src={selectedSrc}
                 alt={alt}
                 loading="lazy"
