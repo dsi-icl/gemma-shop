@@ -27,6 +27,7 @@ type LayoutUpdateCallback = (data: GSMessage) => void;
 export class WallEngine {
     private rws: ReconnectingWebSocket;
     private pingTimer: ReturnType<typeof setTimeout> | null = null;
+    private playbackStartRafs = new Map<number, number>();
 
     // Clock Sync State
     private clockOffset = 0;
@@ -82,6 +83,8 @@ export class WallEngine {
     public destroy() {
         console.log('Wall Engine: Assassinating ghost instance...');
         if (this.pingTimer) clearTimeout(this.pingTimer);
+        for (const rafId of this.playbackStartRafs.values()) cancelAnimationFrame(rafId);
+        this.playbackStartRafs.clear();
         this.rws.destroy();
         this.layoutCallbacks.clear();
     }
@@ -252,6 +255,12 @@ export class WallEngine {
     private handlePlaybackStateChange(layer: Extract<LayerWithWallEngineState, { type: 'video' }>) {
         const video = layer.el as HTMLVideoElement;
         if (!video || typeof video.play !== 'function') return;
+        const layerId = layer.numericId;
+        const pendingStartRaf = this.playbackStartRafs.get(layerId);
+        if (pendingStartRaf !== undefined) {
+            cancelAnimationFrame(pendingStartRaf);
+            this.playbackStartRafs.delete(layerId);
+        }
 
         // CRITICAL HYDRATION FIX:
         // Wait for the video to parse its headers before attempting to seek
@@ -312,12 +321,15 @@ export class WallEngine {
                             );
                         }
                     }
+                    this.playbackStartRafs.delete(layerId);
                 } else {
-                    requestAnimationFrame(checkTime);
+                    const rafId = requestAnimationFrame(checkTime);
+                    this.playbackStartRafs.set(layerId, rafId);
                 }
             };
 
-            requestAnimationFrame(checkTime);
+            const rafId = requestAnimationFrame(checkTime);
+            this.playbackStartRafs.set(layerId, rafId);
         }
     }
 
@@ -340,7 +352,9 @@ export class WallEngine {
         if ((layer.loop ?? true) && layer.duration) {
             expectedTime = expectedTime % layer.duration;
         }
-        const drift = expectedTime - metadata.mediaTime;
+        // Use element currentTime (same strategy as editor); metadata.mediaTime can diverge
+        // across browser implementations and loop boundaries.
+        const drift = expectedTime - video.currentTime;
 
         // Apply drift corrections
         if (drift > 0.5) {

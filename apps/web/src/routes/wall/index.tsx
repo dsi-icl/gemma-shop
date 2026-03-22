@@ -58,10 +58,14 @@ function WallApp() {
         const unsubscribe = engine?.subscribeToLayoutUpdates((data) => {
             if (data.type === 'hydrate') setLayers(data.layers);
             else if (data.type === 'upsert_layer') {
-                setLayers((prev) => [
-                    ...prev.filter((l) => l.numericId !== data.layer.numericId),
-                    data.layer
-                ]);
+                setLayers((prev) => {
+                    const existing = prev.find((l) => l.numericId === data.layer.numericId);
+                    const nextLayer =
+                        existing?.type === 'video' && data.layer.type === 'video'
+                            ? { ...data.layer, playback: existing.playback ?? data.layer.playback }
+                            : data.layer;
+                    return [...prev.filter((l) => l.numericId !== data.layer.numericId), nextLayer];
+                });
             } else if (data.type === 'delete_layer') {
                 setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
             } else if (data.type === 'reboot') {

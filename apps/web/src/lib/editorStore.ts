@@ -272,27 +272,48 @@ export const useEditorStore =
                   },
 
                   hydrate: (layers) => {
-                      _nextId = layers.reduce((max, l) => Math.max(max, l.numericId), 0) + 5;
-                      _nextZIndex =
-                          layers.reduce((max, l) => Math.max(max, l.config.zIndex), 0) + 5;
-                      set({ layers: new Map(layers.map((l) => [l.numericId, l])) });
+                      const engine = EditorEngine.getInstance();
+                      set((s) => {
+                          const mergedLayers = layers.map((layer) => {
+                              if (layer.type !== 'video') return layer;
+                              const existing = s.layers.get(layer.numericId);
+                              if (existing?.type === 'video') {
+                                  return { ...layer, playback: existing.playback };
+                              }
+                              const livePlayback = engine.getPlayback(layer.numericId);
+                              return livePlayback ? { ...layer, playback: livePlayback } : layer;
+                          });
+
+                          _nextId =
+                              mergedLayers.reduce((max, l) => Math.max(max, l.numericId), 0) + 5;
+                          _nextZIndex =
+                              mergedLayers.reduce((max, l) => Math.max(max, l.config.zIndex), 0) +
+                              5;
+
+                          return { layers: new Map(mergedLayers.map((l) => [l.numericId, l])) };
+                      });
                   },
 
                   upsertLayer: (layer) =>
                       set((s) => {
-                          const isNew = !s.layers.has(layer.numericId);
+                          const existingLayer = s.layers.get(layer.numericId);
+                          const isNew = !existingLayer;
+                          const nextLayer =
+                              existingLayer?.type === 'video' && layer.type === 'video'
+                                  ? { ...layer, playback: existingLayer.playback ?? layer.playback }
+                                  : layer;
 
                           // Multiple editors may interfere — build 5-degree tolerance
-                          if (layer.numericId >= _nextId) _nextId = layer.numericId + 5;
+                          if (nextLayer.numericId >= _nextId) _nextId = nextLayer.numericId + 5;
                           if (isNew) {
                               _nextZIndex =
-                                  (layer.config.zIndex ?? 0) >= _nextZIndex
-                                      ? layer.config.zIndex + 5
+                                  (nextLayer.config.zIndex ?? 0) >= _nextZIndex
+                                      ? nextLayer.config.zIndex + 5
                                       : _nextZIndex + 5;
                           }
 
                           const newLayers = new Map(s.layers);
-                          newLayers.set(layer.numericId, layer);
+                          newLayers.set(nextLayer.numericId, nextLayer);
                           return { layers: newLayers };
                       }),
 

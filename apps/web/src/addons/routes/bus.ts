@@ -216,24 +216,33 @@ handlers.set('clear_stage', ({ entry, scopeId }) => {
 });
 
 handlers.set('upsert_layer', ({ entry, data, scopeId, rawText }) => {
-    const layer = data.layer;
+    let layer = data.layer;
     if (typeof layer?.numericId !== 'number') return;
 
     let relayPayload = rawText;
 
-    // Server-side mutation: inject default playback for video layers
-    if (layer.type === 'video' && !layer.playback) {
-        layer.playback = {
-            status: 'paused',
-            anchorMediaTime: 0,
-            anchorServerTime: 0
-        };
-        relayPayload = JSON.stringify(data);
-    }
-
     if (scopeId !== null) {
         const scope = scopedState.get(scopeId);
         if (scope) {
+            // Playback timeline is authoritative via video_play/pause/seek handlers.
+            // Generic upsert_layer must never override live playback state.
+            if (layer.type === 'video') {
+                const existing = scope.layers.get(layer.numericId);
+                if (existing?.type === 'video' && existing.playback) {
+                    layer = { ...layer, playback: existing.playback };
+                    relayPayload = JSON.stringify({ ...data, layer });
+                } else if (!layer.playback) {
+                    layer = {
+                        ...layer,
+                        playback: {
+                            status: 'paused',
+                            anchorMediaTime: 0,
+                            anchorServerTime: 0
+                        }
+                    };
+                    relayPayload = JSON.stringify({ ...data, layer });
+                }
+            }
             scope.layers.set(layer.numericId, layer);
             scope.dirty = true;
         }

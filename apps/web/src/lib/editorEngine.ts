@@ -140,7 +140,7 @@ export class EditorEngine {
             if (data.type === 'hydrate') {
                 this.bufferedHydration = data;
                 data.layers.forEach((l) => {
-                    if (l.type === 'video' && l.playback)
+                    if (l.type === 'video' && l.playback && !this.playbackStates.has(l.numericId))
                         this.playbackStates.set(l.numericId, l.playback);
                 });
                 if (this.hydrateResolver) {
