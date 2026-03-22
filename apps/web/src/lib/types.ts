@@ -83,6 +83,7 @@ const LayerSchema = z.discriminatedUnion('type', [
         .object({
             type: z.literal('web'),
             url: z.string(),
+            proxy: z.boolean().optional(),
             scale: z.number().default(1),
             stillImage: z.string().optional(),
             blurhash: z.string().optional(),

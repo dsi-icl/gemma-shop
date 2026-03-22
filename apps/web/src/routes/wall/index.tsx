@@ -20,6 +20,9 @@ export const Route = createFileRoute('/wall/')({
 
 function WallApp() {
     const [layers, setLayers] = useState<LayerWithWallComponentState[]>([]);
+    const [frameabilityByUrl, setFrameabilityByUrl] = useState<
+        Record<string, { ok: boolean; reason?: string; fallback?: string }>
+    >({});
     const isClient = typeof window !== 'undefined';
     const wallId = useMemo(() => {
         if (!isClient) return null;
@@ -125,6 +128,64 @@ function WallApp() {
         };
     }, [engine, myViewport]);
 
+    useEffect(() => {
+        const urlsToCheck = Array.from(
+            new Set(
+                layers.flatMap((layer) => {
+                    if (
+                        layer.type !== 'web' ||
+                        layer.proxy === true ||
+                        typeof layer.url !== 'string' ||
+                        !/^https?:\/\//i.test(layer.url)
+                    ) {
+                        return [];
+                    }
+                    return [layer.url.trim()];
+                })
+            )
+        ).filter((url) => frameabilityByUrl[url] === undefined);
+
+        if (urlsToCheck.length === 0) return;
+
+        let cancelled = false;
+        for (const url of urlsToCheck) {
+            fetch(`/proxy?check=1&url=${encodeURIComponent(url)}`)
+                .then((res) => res.json())
+                .then((data: { ok?: boolean; reason?: string; fallback?: string }) => {
+                    if (cancelled) return;
+                    setFrameabilityByUrl((prev) => {
+                        if (prev[url] !== undefined) return prev;
+                        return {
+                            ...prev,
+                            [url]: {
+                                ok: data.ok === true,
+                                reason: data.reason,
+                                fallback: data.fallback
+                            }
+                        };
+                    });
+                })
+                .catch(() => {
+                    if (cancelled) return;
+                    setFrameabilityByUrl((prev) => {
+                        if (prev[url] !== undefined) return prev;
+                        return {
+                            ...prev,
+                            [url]: {
+                                ok: false,
+                                reason: 'network_error',
+                                fallback: '/web-nonet?l=wall'
+                            }
+                        };
+                    });
+                });
+        }
+
+        return () => {
+            cancelled = true;
+        };
+    }, [layers, frameabilityByUrl]);
+
     if (!engine) return null;
 
     const stage = layers
@@ -182,12 +243,41 @@ function WallApp() {
 
             if (layer.type === 'web') {
                 const webScale = layer.scale || 1;
+                const shouldProxy =
+                    layer.proxy === true && !!layer.url && /^https?:\/\//i.test(layer.url);
+                const normalizedUrl = (layer.url ?? '').trim();
+                const hasUsableUrl = !!normalizedUrl && /^https?:\/\//i.test(normalizedUrl);
+                const frameability =
+                    hasUsableUrl && layer.proxy !== true
+                        ? (frameabilityByUrl[normalizedUrl] ?? null)
+                        : null;
+                const fallbackFromPrecheck =
+                    frameability && !frameability.ok
+                        ? (frameability.fallback ?? '/web-nonet?l=wall')
+                        : null;
+                const iframeSrc = shouldProxy
+                    ? `/proxy?url=${encodeURIComponent(normalizedUrl)}`
+                    : hasUsableUrl && frameability === null
+                      ? '/web-placeholder?l=wall'
+                      : hasUsableUrl && frameability?.ok === true
+                        ? normalizedUrl
+                        : (fallbackFromPrecheck ?? '/web-nonet?l=wall');
                 return (
                     <div key={layer.numericId} {...commonProps}>
                         <iframe
-                            src={layer.url || '/web-placeholder'}
+                            src={iframeSrc}
                             title={`Web layer ${layer.numericId}`}
-                            // sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                            sandbox="allow-scripts allow-same-origin"
+                            onError={(e) => {
+                                const iframe = e.currentTarget;
+                                if (
+                                    !iframe.src.includes('/web-nonet') &&
+                                    !iframe.src.includes('/web-corsissue')
+                                ) {
+                                    iframe.src = '/web-nonet?l=wall';
+                                }
+                            }}
+                            className="bg-background"
                             style={{
                                 border: 'none',
                                 width: `${layer.config.width / webScale}px`,

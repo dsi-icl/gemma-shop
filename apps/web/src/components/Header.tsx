@@ -65,7 +65,7 @@ export function Header() {
         return params.get('l');
     }, [searchStr]);
 
-    if (mountLocation === 'gallery') return null;
+    if (mountLocation === 'gallery' || mountLocation === 'wall') return null;
 
     return (
         <header className="absolute top-0 left-0 flex w-full items-center justify-end gap-2 p-4">

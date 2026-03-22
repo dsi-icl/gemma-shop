@@ -12,7 +12,7 @@ export function Footer() {
         return params.get('l');
     }, [searchStr]);
 
-    if (mountLocation === 'gallery') return null;
+    if (mountLocation === 'gallery' || mountLocation === 'wall') return null;
 
     return (
         <footer className="absolute bottom-0 left-0 flex w-full items-center justify-between gap-2 p-4 text-sm text-accent">

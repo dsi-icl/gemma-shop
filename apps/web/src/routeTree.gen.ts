@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WebPlaceholderRouteImport } from './routes/web-placeholder'
+import { Route as WebNonetRouteImport } from './routes/web-nonet'
+import { Route as WebCorsissueRouteImport } from './routes/web-corsissue'
 import { Route as OgRouteImport } from './routes/og'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as GuestRouteRouteImport } from './routes/_guest/route'
@@ -48,6 +50,16 @@ import { Route as AuthQuarryEditorProjectIdCommitIdSlideIdRouteImport } from './
 const WebPlaceholderRoute = WebPlaceholderRouteImport.update({
   id: '/web-placeholder',
   path: '/web-placeholder',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebNonetRoute = WebNonetRouteImport.update({
+  id: '/web-nonet',
+  path: '/web-nonet',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WebCorsissueRoute = WebCorsissueRouteImport.update({
+  id: '/web-corsissue',
+  path: '/web-corsissue',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OgRoute = OgRouteImport.update({
@@ -233,6 +245,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/og': typeof OgRoute
+  '/web-corsissue': typeof WebCorsissueRoute
+  '/web-nonet': typeof WebNonetRoute
   '/web-placeholder': typeof WebPlaceholderRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
@@ -267,6 +281,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/og': typeof OgRoute
+  '/web-corsissue': typeof WebCorsissueRoute
+  '/web-nonet': typeof WebNonetRoute
   '/web-placeholder': typeof WebPlaceholderRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
@@ -304,6 +320,8 @@ export interface FileRoutesById {
   '/_guest': typeof GuestRouteRouteWithChildren
   '/admin': typeof AdminRouteRouteWithChildren
   '/og': typeof OgRoute
+  '/web-corsissue': typeof WebCorsissueRoute
+  '/web-nonet': typeof WebNonetRoute
   '/web-placeholder': typeof WebPlaceholderRoute
   '/_guest/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
@@ -341,6 +359,8 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/og'
+    | '/web-corsissue'
+    | '/web-nonet'
     | '/web-placeholder'
     | '/login'
     | '/admin/assets'
@@ -375,6 +395,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/og'
+    | '/web-corsissue'
+    | '/web-nonet'
     | '/web-placeholder'
     | '/login'
     | '/admin/assets'
@@ -411,6 +433,8 @@ export interface FileRouteTypes {
     | '/_guest'
     | '/admin'
     | '/og'
+    | '/web-corsissue'
+    | '/web-nonet'
     | '/web-placeholder'
     | '/_guest/login'
     | '/admin/assets'
@@ -449,6 +473,8 @@ export interface RootRouteChildren {
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
   OgRoute: typeof OgRoute
+  WebCorsissueRoute: typeof WebCorsissueRoute
+  WebNonetRoute: typeof WebNonetRoute
   WebPlaceholderRoute: typeof WebPlaceholderRoute
   ApiWebScreenshotRoute: typeof ApiWebScreenshotRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
@@ -467,6 +493,20 @@ declare module '@tanstack/react-router' {
       path: '/web-placeholder'
       fullPath: '/web-placeholder'
       preLoaderRoute: typeof WebPlaceholderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/web-nonet': {
+      id: '/web-nonet'
+      path: '/web-nonet'
+      fullPath: '/web-nonet'
+      preLoaderRoute: typeof WebNonetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/web-corsissue': {
+      id: '/web-corsissue'
+      path: '/web-corsissue'
+      fullPath: '/web-corsissue'
+      preLoaderRoute: typeof WebCorsissueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/og': {
@@ -830,6 +870,8 @@ const rootRouteChildren: RootRouteChildren = {
   GuestRouteRoute: GuestRouteRouteWithChildren,
   AdminRouteRoute: AdminRouteRouteWithChildren,
   OgRoute: OgRoute,
+  WebCorsissueRoute: WebCorsissueRoute,
+  WebNonetRoute: WebNonetRoute,
   WebPlaceholderRoute: WebPlaceholderRoute,
   ApiWebScreenshotRoute: ApiWebScreenshotRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,

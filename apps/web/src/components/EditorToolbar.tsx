@@ -14,6 +14,8 @@ import {
     GlobeSimpleIcon,
     GridNineIcon,
     ImageIcon,
+    LightningIcon,
+    LightningSlashIcon,
     MapPinIcon,
     MonitorIcon,
     PencilSimpleIcon,
@@ -189,6 +191,19 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         },
         [activeLayer]
     );
+
+    const handleWebProxyToggle = useCallback(() => {
+        if (!activeLayer || activeLayer.type !== 'web') return;
+        const updatedLayer = { ...activeLayer, proxy: !activeLayer.proxy };
+        useEditorStore.getState().upsertLayer(updatedLayer);
+        const engine = EditorEngine.getInstance();
+        engine.sendJSON({
+            type: 'upsert_layer',
+            origin: 'toolbar-web-proxy-toggle',
+            layer: updatedLayer
+        });
+        useEditorStore.getState().markDirty();
+    }, [activeLayer]);
 
     const captureScreenshot = useCallback(async () => {
         if (!activeLayer || activeLayer.type !== 'web' || !activeLayer.url) return;
@@ -684,6 +699,13 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                             onChange={(e) => handleWebUrlChange(e.target.value)}
                             className="h-7 min-w-48 flex-1 text-xs"
                         />
+                        <TipButton
+                            tip={activeLayer.proxy ? 'Disable Proxy' : 'Enable Proxy'}
+                            variant={activeLayer.proxy ? 'outline' : 'ghost'}
+                            onClick={handleWebProxyToggle}
+                        >
+                            {activeLayer.proxy ? <LightningIcon /> : <LightningSlashIcon />}
+                        </TipButton>
                         <TipButton
                             tip={activeLayer.url ? 'Capture screenshot' : 'Set a URL first'}
                             onClick={captureScreenshot}

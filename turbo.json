@@ -1,7 +1,15 @@
 {
     "$schema": "https://turborepo.com/schema.json",
     "ui": "tui",
-    "globalPassThroughEnv": ["NODE_ENV", "PROD", "YJS_DEBUG"],
+    "globalPassThroughEnv": [
+        "NODE_ENV",
+        "PROD",
+        "YJS_DEBUG",
+        "PROXY_ALLOWED_REFERRERS",
+        "PROXY_ALLOW_MISSING_REFERRER",
+        "PROXY_FETCH_TIMEOUT_MS",
+        "PROXY_MAX_BYTES"
+    ],
     "tasks": {
         "build": {
             "dependsOn": ["^build"],

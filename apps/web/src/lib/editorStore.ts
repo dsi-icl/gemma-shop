@@ -666,6 +666,7 @@ export const useEditorStore =
                               visible: true
                           },
                           url: '',
+                          proxy: false,
                           scale: 1
                       };
 
