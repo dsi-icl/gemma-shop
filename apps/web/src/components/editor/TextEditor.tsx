@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useEditorStore } from '~/lib/editorStore';
 import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
 
-import ToolbarPlugin from './ToolbarPlugin';
+import TextEditorToolbar from './TextEditorToolbar';
 
 export function TextEditor({
     layerId,
@@ -91,7 +91,7 @@ export function TextEditor({
 
     return (
         <div ref={rootRef} className="flex flex-col gap-4">
-            <ToolbarPlugin />
+            <TextEditorToolbar />
             <div
                 className="overflow-auto rounded-lg border border-border bg-black"
                 style={{

@@ -82,7 +82,7 @@ function normalizeFontFamily(value: string): string {
     return value.replace(/["']/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-export default function ToolbarPlugin() {
+export default function TextEditorToolbar() {
     const [editor] = useLexicalComposerContext();
     const toolbarRef = useRef(null);
     const [canUndo, setCanUndo] = useState(false);
