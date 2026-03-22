@@ -405,6 +405,22 @@ export function canSendNonCritical(peer: Peer): boolean {
     }
 }
 
+export function estimatePlaybackLeadMs(scopeId: ScopeId): number {
+    const targets = wallPeersByScope.get(scopeId);
+    if (!targets || targets.size === 0) return 180;
+
+    let congested = 0;
+    for (const entry of targets) {
+        if (!canSendNonCritical(entry.peer)) congested += 1;
+    }
+
+    // Adaptive lead:
+    // - scale with fanout size,
+    // - add extra margin when some peers are congested.
+    const dynamic = 160 + Math.min(420, targets.size * 15 + congested * 120);
+    return Math.max(120, Math.min(600, dynamic));
+}
+
 export function sendJSON(peer: Peer, data: GSMessage) {
     markOutgoing(1, 0);
     peer.send(JSON.stringify(data));

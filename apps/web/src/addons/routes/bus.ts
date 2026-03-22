@@ -51,6 +51,7 @@ import {
     getWallNodeCount,
     markIncomingBinary,
     markIncomingJson,
+    estimatePlaybackLeadMs,
     // layerNodes,
     // canSendNonCritical,
     EMPTY_HYDRATE,
@@ -470,8 +471,9 @@ handlers.set('video_play', ({ data, scopeId }) => {
     if (!shouldApplyPlaybackCommand(scopeId, data.numericId, data.issuedAt)) return;
     const layer = scopedState.get(scopeId)?.layers.get(data.numericId);
     if (layer?.type === 'video') {
+        const leadMs = estimatePlaybackLeadMs(scopeId);
         layer.playback.status = 'playing';
-        layer.playback.anchorServerTime = Date.now() + 500;
+        layer.playback.anchorServerTime = Date.now() + leadMs;
         registerActiveVideo(data.numericId, scopeId, layer);
         sendVideoSyncToRelevantWalls(data.numericId, scopeId, layer.playback, {
             criticalToWalls: true
