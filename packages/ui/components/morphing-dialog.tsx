@@ -1,6 +1,6 @@
 'use client';
 
-import { XIcon } from '@phosphor-icons/react';
+import { ArrowsOutSimpleIcon, CircleIcon, XIcon } from '@phosphor-icons/react';
 import useClickOutside from '@repo/ui/hooks/use-click-outside';
 import { cn } from '@repo/ui/lib/utils';
 import { motion, AnimatePresence, MotionConfig, Transition, Variant } from 'motion/react';
@@ -9,9 +9,18 @@ import { createPortal } from 'react-dom';
 
 import AnimatedBlurPattern from './blur-pattern';
 
+export type MorphingDialogState = 'closed' | 'expanded' | 'fullscreen' | 'minimized';
+
 export type MorphingDialogContextType = {
+    state: MorphingDialogState;
+    setState: React.Dispatch<React.SetStateAction<MorphingDialogState>>;
     isOpen: boolean;
     setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    expand: () => void;
+    fullscreen: () => void;
+    minimize: () => void;
+    close: () => void;
+    consumeTriggerCloseGuard: () => boolean;
     uniqueId: string;
     triggerRef: React.RefObject<HTMLButtonElement | null>;
 };
@@ -29,22 +38,117 @@ function useMorphingDialog() {
 export type MorphingDialogProviderProps = {
     children: React.ReactNode;
     transition?: Transition;
+    defaultState?: MorphingDialogState;
+    onStateChange?: (state: MorphingDialogState) => void;
 };
 
-function MorphingDialogProvider({ children, transition }: MorphingDialogProviderProps) {
-    const [isOpen, setIsOpen] = useState(false);
+function MorphingDialogProvider({
+    children,
+    transition,
+    defaultState = 'closed',
+    onStateChange
+}: MorphingDialogProviderProps) {
+    const [state, setState] = useState<MorphingDialogState>(defaultState);
+    const closeRafRef = useRef<number | null>(null);
+    const closeLockRef = useRef(false);
+    const triggerCloseGuardRef = useRef(false);
+    const triggerCloseGuardRafRef = useRef<number | null>(null);
     const uniqueId = useId();
     const triggerRef = useRef<HTMLButtonElement>(null!);
+    const isOpen = state !== 'closed';
+    const setIsOpen = useCallback((next: React.SetStateAction<boolean>) => {
+        setState((prev) => {
+            const resolved = typeof next === 'function' ? next(prev !== 'closed') : next;
+            if (resolved) {
+                return prev === 'closed' ? 'expanded' : prev;
+            }
+            return 'closed';
+        });
+    }, []);
+    const expand = useCallback(() => setState('expanded'), []);
+    const fullscreen = useCallback(() => setState('fullscreen'), []);
+    const minimize = useCallback(() => setState('minimized'), []);
+    const close = useCallback(() => {
+        if (closeLockRef.current) return;
+        closeLockRef.current = true;
+        triggerCloseGuardRef.current = true;
+        if (triggerCloseGuardRafRef.current) {
+            cancelAnimationFrame(triggerCloseGuardRafRef.current);
+        }
+        triggerCloseGuardRafRef.current = requestAnimationFrame(() => {
+            triggerCloseGuardRef.current = false;
+            triggerCloseGuardRafRef.current = null;
+        });
+
+        setState((prev) => {
+            if (prev === 'fullscreen' || prev === 'minimized') {
+                if (closeRafRef.current) cancelAnimationFrame(closeRafRef.current);
+                closeRafRef.current = requestAnimationFrame(() => {
+                    setState('closed');
+                    closeRafRef.current = null;
+                    closeLockRef.current = false;
+                });
+                return 'expanded';
+            }
+
+            requestAnimationFrame(() => {
+                closeLockRef.current = false;
+            });
+            return 'closed';
+        });
+    }, []);
+
+    const consumeTriggerCloseGuard = useCallback(() => {
+        if (!triggerCloseGuardRef.current) return false;
+        triggerCloseGuardRef.current = false;
+        return true;
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (closeRafRef.current) {
+                cancelAnimationFrame(closeRafRef.current);
+                closeRafRef.current = null;
+            }
+            if (triggerCloseGuardRafRef.current) {
+                cancelAnimationFrame(triggerCloseGuardRafRef.current);
+                triggerCloseGuardRafRef.current = null;
+            }
+            closeLockRef.current = false;
+            triggerCloseGuardRef.current = false;
+        };
+    }, []);
 
     const contextValue = useMemo(
         () => ({
+            state,
+            setState,
             isOpen,
             setIsOpen,
+            expand,
+            fullscreen,
+            minimize,
+            close,
+            consumeTriggerCloseGuard,
             uniqueId,
             triggerRef
         }),
-        [isOpen, uniqueId]
+        [
+            state,
+            isOpen,
+            setIsOpen,
+            expand,
+            fullscreen,
+            minimize,
+            close,
+            consumeTriggerCloseGuard,
+            uniqueId
+        ]
     );
+
+    useEffect(() => {
+        onStateChange?.(state);
+    }, [state, onStateChange]);
 
     return (
         <MorphingDialogContext.Provider value={contextValue}>
@@ -56,11 +160,18 @@ function MorphingDialogProvider({ children, transition }: MorphingDialogProvider
 export type MorphingDialogProps = {
     children: React.ReactNode;
     transition?: Transition;
+    defaultState?: MorphingDialogState;
+    onStateChange?: (state: MorphingDialogState) => void;
 };
 
-function MorphingDialog({ children, transition }: MorphingDialogProps) {
+function MorphingDialog({
+    children,
+    transition,
+    defaultState,
+    onStateChange
+}: MorphingDialogProps) {
     return (
-        <MorphingDialogProvider>
+        <MorphingDialogProvider defaultState={defaultState} onStateChange={onStateChange}>
             <MotionConfig transition={transition}>{children}</MotionConfig>
         </MorphingDialogProvider>
     );
@@ -79,20 +190,24 @@ function MorphingDialogTrigger({
     style,
     triggerRef
 }: MorphingDialogTriggerProps) {
-    const { setIsOpen, isOpen, uniqueId } = useMorphingDialog();
+    const { state, setState, uniqueId, consumeTriggerCloseGuard } = useMorphingDialog();
+    const isOpen = state !== 'closed';
 
     const handleClick = useCallback(() => {
-        setIsOpen(!isOpen);
-    }, [isOpen, setIsOpen]);
+        if (consumeTriggerCloseGuard()) {
+            return;
+        }
+        setState((prev) => (prev === 'closed' ? 'expanded' : 'closed'));
+    }, [consumeTriggerCloseGuard, setState]);
 
     const handleKeyDown = useCallback(
         (event: React.KeyboardEvent) => {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
-                setIsOpen(!isOpen);
+                setState((prev) => (prev === 'closed' ? 'expanded' : 'closed'));
             }
         },
-        [isOpen, setIsOpen]
+        [setState]
     );
 
     return (
@@ -120,7 +235,7 @@ export type MorphingDialogContentProps = {
 };
 
 function MorphingDialogContent({ children, className, style }: MorphingDialogContentProps) {
-    const { setIsOpen, isOpen, uniqueId, triggerRef } = useMorphingDialog();
+    const { state, close, fullscreen, isOpen, uniqueId, triggerRef } = useMorphingDialog();
     const containerRef = useRef<HTMLDivElement>(null!);
     const [firstFocusableElement, setFirstFocusableElement] = useState<HTMLElement | null>(null);
     const [lastFocusableElement, setLastFocusableElement] = useState<HTMLElement | null>(null);
@@ -128,7 +243,7 @@ function MorphingDialogContent({ children, className, style }: MorphingDialogCon
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
-                setIsOpen(false);
+                close();
             }
             if (event.key === 'Tab') {
                 if (!firstFocusableElement || !lastFocusableElement) return;
@@ -152,10 +267,10 @@ function MorphingDialogContent({ children, className, style }: MorphingDialogCon
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [setIsOpen, firstFocusableElement, lastFocusableElement]);
+    }, [close, firstFocusableElement, lastFocusableElement]);
 
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && state !== 'minimized') {
             document.body.classList.add('overflow-hidden');
             const focusableElements = containerRef.current?.querySelectorAll(
                 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -169,28 +284,51 @@ function MorphingDialogContent({ children, className, style }: MorphingDialogCon
             }
         } else {
             document.body.classList.remove('overflow-hidden');
-            triggerRef.current?.focus();
+            if (!isOpen) triggerRef.current?.focus();
         }
-    }, [isOpen, triggerRef]);
+    }, [isOpen, state, triggerRef]);
 
     useClickOutside(containerRef, () => {
-        if (isOpen) {
-            setIsOpen(false);
-        }
+        if (isOpen && state !== 'minimized') close();
     });
+
+    const stateClassName =
+        state === 'fullscreen'
+            ? '!fixed !inset-4 !z-50 !w-[calc(100vw-2rem)] !h-[calc(100vh-2rem)] !max-w-none !rounded-2xl'
+            : state === 'minimized'
+              ? '!fixed !left-4 !bottom-4 !z-50 !h-14 !w-14 !max-w-14 !rounded-full shadow-lg'
+              : '';
 
     return (
         <motion.div
             ref={containerRef}
-            layoutId={`dialog-${uniqueId}`}
-            className={cn('overflow-hidden', className)}
+            layout
+            layoutId={state === 'minimized' ? undefined : `dialog-${uniqueId}`}
+            className={cn('overflow-hidden', className, stateClassName)}
             style={style}
             role="dialog"
             aria-modal="true"
             aria-labelledby={`motion-ui-morphing-dialog-title-${uniqueId}`}
             aria-describedby={`motion-ui-morphing-dialog-description-${uniqueId}`}
+            onClick={() => {
+                if (state === 'minimized') fullscreen();
+            }}
         >
-            {children}
+            {state === 'minimized' ? (
+                <button
+                    type="button"
+                    aria-label="Restore fullscreen dialog"
+                    className="flex h-full w-full items-center justify-center bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        fullscreen();
+                    }}
+                >
+                    <ArrowsOutSimpleIcon size={16} />
+                </button>
+            ) : (
+                children
+            )}
         </motion.div>
     );
 }
@@ -202,7 +340,7 @@ export type MorphingDialogContainerProps = {
 };
 
 function MorphingDialogContainer({ children }: MorphingDialogContainerProps) {
-    const { isOpen, uniqueId } = useMorphingDialog();
+    const { isOpen, state, uniqueId } = useMorphingDialog();
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -218,13 +356,24 @@ function MorphingDialogContainer({ children }: MorphingDialogContainerProps) {
                 <>
                     <motion.div
                         key={`backdrop-${uniqueId}`}
-                        className="fixed inset-0 h-full w-full bg-white/40 backdrop-blur-xs dark:bg-black/40"
+                        className={cn(
+                            'fixed inset-0 h-full w-full bg-white/40 backdrop-blur-xs dark:bg-black/40',
+                            state === 'minimized' && 'pointer-events-none opacity-0'
+                        )}
                         initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
+                        animate={{ opacity: state === 'minimized' ? 0 : 1 }}
                         exit={{ opacity: 0 }}
                     />
-                    <div className="fixed inset-0 z-50 flex items-center justify-center">
-                        {children}
+                    <div
+                        className={cn(
+                            'fixed inset-0 z-50',
+                            state === 'expanded' && 'flex items-center justify-center',
+                            state === 'minimized' && 'pointer-events-none'
+                        )}
+                    >
+                        <div className={cn(state === 'minimized' && 'pointer-events-auto')}>
+                            {children}
+                        </div>
                     </div>
                 </>
             )}
@@ -352,11 +501,11 @@ export type MorphingDialogCloseProps = {
 };
 
 function MorphingDialogClose({ children, className, variants }: MorphingDialogCloseProps) {
-    const { setIsOpen, uniqueId } = useMorphingDialog();
+    const { close, uniqueId } = useMorphingDialog();
 
     const handleClose = useCallback(() => {
-        setIsOpen(false);
-    }, [setIsOpen]);
+        close();
+    }, [close]);
 
     return (
         <motion.button
@@ -375,6 +524,47 @@ function MorphingDialogClose({ children, className, variants }: MorphingDialogCl
     );
 }
 
+function MorphingDialogStateControls({ className }: { className?: string }) {
+    const { state, fullscreen, minimize, close } = useMorphingDialog();
+    if (state === 'closed') return null;
+
+    return (
+        <div className={cn('absolute top-3 left-3 z-10 flex gap-1', className)}>
+            {state === 'expanded' ? (
+                <button
+                    type="button"
+                    className="rounded bg-black/45 px-2 py-1 text-[10px] text-white hover:bg-black/60"
+                    onClick={fullscreen}
+                >
+                    Full
+                </button>
+            ) : null}
+            {state === 'fullscreen' ? (
+                <button
+                    type="button"
+                    className="rounded bg-black/45 px-2 py-1 text-[10px] text-white hover:bg-black/60"
+                    onClick={minimize}
+                >
+                    Min
+                </button>
+            ) : null}
+            {state !== 'minimized' ? (
+                <button
+                    type="button"
+                    className="rounded bg-black/45 px-2 py-1 text-[10px] text-white hover:bg-black/60"
+                    onClick={close}
+                >
+                    Close
+                </button>
+            ) : (
+                <span className="rounded bg-black/45 px-2 py-1 text-[10px] text-white/80">
+                    <CircleIcon size={8} weight="fill" />
+                </span>
+            )}
+        </div>
+    );
+}
+
 export {
     MorphingDialog,
     MorphingDialogTrigger,
@@ -384,5 +574,6 @@ export {
     MorphingDialogTitle,
     MorphingDialogSubtitle,
     MorphingDialogDescription,
-    MorphingDialogImage
+    MorphingDialogImage,
+    MorphingDialogStateControls
 };

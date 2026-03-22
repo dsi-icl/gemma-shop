@@ -9,6 +9,7 @@ import {
     MorphingDialogContent,
     MorphingDialogDescription,
     MorphingDialogImage,
+    MorphingDialogStateControls,
     MorphingDialogSubtitle,
     MorphingDialogTitle,
     MorphingDialogTrigger
@@ -84,6 +85,7 @@ export function ProjectCard({ project, onLoadProject }: ProjectCardProps) {
                     }}
                     className="pointer-events-auto relative flex h-auto w-full flex-col overflow-hidden border border-zinc-950/10 bg-white sm:w-[500px] dark:border-zinc-50/10 dark:bg-zinc-900"
                 >
+                    <MorphingDialogStateControls />
                     <MorphingDialogImage
                         src={project.imageUrl}
                         alt={project.name}
