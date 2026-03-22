@@ -43,13 +43,13 @@ import { useEditorStore } from '~/lib/editorStore';
 import { FILTER_PRESETS, normalizeLayerFilters, toCssFilterString } from '~/lib/layerFilters';
 import type { LayerFilterState, LayerWithEditorState } from '~/lib/types';
 
-interface ToolbarProps {
+interface EditorToolbarProps {
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     // onEditText?: (layerId: number) => void;
 }
 
-export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
+export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     // Project header — only changes on project load
     const { projectName, parentSaveMessage } = useEditorStore(
         useShallow((s) => ({ projectName: s.projectName, parentSaveMessage: s.parentSaveMessage }))
@@ -436,7 +436,6 @@ export function Toolbar({ fileInputRef, onUpload }: ToolbarProps) {
                     </TipButton>
                 </div>
             </div>
-            {/* Empty — text editing moved to dialog via double-click or toolbar button */}
             <div
                 id="toolbar"
                 className="flex h-11 min-h-11 items-center gap-1 border-t border-b border-border bg-card/50 px-2 py-1"

@@ -5,12 +5,12 @@ import type { KonvaEventObject } from 'konva/lib/Node';
 import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'react-konva';
 
+import { EditorToolbar } from '~/components/EditorToolbar';
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaTextLayer } from '~/components/KonvaTextLayer';
 import { KonvaVideo } from '~/components/KonvaVideo';
 import { KonvaWebLayer } from '~/components/KonvaWebLayer';
 import { RoyStaticRenderer } from '~/components/roygraph/RoyStaticRenderer';
-import { Toolbar } from '~/components/Toolbar';
 import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
@@ -50,6 +50,22 @@ function getDistance(p1: { x: number; y: number }, p2: { x: number; y: number })
 
 function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
     return (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
+}
+
+function getAngleDelta(current: number, previous: number): number {
+    // Keep delta in [-180, 180] to avoid wrap-around jumps at the -180/180 boundary.
+    return ((current - previous + 540) % 360) - 180;
+}
+
+function touchToStagePoint(stage: Konva.Stage, touch: Touch): { x: number; y: number } {
+    const rect = stage.container().getBoundingClientRect();
+    const pointer = {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+    };
+    const transform = stage.getAbsoluteTransform().copy();
+    transform.invert();
+    return transform.point(pointer);
 }
 
 export function EditorSlate() {
@@ -717,10 +733,12 @@ export function EditorSlate() {
         ) {
             flushNodeState(currentSelectedIds[0]);
             setIsPinching(true);
+            const stage = trRef.current?.getStage();
+            if (!stage) return;
             const t1 = e.evt.touches[0];
             const t2 = e.evt.touches[1];
-            const p1 = { x: t1.clientX, y: t1.clientY };
-            const p2 = { x: t2.clientX, y: t2.clientY };
+            const p1 = touchToStagePoint(stage, t1);
+            const p2 = touchToStagePoint(stage, t2);
             lastDist.current = getDistance(p1, p2);
             lastAngle.current = getAngle(p1, p2);
             lastCenter.current = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
@@ -755,38 +773,33 @@ export function EditorSlate() {
 
             const t1 = e.evt.touches[0];
             const t2 = e.evt.touches[1];
-            const p1 = { x: t1.clientX, y: t1.clientY };
-            const p2 = { x: t2.clientX, y: t2.clientY };
+            const p1 = touchToStagePoint(stage!, t1);
+            const p2 = touchToStagePoint(stage!, t2);
             const dist = getDistance(p1, p2);
             const angle = getAngle(p1, p2);
-            const screenCenter = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+            const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
 
             if (!lastDist.current || !lastAngle.current || !lastCenter.current) return;
-
-            const stageScaleX = stage?.scaleX();
-            const stageScaleY = stage?.scaleY();
             const scaleBy = dist / lastDist.current;
-            const angleDelta = angle - lastAngle.current;
-
-            if (!stageScaleX || !stageScaleY) return;
-
-            const dx = (screenCenter.x - lastCenter.current.x) / stageScaleX;
-            const dy = (screenCenter.y - lastCenter.current.y) / stageScaleY;
-            let newX = Math.round(node.x() + dx);
-            let newY = Math.round(node.y() + dy);
-
-            const logicalPinchCenterX = screenCenter.x / stageScaleX;
-            const logicalPinchCenterY = screenCenter.y / stageScaleY;
-            newX -= Math.round((logicalPinchCenterX - newX) * (scaleBy - 1));
-            newY -= Math.round((logicalPinchCenterY - newY) * (scaleBy - 1));
+            const angleDelta = getAngleDelta(angle, lastAngle.current);
+            const prevCenter = lastCenter.current;
+            const radians = (angleDelta * Math.PI) / 180;
+            const cos = Math.cos(radians);
+            const sin = Math.sin(radians);
+            const fromPrevCenterX = node.x() - prevCenter.x;
+            const fromPrevCenterY = node.y() - prevCenter.y;
+            const rotatedScaledX = (fromPrevCenterX * cos - fromPrevCenterY * sin) * scaleBy;
+            const rotatedScaledY = (fromPrevCenterX * sin + fromPrevCenterY * cos) * scaleBy;
+            const newX = center.x + rotatedScaledX;
+            const newY = center.y + rotatedScaledY;
 
             const newScaleX = Math.round(node.scaleX() * scaleBy * 1000) / 1000;
             const newScaleY = Math.round(node.scaleY() * scaleBy * 1000) / 1000;
-            if (newScaleX > 0.1 && newScaleX < 10) {
+            const canApplyScale =
+                newScaleX > 0.1 && newScaleX < 10 && newScaleY > 0.1 && newScaleY < 10;
+            if (canApplyScale) {
                 node.scaleX(newScaleX);
                 node.x(newX);
-            }
-            if (newScaleY > 0.1 && newScaleY < 10) {
                 node.scaleY(newScaleY);
                 node.y(newY);
             }
@@ -805,7 +818,7 @@ export function EditorSlate() {
 
             lastDist.current = dist;
             lastAngle.current = angle;
-            lastCenter.current = screenCenter;
+            lastCenter.current = center;
             return;
         }
         if (e.evt.touches.length === 2) {
@@ -863,7 +876,7 @@ export function EditorSlate() {
 
     return (
         <>
-            <Toolbar
+            <EditorToolbar
                 fileInputRef={fileInputRef}
                 onUpload={handleUpload}
                 // onEditText={setEditingTextLayerId}
