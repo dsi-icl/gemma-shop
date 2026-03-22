@@ -726,26 +726,11 @@ export function EditorSlate() {
             store.updateLayerConfig(numericId, updatedConfig);
 
             // Sync to server
-            if (layerToUpdate.type === 'video') {
-                const truePlayback = engine.getPlayback(numericId) || layerToUpdate.playback;
-                engine.sendJSON({
-                    type: 'upsert_layer',
-                    origin: 'editor:handle_transform_end',
-                    layer: { ...layerToUpdate, config: updatedConfig, playback: truePlayback }
-                });
-            } else if (layerToUpdate.type === 'shape') {
-                engine.sendJSON({
-                    type: 'upsert_layer',
-                    origin: 'editor:handle_transform_end',
-                    layer: { ...layerToUpdate, config: updatedConfig }
-                });
-            } else {
-                engine.sendJSON({
-                    type: 'upsert_layer',
-                    origin: 'editor:handle_transform_end',
-                    layer: { ...layerToUpdate, config: updatedConfig }
-                });
-            }
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'editor:handle_transform_end',
+                layer: { ...layerToUpdate, config: updatedConfig }
+            });
         },
         [isSnapping]
     );

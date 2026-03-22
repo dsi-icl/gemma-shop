@@ -128,22 +128,11 @@ export const useEditorStore =
     typeof window !== 'undefined' && window.__EDITOR_STORE__
         ? window.__EDITOR_STORE__
         : create<EditorState>()((set, get) => {
-              /** Send a layer update to the server, preserving video playback state */
+              /** Send a layer update to the server */
               const sendLayerUpdate = throttle(
                   (layer: LayerWithEditorState, origin: string) => {
                       const engine = EditorEngine.getInstance();
-                      if (layer.type === 'video') {
-                          engine.sendJSON({
-                              type: 'upsert_layer',
-                              origin,
-                              layer: {
-                                  ...layer,
-                                  playback: engine.getPlayback(layer.numericId) || layer.playback
-                              }
-                          });
-                      } else {
-                          engine.sendJSON({ type: 'upsert_layer', origin, layer });
-                      }
+                      engine.sendJSON({ type: 'upsert_layer', origin, layer });
                   },
                   { wait: 100 }
               );

@@ -104,17 +104,14 @@ export function PlaybackControls({
                             variant={isLooping ? 'secondary' : 'ghost'}
                             size="icon-sm"
                             onClick={() => {
-                                const playback = engine.getPlayback(layer.numericId);
-                                if (playback)
-                                    engine.sendJSON({
-                                        type: 'upsert_layer',
-                                        origin: 'editor:playback_controls_input',
-                                        layer: {
-                                            ...layer,
-                                            loop: !isLooping,
-                                            playback
-                                        }
-                                    });
+                                engine.sendJSON({
+                                    type: 'upsert_layer',
+                                    origin: 'editor:playback_controls_input',
+                                    layer: {
+                                        ...layer,
+                                        loop: !isLooping
+                                    }
+                                });
                             }}
                         />
                     }

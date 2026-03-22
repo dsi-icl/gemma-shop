@@ -343,6 +343,13 @@ export class EditorEngine {
     }
 
     public sendJSON = (data: GSMessage) => {
+        // Protocol discipline:
+        // Editor upsert_layer for video should never carry playback timeline fields.
+        if (data.type === 'upsert_layer' && data.layer.type === 'video') {
+            const { playback: _playback, ...layerWithoutPlayback } = data.layer;
+            this.rws.send(JSON.stringify({ ...data, layer: layerWithoutPlayback }));
+            return;
+        }
         this.rws.send(JSON.stringify(data));
     };
 
