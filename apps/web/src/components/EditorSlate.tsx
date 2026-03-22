@@ -31,6 +31,24 @@ const SNAP_GRID = 120;
 const COLS = 16;
 const ROWS = 4;
 
+function fitSizeToViewport(
+    width: number,
+    height: number,
+    viewportWidth: number,
+    viewportHeight: number,
+    marginRatio = 0.9
+): { width: number; height: number } {
+    const safeW = Math.max(1, width);
+    const safeH = Math.max(1, height);
+    const maxW = Math.max(1, viewportWidth * marginRatio);
+    const maxH = Math.max(1, viewportHeight * marginRatio);
+    const scale = Math.min(1, maxW / safeW, maxH / safeH);
+    return {
+        width: Math.round(safeW * scale),
+        height: Math.round(safeH * scale)
+    };
+}
+
 function normalizeRotationToQuadrant(rotation: number): number {
     return ((Math.round(rotation) % 360) + 360) % 360;
 }
@@ -105,6 +123,19 @@ export function EditorSlate() {
     );
     const selectedLayerIdSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
 
+    const syncInsertionCenter = useCallback(() => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+        const scale = Math.max(stageScaleFactor, 0.001);
+        const centerX = (slot.scrollLeft + slot.clientWidth / 2) / scale;
+        const centerY = (slot.scrollTop + slot.clientHeight / 2) / scale;
+        const viewportWidth = slot.clientWidth / scale;
+        const viewportHeight = slot.clientHeight / scale;
+        const store = useEditorStore.getState();
+        store.setInsertionCenter(centerX, centerY);
+        store.setInsertionViewport(viewportWidth, viewportHeight);
+    }, [stageScaleFactor]);
+
     useLayoutEffect(() => {
         const slot = stageSlot.current;
         if (!slot) return;
@@ -128,6 +159,31 @@ export function EditorSlate() {
 
         return () => observer.disconnect();
     }, []);
+
+    useEffect(() => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+
+        let rafId: number | null = null;
+
+        const scheduleSync = () => {
+            if (rafId !== null) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                syncInsertionCenter();
+                rafId = null;
+            });
+        };
+
+        scheduleSync();
+        slot.addEventListener('scroll', scheduleSync, { passive: true });
+        window.addEventListener('resize', scheduleSync);
+
+        return () => {
+            slot.removeEventListener('scroll', scheduleSync);
+            window.removeEventListener('resize', scheduleSync);
+            if (rafId !== null) cancelAnimationFrame(rafId);
+        };
+    }, [syncInsertionCenter]);
 
     // Shadow ref — keeps binary-updated positions for the fast-path.
     // Binary updates mutate this directly (no React re-render).
@@ -315,12 +371,19 @@ export function EditorSlate() {
         const store = useEditorStore.getState();
         const numericId = store.allocateId();
         const zIndex = store.allocateZIndex();
+        const { x: insertionX, y: insertionY } = store.insertionCenter;
+        const fitted = fitSizeToViewport(
+            mediaWidth,
+            mediaHeight,
+            store.insertionViewport.width,
+            store.insertionViewport.height
+        );
 
         const positions = {
-            cx: mediaWidth / 2,
-            cy: mediaHeight / 2,
-            width: mediaWidth,
-            height: mediaHeight,
+            cx: insertionX,
+            cy: insertionY,
+            width: fitted.width,
+            height: fitted.height,
             rotation: 0,
             scaleX: 1,
             scaleY: 1
@@ -506,7 +569,12 @@ export function EditorSlate() {
         }
 
         // Scale baking for image/map layers
-        if (layer.type === 'image' || layer.type === 'map' || layer.type === 'shape') {
+        if (
+            layer.type === 'image' ||
+            layer.type === 'map' ||
+            layer.type === 'shape' ||
+            layer.type === 'web'
+        ) {
             const scaleX = node.scaleX();
             const scaleY = node.scaleY();
 

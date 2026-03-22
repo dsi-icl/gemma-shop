@@ -8,6 +8,24 @@ import { $deleteAsset } from '~/server/projects.fns';
 
 import { AssetLibrary, type AssetLibraryAsset } from './AssetLibrary';
 
+function fitSizeToViewport(
+    width: number,
+    height: number,
+    viewportWidth: number,
+    viewportHeight: number,
+    marginRatio = 0.9
+): { width: number; height: number } {
+    const safeW = Math.max(1, width);
+    const safeH = Math.max(1, height);
+    const maxW = Math.max(1, viewportWidth * marginRatio);
+    const maxH = Math.max(1, viewportHeight * marginRatio);
+    const scale = Math.min(1, maxW / safeW, maxH / safeH);
+    return {
+        width: Math.round(safeW * scale),
+        height: Math.round(safeH * scale)
+    };
+}
+
 interface AssetLibraryPanelProps {
     projectId: string;
     titleBarSize?: number;
@@ -33,6 +51,7 @@ export function AssetLibraryPanel({
         const engine = EditorEngine.getInstance();
         const numericId = store.allocateId();
         const zIndex = store.allocateZIndex();
+        const { x: insertionX, y: insertionY } = store.insertionCenter;
 
         let mediaWidth = 800;
         let mediaHeight = 600;
@@ -73,11 +92,18 @@ export function AssetLibraryPanel({
             }
         }
 
+        const fitted = fitSizeToViewport(
+            mediaWidth,
+            mediaHeight,
+            store.insertionViewport.width,
+            store.insertionViewport.height
+        );
+
         const config: Layer['config'] = {
-            cx: mediaWidth / 2,
-            cy: mediaHeight / 2,
-            width: mediaWidth,
-            height: mediaHeight,
+            cx: insertionX,
+            cy: insertionY,
+            width: fitted.width,
+            height: fitted.height,
             rotation: 0,
             scaleX: 1,
             scaleY: 1,

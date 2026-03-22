@@ -25,6 +25,24 @@ function generateSlideId(): string {
 
 type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
+function fitSizeToViewport(
+    width: number,
+    height: number,
+    viewportWidth: number,
+    viewportHeight: number,
+    marginRatio = 0.9
+): { width: number; height: number } {
+    const safeW = Math.max(1, width);
+    const safeH = Math.max(1, height);
+    const maxW = Math.max(1, viewportWidth * marginRatio);
+    const maxH = Math.max(1, viewportHeight * marginRatio);
+    const scale = Math.min(1, maxW / safeW, maxH / safeH);
+    return {
+        width: Math.round(safeW * scale),
+        height: Math.round(safeH * scale)
+    };
+}
+
 export interface EditorState {
     // ── State ──
     projectId: string | null;
@@ -61,6 +79,8 @@ export interface EditorState {
     // ── Save pipeline state ──
     saveStatus: SaveStatus;
     headCommitId: string | null;
+    insertionCenter: { x: number; y: number };
+    insertionViewport: { width: number; height: number };
 
     // ── Pure state mutations ──
     loadProject: (projectId: string, commitId: string, slideId: string) => Promise<void>;
@@ -76,6 +96,8 @@ export interface EditorState {
     setStrokeWidth: (width: number) => void;
     setStrokeDash: (dash: number[]) => void;
     setShapeFill: (fill: string) => void;
+    setInsertionCenter: (x: number, y: number) => void;
+    setInsertionViewport: (width: number, height: number) => void;
 
     // ── Save actions ──
     markDirty: () => void;
@@ -190,6 +212,8 @@ export const useEditorStore =
                   // ── Save pipeline state ──
                   saveStatus: 'idle',
                   headCommitId: null,
+                  insertionCenter: { x: 1920 / 2, y: 1080 / 2 },
+                  insertionViewport: { width: 1920, height: 1080 },
 
                   // ── Pure state mutations ──────────────────────────────────────────────
                   loadProject: async (projectId, commitId, slideId) => {
@@ -482,6 +506,25 @@ export const useEditorStore =
                       });
                       get().markDirty();
                   },
+                  setInsertionCenter: (x, y) =>
+                      set((s) => {
+                          if (s.insertionCenter.x === x && s.insertionCenter.y === y) return s;
+                          return { insertionCenter: { x, y } };
+                      }),
+                  setInsertionViewport: (width, height) =>
+                      set((s) => {
+                          const nextWidth = Math.max(1, Math.round(width));
+                          const nextHeight = Math.max(1, Math.round(height));
+                          if (
+                              s.insertionViewport.width === nextWidth &&
+                              s.insertionViewport.height === nextHeight
+                          ) {
+                              return s;
+                          }
+                          return {
+                              insertionViewport: { width: nextWidth, height: nextHeight }
+                          };
+                      }),
 
                   // ── Save pipeline ─────────────────────────────────────────────────────
 
@@ -569,18 +612,25 @@ export const useEditorStore =
                   },
 
                   addTextLayer: () => {
-                      const { allocateId, allocateZIndex } = get();
+                      const { allocateId, allocateZIndex, insertionCenter, insertionViewport } =
+                          get();
                       const numericId = allocateId();
                       const zIndex = allocateZIndex();
+                      const fitted = fitSizeToViewport(
+                          1920,
+                          1080,
+                          insertionViewport.width,
+                          insertionViewport.height
+                      );
 
                       const newLayer: LayerWithEditorState = {
                           numericId,
                           type: 'text',
                           config: {
-                              cx: 1920 / 2,
-                              cy: 1080 / 2,
-                              width: 1920,
-                              height: 1080,
+                              cx: insertionCenter.x,
+                              cy: insertionCenter.y,
+                              width: fitted.width,
+                              height: fitted.height,
                               rotation: 0,
                               scaleX: 1,
                               scaleY: 1,
@@ -605,18 +655,25 @@ export const useEditorStore =
                   },
 
                   addMapLayer: () => {
-                      const { allocateId, allocateZIndex } = get();
+                      const { allocateId, allocateZIndex, insertionCenter, insertionViewport } =
+                          get();
                       const numericId = allocateId();
                       const zIndex = allocateZIndex();
+                      const fitted = fitSizeToViewport(
+                          300,
+                          200,
+                          insertionViewport.width,
+                          insertionViewport.height
+                      );
 
                       const newLayer: LayerWithEditorState = {
                           numericId,
                           type: 'map',
                           config: {
-                              cx: 400,
-                              cy: 300,
-                              width: 300,
-                              height: 200,
+                              cx: insertionCenter.x,
+                              cy: insertionCenter.y,
+                              width: fitted.width,
+                              height: fitted.height,
                               rotation: 0,
                               scaleX: 1,
                               scaleY: 1,
@@ -647,18 +704,25 @@ export const useEditorStore =
                   },
 
                   addWebLayer: () => {
-                      const { allocateId, allocateZIndex } = get();
+                      const { allocateId, allocateZIndex, insertionCenter, insertionViewport } =
+                          get();
                       const numericId = allocateId();
                       const zIndex = allocateZIndex();
+                      const fitted = fitSizeToViewport(
+                          800,
+                          600,
+                          insertionViewport.width,
+                          insertionViewport.height
+                      );
 
                       const newLayer: LayerWithEditorState = {
                           numericId,
                           type: 'web',
                           config: {
-                              cx: 1920 / 2,
-                              cy: 1080 / 2,
-                              width: 800,
-                              height: 600,
+                              cx: insertionCenter.x,
+                              cy: insertionCenter.y,
+                              width: fitted.width,
+                              height: fitted.height,
                               rotation: 0,
                               scaleX: 1,
                               scaleY: 1,
@@ -685,20 +749,33 @@ export const useEditorStore =
                   },
 
                   addShapeLayer: (shape) => {
-                      const { allocateId, allocateZIndex, strokeColor, strokeDash, strokeWidth } =
-                          get();
+                      const {
+                          allocateId,
+                          allocateZIndex,
+                          strokeColor,
+                          strokeDash,
+                          strokeWidth,
+                          insertionCenter,
+                          insertionViewport
+                      } = get();
                       const numericId = allocateId();
                       const zIndex = allocateZIndex();
+                      const fitted = fitSizeToViewport(
+                          200,
+                          200,
+                          insertionViewport.width,
+                          insertionViewport.height
+                      );
 
                       const newLayer: LayerWithEditorState = {
                           numericId,
                           type: 'shape',
                           shape,
                           config: {
-                              cx: 1920 / 2,
-                              cy: 1080 / 2,
-                              width: 200,
-                              height: 200,
+                              cx: insertionCenter.x,
+                              cy: insertionCenter.y,
+                              width: fitted.width,
+                              height: fitted.height,
                               rotation: 0,
                               scaleX: 1,
                               scaleY: 1,
