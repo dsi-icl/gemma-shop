@@ -105,7 +105,7 @@ export function PlaybackControls({
                                 if (playback)
                                     engine.sendJSON({
                                         type: 'upsert_layer',
-                                        origin: 'pbcInput',
+                                        origin: 'editor:playback_controls_input',
                                         layer: {
                                             ...layer,
                                             loop: !isLooping,

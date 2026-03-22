@@ -345,7 +345,11 @@ export const useEditorStore =
                           return { layers: newLayers };
                       });
                       const engine = EditorEngine.getInstance();
-                      engine.sendJSON({ type: 'upsert_layer', layer: updatedLayer });
+                      engine.sendJSON({
+                          type: 'upsert_layer',
+                          origin: 'editor:toggle_layer_visibility',
+                          layer: updatedLayer
+                      });
                       get().markDirty();
                   },
 
@@ -424,7 +428,7 @@ export const useEditorStore =
                                   newState.layers = newLayers;
                               }
                               if (layer) {
-                                  sendLayerUpdate(layer, 'setStrokeColor');
+                                  sendLayerUpdate(layer, 'editor:set_stroke_color');
                               }
                           }
                           return newState;
@@ -443,7 +447,7 @@ export const useEditorStore =
                                       const newLayers = new Map(s.layers);
                                       newLayers.set(numericId, updatedLayer);
                                       newState.layers = newLayers;
-                                      sendLayerUpdate(updatedLayer, 'setStrokeWidth');
+                                      sendLayerUpdate(updatedLayer, 'editor:set_stroke_width');
                                   }
                               }
                           }
@@ -463,7 +467,7 @@ export const useEditorStore =
                                       const newLayers = new Map(s.layers);
                                       newLayers.set(numericId, updatedLayer);
                                       newState.layers = newLayers;
-                                      sendLayerUpdate(updatedLayer, 'setStrokeDash');
+                                      sendLayerUpdate(updatedLayer, 'editor:set_stroke_dash');
                                   }
                               }
                           }
@@ -482,7 +486,7 @@ export const useEditorStore =
                                   const newLayers = new Map(s.layers);
                                   newLayers.set(numericId, updatedLayer);
                                   newState.layers = newLayers;
-                                  sendLayerUpdate(updatedLayer, 'setShapeFill');
+                                  sendLayerUpdate(updatedLayer, 'editor:set_shape_fill');
                               }
                           }
                           return newState;
@@ -566,7 +570,7 @@ export const useEditorStore =
                       newLayers.set(numericId, updatedLayer);
                       set({ layers: newLayers });
 
-                      sendLayerUpdate(updatedLayer, 'bringToFront');
+                      sendLayerUpdate(updatedLayer, 'editor:bring_to_front');
                       get().markDirty();
                   },
 
@@ -590,7 +594,7 @@ export const useEditorStore =
                       newLayers.set(numericId, updatedLayer);
                       set({ layers: newLayers });
 
-                      sendLayerUpdate(updatedLayer, 'sendToBack');
+                      sendLayerUpdate(updatedLayer, 'editor:send_to_back');
                       get().markDirty();
                   },
 
@@ -631,7 +635,7 @@ export const useEditorStore =
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
-                          origin: 'addTextLayer',
+                          origin: 'editor:add_text_layer',
                           layer: newLayer
                       });
                       get().markDirty();
@@ -680,7 +684,7 @@ export const useEditorStore =
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
-                          origin: 'addMapLayer',
+                          origin: 'editor:add_map_layer',
                           layer: newLayer
                       });
                       get().markDirty();
@@ -725,7 +729,7 @@ export const useEditorStore =
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
-                          origin: 'addWebLayer',
+                          origin: 'editor:add_web_layer',
                           layer: newLayer
                       });
                       get().markDirty();
@@ -779,7 +783,7 @@ export const useEditorStore =
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
-                          origin: 'addShapeLayer',
+                          origin: 'editor:add_shape_layer',
                           layer: newLayer
                       });
                       get().markDirty();
@@ -841,7 +845,7 @@ export const useEditorStore =
                       const engine = EditorEngine.getInstance();
                       engine.sendJSON({
                           type: 'upsert_layer',
-                          origin: 'addLineLayer',
+                          origin: 'editor:add_line_layer',
                           layer: newLayer
                       });
                       get().markDirty();
@@ -870,7 +874,7 @@ export const useEditorStore =
                       set({ layers: new Map(updatedLayers.map((l) => [l.numericId, l])) });
 
                       updatedLayers.forEach((layer) => {
-                          sendLayerUpdate(layer, 'reorderLayers');
+                          sendLayerUpdate(layer, 'editor:reorder_layers');
                       });
                       get().markDirty();
                   },

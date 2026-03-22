@@ -136,7 +136,7 @@ export function AssetLibraryPanel({
 
         engine.sendJSON({
             type: 'upsert_layer',
-            origin: 'assetLibrary',
+            origin: 'editor:asset_library',
             layer
         });
         store.markDirty();

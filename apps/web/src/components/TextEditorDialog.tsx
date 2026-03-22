@@ -31,7 +31,7 @@ export function TextEditorDialog({ layerId, open, onOpenChange }: TextEditorDial
     const engine = EditorEngine.getInstance();
 
     const commitMeasuredHeight = (
-        origin: 'text_editor_open' | 'text_editor_close',
+        origin: 'editor:text_editor_open' | 'editor:text_editor_close',
         measured?: number
     ) => {
         if (!textLayerMeta) return;
@@ -60,7 +60,7 @@ export function TextEditorDialog({ layerId, open, onOpenChange }: TextEditorDial
             open={open}
             onOpenChange={(nextOpen) => {
                 if (!nextOpen) {
-                    commitMeasuredHeight('text_editor_close');
+                    commitMeasuredHeight('editor:text_editor_close');
                     openSyncDoneRef.current = false;
                 }
                 onOpenChange(nextOpen);
@@ -75,7 +75,7 @@ export function TextEditorDialog({ layerId, open, onOpenChange }: TextEditorDial
                         onMeasuredHeight={(height) => {
                             latestMeasuredHeightRef.current = height;
                             if (open && !openSyncDoneRef.current) {
-                                commitMeasuredHeight('text_editor_open', height);
+                                commitMeasuredHeight('editor:text_editor_open', height);
                                 openSyncDoneRef.current = true;
                             }
                         }}

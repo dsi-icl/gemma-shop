@@ -159,7 +159,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         throttle(
             (layer: LayerWithEditorState) => {
                 const engine = EditorEngine.getInstance();
-                engine.sendJSON({ type: 'upsert_layer', origin: 'toolbar-web-url', layer });
+                engine.sendJSON({ type: 'upsert_layer', origin: 'editor:toolbar_web_url', layer });
                 useEditorStore.getState().markDirty();
             },
             { wait: 500 }
@@ -170,7 +170,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         throttle(
             (layer: LayerWithEditorState) => {
                 const engine = EditorEngine.getInstance();
-                engine.sendJSON({ type: 'upsert_layer', origin: 'toolbar-filters', layer });
+                engine.sendJSON({ type: 'upsert_layer', origin: 'editor:toolbar_filters', layer });
                 useEditorStore.getState().markDirty();
             },
             { wait: 120 }
@@ -199,7 +199,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         const engine = EditorEngine.getInstance();
         engine.sendJSON({
             type: 'upsert_layer',
-            origin: 'toolbar-web-proxy-toggle',
+            origin: 'editor:toolbar_web_proxy_toggle',
             layer: updatedLayer
         });
         useEditorStore.getState().markDirty();
@@ -235,7 +235,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
             const engine = EditorEngine.getInstance();
             engine.sendJSON({
                 type: 'upsert_layer',
-                origin: 'captureScreenshot',
+                origin: 'editor:capture_screenshot',
                 layer: updatedLayer
             });
             useEditorStore.getState().markDirty();

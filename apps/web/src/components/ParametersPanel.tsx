@@ -40,7 +40,7 @@ export function ParametersPanel({
                 const engine = EditorEngine.getInstance();
                 engine.sendJSON({
                     type: 'upsert_layer',
-                    origin: 'parameters-web-url',
+                    origin: 'editor:parameters_web_url',
                     layer
                 });
                 markDirty();
@@ -83,7 +83,7 @@ export function ParametersPanel({
                     const engine = EditorEngine.getInstance();
                     engine.sendJSON({
                         type: 'upsert_layer',
-                        origin: 'parameters',
+                        origin: 'editor:parameters',
                         layer: updatedLayer
                     });
                     markDirty();

@@ -448,7 +448,7 @@ export function EditorSlate() {
 
             engine.sendJSON({
                 type: 'upsert_layer',
-                origin: 'handleUpload',
+                origin: 'editor:handle_upload',
                 layer: {
                     numericId,
                     type: finalizedLayer.type,
@@ -730,19 +730,19 @@ export function EditorSlate() {
                 const truePlayback = engine.getPlayback(numericId) || layerToUpdate.playback;
                 engine.sendJSON({
                     type: 'upsert_layer',
-                    origin: 'handleTransformEnd',
+                    origin: 'editor:handle_transform_end',
                     layer: { ...layerToUpdate, config: updatedConfig, playback: truePlayback }
                 });
             } else if (layerToUpdate.type === 'shape') {
                 engine.sendJSON({
                     type: 'upsert_layer',
-                    origin: 'handleTransformEnd',
+                    origin: 'editor:handle_transform_end',
                     layer: { ...layerToUpdate, config: updatedConfig }
                 });
             } else {
                 engine.sendJSON({
                     type: 'upsert_layer',
-                    origin: 'handleTransformEnd',
+                    origin: 'editor:handle_transform_end',
                     layer: { ...layerToUpdate, config: updatedConfig }
                 });
             }

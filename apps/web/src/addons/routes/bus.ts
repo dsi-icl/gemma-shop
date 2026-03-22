@@ -868,7 +868,7 @@ export default defineWebSocketHandler({
         invalidateHydrateCache(scopeId);
         broadcastToScope(scopeId, {
             type: 'upsert_layer',
-            origin: 'yjs_sync',
+            origin: 'yjs:sync',
             layer: nextLayer
         });
         return true;
