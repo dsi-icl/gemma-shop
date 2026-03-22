@@ -545,10 +545,14 @@ function CommitViewer() {
                     </div>
                 </ResizablePanel>
                 <ResizableHandle />
-                <ResizablePanel defaultSize={300} minSize={200} className="min-h-0 overflow-hidden">
+                <ResizablePanel
+                    defaultSize={300}
+                    minSize={200}
+                    className="min-h-0 overflow-hidden border-t border-border"
+                >
                     {/* Slide list sidebar */}
                     <div className="flex h-full min-h-0 w-full flex-col border-l border-border">
-                        <div className="flex h-13 shrink-0 cursor-pointer items-center justify-between border-b border-border bg-muted/50 px-4">
+                        <div className="flex h-11 shrink-0 cursor-pointer items-center justify-between border-b border-border bg-muted/50 px-4">
                             <h2 className="flex items-center gap-2 text-sm font-semibold">
                                 <SlideshowIcon size={18} weight="bold" /> Slides
                             </h2>

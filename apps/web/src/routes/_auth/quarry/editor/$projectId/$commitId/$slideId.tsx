@@ -85,7 +85,7 @@ function SlideEditor() {
             <ResizablePanel defaultSize={300} minSize={200} className="min-h-0 overflow-hidden">
                 <ResizablePanelGroup
                     orientation="vertical"
-                    className="h-full min-h-0 overflow-hidden bg-card/50"
+                    className="h-full min-h-0 overflow-hidden border-t border-border bg-card/50"
                 >
                     <ResizablePanel
                         collapsible
