@@ -279,16 +279,23 @@ export class WallEngine {
 
         if (layer.playback.status === 'paused') {
             video.pause();
-            video.currentTime = layer.playback.anchorMediaTime;
+            video.playbackRate = 1.0;
+            if (Math.abs(video.currentTime - layer.playback.anchorMediaTime) > 0.05) {
+                video.currentTime = layer.playback.anchorMediaTime;
+            }
+            layer.rvfcActive = false;
         } else if (layer.playback.status === 'playing') {
             const checkTime = () => {
                 const now = this.getServerTime();
 
                 if (now >= layer.playback.anchorServerTime) {
                     // If we joined late, calculate exactly where we should be NOW
-                    const expectedTime =
+                    let expectedTime =
                         layer.playback.anchorMediaTime +
                         (now - layer.playback.anchorServerTime) / 1000;
+                    if ((layer.loop ?? true) && layer.duration) {
+                        expectedTime = expectedTime % layer.duration;
+                    }
 
                     if (Math.abs(video.currentTime - expectedTime) > 0.5) {
                         video.currentTime = expectedTime;
@@ -318,23 +325,29 @@ export class WallEngine {
         metadata: VideoFrameCallbackMetadata,
         layer: Extract<LayerWithWallEngineState, { type: 'video' }>
     ) {
-        if (layer.playback.status !== 'playing' || !layer.el) return;
+        if (layer.playback.status !== 'playing' || !layer.el) {
+            layer.rvfcActive = false;
+            return;
+        }
 
         const video = layer.el as HTMLVideoElement;
         const currentServerTime = this.getServerTime();
 
         // Master timeline formula
-        const expectedTime =
+        let expectedTime =
             layer.playback.anchorMediaTime +
             (currentServerTime - layer.playback.anchorServerTime) / 1000;
+        if ((layer.loop ?? true) && layer.duration) {
+            expectedTime = expectedTime % layer.duration;
+        }
         const drift = expectedTime - metadata.mediaTime;
 
         // Apply drift corrections
         if (drift > 0.5) {
             video.currentTime = expectedTime; // Hard seek if hopelessly lost
-        } else if (drift > 0.03) {
+        } else if (drift > 0.3) {
             video.playbackRate = 1.05; // Subtly speed up
-        } else if (drift < -0.03) {
+        } else if (drift < -0.3) {
             video.playbackRate = 0.95; // Subtly slow down
         } else {
             video.playbackRate = 1.0; // Frame locked
