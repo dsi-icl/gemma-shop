@@ -181,7 +181,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         type: z.literal('video_seek'),
         numericId: z.number(),
         mediaTime: z.number(),
-        playback: LayerPlaybackStateSchema
+        playback: LayerPlaybackStateSchema.optional()
     }),
     z.object({
         type: z.literal('video_sync'),

@@ -443,7 +443,9 @@ handlers.set('video_play', ({ data, scopeId }) => {
         layer.playback.status = 'playing';
         layer.playback.anchorServerTime = Date.now() + 500;
         registerActiveVideo(data.numericId, scopeId, layer);
-        sendVideoSyncToRelevantWalls(data.numericId, scopeId, layer.playback);
+        sendVideoSyncToRelevantWalls(data.numericId, scopeId, layer.playback, {
+            criticalToWalls: true
+        });
     }
 });
 
@@ -459,7 +461,9 @@ handlers.set('video_pause', ({ data, scopeId }) => {
         layer.playback.anchorServerTime = 0;
 
         unregisterActiveVideo(data.numericId);
-        sendVideoSyncToRelevantWalls(data.numericId, scopeId, layer.playback);
+        sendVideoSyncToRelevantWalls(data.numericId, scopeId, layer.playback, {
+            criticalToWalls: true
+        });
     }
 });
 
@@ -472,7 +476,9 @@ handlers.set('video_seek', ({ data, scopeId }) => {
         layer.playback.anchorServerTime = 0;
 
         unregisterActiveVideo(data.numericId);
-        sendVideoSyncToRelevantWalls(data.numericId, scopeId, layer.playback);
+        sendVideoSyncToRelevantWalls(data.numericId, scopeId, layer.playback, {
+            criticalToWalls: true
+        });
     }
 });
 

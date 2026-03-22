@@ -28,6 +28,7 @@ export class WallEngine {
     private rws: ReconnectingWebSocket;
     private pingTimer: ReturnType<typeof setTimeout> | null = null;
     private playbackStartRafs = new Map<number, number>();
+    private playbackDriftRafs = new Map<number, number>();
 
     // Clock Sync State
     private clockOffset = 0;
@@ -85,6 +86,8 @@ export class WallEngine {
         if (this.pingTimer) clearTimeout(this.pingTimer);
         for (const rafId of this.playbackStartRafs.values()) cancelAnimationFrame(rafId);
         this.playbackStartRafs.clear();
+        for (const rafId of this.playbackDriftRafs.values()) cancelAnimationFrame(rafId);
+        this.playbackDriftRafs.clear();
         this.rws.destroy();
         this.layoutCallbacks.clear();
     }
@@ -244,7 +247,12 @@ export class WallEngine {
             } else if (data.type === 'video_sync' || data.type === 'video_seek') {
                 const layer = this.layers.get(data.numericId);
                 if (layer?.type === 'video') {
-                    layer.playback = data.playback;
+                    layer.playback = data.playback ??
+                        layer.playback ?? {
+                            status: 'paused',
+                            anchorMediaTime: data.type === 'video_seek' ? data.mediaTime : 0,
+                            anchorServerTime: 0
+                        };
                     this.handlePlaybackStateChange(layer);
                 }
             }
@@ -260,6 +268,11 @@ export class WallEngine {
         if (pendingStartRaf !== undefined) {
             cancelAnimationFrame(pendingStartRaf);
             this.playbackStartRafs.delete(layerId);
+        }
+        const pendingDriftRaf = this.playbackDriftRafs.get(layerId);
+        if (pendingDriftRaf !== undefined) {
+            cancelAnimationFrame(pendingDriftRaf);
+            this.playbackDriftRafs.delete(layerId);
         }
 
         // CRITICAL HYDRATION FIX:
@@ -320,6 +333,19 @@ export class WallEngine {
                                 this.driftController(m, layer)
                             );
                         }
+                    } else {
+                        // Fallback for browsers without RVFC: run drift correction at frame rate.
+                        const driftLoop = () => {
+                            if (layer.playback.status !== 'playing' || !layer.el) {
+                                this.playbackDriftRafs.delete(layerId);
+                                return;
+                            }
+                            this.driftController(undefined, layer);
+                            const rafId = requestAnimationFrame(driftLoop);
+                            this.playbackDriftRafs.set(layerId, rafId);
+                        };
+                        const rafId = requestAnimationFrame(driftLoop);
+                        this.playbackDriftRafs.set(layerId, rafId);
                     }
                     this.playbackStartRafs.delete(layerId);
                 } else {
@@ -334,11 +360,16 @@ export class WallEngine {
     }
 
     private driftController(
-        metadata: VideoFrameCallbackMetadata,
+        _metadata: VideoFrameCallbackMetadata | undefined,
         layer: Extract<LayerWithWallEngineState, { type: 'video' }>
     ) {
         if (layer.playback.status !== 'playing' || !layer.el) {
             layer.rvfcActive = false;
+            const pendingDriftRaf = this.playbackDriftRafs.get(layer.numericId);
+            if (pendingDriftRaf !== undefined) {
+                cancelAnimationFrame(pendingDriftRaf);
+                this.playbackDriftRafs.delete(layer.numericId);
+            }
             return;
         }
 
@@ -368,7 +399,9 @@ export class WallEngine {
         }
 
         // Loop exactly when the next hardware frame is presented
-        video.requestVideoFrameCallback((_n, m) => this.driftController(m, layer));
+        if ('requestVideoFrameCallback' in video) {
+            video.requestVideoFrameCallback((_n, m) => this.driftController(m, layer));
+        }
     }
 
     // --- MATH & LERP ---

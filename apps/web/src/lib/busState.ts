@@ -615,7 +615,8 @@ export function clearActiveVideosForScope(scopeId: ScopeId) {
 export function sendVideoSyncToRelevantWalls(
     numericId: number,
     scopeId: ScopeId,
-    playback: { status: 'playing' | 'paused'; anchorMediaTime: number; anchorServerTime: number }
+    playback: { status: 'playing' | 'paused'; anchorMediaTime: number; anchorServerTime: number },
+    opts?: { criticalToWalls?: boolean }
 ) {
     // Editors: JSON (few clients, need it for UI)
     broadcastToEditorsRaw(scopeId, JSON.stringify({ type: 'video_sync', numericId, playback }));
@@ -633,9 +634,10 @@ export function sendVideoSyncToRelevantWalls(
     const targets = wallPeersByScope.get(scopeId);
     // const targets = layerNodes.get(numericId) ?? wallPeersByScope.get(scopeId);
     if (targets) {
+        const criticalToWalls = opts?.criticalToWalls ?? false;
         let sent = 0;
         for (const entry of targets) {
-            if (canSendNonCritical(entry.peer)) {
+            if (criticalToWalls || canSendNonCritical(entry.peer)) {
                 entry.peer.send(frame);
                 sent += 1;
             }

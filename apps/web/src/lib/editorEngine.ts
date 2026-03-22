@@ -127,8 +127,14 @@ export class EditorEngine {
             }
 
             if (data.type === 'video_sync' || data.type === 'video_seek') {
-                this.playbackStates.set(data.numericId, data.playback);
-                this.playbackCallbacks.forEach((cb) => cb(data.numericId, data.playback));
+                const nextPlayback = data.playback ??
+                    this.playbackStates.get(data.numericId) ?? {
+                        status: 'paused',
+                        anchorMediaTime: data.type === 'video_seek' ? data.mediaTime : 0,
+                        anchorServerTime: 0
+                    };
+                this.playbackStates.set(data.numericId, nextPlayback);
+                this.playbackCallbacks.forEach((cb) => cb(data.numericId, nextPlayback));
                 return;
             }
 
@@ -260,6 +266,8 @@ export class EditorEngine {
         this.currentProjectId = projectId;
         this.currentCommitId = commitId;
         this.currentSlideId = slideId;
+        // Playback cache is scope-local; avoid cross-scope numericId collisions.
+        this.playbackStates.clear();
 
         this.sendJSON({
             type: 'hello',
