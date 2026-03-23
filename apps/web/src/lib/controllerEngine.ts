@@ -152,7 +152,7 @@ export class ControllerEngine {
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        if (window.__CONTROLLER_ENGINE__) {
+        if (typeof window !== 'undefined' && window.__CONTROLLER_ENGINE__) {
             window.__CONTROLLER_ENGINE__.destroy();
             window.__CONTROLLER_ENGINE__ = undefined;
         }
