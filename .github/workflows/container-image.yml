@@ -23,6 +23,16 @@ jobs:
               id: prep
               run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
+            - name: Build metadata
+              id: meta
+              run: |
+                  echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+                  if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+                    echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "version=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+                  fi
+
             - name: Build OCI image with Buildah
               id: build
               uses: redhat-actions/buildah-build@v2
@@ -33,6 +43,11 @@ jobs:
                       latest
                   containerfiles: |
                       ./Dockerfile
+                  build-args: |
+                      OCI_CREATED=${{ steps.meta.outputs.created }}
+                      OCI_VERSION=${{ steps.meta.outputs.version }}
+                      OCI_REVISION=${{ github.sha }}
+                      OCI_SOURCE=https://github.com/${{ github.repository }}
                   oci: true
 
             - name: Push image to GHCR

@@ -16,6 +16,7 @@ import { validateUploadToken } from '~/lib/uploadTokens';
 const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff']);
 const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv']);
 const ALLOWED_FONT_EXTS = new Set(['.woff2']);
+const FFMPEG_COMMAND = process.env.FFMPEG_PATH || 'ffmpeg';
 
 type DetectedType = 'image' | 'video' | 'woff2' | null;
 
@@ -97,7 +98,7 @@ function runFFmpeg(
     duration: number
 ): Promise<{ code: number; stderr: string }> {
     return new Promise((resolve) => {
-        const proc = spawn('ffmpeg', args);
+        const proc = spawn(FFMPEG_COMMAND, args);
         let stderr = '';
         proc.stderr.on('data', (d) => {
             const text = d.toString();
@@ -122,6 +123,12 @@ function runFFmpeg(
                 });
             }
         });
+        proc.on('error', (err) =>
+            resolve({
+                code: 127,
+                stderr: `[Tus] FFmpeg unavailable at ${FFMPEG_COMMAND}: ${String(err?.message || err)}`
+            })
+        );
         proc.on('close', (code) => resolve({ code: code ?? 0, stderr }));
     });
 }
@@ -134,7 +141,7 @@ async function extractVideoPreview(
 ): Promise<boolean> {
     const seekTo = Math.min(0.5, duration / 2);
     return new Promise((resolve) => {
-        const proc = spawn('ffmpeg', [
+        const proc = spawn(FFMPEG_COMMAND, [
             '-y', // Overwrite output files without asking
             '-ss',
             seekTo.toString(), // Seek to timestamp
@@ -146,6 +153,7 @@ async function extractVideoPreview(
             '2', // Quality level for image encoding
             outputPath
         ]);
+        proc.on('error', () => resolve(false));
         proc.on('close', (code) => resolve(code === 0));
     });
 }
