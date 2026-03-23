@@ -1,4 +1,5 @@
 import '@tanstack/react-start/server-only';
+import { createSmtpTransport } from '@repo/auth/smtp';
 import { db } from '@repo/db';
 import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
 import { ObjectId } from 'mongodb';
@@ -349,24 +350,7 @@ export async function adminSendSmtpTest(input: { to: string }) {
         );
     }
 
-    const nodemailer = await import('nodemailer');
-    const transporter = nodemailer.default.createTransport({
-        host: smtp.host,
-        port: smtp.port,
-        family: 4,
-        secure: smtp.secure,
-        requireTLS: smtp.requireTLS,
-        ignoreTLS: smtp.ignoreTLS,
-        connectionTimeout: smtp.connectionTimeoutMs,
-        auth: {
-            user: smtp.user,
-            pass: smtp.pass
-        },
-        tls: {
-            rejectUnauthorized: smtp.tlsRejectUnauthorized,
-            ...(smtp.tlsServername ? { servername: smtp.tlsServername } : {})
-        }
-    });
+    const transporter = await createSmtpTransport(smtp);
 
     await transporter.sendMail({
         from: smtp.from,

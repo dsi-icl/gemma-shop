@@ -2,6 +2,7 @@ import '@tanstack/react-start/server-only';
 import { randomBytes, createHash } from 'node:crypto';
 
 import { render } from '@react-email/render';
+import { createSmtpTransport } from '@repo/auth/smtp';
 import { db } from '@repo/db';
 import { getConfigValue, getSmtpConfig, setConfigValue } from '@repo/db/config';
 import { OtpEmail } from '@repo/emails/OtpEmail';
@@ -131,20 +132,7 @@ async function setPhase(phase: BootstrapPhase): Promise<void> {
 }
 
 async function sendOtpWithSmtp(input: { smtp: BootstrapSmtpInput; to: string; otp: string }) {
-    const nodemailer = await import('nodemailer');
-    const transport = nodemailer.default.createTransport({
-        host: 'smtp.office365.com',
-        port: 587,
-        secure: false, // Office 365 uses STARTTLS, not SSL/TLS on 587
-        requireTLS: true,
-        auth: {
-            user: input.smtp.user,
-            pass: input.smtp.pass // Use App Password if 2FA is enabled
-        },
-        tls: {
-            ciphers: 'SSLv3' // Sometimes required for older Node versions
-        }
-    });
+    const transport = await createSmtpTransport(input.smtp);
 
     const html = await render(OtpEmail({ otp: input.otp }));
     await transport.sendMail({

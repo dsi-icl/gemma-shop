@@ -30,6 +30,7 @@ import { Route as AdminProjectsRouteImport } from './routes/admin/projects'
 import { Route as AdminConfigRouteImport } from './routes/admin/config'
 import { Route as AdminAssetsRouteImport } from './routes/admin/assets'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
+import { Route as GuestBootstrapRouteImport } from './routes/_guest/bootstrap'
 import { Route as AuthQuarryIndexRouteImport } from './routes/_auth/quarry/index'
 import { Route as ApiUploadsSplatRouteImport } from './routes/api/uploads/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -151,6 +152,11 @@ const GuestLoginRoute = GuestLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => GuestRouteRoute,
 } as any)
+const GuestBootstrapRoute = GuestBootstrapRouteImport.update({
+  id: '/bootstrap',
+  path: '/bootstrap',
+  getParentRoute: () => GuestRouteRoute,
+} as any)
 const AuthQuarryIndexRoute = AuthQuarryIndexRouteImport.update({
   id: '/quarry/',
   path: '/quarry/',
@@ -254,6 +260,7 @@ export interface FileRoutesByFullPath {
   '/web-corsissue': typeof WebCorsissueRoute
   '/web-nonet': typeof WebNonetRoute
   '/web-placeholder': typeof WebPlaceholderRoute
+  '/bootstrap': typeof GuestBootstrapRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/config': typeof AdminConfigRoute
@@ -291,6 +298,7 @@ export interface FileRoutesByTo {
   '/web-corsissue': typeof WebCorsissueRoute
   '/web-nonet': typeof WebNonetRoute
   '/web-placeholder': typeof WebPlaceholderRoute
+  '/bootstrap': typeof GuestBootstrapRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/config': typeof AdminConfigRoute
@@ -331,6 +339,7 @@ export interface FileRoutesById {
   '/web-corsissue': typeof WebCorsissueRoute
   '/web-nonet': typeof WebNonetRoute
   '/web-placeholder': typeof WebPlaceholderRoute
+  '/_guest/bootstrap': typeof GuestBootstrapRoute
   '/_guest/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/config': typeof AdminConfigRoute
@@ -371,6 +380,7 @@ export interface FileRouteTypes {
     | '/web-corsissue'
     | '/web-nonet'
     | '/web-placeholder'
+    | '/bootstrap'
     | '/login'
     | '/admin/assets'
     | '/admin/config'
@@ -408,6 +418,7 @@ export interface FileRouteTypes {
     | '/web-corsissue'
     | '/web-nonet'
     | '/web-placeholder'
+    | '/bootstrap'
     | '/login'
     | '/admin/assets'
     | '/admin/config'
@@ -447,6 +458,7 @@ export interface FileRouteTypes {
     | '/web-corsissue'
     | '/web-nonet'
     | '/web-placeholder'
+    | '/_guest/bootstrap'
     | '/_guest/login'
     | '/admin/assets'
     | '/admin/config'
@@ -645,6 +657,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof GuestLoginRouteImport
+      parentRoute: typeof GuestRouteRoute
+    }
+    '/_guest/bootstrap': {
+      id: '/_guest/bootstrap'
+      path: '/bootstrap'
+      fullPath: '/bootstrap'
+      preLoaderRoute: typeof GuestBootstrapRouteImport
       parentRoute: typeof GuestRouteRoute
     }
     '/_auth/quarry/': {
@@ -850,10 +869,12 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 )
 
 interface GuestRouteRouteChildren {
+  GuestBootstrapRoute: typeof GuestBootstrapRoute
   GuestLoginRoute: typeof GuestLoginRoute
 }
 
 const GuestRouteRouteChildren: GuestRouteRouteChildren = {
+  GuestBootstrapRoute: GuestBootstrapRoute,
   GuestLoginRoute: GuestLoginRoute,
 }
 

@@ -10,6 +10,8 @@ import { betterAuth } from 'better-auth/minimal';
 import { admin, emailOTP, magicLink } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 
+import { createSmtpTransport } from './smtp';
+
 const allowedHosts = splitCsv(env.ALLOWED_HOSTS);
 const trustedOrigins = splitCsv(env.TRUSTED_ORIGINS);
 const safeAllowedHosts = allowedHosts.length > 0 ? allowedHosts : [env.VITE_BASE_URL];
@@ -28,24 +30,7 @@ async function sendAuthEmail(input: {
             return;
         }
 
-        const nodemailer = await import('nodemailer');
-        const transporter = nodemailer.default.createTransport({
-            host: smtp.host,
-            port: smtp.port,
-            family: 4,
-            secure: smtp.secure,
-            requireTLS: smtp.requireTLS,
-            ignoreTLS: smtp.ignoreTLS,
-            connectionTimeout: smtp.connectionTimeoutMs,
-            auth: {
-                user: smtp.user,
-                pass: smtp.pass
-            },
-            tls: {
-                rejectUnauthorized: smtp.tlsRejectUnauthorized,
-                ...(smtp.tlsServername ? { servername: smtp.tlsServername } : {})
-            }
-        });
+        const transporter = await createSmtpTransport(smtp);
 
         await transporter.sendMail({
             from: smtp.from,
