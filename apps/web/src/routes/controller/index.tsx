@@ -8,7 +8,15 @@ import { cn } from '@repo/ui/lib/utils';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+    startTransition,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState
+} from 'react';
 import { Stage, Layer as KonvaLayer, Rect, Circle, Line } from 'react-konva';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -105,6 +113,7 @@ function Controller() {
     const stageInstance = useRef<Konva.Stage>(null);
     const [stageScaleFactor, setStageScaleFactor] = useState(DEFAULT_STAGE_SCALE_FACTOR);
     const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
+    const [requestedSlideId, setRequestedSlideId] = useState<string | null>(null);
     const searchStr = useLocation({
         select: (location) => location.searchStr
     });
@@ -119,8 +128,10 @@ function Controller() {
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
     const [slides, setSlides] = useState<SlideEntry[]>([]);
     const [loadingSlides, setLoadingSlides] = useState(false);
+    const [pendingSlideId, setPendingSlideId] = useState<string | null>(null);
     const slidesRef = useRef<SlideEntry[]>([]);
     const lastRequestedBindRef = useRef<string | null>(null);
+    const pendingSlideIdRef = useRef<string | null>(null);
     const {
         isDrawing,
         strokeColor,
@@ -200,6 +211,8 @@ function Controller() {
             lastRequestedBindRef.current = null;
         } else {
             setSlides([]);
+            setRequestedSlideId(null);
+            setPendingSlideId(null);
             lastRequestedBindRef.current = null;
         }
     }, [binding.bound, binding.commitId, loadSlides]);
@@ -207,6 +220,9 @@ function Controller() {
     useEffect(() => {
         slidesRef.current = slides;
     }, [slides]);
+    useEffect(() => {
+        pendingSlideIdRef.current = pendingSlideId;
+    }, [pendingSlideId]);
 
     const upsertLayerOnSlide = useCallback((slideId: string, nextLayer: LayerWithEditorState) => {
         setSlides((prev) =>
@@ -265,11 +281,15 @@ function Controller() {
     useEffect(() => {
         if (!engine) return;
         return engine.onMessage((data) => {
-            const targetSlideId = binding.slideId ?? activeSlideId;
+            const targetSlideId = binding.slideId ?? requestedSlideId ?? activeSlideId;
             if (!targetSlideId) return;
 
             if (data.type === 'hydrate') {
                 replaceSlideLayers(targetSlideId, data.layers as LayerWithEditorState[]);
+                const pendingId = pendingSlideIdRef.current;
+                if (pendingId && pendingId === targetSlideId) {
+                    setPendingSlideId(null);
+                }
                 return;
             }
             if (data.type === 'upsert_layer') {
@@ -283,6 +303,7 @@ function Controller() {
     }, [
         engine,
         binding.slideId,
+        requestedSlideId,
         activeSlideId,
         replaceSlideLayers,
         upsertLayerOnSlide,
@@ -345,12 +366,20 @@ function Controller() {
     useEffect(() => {
         if (!activeSlideId && slides.length > 0) {
             setActiveSlideId(slides[0].id);
+            setRequestedSlideId(slides[0].id);
         }
     }, [activeSlideId, slides]);
 
     useEffect(() => {
+        const boundSlideId = binding.slideId;
+        if (!boundSlideId) return;
+        setActiveSlideId((prev) => (prev === boundSlideId ? prev : boundSlideId));
+        setRequestedSlideId((prev) => (prev === boundSlideId ? prev : boundSlideId));
+    }, [binding.slideId]);
+
+    useEffect(() => {
         clearCurrentLine();
-    }, [activeSlideId, binding.slideId, binding.bound, clearCurrentLine]);
+    }, [activeSlideId, requestedSlideId, binding.slideId, binding.bound, clearCurrentLine]);
 
     useEffect(() => {
         if (binding.bound) return;
@@ -358,17 +387,24 @@ function Controller() {
     }, [binding.bound, setDrawing]);
 
     useEffect(() => {
-        if (!engine || !binding.projectId || !binding.commitId || !activeSlideId) return;
-        const bindKey = `${binding.projectId}:${binding.commitId}:${activeSlideId}`;
+        if (!engine || !binding.projectId || !binding.commitId || !requestedSlideId) return;
+        const bindKey = `${binding.projectId}:${binding.commitId}:${requestedSlideId}`;
         if (lastRequestedBindRef.current === bindKey) return;
-        if (binding.slideId === activeSlideId) {
+        if (binding.slideId === requestedSlideId) {
             lastRequestedBindRef.current = bindKey;
             return;
         }
 
         lastRequestedBindRef.current = bindKey;
-        engine.bindSlide(binding.projectId, binding.commitId, activeSlideId);
-    }, [engine, binding.projectId, binding.commitId, binding.slideId, activeSlideId]);
+        engine.bindSlide(binding.projectId, binding.commitId, requestedSlideId);
+    }, [engine, binding.projectId, binding.commitId, binding.slideId, requestedSlideId]);
+
+    useEffect(() => {
+        if (!pendingSlideId) return;
+        if (binding.slideId === pendingSlideId) {
+            setPendingSlideId(null);
+        }
+    }, [binding.slideId, pendingSlideId]);
 
     const activeLayers = useMemo(() => {
         const slide = slides.find((s) => s.id === activeSlideId);
@@ -379,6 +415,7 @@ function Controller() {
         () => [...activeLayers].sort((a, b) => a.config.zIndex - b.config.zIndex),
         [activeLayers]
     );
+    const sortedSlides = useMemo(() => [...slides].sort((a, b) => a.order - b.order), [slides]);
     const canDraw = Boolean(engine && binding.bound && activeSlideId);
 
     const addLineLayer = useCallback(
@@ -722,21 +759,42 @@ function Controller() {
                             </h2>
                         </div>
                         <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-                            {slides
-                                .sort((a, b) => a.order - b.order)
-                                .map((slide) => (
-                                    <button
-                                        key={slide.id}
-                                        onClick={() => setActiveSlideId(slide.id)}
-                                        className={`w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-card/50 ${
-                                            activeSlideId === slide.id
-                                                ? 'bg-primary/10 text-primary'
-                                                : 'text-muted-foreground hover:bg-accent'
-                                        }`}
-                                    >
+                            {sortedSlides.map((slide) => (
+                                <button
+                                    key={slide.id}
+                                    onPointerDown={() => {
+                                        if (slide.id !== activeSlideId) {
+                                            setPendingSlideId(slide.id);
+                                        }
+                                    }}
+                                    onClick={() => {
+                                        if (slide.id === activeSlideId) {
+                                            setPendingSlideId(null);
+                                            return;
+                                        }
+                                        setPendingSlideId(slide.id);
+                                        startTransition(() => {
+                                            setActiveSlideId(slide.id);
+                                        });
+                                        setRequestedSlideId(slide.id);
+                                    }}
+                                    className={`w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-card/50 ${
+                                        activeSlideId === slide.id || requestedSlideId === slide.id
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'text-muted-foreground hover:bg-accent'
+                                    }`}
+                                >
+                                    <span className="flex items-center justify-between gap-2">
                                         <span className="font-medium">Slide {slide.name}</span>
-                                    </button>
-                                ))}
+                                        {pendingSlideId === slide.id ? (
+                                            <CircleNotchIcon
+                                                size={14}
+                                                className="shrink-0 animate-spin"
+                                            />
+                                        ) : null}
+                                    </span>
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </ResizablePanel>
