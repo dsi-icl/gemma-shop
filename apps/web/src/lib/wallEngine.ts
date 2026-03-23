@@ -123,6 +123,23 @@ export class WallEngine {
                 targetPos: { ...layer.config }
             };
             this.layers.set(layer.numericId, layerPtr);
+        } else {
+            // Hydrate can reuse numericIds across slides. Always refresh the cached layer
+            // payload so stale visibility/position from a previous slide cannot leak.
+            const preservedVideoPlayback =
+                layerPtr.type === 'video' && layer.type === 'video'
+                    ? (layerPtr.playback ?? layer.playback)
+                    : null;
+
+            Object.assign(layerPtr, layer);
+            layerPtr.startPos = { ...layer.config };
+            layerPtr.targetPos = { ...layer.config };
+            layerPtr.animStartTime = 0;
+            layerPtr.animDuration = LAYER_ANIMATION_DURATION;
+
+            if (layer.type === 'video' && preservedVideoPlayback && layerPtr.type === 'video') {
+                layerPtr.playback = preservedVideoPlayback;
+            }
         }
         layerPtr.el = el; // Update ref if React re-rendered
         if (layerPtr.type !== 'video' || layer.type !== 'video') return;

@@ -56,8 +56,12 @@ function WallApp() {
 
     useEffect(() => {
         const unsubscribe = engine?.subscribeToLayoutUpdates((data) => {
-            if (data.type === 'hydrate') setLayers(data.layers);
-            else if (data.type === 'upsert_layer') {
+            if (data.type === 'hydrate') {
+                // Hard reset wall-side cache on scope hydrate to avoid stale layer state
+                // when numericIds are reused across slides.
+                engine.layers.clear();
+                setLayers(data.layers);
+            } else if (data.type === 'upsert_layer') {
                 setLayers((prev) => {
                     const existing = prev.find((l) => l.numericId === data.layer.numericId);
                     const nextLayer =
