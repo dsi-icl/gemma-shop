@@ -21,46 +21,46 @@ try {
 function renderBootErrorPage(issues: string[]): string {
     const items = issues.map((issue) => `<li>${issue}</li>`).join('');
     return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Gemma Cast Unavailable</title>
-  <style>
-    :root { color-scheme: dark; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background: #0a0a0a;
-      color: #a3a3a3;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    }
-    .card {
-      width: min(860px, calc(100vw - 32px));
-      border: 1px solid #27272a;
-      border-radius: 16px;
-      padding: 24px;
-      background: linear-gradient(180deg, #111113, #0d0d0f);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-    }
-    h1 { margin: 0 0 8px; color: #fafafa; font-size: 22px; }
-    p { margin: 0 0 16px; color: #a1a1aa; }
-    ul { margin: 0; padding-left: 18px; color: #d4d4d8; }
-    li { margin: 4px 0; }
-    .hint { margin-top: 18px; color: #71717a; font-size: 13px; }
-  </style>
-</head>
-<body>
-  <main class="card">
-    <h1>Service temporarily unavailable</h1>
-    <p>Gemma Cast started in degraded mode due to missing or invalid startup configuration.</p>
-    <ul>${items}</ul>
-    <p class="hint">Update environment configuration and restart the service.</p>
-  </main>
-</body>
-</html>`;
+    <html lang="en">
+        <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Gemma Cast Unavailable</title>
+        <style>
+            :root { color-scheme: dark; }
+            body {
+                margin: 0;
+                min-height: 100vh;
+                display: grid;
+                place-items: center;
+                background: #0a0a0a;
+                color: #a3a3a3;
+                font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            }
+            .card {
+                width: min(860px, calc(100vw - 32px));
+                border: 1px solid #27272a;
+                border-radius: 16px;
+                padding: 24px;
+                background: linear-gradient(180deg, #111113, #0d0d0f);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+            }
+            h1 { margin: 0 0 8px; color: #fafafa; font-size: 22px; }
+            p { margin: 0 0 16px; color: #a1a1aa; }
+            ul { margin: 0; padding-left: 18px; color: #d4d4d8; }
+            li { margin: 4px 0; }
+            .hint { margin-top: 18px; color: #71717a; font-size: 13px; }
+        </style>
+        </head>
+            <body>
+                <main class="card">
+                    <h1>Service temporarily unavailable</h1>
+                    <p>Gemma Shop started in degraded mode due to missing or invalid startup configuration.</p>
+                    <ul>${items}</ul>
+                    <p class="hint">Update environment configuration and restart the service.</p>
+                </main>
+            </body>
+    </html>`;
 }
 
 async function verifyMongoReplicaSet(): Promise<void> {

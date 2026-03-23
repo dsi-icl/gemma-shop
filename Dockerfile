@@ -18,9 +18,9 @@ RUN bun install --frozen-lockfile
 
 # Build the web app (Nitro output in apps/web/.output).
 COPY . .
-RUN NITRO_PRESET=node_server bun run build --filter=@repo/web
+RUN NITRO_PRESET=bun bun run build --filter=@repo/web
 
-FROM node:24-bookworm-slim AS runtime
+FROM oven/bun:1.3.11 AS runtime
 
 ARG OCI_CREATED=unknown
 ARG OCI_VERSION=dev
@@ -37,7 +37,7 @@ LABEL org.opencontainers.image.title="gemma-shop" \
       org.opencontainers.image.revision="${OCI_REVISION}" \
       org.opencontainers.image.created="${OCI_CREATED}" \
       org.opencontainers.image.vendor="florian-guitton" \
-      org.opencontainers.image.base.name="docker.io/library/node:24-bookworm-slim"
+      org.opencontainers.image.base.name="docker.io/oven/bun:1.3.11"
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
@@ -60,7 +60,7 @@ COPY package.json /app/package.json
 # - curl/xz-utils: required to fetch/extract static ffmpeg at boot
 # - Playwright browser OS deps (Chromium) so boot-time install can run reliably
 RUN set -eux; \
-    PW_VERSION="$(node -e "const v=require('/app/package.json')?.workspaces?.catalog?.playwright; if(!v){process.exit(1)}; process.stdout.write(String(v).replace(/^[~^]/,''))")"; \
+    PW_VERSION="$(bun -e "import pkg from '/app/package.json'; const v = pkg?.workspaces?.catalog?.playwright; if(!v) process.exit(1); process.stdout.write(String(v).replace(/^[~^]/,''));")"; \
     echo "$PW_VERSION" > /app/.playwright-version
 
 # Layer A: keep base OS packages current.
@@ -78,8 +78,7 @@ RUN set -eux; \
 # Layer C: browser shared-library dependencies used by Playwright Chromium.
 RUN set -eux; \
     PW_VERSION="$(cat /app/.playwright-version)"; \
-    npx --yes "playwright@$PW_VERSION" install-deps chromium; \
-    rm -rf /root/.npm; \
+    bunx "playwright@$PW_VERSION" install-deps chromium; \
     rm -rf /var/lib/apt/lists/*
 
 # Create dedicated non-root user.
@@ -117,7 +116,7 @@ PW_VERSION="$(cat /app/.playwright-version 2>/dev/null || true)"
 (
   log "Chromium install started (version=${PW_VERSION:-latest})"
   if PLAYWRIGHT_BROWSERS_PATH="$PW_PATH" \
-    npx --yes "playwright@${PW_VERSION:-latest}" install chromium >/dev/null 2>&1; then
+    bunx "playwright@${PW_VERSION:-latest}" install chromium >/dev/null 2>&1; then
     log "Chromium install completed"
   else
     log "Chromium install failed (app will continue; screenshot feature may be unavailable temporarily)"
@@ -183,7 +182,7 @@ else
 fi
 
 log "Starting app server"
-exec node .output/server/index.mjs
+exec bun .output/server/index.mjs
 SH
 
 USER app
