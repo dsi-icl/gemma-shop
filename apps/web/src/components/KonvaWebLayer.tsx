@@ -24,6 +24,7 @@ function selectVariantUrl(
 
 export function KonvaWebLayer({
     layer,
+    isDrawing,
     isPinching,
     opacity,
     onSelect,
@@ -31,6 +32,7 @@ export function KonvaWebLayer({
     onTransformEnd
 }: {
     layer: Extract<LayerWithEditorState, { type: 'web' }>;
+    isDrawing: boolean;
     isPinching: boolean;
     opacity?: number;
     onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
@@ -77,7 +79,8 @@ export function KonvaWebLayer({
         offsetY: layer.config.height / 2,
         rotation: layer.config.rotation,
         opacity,
-        draggable: !isPinching,
+        listening: !isDrawing,
+        draggable: !isDrawing && !isPinching,
         onClick: onSelect,
         onTap: onSelect,
         onDragMove: onTransform,

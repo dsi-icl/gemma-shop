@@ -752,8 +752,9 @@ export function EditorSlate() {
     const handleStageInteractionStart = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
         if (
-            (e.evt instanceof TouchEvent && e.evt.touches?.length === 1) ||
-            e.type === 'mousedown'
+            ((e.evt instanceof TouchEvent && e.evt.touches?.length === 1) ||
+                e.type === 'mousedown') &&
+            !isDrawing
         ) {
             const clickedOnEmpty = e.target === e.target.getStage();
             if (clickedOnEmpty && currentSelectedIds.length) {
@@ -996,15 +997,15 @@ export function EditorSlate() {
 
                                 const props = {
                                     listening: !isDrawing,
+                                    isDrawing,
                                     isPinching,
                                     opacity: hiddenOpacity,
-                                    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+                                    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) =>
                                         toggleLayerSelection(
                                             layer.numericId.toString(),
                                             e.evt.shiftKey,
                                             e.evt.ctrlKey || e.evt.metaKey
-                                        );
-                                    },
+                                        ),
                                     onTransform: (e: KonvaEventObject<Event>) =>
                                         handleTransform(e, layer.numericId),
                                     onTransformEnd: (e: KonvaEventObject<Event>) =>
@@ -1033,6 +1034,7 @@ export function EditorSlate() {
                                         <KonvaTextLayer
                                             key={`txt_${layer.numericId}`}
                                             layer={layer}
+                                            isDrawing={props.isDrawing}
                                             isPinching={props.isPinching}
                                             opacity={hiddenOpacity}
                                             onSelect={props.onSelect}
@@ -1068,7 +1070,8 @@ export function EditorSlate() {
                                             offsetY={layer.config.height / 2}
                                             rotation={layer.config.rotation}
                                             opacity={hiddenOpacity}
-                                            draggable={!props.isPinching}
+                                            listening={props.listening}
+                                            draggable={!props.isDrawing && !props.isPinching}
                                             onClick={props.onSelect}
                                             onTap={props.onSelect}
                                             onDragMove={props.onTransform}
@@ -1096,7 +1099,8 @@ export function EditorSlate() {
                                         scaleX: layer.config.scaleX,
                                         scaleY: layer.config.scaleY,
                                         opacity: hiddenOpacity,
-                                        draggable: !props.isPinching,
+                                        listening: props.listening,
+                                        draggable: !props.isDrawing && !props.isPinching,
                                         onClick: props.onSelect,
                                         onTap: props.onSelect,
                                         onDragMove: props.onTransform,
@@ -1143,7 +1147,7 @@ export function EditorSlate() {
                                     return (
                                         <Line
                                             key={`lin_${layer.numericId}`}
-                                            listening={true}
+                                            listening={props.listening}
                                             opacity={hiddenOpacity}
                                             points={layer.line}
                                             stroke={layer.strokeColor}

@@ -21,6 +21,7 @@ function selectVariantUrl(url: string, sizes: number[] | undefined, displayWidth
 
 export function KonvaStaticImage({
     layer,
+    isDrawing,
     isPinching,
     opacity,
     onSelect,
@@ -28,6 +29,7 @@ export function KonvaStaticImage({
     onTransformEnd
 }: {
     layer: Extract<LayerWithEditorState, { type: 'image' }>;
+    isDrawing: boolean;
     isPinching: boolean;
     opacity?: number;
     onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
@@ -79,7 +81,8 @@ export function KonvaStaticImage({
             offsetY={layer.config.height / 2}
             rotation={layer.config.rotation}
             opacity={opacity}
-            draggable={!isPinching}
+            listening={!isDrawing}
+            draggable={!isDrawing && !isPinching}
             onClick={onSelect}
             onTap={onSelect}
             onDragMove={onTransform}
