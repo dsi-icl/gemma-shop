@@ -1,8 +1,8 @@
-# Gemma Cast
+# Gemma Shop
 
 Collaborative, multi-tenant presentation system for large video walls.
 
-Gemma Cast lets multiple users edit decks in real time and publish synchronized output to distributed wall nodes. The platform is optimized for low-latency editing, fast wall playback, and commit-based versioning.
+Gemma Shop lets multiple users edit decks in real time and publish synchronized output to distributed wall nodes. The platform is optimized for low-latency editing, fast wall playback, and commit-based versioning.
 
 ## What It Does
 
