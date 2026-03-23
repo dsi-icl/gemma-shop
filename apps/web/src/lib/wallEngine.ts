@@ -27,6 +27,7 @@ type LayoutUpdateCallback = (data: GSMessage) => void;
 export class WallEngine {
     private rws: ReconnectingWebSocket;
     private pingTimer: ReturnType<typeof setTimeout> | null = null;
+    private reconnectClearTimer: ReturnType<typeof setTimeout> | null = null;
     private playbackStartRafs = new Map<number, number>();
     private playbackDriftRafs = new Map<number, number>();
 
@@ -67,11 +68,21 @@ export class WallEngine {
             onMessage: (event) => this.handleMessage(event)
         });
 
-        // On disconnect: clear layers so screens go black (better than stale content)
+        // On reconnecting: avoid immediate full clear/hydrate churn during short network blips.
+        // Only clear if disconnect is sustained.
         this.rws.onStateChange((status) => {
             if (status === 'reconnecting') {
-                this.layers.clear();
-                this.layoutCallbacks.forEach((cb) => cb({ type: 'hydrate', layers: [] }));
+                if (this.reconnectClearTimer) clearTimeout(this.reconnectClearTimer);
+                this.reconnectClearTimer = setTimeout(() => {
+                    if (this.rws.status === 'connected') return;
+                    this.layers.clear();
+                    this.layoutCallbacks.forEach((cb) => cb({ type: 'hydrate', layers: [] }));
+                }, 8_000);
+            } else if (status === 'connected') {
+                if (this.reconnectClearTimer) {
+                    clearTimeout(this.reconnectClearTimer);
+                    this.reconnectClearTimer = null;
+                }
             }
         });
     }
@@ -84,6 +95,7 @@ export class WallEngine {
     public destroy() {
         console.log('Wall Engine: Assassinating ghost instance...');
         if (this.pingTimer) clearTimeout(this.pingTimer);
+        if (this.reconnectClearTimer) clearTimeout(this.reconnectClearTimer);
         for (const rafId of this.playbackStartRafs.values()) cancelAnimationFrame(rafId);
         this.playbackStartRafs.clear();
         for (const rafId of this.playbackDriftRafs.values()) cancelAnimationFrame(rafId);

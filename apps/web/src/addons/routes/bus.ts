@@ -879,6 +879,13 @@ export default defineWebSocketHandler({
 
     message(peer, message) {
         const raw = message.rawData;
+        const knownPeer = peers.get(peer.id);
+        if (knownPeer) {
+            const specimen = knownPeer.meta.specimen;
+            if (specimen === 'editor' || specimen === 'wall') {
+                touchPing(peer.id);
+            }
+        }
 
         // ── Binary fast-path (ArrayBuffer) ───────────────────────────
         if (raw instanceof ArrayBuffer) {

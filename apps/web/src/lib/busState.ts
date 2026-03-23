@@ -990,7 +990,7 @@ export function resolveScopeId(meta: PeerMeta): ScopeId | null {
     }
 }
 
-const PING_TIMEOUT_MS = 15_000; // Force-close peers with no ping for 15s
+const PING_TIMEOUT_MS = 60_000; // Force-close peers with no ping for 60s
 
 // Last clock-ping timestamp per peer. Updated in handleBinary CLOCK_PING handler
 export const lastPingSeen: Map<string, number> = _hmr.lastPingSeen;
