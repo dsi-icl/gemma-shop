@@ -3,7 +3,7 @@
 import {
     CheckCircleIcon,
     CloudArrowUpIcon,
-    SpinnerGapIcon,
+    CircleNotchIcon,
     UploadSimpleIcon,
     WarningCircleIcon
 } from '@phosphor-icons/react';
@@ -137,7 +137,7 @@ function MobileUpload() {
         return (
             <div className="container flex min-h-svh min-w-full flex-col pt-18 pb-13">
                 <div className="flex h-full grow items-center justify-center bg-background p-4">
-                    <SpinnerGapIcon size={32} className="animate-spin text-muted-foreground" />
+                    <CircleNotchIcon size={32} className="animate-spin text-muted-foreground" />
                 </div>
             </div>
         );
@@ -214,7 +214,7 @@ function MobileUpload() {
                                         />
                                     )}
                                     {f.status === 'uploading' && (
-                                        <SpinnerGapIcon
+                                        <CircleNotchIcon
                                             size={20}
                                             className="shrink-0 animate-spin text-primary"
                                         />

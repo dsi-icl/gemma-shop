@@ -1,4 +1,4 @@
-import { MonitorIcon, SpinnerGapIcon, XIcon } from '@phosphor-icons/react';
+import { CircleNotchIcon, MonitorIcon, XIcon } from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/popover';
 import { useQuery } from '@tanstack/react-query';
@@ -14,7 +14,7 @@ function WallList({ onSelect }: { onSelect: (wallId: string) => void }) {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-4">
-                <SpinnerGapIcon size={20} className="animate-spin text-muted-foreground" />
+                <CircleNotchIcon size={20} className="animate-spin text-muted-foreground" />
             </div>
         );
     }

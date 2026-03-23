@@ -1,7 +1,7 @@
 import {
     CloudArrowUpIcon,
     DeviceMobileIcon,
-    SpinnerGapIcon,
+    CircleNotchIcon,
     UploadSimpleIcon,
     XIcon
 } from '@phosphor-icons/react';
@@ -226,7 +226,7 @@ export function UploadDialog({
             <DialogTrigger nativeButton={false} render={<div />}>
                 {trigger}
             </DialogTrigger>
-            <DialogContent className="w-[640px] max-w-[90vw]">
+            <DialogContent className="w-160 max-w-[90vw]">
                 <div className="flex items-center justify-between border-b border-border px-6 py-4">
                     <DialogTitle className="flex items-center gap-2">
                         <CloudArrowUpIcon size={20} weight="bold" />
@@ -237,7 +237,7 @@ export function UploadDialog({
                     </DialogClose>
                 </div>
 
-                <div className="flex min-h-[300px] divide-x divide-border">
+                <div className="flex min-h-75 divide-x divide-border">
                     {/* Left: QR Code */}
                     <div className="flex w-1/2 flex-col items-center justify-center gap-3 p-6">
                         <DeviceMobileIcon
@@ -258,7 +258,7 @@ export function UploadDialog({
                             />
                         ) : (
                             <div className="flex h-40 w-40 items-center justify-center rounded-lg border border-border">
-                                <SpinnerGapIcon
+                                <CircleNotchIcon
                                     size={24}
                                     className="animate-spin text-muted-foreground"
                                 />

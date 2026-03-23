@@ -1,4 +1,4 @@
-import { ArrowRightIcon, EyeIcon, SpinnerGapIcon } from '@phosphor-icons/react';
+import { ArrowRightIcon, CircleNotchIcon, EyeIcon } from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from './badge';
@@ -224,10 +224,7 @@ function ProjectCardDialogBody({
                                 disabled={isLoadingWall}
                             >
                                 {isLoadingWall ? (
-                                    <>
-                                        <SpinnerGapIcon className="animate-spin" />
-                                        Loading
-                                    </>
+                                    <CircleNotchIcon className="animate-spin" />
                                 ) : (
                                     <>
                                         Load project <ArrowRightIcon />
