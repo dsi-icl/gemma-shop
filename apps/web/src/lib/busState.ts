@@ -533,6 +533,23 @@ export function broadcastToWallNodesRaw(wallId: string, payload: string) {
     markOutgoing(wallPeers.size, 0);
 }
 
+export function broadcastToControllersByWallRaw(
+    wallId: string,
+    payload: string,
+    exclude?: PeerEntry
+) {
+    const controllers = controllersByWallId.get(wallId);
+    if (!controllers) return;
+    let sent = 0;
+    for (const entry of controllers) {
+        if (entry !== exclude) {
+            entry.peer.send(payload);
+            sent += 1;
+        }
+    }
+    markOutgoing(sent, 0);
+}
+
 export function broadcastToWalls(scopeId: ScopeId, data: GSMessage) {
     broadcastToWallsRaw(scopeId, JSON.stringify(data));
 }

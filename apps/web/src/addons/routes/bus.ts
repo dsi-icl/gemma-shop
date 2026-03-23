@@ -21,6 +21,7 @@ import {
     sendJSON,
     broadcastToEditors,
     broadcastToWallsBinary,
+    broadcastToControllersByWallRaw,
     broadcastToScope,
     broadcastToScopeRaw,
     broadcastToWallNodesRaw,
@@ -235,6 +236,13 @@ handlers.set('rehydrate_please', ({ entry }) => {
                 ? getWallHydratePayload(boundScope, meta.wallId)
                 : EMPTY_HYDRATE
         );
+    } else if (meta.specimen === 'controller') {
+        const boundScope = wallBindings.get(meta.wallId);
+        entry.peer.send(
+            boundScope !== undefined
+                ? getWallHydratePayload(boundScope, meta.wallId)
+                : EMPTY_HYDRATE
+        );
     }
 });
 
@@ -298,6 +306,7 @@ handlers.set('upsert_layer', ({ entry, data, scopeId, rawText }) => {
         if (isControllerTransientUpsert) {
             if (entry.meta.specimen !== 'controller') return;
             broadcastToWallNodesRaw(entry.meta.wallId, relayPayload);
+            broadcastToControllersByWallRaw(entry.meta.wallId, relayPayload, entry);
         } else {
             broadcastToScopeRaw(scopeId, relayPayload, entry);
         }
@@ -340,6 +349,7 @@ handlers.set('delete_layer', ({ entry, data, scopeId, rawText }) => {
     if (isControllerTransientDelete || (deletedControllerTransient && !deletedPersistentLayer)) {
         if (entry.meta.specimen !== 'controller') return;
         broadcastToWallNodesRaw(entry.meta.wallId, rawText);
+        broadcastToControllersByWallRaw(entry.meta.wallId, rawText, entry);
     } else {
         broadcastToScopeRaw(scopeId, rawText, entry);
     }
@@ -706,6 +716,11 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
                 ? { projectId: scope.projectId, commitId: scope.commitId, slideId: scope.slideId }
                 : {})
         });
+        peer.send(
+            boundScope !== undefined
+                ? getWallHydratePayload(boundScope, parsed.wallId)
+                : EMPTY_HYDRATE
+        );
 
         console.log(`[WS] Controller joined wallId=${parsed.wallId}`);
         logPeerCounts();
