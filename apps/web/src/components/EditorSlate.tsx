@@ -168,21 +168,6 @@ export function EditorSlate() {
         };
     }, [syncInsertionCenter]);
 
-    useEffect(() => {
-        const slot = stageSlot.current;
-        if (!slot) return;
-
-        const handleWheel = (e: WheelEvent) => {
-            const delta = e.deltaX + e.deltaY;
-            if (delta === 0) return;
-            e.preventDefault();
-            slot.scrollLeft += delta;
-        };
-
-        slot.addEventListener('wheel', handleWheel, { passive: false });
-        return () => slot.removeEventListener('wheel', handleWheel);
-    }, []);
-
     // Shadow ref — keeps binary-updated positions for the fast-path.
     // Binary updates mutate this directly (no React re-render).
     const layersRef = useRef<Map<number, LayerWithEditorState>>(new Map());
@@ -915,6 +900,15 @@ export function EditorSlate() {
         lastCenter.current = null;
     };
 
+    const handleStageWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+        const delta = e.evt.deltaX + e.evt.deltaY;
+        if (delta === 0) return;
+        e.evt.preventDefault();
+        slot.scrollLeft += delta;
+    }, []);
+
     useEffect(() => {
         if (selectedLayerIds.length && trRef.current) {
             const node = trRef.current.getStage()?.findOne(`#${selectedLayerIds[0]}`);
@@ -956,6 +950,7 @@ export function EditorSlate() {
                         onMouseDown={handleStageInteractionStart}
                         onMouseMove={handleTouchMove}
                         onMouseUp={handleTouchEnd}
+                        onWheel={handleStageWheel}
                         onTouchStart={handleStageInteractionStart}
                         onTouchMove={handleTouchMove}
                         onTouchEnd={handleTouchEnd}

@@ -484,6 +484,15 @@ function Controller() {
         }
     }, [canDraw, isDrawing, consumeCurrentLine, addLineLayer]);
 
+    const handleStageWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+        const delta = e.evt.deltaX + e.evt.deltaY;
+        if (delta === 0) return;
+        e.evt.preventDefault();
+        slot.scrollLeft += delta;
+    }, []);
+
     useLayoutEffect(() => {
         const slot = stageSlot.current;
         if (!slot) return;
@@ -505,21 +514,6 @@ function Controller() {
         observer.observe(slot);
 
         return () => observer.disconnect();
-    }, []);
-
-    useEffect(() => {
-        const slot = stageSlot.current;
-        if (!slot) return;
-
-        const handleWheel = (e: WheelEvent) => {
-            const delta = e.deltaX + e.deltaY;
-            if (delta === 0) return;
-            e.preventDefault();
-            slot.scrollLeft += delta;
-        };
-
-        slot.addEventListener('wheel', handleWheel, { passive: false });
-        return () => slot.removeEventListener('wheel', handleWheel);
     }, []);
 
     if (loadingSlides)
@@ -583,6 +577,7 @@ function Controller() {
                                         onMouseDown={handleDrawStart}
                                         onMouseMove={handleDrawMove}
                                         onMouseUp={handleDrawEnd}
+                                        onWheel={handleStageWheel}
                                         onTouchStart={handleDrawStart}
                                         onTouchMove={handleDrawMove}
                                         onTouchEnd={handleDrawEnd}

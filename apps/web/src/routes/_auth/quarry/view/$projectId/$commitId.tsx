@@ -10,7 +10,8 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { differenceInDays, format, formatDistanceToNow, isBefore, subMonths } from 'date-fns';
 import Konva from 'konva';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { KonvaEventObject } from 'konva/lib/Node';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer as KonvaLayer, Rect, Circle, Line } from 'react-konva';
 import { toast } from 'sonner';
 
@@ -88,19 +89,13 @@ function CommitViewer() {
         return () => observer.disconnect();
     }, []);
 
-    useEffect(() => {
+    const handleStageWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
         const slot = stageSlot.current;
         if (!slot) return;
-
-        const handleWheel = (e: WheelEvent) => {
-            const delta = e.deltaX + e.deltaY;
-            if (delta === 0) return;
-            e.preventDefault();
-            slot.scrollLeft += delta;
-        };
-
-        slot.addEventListener('wheel', handleWheel, { passive: false });
-        return () => slot.removeEventListener('wheel', handleWheel);
+        const delta = e.evt.deltaX + e.evt.deltaY;
+        if (delta === 0) return;
+        e.evt.preventDefault();
+        slot.scrollLeft += delta;
     }, []);
 
     const handleEditFromVersion = async () => {
@@ -233,6 +228,7 @@ function CommitViewer() {
                                         ref={stageInstance}
                                         width={COLS * SCREEN_W * stageScaleFactor}
                                         height={ROWS * SCREEN_H * stageScaleFactor}
+                                        onWheel={handleStageWheel}
                                         scaleX={stageScaleFactor}
                                         scaleY={stageScaleFactor}
                                     >
