@@ -17,9 +17,11 @@ import {
     internScope,
     scopeLabel,
     bindWall,
+    scheduleWallUnbindGrace,
     unbindWall,
     sendJSON,
     broadcastToEditors,
+    broadcastToControllersByScopeRaw,
     broadcastToWallsBinary,
     broadcastToControllersByWallRaw,
     broadcastToScope,
@@ -48,6 +50,7 @@ import {
     getEditorHydratePayload,
     getWallHydratePayload,
     upsertControllerTransientLayer,
+    cancelWallUnbindGrace,
     touchPing,
     reapStalePeers,
     persistSlideMetadata,
@@ -260,7 +263,9 @@ handlers.set('clear_stage', ({ entry, scopeId }) => {
     clearControllerTransientForScope(scopeId);
     // clearLayerNodesForScope(scopeId);
     invalidateHydrateCache(scopeId);
-    broadcastToScope(scopeId, { type: 'hydrate', layers: [] }, entry);
+    const clearPayload = { type: 'hydrate', layers: [] } satisfies GSMessage;
+    broadcastToScope(scopeId, clearPayload, entry);
+    broadcastToControllersByScopeRaw(scopeId, JSON.stringify(clearPayload));
 });
 
 handlers.set('upsert_layer', ({ entry, data, scopeId, rawText }) => {
@@ -449,6 +454,7 @@ handlers.set('stage_save', ({ entry, data, scopeId }) => {
 handlers.set('bind_wall', ({ data }) => {
     void (async () => {
         try {
+            cancelWallUnbindGrace(data.wallId);
             const resolvedSlideId = await resolveBoundSlideId(
                 data.projectId,
                 data.commitId,
@@ -516,8 +522,13 @@ handlers.set('bind_wall', ({ data }) => {
 });
 
 handlers.set('unbind_wall', ({ data }) => {
+    cancelWallUnbindGrace(data.wallId);
     unbindWall(data.wallId);
     hydrateWallNodes(data.wallId);
+    broadcastToControllersByWallRaw(
+        data.wallId,
+        JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
+    );
     notifyControllers(data.wallId, false);
     void db.collection('walls').updateOne(
         { wallId: data.wallId },
@@ -809,6 +820,10 @@ export default defineWebSocketHandler({
 
                     unbindWall(wallId);
                     hydrateWallNodes(wallId);
+                    broadcastToControllersByWallRaw(
+                        wallId,
+                        JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
+                    );
                     notifyControllers(wallId, false);
                     void db.collection('walls').updateOne(
                         { wallId },
@@ -827,6 +842,34 @@ export default defineWebSocketHandler({
             }
         }
         if (meta?.specimen === 'wall') {
+            if (getWallNodeCount(meta.wallId) <= 0) {
+                scheduleWallUnbindGrace(meta.wallId, () => {
+                    // Wall may have reconnected during grace period.
+                    if (getWallNodeCount(meta.wallId) > 0) return;
+
+                    unbindWall(meta.wallId);
+                    hydrateWallNodes(meta.wallId);
+                    broadcastToControllersByWallRaw(
+                        meta.wallId,
+                        JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
+                    );
+                    notifyControllers(meta.wallId, false);
+                    void db.collection('walls').updateOne(
+                        { wallId: meta.wallId },
+                        {
+                            $set: {
+                                boundProjectId: null,
+                                boundCommitId: null,
+                                boundSlideId: null,
+                                boundSource: null,
+                                updatedAt: new Date().toISOString()
+                            }
+                        }
+                    );
+                    broadcastWallBindingToEditors(meta.wallId);
+                    broadcastWallNodeCountToEditors(meta.wallId);
+                });
+            }
             broadcastWallNodeCountToEditors(meta.wallId);
             broadcastWallBindingToEditors(meta.wallId);
             syncWallNodeCountToDb(meta.wallId);

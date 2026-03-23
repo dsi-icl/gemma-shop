@@ -27,8 +27,15 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     peerCounts: { editor: 0, wall: 0, controller: 0, roy: 0 },
     lastPingSeen: new Map<string, number>(),
     scopeCleanupTimers: new Map<ScopeId, ReturnType<typeof setTimeout>>(),
+    wallUnbindTimers: new Map<string, ReturnType<typeof setTimeout>>(),
     controllerTransientByWallId: new Map<string, Map<number, Layer>>()
 };
+if (!_hmr.controllerTransientByWallId) {
+    _hmr.controllerTransientByWallId = new Map<string, Map<number, Layer>>();
+}
+if (!_hmr.wallUnbindTimers) {
+    _hmr.wallUnbindTimers = new Map<string, ReturnType<typeof setTimeout>>();
+}
 (process as any).__BUS_HMR__ = _hmr;
 
 export const scopedState: Map<ScopeId, ScopeState> = _hmr.scopedState;
@@ -208,6 +215,7 @@ export function registerPeer(peer: Peer, meta: PeerMeta): PeerEntry {
             cancelScopeCleanup(meta.scopeId);
             break;
         case 'wall': {
+            cancelWallUnbindGrace(meta.wallId);
             addToIndex(wallsByWallId, meta.wallId, entry);
             const boundScopeId = wallBindings.get(meta.wallId);
             if (boundScopeId !== undefined) {
@@ -242,19 +250,6 @@ export function unregisterPeer(peerId: string): PeerMeta | null {
             const boundScopeId = wallBindings.get(meta.wallId);
             if (boundScopeId !== undefined) {
                 removeFromIndex(wallPeersByScope, boundScopeId, entry);
-            }
-            // Remove this wall peer from all layerNodes sets
-            // for (const [, peerSet] of layerNodes) {
-            //     peerSet.delete(entry);
-            // }
-            // If this was the last wall for this wallId, clean up binding
-            const remainingWalls = wallsByWallId.get(meta.wallId);
-            if (!remainingWalls || remainingWalls.size === 0) {
-                const oldScope = wallBindings.get(meta.wallId);
-                if (oldScope !== undefined) {
-                    unbindWall(meta.wallId);
-                    scheduleScopeCleanup(oldScope);
-                }
             }
             break;
         }
@@ -543,6 +538,21 @@ export function broadcastToControllersByWallRaw(
     let sent = 0;
     for (const entry of controllers) {
         if (entry !== exclude) {
+            entry.peer.send(payload);
+            sent += 1;
+        }
+    }
+    markOutgoing(sent, 0);
+}
+
+export function broadcastToControllersByScopeRaw(scopeId: ScopeId, payload: string) {
+    const watchers = scopeWatchers.get(scopeId);
+    if (!watchers || watchers.size === 0) return;
+    let sent = 0;
+    for (const wallId of watchers) {
+        const controllers = controllersByWallId.get(wallId);
+        if (!controllers) continue;
+        for (const entry of controllers) {
             entry.peer.send(payload);
             sent += 1;
         }
@@ -851,6 +861,24 @@ export function encodeVideoSyncBinary(
 
 const SCOPE_CLEANUP_GRACE_MS = 5 * 60 * 1000; // 5 minutes
 const scopeCleanupTimers: Map<ScopeId, ReturnType<typeof setTimeout>> = _hmr.scopeCleanupTimers;
+const WALL_UNBIND_GRACE_MS = 5_000; // 5 seconds
+const wallUnbindTimers: Map<string, ReturnType<typeof setTimeout>> = _hmr.wallUnbindTimers;
+
+export function scheduleWallUnbindGrace(wallId: string, onExpire: () => void) {
+    if (wallUnbindTimers.has(wallId)) return;
+    const timer = setTimeout(() => {
+        wallUnbindTimers.delete(wallId);
+        onExpire();
+    }, WALL_UNBIND_GRACE_MS);
+    wallUnbindTimers.set(wallId, timer);
+}
+
+export function cancelWallUnbindGrace(wallId: string) {
+    const timer = wallUnbindTimers.get(wallId);
+    if (!timer) return;
+    clearTimeout(timer);
+    wallUnbindTimers.delete(wallId);
+}
 
 // Garbage collection if no editors or walls are watching a scope
 export function scheduleScopeCleanup(scopeId: ScopeId) {
