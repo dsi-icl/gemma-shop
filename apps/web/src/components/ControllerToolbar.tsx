@@ -1,32 +1,57 @@
+import { PencilSimpleIcon } from '@phosphor-icons/react';
 import { Separator } from '@repo/ui/components/separator';
+import { TipButton } from '@repo/ui/components/tip-button';
 import { TooltipProvider } from '@repo/ui/components/tooltip';
 
-import { AppearanceToolbar } from '~/components/AppearanceToolbar';
-import { ControllerEngine } from '~/lib/controllerEngine';
+import { StrokeTool } from '~/components/StrokeTool';
 
-export function ControllerToolbar() {
-    // const engine = ControllerEngine.getInstance();
+interface ControllerToolbarProps {
+    isDrawing: boolean;
+    canDraw: boolean;
+    onToggleDrawing: () => void;
+    strokeColor: string;
+    setStrokeColor: (color: string) => void;
+    strokeWidth: number;
+    setStrokeWidth: (width: number) => void;
+    strokeDash: number[];
+    setStrokeDash: (dash: number[]) => void;
+}
 
+export function ControllerToolbar({
+    isDrawing,
+    canDraw,
+    onToggleDrawing,
+    strokeColor,
+    setStrokeColor,
+    strokeWidth,
+    setStrokeWidth,
+    strokeDash,
+    setStrokeDash
+}: ControllerToolbarProps) {
     return (
         <TooltipProvider>
             <div
                 id="toolbar"
                 className="flex h-11 min-h-11 items-center gap-1 border-t border-b border-border bg-card/50 px-2 py-1"
             >
-                <AppearanceToolbar />
+                <TipButton
+                    tip={canDraw ? 'Draw' : 'Connect to a slide to draw'}
+                    tipSide="bottom"
+                    onClick={onToggleDrawing}
+                    variant={isDrawing ? 'outline' : 'ghost'}
+                    disabled={!canDraw}
+                >
+                    <PencilSimpleIcon />
+                </TipButton>
+                <StrokeTool
+                    strokeColor={strokeColor}
+                    setStrokeColor={setStrokeColor}
+                    strokeWidth={strokeWidth}
+                    setStrokeWidth={setStrokeWidth}
+                    strokeDash={strokeDash}
+                    setStrokeDash={setStrokeDash}
+                />
                 <Separator orientation="vertical" className="mx-1 my-1 h-6" />
-                {/* TODO Add video controls here */}
-                {/* <PlaybackControls
-                            key={`pc_${activeLayer.numericId}`}
-                            layer={activeLayer as Extract<LayerWithEditorState, { type: 'video' }>}
-                            engine={engine}
-                        />
-                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
-                        <VideoScrubber
-                            key={`vs_${activeLayer.numericId}`}
-                            layer={activeLayer as Extract<LayerWithEditorState, { type: 'video' }>}
-                            engine={engine}
-                        /> */}
             </div>
         </TooltipProvider>
     );

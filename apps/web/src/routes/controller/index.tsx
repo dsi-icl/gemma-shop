@@ -7,13 +7,16 @@ import {
 import { cn } from '@repo/ui/lib/utils';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
 import Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer as KonvaLayer, Rect, Circle, Line } from 'react-konva';
+import { useShallow } from 'zustand/react/shallow';
 
 import { ControllerToolbar } from '~/components/ControllerToolbar';
 import { ReadOnlyMediaLayer, ReadOnlyTextLayer } from '~/components/ReadOnlyLayers';
 import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { ControllerEngine } from '~/lib/controllerEngine';
+import { useControllerStore } from '~/lib/controllerStore';
 import type { LayerWithEditorState } from '~/lib/types';
 import { $getCommit } from '~/server/projects.fns';
 
@@ -42,6 +45,61 @@ interface SlideEntry {
     layerCount: number;
 }
 
+function buildLineLayer(
+    line: number[],
+    strokeColor: string,
+    strokeWidth: number,
+    strokeDash: number[],
+    existingLayers: LayerWithEditorState[]
+): LayerWithEditorState | null {
+    let minX: number | null = null;
+    let minY: number | null = null;
+    let maxX: number | null = null;
+    let maxY: number | null = null;
+
+    for (let i = 0; i < line.length; i += 2) {
+        const x = line[i];
+        const y = line[i + 1];
+        if (minX === null || minY === null || maxX === null || maxY === null) {
+            minX = x;
+            minY = y;
+            maxX = x;
+            maxY = y;
+        }
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+
+    if (minX === null || minY === null || maxX === null || maxY === null) return null;
+
+    const nextNumericId =
+        existingLayers.reduce((max, layer) => Math.max(max, layer.numericId), 0) + 5;
+    const nextZIndex =
+        existingLayers.reduce((max, layer) => Math.max(max, layer.config.zIndex), 0) + 5;
+
+    return {
+        numericId: nextNumericId,
+        type: 'line',
+        config: {
+            cx: minX,
+            cy: minY,
+            width: Math.round(maxX - minX),
+            height: Math.round(maxY - minY),
+            rotation: 0,
+            scaleX: 1,
+            scaleY: 1,
+            zIndex: nextZIndex,
+            visible: true
+        },
+        line: line.map((p) => Math.round(p)),
+        strokeColor,
+        strokeWidth,
+        strokeDash
+    };
+}
+
 function Controller() {
     const stageSlot = useRef<HTMLDivElement>(null);
     const stageInstance = useRef<Konva.Stage>(null);
@@ -63,6 +121,39 @@ function Controller() {
     const [loadingSlides, setLoadingSlides] = useState(false);
     const slidesRef = useRef<SlideEntry[]>([]);
     const lastRequestedBindRef = useRef<string | null>(null);
+    const {
+        isDrawing,
+        strokeColor,
+        setStrokeColor,
+        strokeWidth,
+        setStrokeWidth,
+        strokeDash,
+        setStrokeDash,
+        currentLine,
+        setDrawing,
+        toggleDrawing,
+        startLine,
+        appendLinePoint,
+        clearCurrentLine,
+        consumeCurrentLine
+    } = useControllerStore(
+        useShallow((s) => ({
+            isDrawing: s.isDrawing,
+            strokeColor: s.strokeColor,
+            setStrokeColor: s.setStrokeColor,
+            strokeWidth: s.strokeWidth,
+            setStrokeWidth: s.setStrokeWidth,
+            strokeDash: s.strokeDash,
+            setStrokeDash: s.setStrokeDash,
+            currentLine: s.currentLine,
+            setDrawing: s.setDrawing,
+            toggleDrawing: s.toggleDrawing,
+            startLine: s.startLine,
+            appendLinePoint: s.appendLinePoint,
+            clearCurrentLine: s.clearCurrentLine,
+            consumeCurrentLine: s.consumeCurrentLine
+        }))
+    );
 
     // Listen for binding status from bus
     useEffect(() => {
@@ -116,6 +207,87 @@ function Controller() {
     useEffect(() => {
         slidesRef.current = slides;
     }, [slides]);
+
+    const upsertLayerOnSlide = useCallback((slideId: string, nextLayer: LayerWithEditorState) => {
+        setSlides((prev) =>
+            prev.map((slide) => {
+                if (slide.id !== slideId) return slide;
+                const existingIndex = slide.layers.findIndex(
+                    (l) => l.numericId === nextLayer.numericId
+                );
+                const nextLayers = [...slide.layers];
+                if (existingIndex >= 0) {
+                    nextLayers[existingIndex] = nextLayer;
+                } else {
+                    nextLayers.push(nextLayer);
+                }
+                return {
+                    ...slide,
+                    layers: nextLayers,
+                    layerCount: nextLayers.length
+                };
+            })
+        );
+    }, []);
+
+    const deleteLayerOnSlide = useCallback((slideId: string, numericId: number) => {
+        setSlides((prev) =>
+            prev.map((slide) => {
+                if (slide.id !== slideId) return slide;
+                const nextLayers = slide.layers.filter((l) => l.numericId !== numericId);
+                if (nextLayers.length === slide.layers.length) return slide;
+                return {
+                    ...slide,
+                    layers: nextLayers,
+                    layerCount: nextLayers.length
+                };
+            })
+        );
+    }, []);
+
+    const replaceSlideLayers = useCallback(
+        (slideId: string, nextLayers: LayerWithEditorState[]) => {
+            setSlides((prev) =>
+                prev.map((slide) =>
+                    slide.id === slideId
+                        ? {
+                              ...slide,
+                              layers: nextLayers,
+                              layerCount: nextLayers.length
+                          }
+                        : slide
+                )
+            );
+        },
+        []
+    );
+
+    useEffect(() => {
+        if (!engine) return;
+        return engine.onMessage((data) => {
+            const targetSlideId = binding.slideId ?? activeSlideId;
+            if (!targetSlideId) return;
+
+            if (data.type === 'hydrate') {
+                replaceSlideLayers(targetSlideId, data.layers as LayerWithEditorState[]);
+                return;
+            }
+            if (data.type === 'upsert_layer') {
+                upsertLayerOnSlide(targetSlideId, data.layer as LayerWithEditorState);
+                return;
+            }
+            if (data.type === 'delete_layer') {
+                deleteLayerOnSlide(targetSlideId, data.numericId);
+            }
+        });
+    }, [
+        engine,
+        binding.slideId,
+        activeSlideId,
+        replaceSlideLayers,
+        upsertLayerOnSlide,
+        deleteLayerOnSlide
+    ]);
 
     // Listen for live slide list updates from other editors
     useEffect(() => {
@@ -177,6 +349,15 @@ function Controller() {
     }, [activeSlideId, slides]);
 
     useEffect(() => {
+        clearCurrentLine();
+    }, [activeSlideId, binding.slideId, binding.bound, clearCurrentLine]);
+
+    useEffect(() => {
+        if (binding.bound) return;
+        setDrawing(false);
+    }, [binding.bound, setDrawing]);
+
+    useEffect(() => {
         if (!engine || !binding.projectId || !binding.commitId || !activeSlideId) return;
         const bindKey = `${binding.projectId}:${binding.commitId}:${activeSlideId}`;
         if (lastRequestedBindRef.current === bindKey) return;
@@ -198,6 +379,73 @@ function Controller() {
         () => [...activeLayers].sort((a, b) => a.config.zIndex - b.config.zIndex),
         [activeLayers]
     );
+    const canDraw = Boolean(engine && binding.bound && activeSlideId);
+
+    const addLineLayer = useCallback(
+        (line: number[]) => {
+            if (!engine || !activeSlideId || line.length < 6) return;
+            const currentSlides = slidesRef.current;
+            const targetSlide = currentSlides.find((slide) => slide.id === activeSlideId);
+            if (!targetSlide) return;
+            const nextLayer = buildLineLayer(
+                line,
+                strokeColor,
+                strokeWidth,
+                strokeDash,
+                targetSlide.layers
+            );
+            if (!nextLayer) return;
+
+            upsertLayerOnSlide(activeSlideId, nextLayer);
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'controller:add_line_layer',
+                layer: nextLayer
+            });
+        },
+        [engine, activeSlideId, strokeColor, strokeWidth, strokeDash, upsertLayerOnSlide]
+    );
+
+    const getStagePoint = useCallback(
+        (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+            const stage = e.target.getStage();
+            const point = stage?.getPointerPosition();
+            if (!point) return null;
+            return {
+                x: point.x / stageScaleFactor,
+                y: point.y / stageScaleFactor
+            };
+        },
+        [stageScaleFactor]
+    );
+
+    const handleDrawStart = useCallback(
+        (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+            if (!canDraw || !isDrawing) return;
+            const point = getStagePoint(e);
+            if (!point) return;
+            startLine(point.x, point.y);
+        },
+        [canDraw, isDrawing, getStagePoint, startLine]
+    );
+
+    const handleDrawMove = useCallback(
+        (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+            if (!canDraw || !isDrawing || currentLine.length < 2) return;
+            const point = getStagePoint(e);
+            if (!point) return;
+            appendLinePoint(point.x, point.y);
+        },
+        [canDraw, isDrawing, currentLine.length, getStagePoint, appendLinePoint]
+    );
+
+    const handleDrawEnd = useCallback(() => {
+        if (!canDraw || !isDrawing) return;
+        const line = consumeCurrentLine();
+        if (line.length > 6) {
+            addLineLayer(line);
+        }
+    }, [canDraw, isDrawing, consumeCurrentLine, addLineLayer]);
 
     useLayoutEffect(() => {
         const slot = stageSlot.current;
@@ -254,7 +502,17 @@ function Controller() {
                         <div className="flex min-h-0 flex-1 overflow-hidden">
                             {/* Canvas area */}
                             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                                <ControllerToolbar />
+                                <ControllerToolbar
+                                    isDrawing={isDrawing}
+                                    canDraw={canDraw}
+                                    onToggleDrawing={toggleDrawing}
+                                    strokeColor={strokeColor}
+                                    setStrokeColor={setStrokeColor}
+                                    strokeWidth={strokeWidth}
+                                    setStrokeWidth={setStrokeWidth}
+                                    strokeDash={strokeDash}
+                                    setStrokeDash={setStrokeDash}
+                                />
 
                                 <ViewerSlatePreview
                                     stageSlot={stageSlot}
@@ -270,6 +528,12 @@ function Controller() {
                                         ref={stageInstance}
                                         width={COLS * SCREEN_W * stageScaleFactor}
                                         height={ROWS * SCREEN_H * stageScaleFactor}
+                                        onMouseDown={handleDrawStart}
+                                        onMouseMove={handleDrawMove}
+                                        onMouseUp={handleDrawEnd}
+                                        onTouchStart={handleDrawStart}
+                                        onTouchMove={handleDrawMove}
+                                        onTouchEnd={handleDrawEnd}
                                         scaleX={stageScaleFactor}
                                         scaleY={stageScaleFactor}
                                     >
@@ -423,6 +687,20 @@ function Controller() {
                                                         />
                                                     );
                                                 })}
+                                            {currentLine.length > 3 && (
+                                                <Line
+                                                    key="new-line"
+                                                    points={currentLine}
+                                                    stroke={strokeColor}
+                                                    strokeWidth={strokeWidth}
+                                                    dash={strokeDash}
+                                                    dashEnabled={true}
+                                                    tension={0.5}
+                                                    lineCap="round"
+                                                    lineJoin="round"
+                                                    listening={false}
+                                                />
+                                            )}
                                         </KonvaLayer>
                                     </Stage>
                                 </div>

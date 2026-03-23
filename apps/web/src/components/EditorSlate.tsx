@@ -789,10 +789,11 @@ export function EditorSlate() {
         }
     };
 
-    const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
+    const handleTouchMove = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
         e.evt.preventDefault();
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
         if (isDrawing) {
+            if (e.evt instanceof MouseEvent && e.evt.buttons !== 1) return;
             const stage = e.target.getStage();
             const point = stage?.getPointerPosition();
             if (!point) return;
@@ -801,7 +802,12 @@ export function EditorSlate() {
             );
             return;
         }
-        if (e.evt.touches.length === 2 && currentSelectedIds.length > 0 && trRef.current) {
+        if (
+            e.evt instanceof TouchEvent &&
+            e.evt.touches.length === 2 &&
+            currentSelectedIds.length > 0 &&
+            trRef.current
+        ) {
             const stage = trRef.current.getStage();
             const node = stage?.findOne(`#${currentSelectedIds[0]}`);
             if (!node) return;
@@ -857,7 +863,7 @@ export function EditorSlate() {
             lastCenter.current = center;
             return;
         }
-        if (e.evt.touches.length === 2) {
+        if (e.evt instanceof TouchEvent && e.evt.touches.length === 2) {
             if (e.evt.targetTouches && e.evt.targetTouches.length > 1) {
                 const currentX = e.evt.touches[0].screenX;
                 const deltaX = currentX - lastX.current;
@@ -869,8 +875,8 @@ export function EditorSlate() {
         }
     };
 
-    const handleTouchEnd = (e: KonvaEventObject<TouchEvent>) => {
-        if (e.evt.touches.length < 2) setIsPinching(false);
+    const handleTouchEnd = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
+        if (e.evt instanceof TouchEvent && e.evt.touches.length < 2) setIsPinching(false);
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
         if (currentSelectedIds.length && trRef.current) {
             const stage = trRef.current.getStage();
@@ -933,6 +939,8 @@ export function EditorSlate() {
                         width={COLS * SCREEN_W * stageScaleFactor}
                         height={ROWS * SCREEN_H * stageScaleFactor}
                         onMouseDown={handleStageInteractionStart}
+                        onMouseMove={handleTouchMove}
+                        onMouseUp={handleTouchEnd}
                         onTouchStart={handleStageInteractionStart}
                         onTouchMove={handleTouchMove}
                         onTouchEnd={handleTouchEnd}

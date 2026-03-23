@@ -3,15 +3,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 function TipButton({
     tip,
+    tipSide,
     children,
     ...props
-}: { tip: string } & React.ComponentProps<typeof Button>) {
+}: { tip: string; tipSide?: Parameters<typeof TooltipContent>[0]['side'] } & React.ComponentProps<
+    typeof Button
+>) {
     return (
         <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon-sm" {...props} />}>
                 {children}
             </TooltipTrigger>
-            <TooltipContent side="top">{tip}</TooltipContent>
+            <TooltipContent side={tipSide}>{tip}</TooltipContent>
         </Tooltip>
     );
 }

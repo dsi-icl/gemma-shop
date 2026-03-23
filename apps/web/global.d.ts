@@ -1,4 +1,5 @@
 import type { ControllerEngine } from '~/lib/controllerEngine';
+import type { ControllerStateCreator } from '~/lib/controllerStore';
 import type { EditorEngine } from '~/lib/editorEngine';
 import type { EditorStateCreator } from '~/lib/editorStore';
 import type { GSMessage, Layer, ScopeKey, ScopeState } from '~/lib/types';
@@ -15,6 +16,7 @@ declare global {
         __EDITOR_RELOADING__?: boolean;
         __WALL_RELOADING__?: boolean;
         __EDITOR_STORE__?: EditorStateCreator;
+        __CONTROLLER_STORE__?: ControllerStateCreator;
     }
 
     namespace NodeJS {

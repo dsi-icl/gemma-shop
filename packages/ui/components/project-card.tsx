@@ -143,7 +143,7 @@ function ProjectCardDialogBody({
                         <iframe
                             title={`Controller for ${project.name}`}
                             src={controllerUrl}
-                            className="h-full w-full border-0"
+                            className="h-full w-full border-0 bg-background"
                         />
                     ) : null}
                 </div>
