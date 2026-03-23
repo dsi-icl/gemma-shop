@@ -72,7 +72,7 @@ RUN set -eux; \
 # Layer B: minimal process/runtime essentials.
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends tini ca-certificates curl xz-utils; \
+    apt-get install -y --no-install-recommends tini ca-certificates curl xz-utils iputils-ping netcat-openbsd curl; \
     rm -rf /var/lib/apt/lists/*
 
 # Layer C: browser shared-library dependencies used by Playwright Chromium.
@@ -182,7 +182,7 @@ else
 fi
 
 log "Starting app server"
-exec bun .output/server/index.mjs
+exec bun --dns-result-order="${DNS_RESULT_ORDER:-ipv4first}" .output/server/index.mjs
 SH
 
 USER app

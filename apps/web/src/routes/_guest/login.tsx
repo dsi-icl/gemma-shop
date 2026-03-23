@@ -8,13 +8,21 @@ import { VirtualEmailKeyboard } from '@repo/ui/components/virtual-email-keyboard
 import { VirtualNumericKeypad } from '@repo/ui/components/virtual-numeric-keypad';
 import { useForm } from '@tanstack/react-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import { $bootstrapStatus } from '~/server/bootstrap.fns';
+
 export const Route = createFileRoute('/_guest/login')({
+    beforeLoad: async () => {
+        const status = await $bootstrapStatus();
+        if (status.requiresBootstrap) {
+            throw redirect({ to: '/bootstrap' });
+        }
+    },
     component: LoginForm
 });
 

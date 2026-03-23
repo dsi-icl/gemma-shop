@@ -32,10 +32,18 @@ async function sendAuthEmail(input: {
         const transporter = nodemailer.default.createTransport({
             host: smtp.host,
             port: smtp.port,
+            family: 4,
             secure: smtp.secure,
+            requireTLS: smtp.requireTLS,
+            ignoreTLS: smtp.ignoreTLS,
+            connectionTimeout: smtp.connectionTimeoutMs,
             auth: {
                 user: smtp.user,
                 pass: smtp.pass
+            },
+            tls: {
+                rejectUnauthorized: smtp.tlsRejectUnauthorized,
+                ...(smtp.tlsServername ? { servername: smtp.tlsServername } : {})
             }
         });
 
@@ -71,7 +79,7 @@ export const auth = betterAuth({
                 const html = await render(MagicLinkEmail({ url }));
                 await sendAuthEmail({
                     to: email,
-                    subject: 'Sign in to Gemma Cast',
+                    subject: 'Sign in to Gemma Shop',
                     html,
                     fallbackLog: `Magic Link to ${email} : (${token}) : ${url}`
                 });
@@ -82,7 +90,7 @@ export const auth = betterAuth({
                 const html = await render(OtpEmail({ otp }));
                 await sendAuthEmail({
                     to: email,
-                    subject: 'Your Gemma Cast OTP',
+                    subject: 'Your Gemma Shop OTP',
                     html,
                     fallbackLog: `OTP to ${email} : ${otp} (${type})`
                 });

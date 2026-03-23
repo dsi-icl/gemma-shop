@@ -6,6 +6,10 @@ const RawEnvSchema = z.object({
     NODE_ENV: z.enum(['development', 'test', 'production']).optional(),
     PORT: z.coerce.number().int().positive().optional(),
     VITE_BASE_URL: z.string().optional(),
+    BOOT_NETWORK_CHECK_ENABLED: z.string().optional(),
+    BOOT_NETWORK_CHECK_HOST: z.string().optional(),
+    BOOT_NETWORK_CHECK_PORT: z.coerce.number().int().positive().optional(),
+    BOOT_NETWORK_CHECK_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
 
     SERVER_DATABASE_URL: z.string().min(1).optional(),
     SERVER_AUTH_SECRET: z.string().min(1).optional(),
@@ -57,6 +61,10 @@ export const env = {
     NODE_ENV: raw.NODE_ENV ?? 'development',
     PORT: raw.PORT ?? 3000,
     VITE_BASE_URL: raw.VITE_BASE_URL ?? 'http://localhost:3000',
+    BOOT_NETWORK_CHECK_ENABLED: raw.BOOT_NETWORK_CHECK_ENABLED ?? 'true',
+    BOOT_NETWORK_CHECK_HOST: raw.BOOT_NETWORK_CHECK_HOST ?? 'example.com',
+    BOOT_NETWORK_CHECK_PORT: raw.BOOT_NETWORK_CHECK_PORT ?? 443,
+    BOOT_NETWORK_CHECK_TIMEOUT_MS: raw.BOOT_NETWORK_CHECK_TIMEOUT_MS ?? 5000,
 
     SERVER_DATABASE_URL: raw.SERVER_DATABASE_URL ?? '',
     SERVER_AUTH_SECRET: raw.SERVER_AUTH_SECRET ?? '',

@@ -4,6 +4,7 @@
 **/.turbo
 .vscode
 .claude
+docker-compose*
 node_modules
 **/node_modules
 **/.env*

@@ -4,6 +4,8 @@ services:
     mongo:
         image: mongo:8.0.4
         command: ['mongod', '--replSet', 'rs0', '--bind_ip_all', '--port', '27017']
+        networks:
+            - gemma_network
         ports:
             - '${MONGO_HOST_PORT:-37017}:27017'
         volumes:
@@ -24,6 +26,8 @@ services:
             mongo:
                 condition: service_healthy
         restart: 'no'
+        networks:
+            - gemma_network
         entrypoint:
             - sh
             - -lc
@@ -58,6 +62,8 @@ services:
                 condition: service_started
             mongo-init:
                 condition: service_completed_successfully
+        networks:
+            - gemma_network
         environment:
             NODE_ENV: production
             PORT: 3000
@@ -77,6 +83,12 @@ services:
             interval: 10s
             timeout: 5s
             retries: 30
+
+networks:
+    gemma_network:
+        driver: bridge
+        driver_opts:
+            com.docker.network.driver.mtu: '1450'
 
 volumes:
     mongo_data:

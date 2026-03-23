@@ -151,16 +151,38 @@ export type SmtpConfig = {
     host: string;
     port: number;
     secure: boolean;
+    requireTLS: boolean;
+    ignoreTLS: boolean;
+    tlsRejectUnauthorized: boolean;
+    tlsServername: string;
+    connectionTimeoutMs: number;
     user: string;
     pass: string;
     from: string;
 };
 
 export async function getSmtpConfig(): Promise<SmtpConfig | null> {
-    const [host, port, secure, user, pass, from] = await Promise.all([
+    const [
+        host,
+        port,
+        secure,
+        requireTLS,
+        ignoreTLS,
+        tlsRejectUnauthorized,
+        tlsServername,
+        connectionTimeoutMs,
+        user,
+        pass,
+        from
+    ] = await Promise.all([
         getConfigValue<string>('smtp.host'),
         getConfigValue<number>('smtp.port'),
         getConfigValue<boolean>('smtp.secure'),
+        getConfigValue<boolean>('smtp.requireTLS'),
+        getConfigValue<boolean>('smtp.ignoreTLS'),
+        getConfigValue<boolean>('smtp.tlsRejectUnauthorized'),
+        getConfigValue<string>('smtp.tlsServername'),
+        getConfigValue<number>('smtp.connectionTimeoutMs'),
         getConfigValue<string>('smtp.user'),
         getConfigValue<string>('smtp.pass'),
         getConfigValue<string>('smtp.from')
@@ -174,6 +196,14 @@ export async function getSmtpConfig(): Promise<SmtpConfig | null> {
         host,
         port,
         secure: !!secure,
+        requireTLS: !!requireTLS,
+        ignoreTLS: !!ignoreTLS,
+        tlsRejectUnauthorized: tlsRejectUnauthorized ?? true,
+        tlsServername: tlsServername ?? '',
+        connectionTimeoutMs:
+            typeof connectionTimeoutMs === 'number' && Number.isFinite(connectionTimeoutMs)
+                ? connectionTimeoutMs
+                : 10000,
         user,
         pass,
         from

@@ -1,10 +1,13 @@
+import { lookup } from 'node:dns/promises';
 import { mkdirSync } from 'node:fs';
+import net from 'node:net';
 
 import { env, bootHealth } from '@repo/env';
 import handler, { createServerEntry } from '@tanstack/react-start/server-entry';
 import { MongoClient } from 'mongodb';
 
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
+import { getBootstrapStatus } from '~/server/bootstrap';
 
 const bootIssues: string[] = [...bootHealth.issues];
 let startupChecksPromise: Promise<void> | null = null;
@@ -25,7 +28,7 @@ function renderBootErrorPage(issues: string[]): string {
         <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>Gemma Cast Unavailable</title>
+        <title>Gemma Shop Unavailable</title>
         <style>
             :root { color-scheme: dark; }
             body {
@@ -93,11 +96,66 @@ async function verifyMongoReplicaSet(): Promise<void> {
     }
 }
 
+function isNetworkCheckEnabled(): boolean {
+    return !['0', 'false', 'off', 'no'].includes(env.BOOT_NETWORK_CHECK_ENABLED.toLowerCase());
+}
+
+async function verifyOutboundConnectivity(): Promise<void> {
+    if (!isNetworkCheckEnabled()) return;
+
+    const host = env.BOOT_NETWORK_CHECK_HOST;
+    const port = env.BOOT_NETWORK_CHECK_PORT;
+    const timeoutMs = env.BOOT_NETWORK_CHECK_TIMEOUT_MS;
+
+    try {
+        await lookup(host);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        bootIssues.push(
+            `Network bootstrap check failed: DNS resolution failed for "${host}" (${message}).`
+        );
+        return;
+    }
+
+    await new Promise<void>((resolve) => {
+        const socket = new net.Socket();
+        let done = false;
+
+        const finish = (issue?: string) => {
+            if (done) return;
+            done = true;
+            socket.destroy();
+            if (issue) bootIssues.push(issue);
+            resolve();
+        };
+
+        socket.setTimeout(timeoutMs);
+        socket.once('connect', () => finish());
+        socket.once('timeout', () =>
+            finish(
+                `Network bootstrap check failed: connection timeout to "${host}:${port}" after ${timeoutMs}ms.`
+            )
+        );
+        socket.once('error', (err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            finish(
+                `Network bootstrap check failed: could not connect to "${host}:${port}" (${message}).`
+            );
+        });
+
+        socket.connect(port, host);
+    });
+}
+
 async function runStartupChecksOnce(): Promise<void> {
     if (!startupChecksPromise) {
         startupChecksPromise = (async () => {
             if (bootIssues.length > 0) return;
             await verifyMongoReplicaSet();
+            if (bootIssues.length > 0) return;
+            await verifyOutboundConnectivity();
+            if (bootIssues.length > 0) return;
+            await getBootstrapStatus();
         })();
     }
     await startupChecksPromise;

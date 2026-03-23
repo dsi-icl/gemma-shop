@@ -20,14 +20,24 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { Suspense } from 'react';
 
+import { $finalizeFirstAdminForCurrentUser } from '~/server/bootstrap.fns';
+
 export const Route = createFileRoute('/admin')({
     component: AdminLayout,
     beforeLoad: async ({ context }) => {
-        const user = await context.queryClient.ensureQueryData({
+        let user = await context.queryClient.ensureQueryData({
             ...authQueryOptions(),
             revalidateIfStale: true
         });
         if (!user) throw redirect({ to: '/login' });
+        const promotion = await $finalizeFirstAdminForCurrentUser();
+        if (promotion.promoted) {
+            await context.queryClient.invalidateQueries({ queryKey: authQueryOptions().queryKey });
+            user = await context.queryClient.fetchQuery({
+                ...authQueryOptions(),
+                revalidateIfStale: true
+            });
+        }
         if ((user as any).role !== 'admin') throw redirect({ to: '/quarry' });
         return { user };
     }

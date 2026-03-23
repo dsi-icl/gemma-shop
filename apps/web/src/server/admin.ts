@@ -263,6 +263,28 @@ export const ADMIN_CONFIG_FIELDS: ConfigField[] = [
     },
     { key: 'smtp.port', label: 'SMTP Port', encrypted: false, type: 'number', placeholder: '587' },
     { key: 'smtp.secure', label: 'SMTP Secure', encrypted: false, type: 'boolean' },
+    { key: 'smtp.requireTLS', label: 'SMTP Require TLS', encrypted: false, type: 'boolean' },
+    { key: 'smtp.ignoreTLS', label: 'SMTP Ignore TLS', encrypted: false, type: 'boolean' },
+    {
+        key: 'smtp.tlsRejectUnauthorized',
+        label: 'SMTP TLS Reject Unauthorized',
+        encrypted: false,
+        type: 'boolean'
+    },
+    {
+        key: 'smtp.tlsServername',
+        label: 'SMTP TLS Server Name',
+        encrypted: false,
+        type: 'string',
+        placeholder: 'smtp.example.com'
+    },
+    {
+        key: 'smtp.connectionTimeoutMs',
+        label: 'SMTP Connection Timeout (ms)',
+        encrypted: false,
+        type: 'number',
+        placeholder: '10000'
+    },
     { key: 'smtp.user', label: 'SMTP Username', encrypted: false, type: 'string' },
     { key: 'smtp.pass', label: 'SMTP Password', encrypted: true, type: 'secret' },
     {
@@ -331,18 +353,26 @@ export async function adminSendSmtpTest(input: { to: string }) {
     const transporter = nodemailer.default.createTransport({
         host: smtp.host,
         port: smtp.port,
+        family: 4,
         secure: smtp.secure,
+        requireTLS: smtp.requireTLS,
+        ignoreTLS: smtp.ignoreTLS,
+        connectionTimeout: smtp.connectionTimeoutMs,
         auth: {
             user: smtp.user,
             pass: smtp.pass
+        },
+        tls: {
+            rejectUnauthorized: smtp.tlsRejectUnauthorized,
+            ...(smtp.tlsServername ? { servername: smtp.tlsServername } : {})
         }
     });
 
     await transporter.sendMail({
         from: smtp.from,
         to: input.to,
-        subject: 'Gemma Cast SMTP test',
-        html: '<p>This is a test email from Gemma Cast admin configuration.</p>'
+        subject: 'Gemma Shop SMTP test',
+        html: '<p>This is a test email from Gemma Shop admin configuration.</p>'
     });
 
     return { ok: true as const };
