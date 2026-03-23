@@ -167,7 +167,11 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             specimen: z.literal('roy')
         })
     ]),
-    z.object({ type: z.literal('hydrate'), layers: LayerSchema.array() }),
+    z.object({
+        type: z.literal('hydrate'),
+        layers: LayerSchema.array(),
+        customRenderUrl: z.string().optional()
+    }),
     z.object({ type: z.literal('rehydrate_please') }),
     z.object({
         type: z.literal('upsert_layer'),
@@ -298,6 +302,8 @@ export interface ScopeState {
     dirty: boolean;
     /** Cached JSON payload for hydrate messages. Invalidated on any layer mutation. */
     hydrateCache: string | null;
+    /** Optional custom render URL from the project configuration. */
+    customRenderUrl?: string;
 }
 
 export interface Slide {

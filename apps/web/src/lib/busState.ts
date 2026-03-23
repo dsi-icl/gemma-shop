@@ -270,7 +270,8 @@ export function getOrCreateScope(
     scopeId: ScopeId,
     projectId: string,
     commitId: string,
-    slideId: string
+    slideId: string,
+    customRenderUrl?: string
 ): ScopeState {
     let scope = scopedState.get(scopeId);
     if (!scope) {
@@ -280,7 +281,8 @@ export function getOrCreateScope(
             commitId,
             slideId,
             dirty: false,
-            hydrateCache: null
+            hydrateCache: null,
+            customRenderUrl
         };
         scopedState.set(scopeId, scope);
 
@@ -290,6 +292,9 @@ export function getOrCreateScope(
             commitToScopeIds.set(commitId, scopeIds);
         }
         scopeIds.add(scopeId);
+    } else if (customRenderUrl !== undefined && scope.customRenderUrl !== customRenderUrl) {
+        scope.customRenderUrl = customRenderUrl;
+        scope.hydrateCache = null;
     }
     return scope;
 }
@@ -325,7 +330,8 @@ export function getEditorHydratePayload(scopeId: ScopeId): string {
     if (!scope.hydrateCache) {
         scope.hydrateCache = JSON.stringify({
             type: 'hydrate',
-            layers: Array.from(scope.layers.values())
+            layers: Array.from(scope.layers.values()),
+            ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {})
         });
     }
     return scope.hydrateCache;
@@ -350,7 +356,8 @@ export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string 
 
     const payload = JSON.stringify({
         type: 'hydrate',
-        layers: Array.from(mergedByNumericId.values())
+        layers: Array.from(mergedByNumericId.values()),
+        ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {})
     });
     return payload;
 }
@@ -642,6 +649,29 @@ export function hydrateWallNodes(wallId: string) {
     if (!wallPeers) return;
     for (const entry of wallPeers) entry.peer.send(payload);
     markOutgoing(wallPeers.size, 0);
+}
+
+/**
+ * Update customRenderUrl for all active scopes belonging to a project,
+ * invalidate their hydrate caches, and re-hydrate any bound walls.
+ */
+export function updateProjectCustomRenderUrl(
+    projectId: string,
+    customRenderUrl: string | undefined
+) {
+    const affectedWallIds = new Set<string>();
+    for (const [scopeId, scope] of scopedState) {
+        if (scope.projectId !== projectId) continue;
+        scope.customRenderUrl = customRenderUrl;
+        scope.hydrateCache = null;
+        // Find walls bound to this scope
+        for (const [wallId, boundScopeId] of wallBindings) {
+            if (boundScopeId === scopeId) affectedWallIds.add(wallId);
+        }
+    }
+    for (const wallId of affectedWallIds) {
+        hydrateWallNodes(wallId);
+    }
 }
 
 // Notify all controllers for a wallId about binding status

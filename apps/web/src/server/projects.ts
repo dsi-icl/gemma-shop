@@ -12,7 +12,7 @@ import type {
 } from '@repo/db/schema';
 import { ObjectId } from 'mongodb';
 
-import { scopedState } from '~/lib/busState';
+import { scopedState, updateProjectCustomRenderUrl } from '~/lib/busState';
 import { ASSET_DIR } from '~/lib/serverVariables';
 
 const projects = db.collection('projects');
@@ -222,6 +222,11 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
         createdAt: new Date()
     });
 
+    // Live-push customRenderUrl changes to any bound walls
+    if ('customRenderUrl' in updates) {
+        updateProjectCustomRenderUrl(_id, updates.customRenderUrl);
+    }
+
     return serializeProject(result);
 }
 
@@ -320,6 +325,36 @@ export async function publishCommit(projectId: string, commitId: string | null, 
     });
 
     return isPublishing;
+}
+
+/**
+ * Publish a custom-render project by creating a sentinel commit (one empty slide, no layers)
+ * and marking it as the published commit. If already published, this is a no-op.
+ */
+export async function publishCustomRenderProject(projectId: string, userEmail: string) {
+    const existing = await projects.findOne({ _id: new ObjectId(projectId) });
+    if (!existing) throw new Error('Project not found');
+    assertCanEdit(existing, userEmail);
+    if (!existing.customRenderUrl) throw new Error('Project has no custom render URL');
+
+    // If already published, no-op
+    if (existing.publishedCommitId) return true;
+
+    const sentinelSlideId = new ObjectId().toHexString();
+    const sentinel = {
+        projectId: new ObjectId(projectId),
+        parentId: null,
+        authorId: new ObjectId(),
+        message: 'Published (custom render)',
+        content: { slides: [{ id: sentinelSlideId, order: 0, layers: [] }] },
+        isAutoSave: false,
+        isMutableHead: false,
+        createdAt: new Date()
+    };
+    const result = await commits.insertOne(sentinel);
+    const sentinelId = result.insertedId.toHexString();
+
+    return publishCommit(projectId, sentinelId, userEmail);
 }
 
 /**

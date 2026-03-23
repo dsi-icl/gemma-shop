@@ -455,11 +455,15 @@ handlers.set('bind_wall', ({ data }) => {
     void (async () => {
         try {
             cancelWallUnbindGrace(data.wallId);
-            const resolvedSlideId = await resolveBoundSlideId(
-                data.projectId,
-                data.commitId,
-                data.slideId
-            );
+            const [resolvedSlideId, project] = await Promise.all([
+                resolveBoundSlideId(data.projectId, data.commitId, data.slideId),
+                db
+                    .collection('projects')
+                    .findOne(
+                        { _id: new ObjectId(data.projectId) },
+                        { projection: { customRenderUrl: 1 } }
+                    )
+            ]);
             if (!resolvedSlideId) {
                 console.warn(
                     `[WS] Refusing bind_wall for ${data.wallId}: no valid slide for ${makeScopeLabel(data.projectId, data.commitId, data.slideId)}`
@@ -468,7 +472,13 @@ handlers.set('bind_wall', ({ data }) => {
             }
 
             const scopeId = internScope(data.projectId, data.commitId, resolvedSlideId);
-            const scope = getOrCreateScope(scopeId, data.projectId, data.commitId, resolvedSlideId);
+            const scope = getOrCreateScope(
+                scopeId,
+                data.projectId,
+                data.commitId,
+                resolvedSlideId,
+                project?.customRenderUrl
+            );
             bindWall(data.wallId, scopeId, 'live');
 
             if (scope.layers.size === 0) {

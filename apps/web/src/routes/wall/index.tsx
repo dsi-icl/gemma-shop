@@ -20,6 +20,7 @@ export const Route = createFileRoute('/wall/')({
 
 function WallApp() {
     const [layers, setLayers] = useState<LayerWithWallComponentState[]>([]);
+    const [customRenderUrl, setCustomRenderUrl] = useState<string | undefined>();
     const [frameabilityByUrl, setFrameabilityByUrl] = useState<
         Record<string, { ok: boolean; reason?: string; fallback?: string }>
     >({});
@@ -61,6 +62,7 @@ function WallApp() {
                 // when numericIds are reused across slides.
                 engine.layers.clear();
                 setLayers(data.layers);
+                setCustomRenderUrl(data.customRenderUrl);
             } else if (data.type === 'upsert_layer') {
                 setLayers((prev) => {
                     const existing = prev.find((l) => l.numericId === data.layer.numericId);
@@ -195,6 +197,28 @@ function WallApp() {
     }, [layers, frameabilityByUrl]);
 
     if (!engine) return null;
+
+    if (customRenderUrl) {
+        const iframeSrc = new URL(customRenderUrl);
+        iframeSrc.searchParams.set('c', String(myViewport.x / SCREEN_W));
+        iframeSrc.searchParams.set('r', String(myViewport.y / SCREEN_H));
+        return (
+            <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">
+                <iframe
+                    src={iframeSrc.toString()}
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: `${SCREEN_W}px`,
+                        height: `${SCREEN_H}px`,
+                        border: 'none'
+                    }}
+                    allow="autoplay; fullscreen"
+                />
+            </div>
+        );
+    }
 
     const stage = layers
         .filter((layer) => layer.config.visible)

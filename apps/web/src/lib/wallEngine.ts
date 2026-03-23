@@ -40,6 +40,7 @@ export class WallEngine {
     private layoutCallbacks = new Set<LayoutUpdateCallback>();
     public viewport: Viewport;
     public wallId: string | null;
+    public customRenderUrl: string | undefined;
 
     private constructor(wallId: string, viewport: Viewport) {
         this.wallId = wallId;
@@ -264,6 +265,10 @@ export class WallEngine {
         // B. JSON SLOW-PATH (Low-Frequency Events)
         if (typeof event.data === 'string') {
             const data = GSMessageSchema.parse(JSON.parse(event.data));
+
+            if (data.type === 'hydrate') {
+                this.customRenderUrl = data.customRenderUrl;
+            }
 
             if (
                 data.type === 'hydrate' ||

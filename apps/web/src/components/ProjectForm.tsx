@@ -258,7 +258,7 @@ export function ProjectForm({
 
                     <form.Field name="customRenderUrl">
                         {(field) => (
-                            <div className="grid hidden gap-2">
+                            <div className="grid gap-2">
                                 <Label htmlFor={field.name}>Custom Render URL</Label>
                                 <Input
                                     id={field.name}

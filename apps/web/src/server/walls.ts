@@ -15,6 +15,7 @@ import {
 
 const walls = db.collection('walls');
 const commits = db.collection('commits');
+const projects = db.collection('projects');
 
 function serializeForClient<T>(value: T): T {
     if (value instanceof ObjectId) {
@@ -57,10 +58,13 @@ export async function bindWallToScope(
     commitId: string,
     slideId: string
 ) {
-    const commit = await commits.findOne(
-        { _id: new ObjectId(commitId), projectId: new ObjectId(projectId) },
-        { projection: { 'content.slides.id': 1 } }
-    );
+    const [commit, project] = await Promise.all([
+        commits.findOne(
+            { _id: new ObjectId(commitId), projectId: new ObjectId(projectId) },
+            { projection: { 'content.slides.id': 1 } }
+        ),
+        projects.findOne({ _id: new ObjectId(projectId) }, { projection: { customRenderUrl: 1 } })
+    ]);
     if (!commit) throw new Error('Commit not found for project');
 
     const slides = (commit.content?.slides as Array<{ id?: string }>) ?? [];
@@ -69,7 +73,13 @@ export async function bindWallToScope(
     if (!resolvedSlideId) throw new Error('Commit has no slides to bind');
 
     const scopeId = internScope(projectId, commitId, resolvedSlideId);
-    const scope = getOrCreateScope(scopeId, projectId, commitId, resolvedSlideId);
+    const scope = getOrCreateScope(
+        scopeId,
+        projectId,
+        commitId,
+        resolvedSlideId,
+        project?.customRenderUrl
+    );
     bindWall(wallId, scopeId, 'gallery');
 
     // Auto-seed from DB if scope is fresh, then hydrate walls

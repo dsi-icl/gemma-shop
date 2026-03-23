@@ -24,6 +24,7 @@ import {
     listPublishedProjects,
     promoteBranchHead,
     publishCommit,
+    publishCustomRenderProject,
     restoreProject,
     updateProject
 } from './projects';
@@ -131,6 +132,13 @@ export const $publishCommit = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         return publishCommit(data.projectId, data.commitId, context.user.email);
+    });
+
+export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
+    .inputValidator(z.object({ projectId: z.string() }))
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        return publishCustomRenderProject(data.projectId, context.user.email);
     });
 
 export const $getAuditLogs = createServerFn({ method: 'GET' })

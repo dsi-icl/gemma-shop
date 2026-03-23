@@ -26,7 +26,7 @@ import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { ControllerEngine } from '~/lib/controllerEngine';
 import { useControllerStore } from '~/lib/controllerStore';
 import type { LayerWithEditorState } from '~/lib/types';
-import { $getCommit } from '~/server/projects.fns';
+import { $getCommit, $getProject } from '~/server/projects.fns';
 
 const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
 const SCREEN_W = 1920;
@@ -124,8 +124,13 @@ function Controller() {
 
     const showHideHeadAndFoot = mountLocation === 'gallery';
 
-    const engine = useMemo(() => (wallId ? ControllerEngine.getInstance(wallId) : null), [wallId]);
+    const engine = useMemo(
+        () =>
+            typeof window !== 'undefined' && wallId ? ControllerEngine.getInstance(wallId) : null,
+        [wallId]
+    );
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
+    const [customRenderUrl, setCustomRenderUrl] = useState<string | undefined>();
     const [slides, setSlides] = useState<SlideEntry[]>([]);
     const [loadingSlides, setLoadingSlides] = useState(false);
     const [pendingSlideId, setPendingSlideId] = useState<string | null>(null);
@@ -183,6 +188,25 @@ function Controller() {
             });
         });
     }, [engine]);
+
+    // Check if the bound project uses a custom render URL
+    useEffect(() => {
+        if (!binding.bound || !binding.projectId) {
+            setCustomRenderUrl(undefined);
+            return;
+        }
+        let cancelled = false;
+        $getProject({ data: { id: binding.projectId } })
+            .then((project) => {
+                if (!cancelled) setCustomRenderUrl(project?.customRenderUrl ?? undefined);
+            })
+            .catch(() => {
+                if (!cancelled) setCustomRenderUrl(undefined);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [binding.bound, binding.projectId]);
 
     // Fetch slides from the bound commit
     const loadSlides = useCallback(async (commitId: string) => {
@@ -515,6 +539,24 @@ function Controller() {
 
         return () => observer.disconnect();
     }, []);
+
+    if (customRenderUrl)
+        return (
+            <div
+                className={cn(
+                    'container flex h-full max-h-full min-h-0 min-w-full flex-col items-center justify-center gap-4 overflow-hidden bg-background text-center',
+                    showHideHeadAndFoot
+                        ? 'fixed inset-0 top-0 right-0 bottom-0 left-0 z-1000! p-0'
+                        : 'pt-18 pb-13'
+                )}
+            >
+                <h2 className="text-xl font-semibold">Gemma Controller Unavailable</h2>
+                <p className="max-w-md text-muted-foreground">
+                    This project uses a custom render URL and cannot be controlled with the built-in
+                    controller. Set your custom control URL in the project settings.
+                </p>
+            </div>
+        );
 
     if (loadingSlides)
         return (

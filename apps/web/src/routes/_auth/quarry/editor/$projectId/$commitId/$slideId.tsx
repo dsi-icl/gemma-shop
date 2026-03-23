@@ -3,7 +3,8 @@ import {
     ResizablePanel,
     ResizablePanelGroup
 } from '@repo/ui/components/resizable';
-import { createFileRoute, useParams } from '@tanstack/react-router';
+import { useSuspenseQuery } from '@tanstack/react-query';
+import { createFileRoute, Link, useParams } from '@tanstack/react-router';
 import { useCallback, useEffect, useState } from 'react';
 import { usePanelRef } from 'react-resizable-panels';
 
@@ -13,6 +14,7 @@ import { MainBoard } from '~/components/MainBoard';
 import { ParametersPanel } from '~/components/ParametersPanel';
 import { SlideList } from '~/components/SlideList';
 import { useEditorStore } from '~/lib/editorStore';
+import { projectQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId/$commitId/$slideId')({
     component: SlideEditor
@@ -22,6 +24,39 @@ function SlideEditor() {
     const { projectId, commitId, slideId } = useParams({
         from: '/_auth/quarry/editor/$projectId/$commitId/$slideId'
     });
+    const { data: project } = useSuspenseQuery(projectQueryOptions(projectId));
+
+    if (project.customRenderUrl) {
+        return (
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+                <h2 className="text-xl font-semibold">Gemma Editor Unavailable</h2>
+                <p className="max-w-md text-muted-foreground">
+                    This project uses a custom render URL and cannot be edited with the built-in
+                    editor.
+                </p>
+                <Link
+                    to="/quarry/projects/$projectId"
+                    params={{ projectId }}
+                    className="text-sm text-primary underline underline-offset-4"
+                >
+                    Back to project settings
+                </Link>
+            </div>
+        );
+    }
+
+    return <SlideEditorInner projectId={projectId} commitId={commitId} slideId={slideId} />;
+}
+
+function SlideEditorInner({
+    projectId,
+    commitId,
+    slideId
+}: {
+    projectId: string;
+    commitId: string;
+    slideId: string;
+}) {
     const loadProject = useEditorStore((s) => s.loadProject);
 
     const [hasInitialisedSlides, setHasInitialisedSlides] = useState(false);
