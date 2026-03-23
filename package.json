@@ -116,7 +116,7 @@
     "scripts": {
         "build": "turbo run build",
         "check": "turbo run quality",
-        "docker:build": "docker build -t gemma-shop:local .",
+        "docker:build": "node tooling/scripts/docker-build.mjs",
         "deps": "bunx taze@latest -Ilwr --peer",
         "deps:major": "bunx taze@latest major -Ilwr --peer",
         "dev": "turbo run dev --parallel",
