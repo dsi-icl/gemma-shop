@@ -2,7 +2,7 @@ export function deriveVideoStillImageFilename(url: string): string | null {
     if (!url.startsWith('/api/assets/')) return null;
     const filename = url.split('/').pop() ?? '';
     const base = filename.replace(/\.[^.]+$/, '');
-    return base ? `${base}_preview.jpg` : null;
+    return base ? `${base}.jpg` : null;
 }
 
 export function isFontAsset(asset: { name: string; mimeType?: string }): boolean {

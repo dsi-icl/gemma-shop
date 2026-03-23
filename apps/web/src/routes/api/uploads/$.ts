@@ -223,7 +223,7 @@ const tusServer = new Server({
             } else if (isVideo) {
                 // ── Video: transcode + generate preview ──
                 assetFilename = `${upload.id}.mp4`;
-                previewFilename = `${upload.id}_preview.jpg`;
+                previewFilename = `${upload.id}.jpg`;
                 const rawPath = join(TMP_DIR, `${upload.id}_raw${ext}`);
                 const finalPath = join(ASSET_DIR, assetFilename);
                 const previewPath = join(ASSET_DIR, previewFilename);

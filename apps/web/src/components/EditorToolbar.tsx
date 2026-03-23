@@ -126,7 +126,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
             if (activeLayer.stillImage) return `/api/assets/${activeLayer.stillImage}`;
             const filename = activeLayer.url.split('/').pop() ?? '';
             const base = filename.replace(/\.[^.]+$/, '');
-            return base ? `/api/assets/${base}_preview.jpg` : null;
+            return base ? `/api/assets/${base}.jpg` : null;
         }
         if (activeLayer.type === 'web' && activeLayer.stillImage) {
             return `/api/assets/${activeLayer.stillImage}`;

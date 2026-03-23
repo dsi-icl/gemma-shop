@@ -430,7 +430,7 @@ export function EditorSlate() {
             const uploadId = response.uploadURL?.split('/').pop() ?? '';
             const assetFilename = isImage ? `${uploadId}${ext}` : `${uploadId}.mp4`;
             const assetUrl = `${window.location.origin}/api/assets/${assetFilename}`;
-            const stillImageFilename = isImage ? undefined : `${uploadId}_preview.jpg`;
+            const stillImageFilename = isImage ? undefined : `${uploadId}.jpg`;
 
             // Grab freshest config from shadow state (user may have moved the preview)
             const freshestLayer = layersRef.current.get(numericId) || optimisticLayer;
