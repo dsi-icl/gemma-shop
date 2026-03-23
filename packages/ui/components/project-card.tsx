@@ -261,19 +261,21 @@ function ProjectCardDialogBody({
                                 </div>
                             ) : null}
 
-                            <Button
-                                className="mt-5 w-full"
-                                onClick={handleLoadButton}
-                                disabled={isLoadingWall}
-                            >
-                                {isLoadingWall ? (
-                                    <CircleNotchIcon className="animate-spin" />
-                                ) : (
-                                    <>
-                                        Load project <ArrowRightIcon />
-                                    </>
-                                )}
-                            </Button>
+                            {!isFullscreen ? (
+                                <Button
+                                    className="mt-5 w-full"
+                                    onClick={handleLoadButton}
+                                    disabled={isLoadingWall}
+                                >
+                                    {isLoadingWall ? (
+                                        <CircleNotchIcon className="animate-spin" />
+                                    ) : (
+                                        <>
+                                            Load project <ArrowRightIcon />
+                                        </>
+                                    )}
+                                </Button>
+                            ) : null}
                         </MorphingDialogDescription>
                     </div>
                 </div>
