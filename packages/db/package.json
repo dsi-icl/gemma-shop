@@ -5,9 +5,11 @@
     "type": "module",
     "exports": {
         ".": "./src/index.ts",
+        "./config": "./src/config.ts",
         "./schema": "./src/schema/index.ts"
     },
     "dependencies": {
+        "@repo/env": "workspace:*",
         "mongodb": "catalog:",
         "zod": "catalog:"
     },

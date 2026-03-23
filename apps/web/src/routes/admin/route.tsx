@@ -1,6 +1,7 @@
 import {
     CastleTurretIcon,
     ChartBarIcon,
+    GearIcon,
     FolderIcon,
     ImageIcon,
     MonitorIcon,
@@ -37,6 +38,7 @@ const NAV = [
     { to: '/admin/projects', label: 'Projects', icon: FolderIcon },
     { to: '/admin/walls', label: 'Walls', icon: MonitorIcon },
     { to: '/admin/assets', label: 'Public Assets', icon: ImageIcon },
+    { to: '/admin/config', label: 'Config', icon: GearIcon },
     { to: '/admin/stats', label: 'Stats', icon: ChartBarIcon }
 ] as const;
 
@@ -45,7 +47,8 @@ const TAB_ORDER = {
     projects: 1,
     walls: 2,
     assets: 3,
-    stats: 4
+    config: 4,
+    stats: 5
 } as const;
 
 type AdminTabKey = keyof typeof TAB_ORDER;
@@ -69,6 +72,7 @@ function getTabFromPath(pathname: string): AdminTabKey {
     if (pathname.endsWith('/projects')) return 'projects';
     if (pathname.endsWith('/walls')) return 'walls';
     if (pathname.endsWith('/assets')) return 'assets';
+    if (pathname.endsWith('/config')) return 'config';
     if (pathname.endsWith('/stats')) return 'stats';
     return 'users';
 }
@@ -93,7 +97,7 @@ function AdminLayout() {
                 onValueChange={(value) => {
                     const tab = NAV.find((t) => t.to.split('/').pop() === value);
                     if (!tab) return;
-                    navigate({ to: tab.to });
+                    navigate({ to: tab.to as any });
                 }}
                 className="mb-6"
             >

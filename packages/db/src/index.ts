@@ -1,6 +1,23 @@
 import '@tanstack/react-start/server-only';
-import { MongoClient } from 'mongodb';
+import { env } from '@repo/env';
+import { Db, MongoClient } from 'mongodb';
 
-const client = new MongoClient(process.env.SERVER_DATABASE_URL as string);
+const FALLBACK_DB_ERROR = 'Database is unavailable because SERVER_DATABASE_URL is not configured.';
 
-export const db = client.db();
+let dbInstance: Db;
+
+if (env.SERVER_DATABASE_URL) {
+    const client = new MongoClient(env.SERVER_DATABASE_URL);
+    dbInstance = client.db();
+} else {
+    const unavailable = () => {
+        throw new Error(FALLBACK_DB_ERROR);
+    };
+
+    dbInstance = {
+        collection: unavailable,
+        command: unavailable
+    } as unknown as Db;
+}
+
+export const db = dbInstance;

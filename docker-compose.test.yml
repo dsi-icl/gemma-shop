@@ -1,0 +1,83 @@
+name: gemma-shop-test
+
+services:
+    mongo:
+        image: mongo:8.0.4
+        command: ['mongod', '--replSet', 'rs0', '--bind_ip_all', '--port', '27017']
+        ports:
+            - '${MONGO_HOST_PORT:-37017}:27017'
+        volumes:
+            - mongo_data:/data/db
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    'mongosh --quiet --host localhost:27017 --eval "db.adminCommand({ ping: 1 }).ok" | grep 1'
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
+    mongo-init:
+        image: mongo:8.0.4
+        depends_on:
+            mongo:
+                condition: service_healthy
+        restart: 'no'
+        entrypoint:
+            - sh
+            - -lc
+            - |
+                set -e
+                echo "[mongo-init] waiting for mongo..."
+                until mongosh --quiet --host mongo:27017 --eval "db.adminCommand({ ping: 1 }).ok" | grep 1 >/dev/null; do
+                  sleep 1
+                done
+                echo "[mongo-init] ensuring replica set rs0..."
+                mongosh --quiet --host mongo:27017 --eval '
+                  try {
+                    const status = rs.status();
+                    if (status.ok === 1) {
+                      print("[mongo-init] replica set already initialized");
+                    }
+                  } catch (e) {
+                    rs.initiate({
+                      _id: "rs0",
+                      members: [{ _id: 0, host: "mongo:27017" }]
+                    });
+                    print("[mongo-init] replica set initiated");
+                  }
+                '
+
+    web:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        depends_on:
+            mongo:
+                condition: service_started
+            mongo-init:
+                condition: service_completed_successfully
+        environment:
+            NODE_ENV: production
+            PORT: 3000
+            VITE_BASE_URL: http://localhost:${WEB_HOST_PORT:-3870}
+            SERVER_DATABASE_URL: mongodb://mongo:27017/gemmashop?replicaSet=rs0&directConnection=true
+            SERVER_AUTH_SECRET: 00000000000000000000000000000000
+            SERVER_CONFIG_ENCRYPTION_KEY: local-dev-encryption-key
+            ALLOWED_HOSTS: http://localhost:${WEB_HOST_PORT:-3870}
+            TRUSTED_ORIGINS: http://localhost:${WEB_HOST_PORT:-3870}
+            APP_DATA_DIR: /app/data
+        ports:
+            - '${WEB_HOST_PORT:-3870}:3000'
+        volumes:
+            - app_data:/app/data
+        healthcheck:
+            test: ['CMD-SHELL', 'curl -fsS http://localhost:3000/ >/dev/null || exit 1']
+            interval: 10s
+            timeout: 5s
+            retries: 30
+
+volumes:
+    mongo_data:
+    app_data:

@@ -3,12 +3,11 @@
 import { throttle } from '@tanstack/pacer';
 
 import { type ConnectionStatus, ReconnectingWebSocket } from './reconnectingWs';
+import { getWebSocketUrl } from './runtimeUrl';
 import { GSMessageSchema, type GSMessage, type Layer } from './types';
 
 const getGemmaBusUrl = (): string => {
-    if (typeof window === 'undefined') return 'ws://localhost:3670/bus';
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${protocol}://${window.location.host}/bus`;
+    return getWebSocketUrl('/bus');
 };
 
 type SaveResponseCallback = (data: Extract<GSMessage, { type: 'stage_save_response' }>) => void;

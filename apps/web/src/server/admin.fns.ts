@@ -4,12 +4,15 @@ import { z } from 'zod';
 
 import {
     adminDeletePublicAsset,
+    adminListConfig,
     adminGetWallBindingMeta,
     adminGetStats,
     adminListProjects,
     adminListPublicAssets,
     adminListUsers,
     adminListWalls,
+    adminSendSmtpTest,
+    adminSetConfig,
     adminUnbindWall
 } from './admin';
 
@@ -67,3 +70,24 @@ export const $adminGetWallBindingMeta = createServerFn({ method: 'GET' })
             boundSlideId: data.boundSlideId ?? null
         })
     );
+
+export const $adminListConfig = createServerFn({ method: 'GET' })
+    .middleware([adminMiddleware])
+    .handler(async () => adminListConfig());
+
+export const $adminSetConfig = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            key: z.string(),
+            value: z.string()
+        })
+    )
+    .handler(async ({ data, context }) =>
+        adminSetConfig({ key: data.key, value: data.value, updatedBy: context.user.email })
+    );
+
+export const $adminSendSmtpTest = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(z.object({ to: z.string().email() }))
+    .handler(async ({ data }) => adminSendSmtpTest({ to: data.to }));

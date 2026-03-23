@@ -1,5 +1,6 @@
 import '@tanstack/react-start/server-only';
 import { db } from '@repo/db';
+import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
 import { ObjectId } from 'mongodb';
 
 import {
@@ -242,4 +243,107 @@ export async function adminDeletePublicAsset(assetId: string) {
         }
         await Promise.allSettled(filesToDelete.map((f) => unlink(join(ASSET_DIR, f))));
     }
+}
+
+type ConfigField = {
+    key: string;
+    label: string;
+    encrypted: boolean;
+    type: 'string' | 'number' | 'boolean' | 'secret';
+    placeholder?: string;
+};
+
+export const ADMIN_CONFIG_FIELDS: ConfigField[] = [
+    {
+        key: 'smtp.host',
+        label: 'SMTP Host',
+        encrypted: false,
+        type: 'string',
+        placeholder: 'smtp.example.com'
+    },
+    { key: 'smtp.port', label: 'SMTP Port', encrypted: false, type: 'number', placeholder: '587' },
+    { key: 'smtp.secure', label: 'SMTP Secure', encrypted: false, type: 'boolean' },
+    { key: 'smtp.user', label: 'SMTP Username', encrypted: false, type: 'string' },
+    { key: 'smtp.pass', label: 'SMTP Password', encrypted: true, type: 'secret' },
+    {
+        key: 'smtp.from',
+        label: 'SMTP From Address',
+        encrypted: false,
+        type: 'string',
+        placeholder: 'noreply@example.com'
+    }
+];
+
+export async function adminListConfig() {
+    const entries = await listConfigEntries();
+    const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+
+    return ADMIN_CONFIG_FIELDS.map((field) => {
+        const current = byKey.get(field.key);
+        return {
+            ...field,
+            value: current?.value ?? null,
+            isSet: current?.isSet ?? false,
+            updatedAt: current?.updatedAt ?? null,
+            updatedBy: current?.updatedBy ?? null,
+            version: current?.version ?? 0
+        };
+    });
+}
+
+function normalizeConfigValue(field: ConfigField, value: string): unknown {
+    if (field.type === 'number') {
+        const num = Number(value);
+        if (!Number.isFinite(num)) throw new Error(`${field.label} must be a valid number`);
+        return num;
+    }
+    if (field.type === 'boolean') {
+        return value === 'true';
+    }
+    return value;
+}
+
+export async function adminSetConfig(input: { key: string; value: string; updatedBy: string }) {
+    const field = ADMIN_CONFIG_FIELDS.find((f) => f.key === input.key);
+    if (!field) throw new Error('Unsupported config key');
+
+    if (field.encrypted && input.value.trim() === '') {
+        throw new Error(`${field.label} cannot be empty`);
+    }
+
+    await setConfigValue({
+        key: field.key,
+        value: normalizeConfigValue(field, input.value),
+        encrypted: field.encrypted,
+        updatedBy: input.updatedBy
+    });
+}
+
+export async function adminSendSmtpTest(input: { to: string }) {
+    const smtp = await getSmtpConfig();
+    if (!smtp) {
+        throw new Error(
+            'SMTP configuration is incomplete. Please configure all SMTP fields first.'
+        );
+    }
+
+    const nodemailer = await import('nodemailer');
+    const transporter = nodemailer.default.createTransport({
+        host: smtp.host,
+        port: smtp.port,
+        secure: smtp.secure,
+        auth: {
+            user: smtp.user,
+            pass: smtp.pass
+        }
+    });
+
+    await transporter.sendMail({
+        from: smtp.from,
+        to: input.to,
+        subject: 'Gemma Cast SMTP test',
+        html: '<p>This is a test email from Gemma Cast admin configuration.</p>'
+    });
+
+    return { ok: true as const };
 }

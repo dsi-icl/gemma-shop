@@ -1,9 +1,9 @@
+import { getWebSocketUrl } from '../../lib/runtimeUrl';
+
 let socket: WebSocket | null = null;
 
 const getRoyBusUrl = (): string => {
-    if (typeof window === 'undefined') return 'ws://localhost:3670/roy';
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${protocol}://${window.location.host}/roy`;
+    return getWebSocketUrl('/roy');
 };
 
 export function getWS(): WebSocket {

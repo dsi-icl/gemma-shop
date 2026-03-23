@@ -3,6 +3,7 @@ import { queryOptions } from '@tanstack/react-query';
 import {
     $adminGetWallBindingMeta,
     $adminGetStats,
+    $adminListConfig,
     $adminListProjects,
     $adminListPublicAssets,
     $adminListUsers,
@@ -57,4 +58,10 @@ export const adminWallBindingMetaQueryOptions = (input: {
                 }
             }),
         staleTime: 15_000
+    });
+
+export const adminConfigQueryOptions = () =>
+    queryOptions({
+        queryKey: ['admin', 'config'],
+        queryFn: () => $adminListConfig()
     });

@@ -2,6 +2,7 @@
 
 FROM oven/bun:1.3.11 AS build
 WORKDIR /workspace
+ENV TURBO_TELEMETRY_DISABLED=1
 
 # Install dependencies first for better cache reuse.
 COPY package.json bun.lock bunfig.toml turbo.json ./
@@ -9,6 +10,7 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/auth/package.json packages/auth/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/emails/package.json packages/emails/package.json
+COPY packages/env/package.json packages/env/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY tooling/tsconfig/package.json tooling/tsconfig/package.json
 
@@ -16,7 +18,7 @@ RUN bun install --frozen-lockfile
 
 # Build the web app (Nitro output in apps/web/.output).
 COPY . .
-RUN bun run build --filter=@repo/web
+RUN NITRO_PRESET=node_server bun run build --filter=@repo/web
 
 FROM node:24-bookworm-slim AS runtime
 
@@ -40,9 +42,12 @@ LABEL org.opencontainers.image.title="gemma-shop" \
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
-    RUNTIME_DEPS_DIR=/app/runtime-deps \
-    PLAYWRIGHT_BROWSERS_PATH=/app/runtime-deps/playwright \
-    FFMPEG_PATH=/app/runtime-deps/bin/ffmpeg \
+    APP_DATA_DIR=/app/data \
+    UPLOAD_DIR=/app/data/uploads \
+    TMP_DIR=/app/data/tmp \
+    ASSET_DIR=/app/data/assets \
+    PLAYWRIGHT_BROWSERS_PATH=/app/data/playwright \
+    FFMPEG_PATH=/app/data/bin/ffmpeg \
     FFMPEG_STATIC_URL=https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
     FFMPEG_STATIC_SHA256=
 
@@ -87,12 +92,12 @@ COPY --from=build --chown=app:app /workspace/apps/web/.output/public ./.output/p
 COPY --from=build --chown=app:app /workspace/apps/web/.output/nitro.json ./.output/nitro.json
 
 # Writable dirs used by server-side upload/asset pipeline.
-RUN mkdir -p .uploads .tmp public/assets /app/runtime-deps/playwright /app/runtime-deps/bin /app/runtime-deps/cache && chown -R app:app /app
+RUN mkdir -p /app/data/uploads /app/data/tmp /app/data/assets /app/data/playwright /app/data/bin /app/data/cache && chown -R app:app /app
 
 # Source maps are not needed in production runtime image.
 RUN find ./.output -type f -name '*.map' -delete || true
 
-RUN cat >/usr/local/bin/container-start.sh <<'SH' && chmod +x /usr/local/bin/container-start.sh
+RUN cat >/usr/local/bin/container-start.sh <<'SH' && sed -i 's/\r$//' /usr/local/bin/container-start.sh && chmod +x /usr/local/bin/container-start.sh
 #!/usr/bin/env sh
 set -eu
 
@@ -101,7 +106,7 @@ log() {
 }
 
 # Runtime browser cache path. Mount this as a volume to persist binaries.
-DEPS_ROOT="${RUNTIME_DEPS_DIR:-/app/runtime-deps}"
+DEPS_ROOT="${APP_DATA_DIR:-/app/data}"
 PW_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$DEPS_ROOT/playwright}"
 mkdir -p "$PW_PATH" >/dev/null 2>&1 || true
 log "Dependency root: $DEPS_ROOT"
@@ -185,3 +190,4 @@ USER app
 EXPOSE 3000
 
 ENTRYPOINT ["tini", "--", "/usr/local/bin/container-start.sh"]
+

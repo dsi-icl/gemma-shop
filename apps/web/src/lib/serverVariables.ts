@@ -1,6 +1,9 @@
 import { join } from 'path';
 
-export const PORT = 3000;
-export const UPLOAD_DIR = join(process.cwd(), '.uploads');
-export const TMP_DIR = join(process.cwd(), '.tmp');
-export const ASSET_DIR = join(process.cwd(), 'public', 'assets');
+import { env } from '@repo/env';
+
+export const PORT = env.PORT;
+export const APP_DATA_DIR = env.APP_DATA_DIR;
+export const UPLOAD_DIR = env.UPLOAD_DIR || join(APP_DATA_DIR, 'uploads');
+export const TMP_DIR = env.TMP_DIR || join(APP_DATA_DIR, 'tmp');
+export const ASSET_DIR = env.ASSET_DIR || join(APP_DATA_DIR, 'assets');

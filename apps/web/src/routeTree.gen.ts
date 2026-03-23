@@ -27,6 +27,7 @@ import { Route as AdminWallsRouteImport } from './routes/admin/walls'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminStatsRouteImport } from './routes/admin/stats'
 import { Route as AdminProjectsRouteImport } from './routes/admin/projects'
+import { Route as AdminConfigRouteImport } from './routes/admin/config'
 import { Route as AdminAssetsRouteImport } from './routes/admin/assets'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as AuthQuarryIndexRouteImport } from './routes/_auth/quarry/index'
@@ -133,6 +134,11 @@ const AdminStatsRoute = AdminStatsRouteImport.update({
 const AdminProjectsRoute = AdminProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminConfigRoute = AdminConfigRouteImport.update({
+  id: '/config',
+  path: '/config',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminAssetsRoute = AdminAssetsRouteImport.update({
@@ -250,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/web-placeholder': typeof WebPlaceholderRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
+  '/admin/config': typeof AdminConfigRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -286,6 +293,7 @@ export interface FileRoutesByTo {
   '/web-placeholder': typeof WebPlaceholderRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
+  '/admin/config': typeof AdminConfigRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -325,6 +333,7 @@ export interface FileRoutesById {
   '/web-placeholder': typeof WebPlaceholderRoute
   '/_guest/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
+  '/admin/config': typeof AdminConfigRoute
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -364,6 +373,7 @@ export interface FileRouteTypes {
     | '/web-placeholder'
     | '/login'
     | '/admin/assets'
+    | '/admin/config'
     | '/admin/projects'
     | '/admin/stats'
     | '/admin/users'
@@ -400,6 +410,7 @@ export interface FileRouteTypes {
     | '/web-placeholder'
     | '/login'
     | '/admin/assets'
+    | '/admin/config'
     | '/admin/projects'
     | '/admin/stats'
     | '/admin/users'
@@ -438,6 +449,7 @@ export interface FileRouteTypes {
     | '/web-placeholder'
     | '/_guest/login'
     | '/admin/assets'
+    | '/admin/config'
     | '/admin/projects'
     | '/admin/stats'
     | '/admin/users'
@@ -612,6 +624,13 @@ declare module '@tanstack/react-router' {
       path: '/projects'
       fullPath: '/admin/projects'
       preLoaderRoute: typeof AdminProjectsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/config': {
+      id: '/admin/config'
+      path: '/config'
+      fullPath: '/admin/config'
+      preLoaderRoute: typeof AdminConfigRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/assets': {
@@ -844,6 +863,7 @@ const GuestRouteRouteWithChildren = GuestRouteRoute._addFileChildren(
 
 interface AdminRouteRouteChildren {
   AdminAssetsRoute: typeof AdminAssetsRoute
+  AdminConfigRoute: typeof AdminConfigRoute
   AdminProjectsRoute: typeof AdminProjectsRoute
   AdminStatsRoute: typeof AdminStatsRoute
   AdminUsersRoute: typeof AdminUsersRoute
@@ -853,6 +873,7 @@ interface AdminRouteRouteChildren {
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminAssetsRoute: AdminAssetsRoute,
+  AdminConfigRoute: AdminConfigRoute,
   AdminProjectsRoute: AdminProjectsRoute,
   AdminStatsRoute: AdminStatsRoute,
   AdminUsersRoute: AdminUsersRoute,
