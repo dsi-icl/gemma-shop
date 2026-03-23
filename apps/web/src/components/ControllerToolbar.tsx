@@ -43,14 +43,16 @@ export function ControllerToolbar({
                 >
                     <PencilSimpleIcon />
                 </TipButton>
-                <StrokeTool
-                    strokeColor={strokeColor}
-                    setStrokeColor={setStrokeColor}
-                    strokeWidth={strokeWidth}
-                    setStrokeWidth={setStrokeWidth}
-                    strokeDash={strokeDash}
-                    setStrokeDash={setStrokeDash}
-                />
+                {isDrawing ? (
+                    <StrokeTool
+                        strokeColor={strokeColor}
+                        setStrokeColor={setStrokeColor}
+                        strokeWidth={strokeWidth}
+                        setStrokeWidth={setStrokeWidth}
+                        strokeDash={strokeDash}
+                        setStrokeDash={setStrokeDash}
+                    />
+                ) : null}
                 <Separator orientation="vertical" className="mx-1 my-1 h-6" />
             </div>
         </TooltipProvider>

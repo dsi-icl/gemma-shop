@@ -54,7 +54,7 @@ export function StrokeTool({
 }: StrokeToolProps) {
     return (
         <Popover>
-            <PopoverTrigger>
+            <PopoverTrigger nativeButton={false} render={<div />}>
                 <TipButton tip="Line Style" variant="outline" size="sm">
                     {getPolylinePreview({
                         strokeColor,
