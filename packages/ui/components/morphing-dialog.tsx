@@ -497,7 +497,6 @@ function MorphingDialogImage({
 }
 
 export type MorphingDialogCloseProps = {
-    children?: React.ReactNode;
     className?: string;
     variants?: {
         initial: Variant;
@@ -506,7 +505,7 @@ export type MorphingDialogCloseProps = {
     };
 };
 
-function MorphingDialogClose({ children, className, variants }: MorphingDialogCloseProps) {
+function MorphingDialogClose({ className, variants }: MorphingDialogCloseProps) {
     const { close, uniqueId } = useMorphingDialog();
 
     const handleClose = useCallback(() => {
@@ -525,7 +524,7 @@ function MorphingDialogClose({ children, className, variants }: MorphingDialogCl
             exit="exit"
             variants={variants}
         >
-            {children || <XIcon size={24} />}
+            <XIcon size={24} />
         </motion.button>
     );
 }
@@ -539,7 +538,7 @@ function MorphingDialogMinimize({ className, variants }: MorphingDialogCloseProp
             onClick={minimize}
             type="button"
             aria-label="Minimize dialog"
-            className={cn('absolute top-6 right-16 z-10 text-zinc-50', className)}
+            className={cn('absolute top-6 right-16 z-10', className)}
             initial="initial"
             animate="animate"
             exit="exit"

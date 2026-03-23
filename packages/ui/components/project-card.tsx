@@ -1,4 +1,10 @@
-import { ArrowRightIcon, CircleNotchIcon, EyeIcon } from '@phosphor-icons/react';
+import {
+    ArrowClockwiseIcon,
+    ArrowRightIcon,
+    CircleNotchIcon,
+    EyeIcon
+} from '@phosphor-icons/react';
+import { motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from './badge';
@@ -36,6 +42,7 @@ interface ProjectCardProps {
         isBound?: boolean;
     }>;
     onLoadProject?: (wallId: string) => Promise<boolean | void>;
+    onWallRebootRequest?: (wallId: string) => Promise<boolean | void> | boolean | void;
 }
 
 function buildControllerUrl(customControlUrl: string | undefined, wallId: string): string {
@@ -64,6 +71,7 @@ function buildControllerUrl(customControlUrl: string | undefined, wallId: string
 function ProjectCardDialogBody({
     project,
     onLoadProject,
+    onWallRebootRequest,
     availableWalls = [],
     presetWallId
 }: ProjectCardProps) {
@@ -72,6 +80,10 @@ function ProjectCardDialogBody({
     const [isLoadingWall, setIsLoadingWall] = useState(false);
     const [activeWallId, setActiveWallId] = useState<string | null>(null);
     const [controllerMounted, setControllerMounted] = useState(false);
+    const [controllerReloadNonce, setControllerReloadNonce] = useState(0);
+    const [isRefreshingController, setIsRefreshingController] = useState(false);
+    const [refreshRebootDone, setRefreshRebootDone] = useState(false);
+    const [refreshIframeLoaded, setRefreshIframeLoaded] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const hasController = Boolean(activeWallId);
@@ -122,10 +134,36 @@ function ProjectCardDialogBody({
         }
     }, [isFullscreen, hasController, controllerMounted]);
 
-    const controllerUrl = useMemo(
-        () => (activeWallId ? buildControllerUrl(project.customControlUrl, activeWallId) : ''),
-        [activeWallId, project.customControlUrl]
-    );
+    const controllerUrl = useMemo(() => {
+        if (!activeWallId) return '';
+        const baseUrl = buildControllerUrl(project.customControlUrl, activeWallId);
+        return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}_r=${controllerReloadNonce}`;
+    }, [activeWallId, project.customControlUrl, controllerReloadNonce]);
+
+    const handleWallRebootRequest = async () => {
+        if (!activeWallId || isRefreshingController) return;
+        setErrorMessage(null);
+        setRefreshRebootDone(false);
+        setRefreshIframeLoaded(false);
+        setControllerReloadNonce((prev) => prev + 1);
+        setIsRefreshingController(true);
+        try {
+            const ok = onWallRebootRequest
+                ? await Promise.resolve(onWallRebootRequest(activeWallId))
+                : true;
+            if (ok === false) setErrorMessage('Could not refresh wall screens');
+        } catch (error: any) {
+            setErrorMessage(error?.message ?? 'Could not refresh wall screens');
+        }
+        setRefreshRebootDone(true);
+    };
+
+    useEffect(() => {
+        if (!isRefreshingController) return;
+        if (!refreshRebootDone) return;
+        if (!refreshIframeLoaded) return;
+        setIsRefreshingController(false);
+    }, [isRefreshingController, refreshRebootDone, refreshIframeLoaded]);
 
     return (
         <>
@@ -144,6 +182,11 @@ function ProjectCardDialogBody({
                             title={`Controller for ${project.name}`}
                             src={controllerUrl}
                             className="h-full w-full border-0 bg-background"
+                            onLoad={() => {
+                                if (isRefreshingController) {
+                                    setRefreshIframeLoaded(true);
+                                }
+                            }}
                         />
                     ) : null}
                 </div>
@@ -235,6 +278,25 @@ function ProjectCardDialogBody({
                     </div>
                 </div>
             </div>
+
+            {isFullscreen && hasController ? (
+                <motion.button
+                    onClick={handleWallRebootRequest}
+                    disabled={isRefreshingController}
+                    type="button"
+                    aria-label="Minimize dialog"
+                    className="absolute top-6 right-26 z-10"
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                >
+                    {isRefreshingController ? (
+                        <CircleNotchIcon size={24} className="animate-spin" />
+                    ) : (
+                        <ArrowClockwiseIcon size={24} />
+                    )}
+                </motion.button>
+            ) : null}
             <MorphingDialogMinimize />
             <MorphingDialogClose />
         </>
@@ -244,6 +306,7 @@ function ProjectCardDialogBody({
 export function ProjectCard({
     project,
     onLoadProject,
+    onWallRebootRequest,
     availableWalls,
     presetWallId
 }: ProjectCardProps) {
@@ -306,6 +369,7 @@ export function ProjectCard({
                         presetWallId={presetWallId}
                         availableWalls={availableWalls}
                         onLoadProject={onLoadProject}
+                        onWallRebootRequest={onWallRebootRequest}
                     />
                 </MorphingDialogContent>
             </MorphingDialogContainer>

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 
+import { ControllerEngine } from '~/lib/controllerEngine';
 import { $bindWall } from '~/server/walls.fns';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
@@ -52,11 +53,23 @@ export function GalleryProjectCard({ project }: GalleryProjectCardProps) {
         }
     };
 
+    const handleWallRebootRequest = async (wallId: string) => {
+        try {
+            const engine = ControllerEngine.getInstance(wallId);
+            engine.sendJSON({ type: 'reboot' });
+            return true;
+        } catch (e: any) {
+            toast.error(e?.message ?? 'Could not refresh wall screens');
+            return false;
+        }
+    };
+
     return (
         <ProjectCard
             project={project}
             availableWalls={availableWalls}
             onLoadProject={handleLoadProject}
+            onWallRebootRequest={handleWallRebootRequest}
             presetWallId={presetWallId}
         />
     );
