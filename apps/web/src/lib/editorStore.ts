@@ -1019,107 +1019,114 @@ export const useEditorStore =
 if (typeof window !== 'undefined') window.__EDITOR_STORE__ = useEditorStore;
 
 // The engine pushes WebSocket JSON messages directly into the store.
-const engine = EditorEngine.getInstance();
-const unsubJson = engine.subscribeToJson((data) => {
-    const store = useEditorStore.getState();
-    if (data.type === 'hydrate') {
-        store.hydrate(data.layers);
-    } else if (data.type === 'upsert_layer') {
-        store.upsertLayer(data.layer);
-    } else if (data.type === 'delete_layer') {
-        // Remote delete — only update local state, don't re-broadcast
-        useEditorStore.setState((s) => {
-            const newLayers = new Map(s.layers);
-            newLayers.delete(data.numericId);
-            return {
-                layers: newLayers,
-                selectedLayerIds: s.selectedLayerIds.filter(
-                    (id) => id !== data.numericId.toString()
-                )
-            };
-        });
-    } else if (data.type === 'processing_progress') {
-        store.updateProgress(data.numericId, data.progress);
-    } else if (data.type === 'slides_updated') {
-        // Another editor changed slide metadata — update our list without touching layers
-        if (data.commitId === store.commitId) {
-            store.setSlides(
-                data.slides.map((s: { id: string; order: number; name: string }) => ({
-                    id: s.id,
-                    order: s.order,
-                    name: s.name
-                }))
-            );
-        }
-    } else if (data.type === 'asset_added') {
-        // New asset uploaded (by any editor or mobile) — invalidate React Query cache
-        if (data.projectId === store.projectId) {
-            import('~/router').then(({ queryClient }) => {
-                queryClient.invalidateQueries({
-                    queryKey: projectAssetsQueryOptions(data.projectId).queryKey
-                });
+let unsubJson = () => {};
+let unsubStatus = () => {};
+let unsubSave = () => {};
+
+if (typeof window !== 'undefined') {
+    const engine = EditorEngine.getInstance();
+
+    unsubJson = engine.subscribeToJson((data) => {
+        const store = useEditorStore.getState();
+        if (data.type === 'hydrate') {
+            store.hydrate(data.layers);
+        } else if (data.type === 'upsert_layer') {
+            store.upsertLayer(data.layer);
+        } else if (data.type === 'delete_layer') {
+            // Remote delete — only update local state, don't re-broadcast
+            useEditorStore.setState((s) => {
+                const newLayers = new Map(s.layers);
+                newLayers.delete(data.numericId);
+                return {
+                    layers: newLayers,
+                    selectedLayerIds: s.selectedLayerIds.filter(
+                        (id) => id !== data.numericId.toString()
+                    )
+                };
             });
-        }
-    } else if (data.type === 'wall_node_count') {
-        useEditorStore.setState((s) => {
-            const next: Partial<EditorState> = {
-                wallNodeCounts: { ...s.wallNodeCounts, [data.wallId]: data.connectedNodes }
-            };
-            if (s.boundWallId === data.wallId && data.connectedNodes <= 0) {
-                next.boundWallId = null;
+        } else if (data.type === 'processing_progress') {
+            store.updateProgress(data.numericId, data.progress);
+        } else if (data.type === 'slides_updated') {
+            // Another editor changed slide metadata — update our list without touching layers
+            if (data.commitId === store.commitId) {
+                store.setSlides(
+                    data.slides.map((s: { id: string; order: number; name: string }) => ({
+                        id: s.id,
+                        order: s.order,
+                        name: s.name
+                    }))
+                );
+            }
+        } else if (data.type === 'asset_added') {
+            // New asset uploaded (by any editor or mobile) — invalidate React Query cache
+            if (data.projectId === store.projectId) {
+                import('~/router').then(({ queryClient }) => {
+                    queryClient.invalidateQueries({
+                        queryKey: projectAssetsQueryOptions(data.projectId).queryKey
+                    });
+                });
+            }
+        } else if (data.type === 'wall_node_count') {
+            useEditorStore.setState((s) => {
+                const next: Partial<EditorState> = {
+                    wallNodeCounts: { ...s.wallNodeCounts, [data.wallId]: data.connectedNodes }
+                };
+                if (s.boundWallId === data.wallId && data.connectedNodes <= 0) {
+                    next.boundWallId = null;
+                    engine.boundWallId = null;
+                }
+                return next;
+            });
+        } else if (data.type === 'wall_binding_status') {
+            const state = useEditorStore.getState();
+            const currentlyBound = state.boundWallId;
+            const matchesCurrentScope =
+                data.bound &&
+                data.projectId === state.projectId &&
+                data.commitId === state.commitId &&
+                data.slideId === state.activeSlideId;
+
+            if (matchesCurrentScope) {
+                useEditorStore.setState({ boundWallId: data.wallId });
+                engine.boundWallId = data.wallId;
+            } else if (currentlyBound === data.wallId) {
+                useEditorStore.setState({ boundWallId: null });
                 engine.boundWallId = null;
             }
-            return next;
-        });
-    } else if (data.type === 'wall_binding_status') {
-        const state = useEditorStore.getState();
-        const currentlyBound = state.boundWallId;
-        const matchesCurrentScope =
-            data.bound &&
-            data.projectId === state.projectId &&
-            data.commitId === state.commitId &&
-            data.slideId === state.activeSlideId;
-
-        if (matchesCurrentScope) {
-            useEditorStore.setState({ boundWallId: data.wallId });
-            engine.boundWallId = data.wallId;
-        } else if (currentlyBound === data.wallId) {
-            useEditorStore.setState({ boundWallId: null });
-            engine.boundWallId = null;
         }
-    }
-});
+    });
 
-// Wire connection status into the store
-const unsubStatus = engine.onConnectionStatusChange((status) => {
-    useEditorStore.setState({ connectionStatus: status });
-});
+    // Wire connection status into the store
+    unsubStatus = engine.onConnectionStatusChange((status) => {
+        useEditorStore.setState({ connectionStatus: status });
+    });
 
-// Wire save responses from the bus back into the store
-const unsubSave = engine.subscribeToSaveResponse((data) => {
-    const store = useEditorStore.getState();
-    if (data.success) {
-        useEditorStore.setState({
-            saveStatus: 'saved',
-            headCommitId: data.commitId ?? store.headCommitId
-        });
-        // Reset to idle after brief "saved" flash
-        setTimeout(() => {
-            if (useEditorStore.getState().saveStatus === 'saved') {
-                useEditorStore.setState({ saveStatus: 'idle' });
-            }
-        }, 2000);
-    } else {
-        console.error('Save failed:', data.error);
-        useEditorStore.setState({ saveStatus: 'error' });
-        // Allow retry after 3s
-        setTimeout(() => {
-            if (useEditorStore.getState().saveStatus === 'error') {
-                useEditorStore.setState({ saveStatus: 'dirty' });
-            }
-        }, 3000);
-    }
-});
+    // Wire save responses from the bus back into the store
+    unsubSave = engine.subscribeToSaveResponse((data) => {
+        const store = useEditorStore.getState();
+        if (data.success) {
+            useEditorStore.setState({
+                saveStatus: 'saved',
+                headCommitId: data.commitId ?? store.headCommitId
+            });
+            // Reset to idle after brief "saved" flash
+            setTimeout(() => {
+                if (useEditorStore.getState().saveStatus === 'saved') {
+                    useEditorStore.setState({ saveStatus: 'idle' });
+                }
+            }, 2000);
+        } else {
+            console.error('Save failed:', data.error);
+            useEditorStore.setState({ saveStatus: 'error' });
+            // Allow retry after 3s
+            setTimeout(() => {
+                if (useEditorStore.getState().saveStatus === 'error') {
+                    useEditorStore.setState({ saveStatus: 'dirty' });
+                }
+            }, 3000);
+        }
+    });
+}
 
 if (import.meta.hot) {
     import.meta.hot.accept();

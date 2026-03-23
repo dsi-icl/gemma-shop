@@ -38,6 +38,7 @@
         "@tanstack/store": "catalog:",
         "@tus/file-store": "catalog:",
         "@tus/server": "catalog:",
+        "@uppy/core": "catalog:",
         "@uppy/react": "catalog:",
         "@uppy/tus": "catalog:",
         "better-auth": "catalog:",

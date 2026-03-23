@@ -1,0 +1,45 @@
+name: Container Image (OCI)
+
+on:
+    push:
+        branches:
+            - main
+        tags:
+            - 'v*'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    packages: write
+
+jobs:
+    build-and-push:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Normalize image owner
+              id: prep
+              run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+            - name: Build OCI image with Buildah
+              id: build
+              uses: redhat-actions/buildah-build@v2
+              with:
+                  image: ghcr.io/${{ steps.prep.outputs.owner_lc }}/gemma-shop
+                  tags: |
+                      sha-${{ github.sha }}
+                      latest
+                  containerfiles: |
+                      ./Dockerfile
+                  oci: true
+
+            - name: Push image to GHCR
+              uses: redhat-actions/push-to-registry@v2
+              with:
+                  image: ${{ steps.build.outputs.image }}
+                  tags: ${{ steps.build.outputs.tags }}
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}

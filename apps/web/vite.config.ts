@@ -8,6 +8,13 @@ import { defineConfig } from 'vite';
 import { ttfPlugin } from './plugins/ttf';
 
 export default defineConfig({
+    build: {
+        rollupOptions: {
+            // Keep Playwright out of bundled server chunks. It is a runtime-only dependency
+            // for the screenshot endpoint and may reference deep optional modules.
+            external: ['playwright', 'playwright-core', 'chromium-bidi']
+        }
+    },
     resolve: {
         tsconfigPaths: true
     },

@@ -2,7 +2,6 @@ import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { createFileRoute } from '@tanstack/react-router';
-import { chromium } from 'playwright';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { ASSET_DIR } from '~/lib/serverVariables';
@@ -76,6 +75,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
 
                 let browser;
                 try {
+                    const { chromium } = await import('playwright');
                     browser = await chromium.launch({ headless: true });
                     const context = await browser.newContext({
                         viewport: { width: viewportWidth, height: viewportHeight }
@@ -104,9 +104,21 @@ export const Route = createFileRoute('/api/web-screenshot')({
                 } catch (err: any) {
                     console.error('[WebScreenshot] Failed:', err);
                     if (browser) await browser.close().catch(() => {});
+                    const message = String(err?.message ?? 'Screenshot capture failed');
+                    const notReady =
+                        message.includes('Executable does not exist') ||
+                        message.includes('browserType.launch') ||
+                        message.includes('playwright');
                     return new Response(
-                        JSON.stringify({ error: err.message || 'Screenshot capture failed' }),
-                        { status: 500, headers: { 'Content-Type': 'application/json' } }
+                        JSON.stringify({
+                            error: notReady
+                                ? 'Screenshot browser is not ready yet. Retry shortly.'
+                                : message
+                        }),
+                        {
+                            status: notReady ? 503 : 500,
+                            headers: { 'Content-Type': 'application/json' }
+                        }
                     );
                 }
             }

@@ -57,6 +57,7 @@
             "@types/qrcode": "^1.5.6",
             "@types/react-dom": "^19.2.3",
             "@types/react": "^19.2.14",
+            "@uppy/core": "^5.1.1",
             "@uppy/react": "^5.2.0",
             "@uppy/tus": "^5.1.1",
             "@vitejs/plugin-react": "^6.0.1",
@@ -115,6 +116,7 @@
     "scripts": {
         "build": "turbo run build",
         "check": "turbo run quality",
+        "docker:build": "docker build -t gemma-shop:local .",
         "deps": "bunx taze@latest -Ilwr --peer",
         "deps:major": "bunx taze@latest major -Ilwr --peer",
         "dev": "turbo run dev --parallel",
