@@ -26,7 +26,8 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     activeVideos: new Map<number, { scopeId: ScopeId; layer: Layer }>(),
     peerCounts: { editor: 0, wall: 0, controller: 0, roy: 0 },
     lastPingSeen: new Map<string, number>(),
-    scopeCleanupTimers: new Map<ScopeId, ReturnType<typeof setTimeout>>()
+    scopeCleanupTimers: new Map<ScopeId, ReturnType<typeof setTimeout>>(),
+    controllerTransientByWallId: new Map<string, Map<number, Layer>>()
 };
 (process as any).__BUS_HMR__ = _hmr;
 
@@ -136,6 +137,10 @@ export const scopeWatchers: Map<ScopeId, Set<string>> = _hmr.scopeWatchers;
  * Updated on bind/unbind/register/unregister (cold path) so broadcast (hot path) is one loop.
  */
 export const wallPeersByScope: Map<ScopeId, Set<PeerEntry>> = _hmr.wallPeersByScope;
+export const controllerTransientByWallId: Map<
+    string,
+    Map<number, Layer>
+> = _hmr.controllerTransientByWallId;
 
 // Active video registry for the VSYNC loop only playing videos are tracked
 export const activeVideos: Map<number, { scopeId: ScopeId; layer: Layer }> = _hmr.activeVideos;
@@ -315,7 +320,11 @@ export function invalidateHydrateCache(scopeId: ScopeId) {
     if (scope) scope.hydrateCache = null;
 }
 
-export function getHydratePayload(scopeId: ScopeId): string {
+export function invalidateWallHydrateCache(_scopeId: ScopeId) {
+    // no-op: wall hydrate payloads are generated per wall, on demand
+}
+
+export function getEditorHydratePayload(scopeId: ScopeId): string {
     const scope = scopedState.get(scopeId);
     if (!scope) return EMPTY_HYDRATE;
     if (!scope.hydrateCache) {
@@ -327,8 +336,74 @@ export function getHydratePayload(scopeId: ScopeId): string {
     return scope.hydrateCache;
 }
 
+export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string {
+    const scope = scopedState.get(scopeId);
+    if (!scope) return EMPTY_HYDRATE;
+
+    const controllerTransient = controllerTransientByWallId.get(wallId);
+    if (!controllerTransient || controllerTransient.size === 0) {
+        return getEditorHydratePayload(scopeId);
+    }
+
+    const mergedByNumericId = new Map<number, Layer>();
+    for (const layer of scope.layers.values()) {
+        mergedByNumericId.set(layer.numericId, layer);
+    }
+    for (const layer of controllerTransient.values()) {
+        mergedByNumericId.set(layer.numericId, layer);
+    }
+
+    const payload = JSON.stringify({
+        type: 'hydrate',
+        layers: Array.from(mergedByNumericId.values())
+    });
+    return payload;
+}
+
+export function upsertControllerTransientLayer(wallId: string, layer: Layer) {
+    let byId = controllerTransientByWallId.get(wallId);
+    if (!byId) {
+        byId = new Map<number, Layer>();
+        controllerTransientByWallId.set(wallId, byId);
+    }
+    byId.set(layer.numericId, layer);
+}
+
+export function deleteControllerTransientLayer(wallId: string, numericId: number): boolean {
+    const byId = controllerTransientByWallId.get(wallId);
+    if (!byId) return false;
+    const deleted = byId.delete(numericId);
+    if (byId.size === 0) controllerTransientByWallId.delete(wallId);
+    return deleted;
+}
+
+export function deleteControllerTransientLayerForScope(
+    scopeId: ScopeId,
+    numericId: number
+): boolean {
+    const watchers = scopeWatchers.get(scopeId);
+    if (!watchers || watchers.size === 0) return false;
+    let deleted = false;
+    for (const wallId of watchers) {
+        if (deleteControllerTransientLayer(wallId, numericId)) deleted = true;
+    }
+    return deleted;
+}
+
+export function clearControllerTransientForWall(wallId: string) {
+    if (!controllerTransientByWallId.has(wallId)) return;
+    controllerTransientByWallId.delete(wallId);
+}
+
+export function clearControllerTransientForScope(scopeId: ScopeId) {
+    const watchers = scopeWatchers.get(scopeId);
+    if (!watchers || watchers.size === 0) return;
+    for (const wallId of watchers) clearControllerTransientForWall(wallId);
+}
+
 export function bindWall(wallId: string, scopeId: ScopeId, source: 'live' | 'gallery' = 'gallery') {
     const oldScopeId = wallBindings.get(wallId);
+    clearControllerTransientForWall(wallId);
 
     // Tear down old binding
     if (oldScopeId !== undefined) {
@@ -373,6 +448,7 @@ export function bindWall(wallId: string, scopeId: ScopeId, source: 'live' | 'gal
 
 export function unbindWall(wallId: string) {
     const oldScopeId = wallBindings.get(wallId);
+    clearControllerTransientForWall(wallId);
     if (oldScopeId !== undefined) {
         const watchers = scopeWatchers.get(oldScopeId);
         if (watchers) {
@@ -448,6 +524,13 @@ export function broadcastToWallsRaw(scopeId: ScopeId, payload: string) {
     if (!set) return;
     for (const entry of set) entry.peer.send(payload);
     markOutgoing(set.size, 0);
+}
+
+export function broadcastToWallNodesRaw(wallId: string, payload: string) {
+    const wallPeers = wallsByWallId.get(wallId);
+    if (!wallPeers) return;
+    for (const entry of wallPeers) entry.peer.send(payload);
+    markOutgoing(wallPeers.size, 0);
 }
 
 export function broadcastToWalls(scopeId: ScopeId, data: GSMessage) {
@@ -526,7 +609,7 @@ export function notifyControllersByCommit(commitId: string, payload: string) {
 // Hydrate all wall peers for a given wallId with their bound scope's layers
 export function hydrateWallNodes(wallId: string) {
     const scopeId = wallBindings.get(wallId);
-    const payload = scopeId !== undefined ? getHydratePayload(scopeId) : EMPTY_HYDRATE;
+    const payload = scopeId !== undefined ? getWallHydratePayload(scopeId, wallId) : EMPTY_HYDRATE;
 
     const wallPeers = wallsByWallId.get(wallId);
     if (!wallPeers) return;
@@ -760,6 +843,10 @@ export function scheduleScopeCleanup(scopeId: ScopeId) {
     const watchers = scopeWatchers.get(scopeId);
     if (watchers && watchers.size > 0) return;
 
+    // Transient controller layers should not outlive active viewers.
+    // Clear immediately when a scope becomes unobserved, even before full scope GC.
+    clearControllerTransientForScope(scopeId);
+
     // Don't double-schedule
     if (scopeCleanupTimers.has(scopeId)) return;
 
@@ -785,14 +872,29 @@ export function cancelScopeCleanup(scopeId: ScopeId) {
 
 /** Execute scope garbage collection: auto-save if dirty, then purge all state. */
 async function executeScopeCleanup(scopeId: ScopeId) {
-    const scope = scopedState.get(scopeId);
-    if (!scope) return;
-
     // Re-check: someone may have reconnected during the grace period
     const editors = editorsByScope.get(scopeId);
     if (editors && editors.size > 0) return;
     const watchers = scopeWatchers.get(scopeId);
     if (watchers && watchers.size > 0) return;
+
+    const scope = scopedState.get(scopeId);
+    if (!scope) {
+        // Defensive cleanup for orphaned scope IDs (e.g. partial state after HMR).
+        clearActiveVideosForScope(scopeId);
+        clearControllerTransientForScope(scopeId);
+
+        editorsByScope.delete(scopeId);
+        wallPeersByScope.delete(scopeId);
+        scopeWatchers.delete(scopeId);
+
+        const key = scopeIdToKey.get(scopeId);
+        if (key) {
+            scopeKeyToId.delete(key);
+            scopeIdToKey.delete(scopeId);
+        }
+        return;
+    }
 
     console.log(`[Bus] Cleaning up scope ${scopeLabel(scopeId)}`);
 
@@ -806,6 +908,7 @@ async function executeScopeCleanup(scopeId: ScopeId) {
 
     // Purge active videos
     clearActiveVideosForScope(scopeId);
+    clearControllerTransientForScope(scopeId);
 
     // Purge scope state
     scopedState.delete(scopeId);

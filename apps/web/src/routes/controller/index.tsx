@@ -83,7 +83,7 @@ function buildLineLayer(
     if (minX === null || minY === null || maxX === null || maxY === null) return null;
 
     const nextNumericId =
-        existingLayers.reduce((max, layer) => Math.max(max, layer.numericId), 0) + 5;
+        existingLayers.reduce((max, layer) => Math.max(max, layer.numericId), 0) + 10000;
     const nextZIndex =
         existingLayers.reduce((max, layer) => Math.max(max, layer.config.zIndex), 0) + 5;
 

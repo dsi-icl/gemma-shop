@@ -23,6 +23,7 @@ import {
     broadcastToWallsBinary,
     broadcastToScope,
     broadcastToScopeRaw,
+    broadcastToWallNodesRaw,
     broadcastToWallsRaw,
     hydrateWallNodes,
     notifyControllers,
@@ -39,8 +40,13 @@ import {
     broadcastVideoSyncBatchToWalls,
     // deleteLayerNodes,
     // clearLayerNodesForScope,
+    clearControllerTransientForScope,
+    deleteControllerTransientLayerForScope,
+    deleteControllerTransientLayer,
     invalidateHydrateCache,
-    getHydratePayload,
+    getEditorHydratePayload,
+    getWallHydratePayload,
+    upsertControllerTransientLayer,
     touchPing,
     reapStalePeers,
     persistSlideMetadata,
@@ -221,10 +227,14 @@ handlers.set('rehydrate_please', ({ entry }) => {
     const { meta } = entry;
 
     if (meta.specimen === 'editor') {
-        entry.peer.send(getHydratePayload(meta.scopeId));
+        entry.peer.send(getEditorHydratePayload(meta.scopeId));
     } else if (meta.specimen === 'wall') {
         const boundScope = wallBindings.get(meta.wallId);
-        entry.peer.send(boundScope !== undefined ? getHydratePayload(boundScope) : EMPTY_HYDRATE);
+        entry.peer.send(
+            boundScope !== undefined
+                ? getWallHydratePayload(boundScope, meta.wallId)
+                : EMPTY_HYDRATE
+        );
     }
 });
 
@@ -239,6 +249,7 @@ handlers.set('clear_stage', ({ entry, scopeId }) => {
         scope.dirty = true;
     }
     clearActiveVideosForScope(scopeId);
+    clearControllerTransientForScope(scopeId);
     // clearLayerNodesForScope(scopeId);
     invalidateHydrateCache(scopeId);
     broadcastToScope(scopeId, { type: 'hydrate', layers: [] }, entry);
@@ -248,52 +259,90 @@ handlers.set('upsert_layer', ({ entry, data, scopeId, rawText }) => {
     let layer = data.layer;
     if (typeof layer?.numericId !== 'number') return;
 
+    const isControllerTransientUpsert = data.origin === 'controller:add_line_layer';
     let relayPayload = rawText;
 
     if (scopeId !== null) {
         const scope = scopedState.get(scopeId);
         if (scope) {
-            // Playback timeline is authoritative via video_play/pause/seek handlers.
-            // Generic upsert_layer must never override live playback state.
-            if (layer.type === 'video') {
-                const existing = scope.layers.get(layer.numericId);
-                if (existing?.type === 'video' && existing.playback) {
-                    layer = { ...layer, playback: existing.playback };
-                    relayPayload = JSON.stringify({ ...data, layer });
-                } else if (!layer.playback) {
-                    layer = {
-                        ...layer,
-                        playback: {
-                            status: 'paused',
-                            anchorMediaTime: 0,
-                            anchorServerTime: 0
-                        }
-                    };
-                    relayPayload = JSON.stringify({ ...data, layer });
+            if (isControllerTransientUpsert) {
+                // Controller drawings are transient wall overlays: no DB persistence and no editor fanout.
+                if (entry.meta.specimen !== 'controller') return;
+                upsertControllerTransientLayer(entry.meta.wallId, layer);
+            } else {
+                // Playback timeline is authoritative via video_play/pause/seek handlers.
+                // Generic upsert_layer must never override live playback state.
+                if (layer.type === 'video') {
+                    const existing = scope.layers.get(layer.numericId);
+                    if (existing?.type === 'video' && existing.playback) {
+                        layer = { ...layer, playback: existing.playback };
+                        relayPayload = JSON.stringify({ ...data, layer });
+                    } else if (!layer.playback) {
+                        layer = {
+                            ...layer,
+                            playback: {
+                                status: 'paused',
+                                anchorMediaTime: 0,
+                                anchorServerTime: 0
+                            }
+                        };
+                        relayPayload = JSON.stringify({ ...data, layer });
+                    }
                 }
+                scope.layers.set(layer.numericId, layer);
+                scope.dirty = true;
+                invalidateHydrateCache(scopeId);
             }
-            scope.layers.set(layer.numericId, layer);
-            scope.dirty = true;
         }
         // recomputeLayerNodes(layer.numericId, layer, scopeId);
-        invalidateHydrateCache(scopeId);
-        broadcastToScopeRaw(scopeId, relayPayload, entry);
+        if (isControllerTransientUpsert) {
+            if (entry.meta.specimen !== 'controller') return;
+            broadcastToWallNodesRaw(entry.meta.wallId, relayPayload);
+        } else {
+            broadcastToScopeRaw(scopeId, relayPayload, entry);
+        }
     }
 });
 
 handlers.set('delete_layer', ({ entry, data, scopeId, rawText }) => {
     if (scopeId === null) return;
+    const isControllerTransientDelete = data.origin === 'controller:add_line_layer';
     const scope = scopedState.get(scopeId);
+    let deletedPersistentLayer = false;
+    let deletedControllerTransient = false;
+
     if (scope) {
-        scope.layers.delete(data.numericId);
-        clearPlaybackCommand(scopeId, data.numericId);
-        scope.dirty = true;
-        deleteYDocForLayer(scopeId, data.numericId);
+        if (isControllerTransientDelete) {
+            if (entry.meta.specimen !== 'controller') return;
+            deletedControllerTransient = deleteControllerTransientLayer(
+                entry.meta.wallId,
+                data.numericId
+            );
+        } else {
+            deletedPersistentLayer = scope.layers.delete(data.numericId);
+            if (deletedPersistentLayer) {
+                clearPlaybackCommand(scopeId, data.numericId);
+                scope.dirty = true;
+                deleteYDocForLayer(scopeId, data.numericId);
+            }
+            deletedControllerTransient = deleteControllerTransientLayerForScope(
+                scopeId,
+                data.numericId
+            );
+            invalidateHydrateCache(scopeId);
+        }
     }
-    unregisterActiveVideo(data.numericId);
+
+    if (deletedPersistentLayer) {
+        unregisterActiveVideo(data.numericId);
+    }
     // deleteLayerNodes(data.numericId);
-    invalidateHydrateCache(scopeId);
-    broadcastToScopeRaw(scopeId, rawText, entry);
+    if (isControllerTransientDelete || (deletedControllerTransient && !deletedPersistentLayer)) {
+        if (entry.meta.specimen !== 'controller') return;
+        broadcastToWallNodesRaw(entry.meta.wallId, rawText);
+    } else {
+        broadcastToScopeRaw(scopeId, rawText, entry);
+    }
 });
 
 handlers.set('seed_scope', ({ entry, data, scopeId }) => {
@@ -311,6 +360,7 @@ handlers.set('seed_scope', ({ entry, data, scopeId }) => {
     scope.dirty = true;
 
     clearActiveVideosForScope(scopeId);
+    clearControllerTransientForScope(scopeId);
     invalidateHydrateCache(scopeId);
 
     // Cascade hydrate to all bound walls
@@ -388,60 +438,70 @@ handlers.set('stage_save', ({ entry, data, scopeId }) => {
 
 handlers.set('bind_wall', ({ data }) => {
     void (async () => {
-        const resolvedSlideId = await resolveBoundSlideId(
-            data.projectId,
-            data.commitId,
-            data.slideId
-        );
-        if (!resolvedSlideId) {
-            console.warn(
-                `[WS] Refusing bind_wall for ${data.wallId}: no valid slide for ${makeScopeLabel(data.projectId, data.commitId, data.slideId)}`
+        try {
+            const resolvedSlideId = await resolveBoundSlideId(
+                data.projectId,
+                data.commitId,
+                data.slideId
             );
-            return;
-        }
+            if (!resolvedSlideId) {
+                console.warn(
+                    `[WS] Refusing bind_wall for ${data.wallId}: no valid slide for ${makeScopeLabel(data.projectId, data.commitId, data.slideId)}`
+                );
+                return;
+            }
 
-        const scopeId = internScope(data.projectId, data.commitId, resolvedSlideId);
-        const scope = getOrCreateScope(scopeId, data.projectId, data.commitId, resolvedSlideId);
-        bindWall(data.wallId, scopeId, 'live');
+            const scopeId = internScope(data.projectId, data.commitId, resolvedSlideId);
+            const scope = getOrCreateScope(scopeId, data.projectId, data.commitId, resolvedSlideId);
+            bindWall(data.wallId, scopeId, 'live');
 
-        const finish = () => {
-            hydrateWallNodes(data.wallId);
+            if (scope.layers.size === 0) {
+                // Fresh scope — auto-seed from DB before hydrating walls
+                await seedScopeFromDb(scopeId);
+            }
+
+            // Keep control-plane updates resilient even if hydrate throws.
             notifyControllers(data.wallId, true, data.projectId, data.commitId, resolvedSlideId);
-        };
+            try {
+                hydrateWallNodes(data.wallId);
+            } catch (err) {
+                console.error(
+                    `[WS] bind_wall hydrate failed for ${data.wallId} (${makeScopeLabel(data.projectId, data.commitId, resolvedSlideId)}):`,
+                    err
+                );
+            }
 
-        if (scope.layers.size === 0) {
-            // Fresh scope — auto-seed from DB before hydrating walls
-            await seedScopeFromDb(scopeId);
-            finish();
-        } else {
-            finish();
-        }
-
-        await db.collection('walls').updateOne(
-            { wallId: data.wallId },
-            {
-                $set: {
-                    boundProjectId: data.projectId,
-                    boundCommitId: data.commitId,
-                    boundSlideId: resolvedSlideId,
-                    boundSource: 'live',
-                    updatedAt: new Date().toISOString()
+            await db.collection('walls').updateOne(
+                { wallId: data.wallId },
+                {
+                    $set: {
+                        boundProjectId: data.projectId,
+                        boundCommitId: data.commitId,
+                        boundSlideId: resolvedSlideId,
+                        boundSource: 'live',
+                        updatedAt: new Date().toISOString()
+                    },
+                    $setOnInsert: {
+                        wallId: data.wallId,
+                        name: data.wallId,
+                        createdAt: new Date().toISOString()
+                    }
                 },
-                $setOnInsert: {
-                    wallId: data.wallId,
-                    name: data.wallId,
-                    createdAt: new Date().toISOString()
-                }
-            },
-            { upsert: true }
-        );
+                { upsert: true }
+            );
 
-        broadcastWallBindingToEditors(data.wallId);
-        broadcastWallNodeCountToEditors(data.wallId);
+            broadcastWallBindingToEditors(data.wallId);
+            broadcastWallNodeCountToEditors(data.wallId);
 
-        console.log(
-            `[WS] Wall ${data.wallId} bound to scope=${makeScopeLabel(data.projectId, data.commitId, resolvedSlideId)}`
-        );
+            console.log(
+                `[WS] Wall ${data.wallId} bound to scope=${makeScopeLabel(data.projectId, data.commitId, resolvedSlideId)}`
+            );
+        } catch (err) {
+            console.error(
+                `[WS] bind_wall failed for ${data.wallId} (${makeScopeLabel(data.projectId, data.commitId, data.slideId)}):`,
+                err
+            );
+        }
     })();
 });
 
@@ -539,7 +599,7 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
         if (scope.layers.size === 0) {
             // Fresh scope — auto-seed from DB so the editor gets layers immediately
             seedScopeFromDb(scopeId).then(() => {
-                peer.send(getHydratePayload(scopeId));
+                peer.send(getEditorHydratePayload(scopeId));
                 for (const wallId of wallsByWallId.keys()) {
                     peer.send(
                         JSON.stringify({
@@ -568,7 +628,7 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
                 }
             });
         } else {
-            peer.send(getHydratePayload(scopeId));
+            peer.send(getEditorHydratePayload(scopeId));
             for (const wallId of wallsByWallId.keys()) {
                 peer.send(
                     JSON.stringify({
@@ -614,7 +674,11 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
 
         const boundScope = wallBindings.get(parsed.wallId);
 
-        peer.send(boundScope !== undefined ? getHydratePayload(boundScope) : EMPTY_HYDRATE);
+        peer.send(
+            boundScope !== undefined
+                ? getWallHydratePayload(boundScope, parsed.wallId)
+                : EMPTY_HYDRATE
+        );
 
         // if (boundScope !== undefined) recomputeAllLayerNodes(boundScope);
         broadcastWallNodeCountToEditors(parsed.wallId);
