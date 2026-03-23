@@ -88,6 +88,21 @@ function CommitViewer() {
         return () => observer.disconnect();
     }, []);
 
+    useEffect(() => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+
+        const handleWheel = (e: WheelEvent) => {
+            const delta = e.deltaX + e.deltaY;
+            if (delta === 0) return;
+            e.preventDefault();
+            slot.scrollLeft += delta;
+        };
+
+        slot.addEventListener('wheel', handleWheel, { passive: false });
+        return () => slot.removeEventListener('wheel', handleWheel);
+    }, []);
+
     const handleEditFromVersion = async () => {
         setBranching(true);
         try {

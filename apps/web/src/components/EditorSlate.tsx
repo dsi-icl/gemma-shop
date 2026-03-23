@@ -168,6 +168,21 @@ export function EditorSlate() {
         };
     }, [syncInsertionCenter]);
 
+    useEffect(() => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+
+        const handleWheel = (e: WheelEvent) => {
+            const delta = e.deltaX + e.deltaY;
+            if (delta === 0) return;
+            e.preventDefault();
+            slot.scrollLeft += delta;
+        };
+
+        slot.addEventListener('wheel', handleWheel, { passive: false });
+        return () => slot.removeEventListener('wheel', handleWheel);
+    }, []);
+
     // Shadow ref — keeps binary-updated positions for the fast-path.
     // Binary updates mutate this directly (no React re-render).
     const layersRef = useRef<Map<number, LayerWithEditorState>>(new Map());
