@@ -427,7 +427,12 @@ async function sendGalleryStateSnapshot(peer: import('crossws').Peer, wallId?: s
             connectedNodes: getWallNodeCount(id),
             bound: boundScope !== undefined,
             ...(scope
-                ? { projectId: scope.projectId, commitId: scope.commitId, slideId: scope.slideId }
+                ? {
+                      projectId: scope.projectId,
+                      commitId: scope.commitId,
+                      slideId: scope.slideId,
+                      source: wallBindingSources.get(id)
+                  }
                 : {})
         };
     });

@@ -3,7 +3,7 @@ import type { Project } from '@repo/ui/components/project-card';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { GalleryProjectCard } from '~/components/GalleryProjectCard';
@@ -32,6 +32,7 @@ type WallListEntry = {
 function HomePage() {
     const [activeTag, setActiveTag] = useState<string | null>(null);
     const [autoOpenRevision, setAutoOpenRevision] = useState(0);
+    const [liveSessionRevision, setLiveSessionRevision] = useState(0);
     const { data: publishedProjects = [] } = useQuery(publishedProjectsQueryOptions());
     const { data: walls = [] } = useQuery(wallsQueryOptions());
     const queryClient = useQueryClient();
@@ -46,6 +47,7 @@ function HomePage() {
         requesterEmail?: string;
     } | null>(null);
     const [overrideClockNow, setOverrideClockNow] = useState<number>(() => Date.now());
+    const liveBoundForTargetRef = useRef(false);
 
     const formatRequesterLabel = (email?: string) => {
         // TODO Lookup through university LDAP to get names maybe ?
@@ -64,9 +66,25 @@ function HomePage() {
     );
 
     useEffect(() => {
+        liveBoundForTargetRef.current = false;
+    }, [wallId]);
+
+    useEffect(() => {
         if (!galleryEngine) return;
         const wallsQueryKey = wallsQueryOptions().queryKey;
         const publishedProjectsQueryKey = publishedProjectsQueryOptions().queryKey;
+        const handleLiveBindingStatus = (
+            nextWallId: string,
+            bound: boolean,
+            source?: 'live' | 'gallery'
+        ) => {
+            if (!wallId || nextWallId !== wallId) return;
+            const isLiveBound = bound && source === 'live';
+            if (isLiveBound && !liveBoundForTargetRef.current) {
+                setLiveSessionRevision((v) => v + 1);
+            }
+            liveBoundForTargetRef.current = isLiveBound;
+        };
 
         const setWallBinding = (
             wallState:
@@ -148,11 +166,23 @@ function HomePage() {
                             boundProjectId: wall.bound ? (wall.projectId ?? null) : null,
                             boundCommitId: wall.bound ? (wall.commitId ?? null) : null,
                             boundSlideId: wall.bound ? (wall.slideId ?? null) : null,
-                            boundSource: existing?.boundSource ?? null
+                            boundSource: wall.bound ? (wall.source ?? null) : null
                         });
                     }
                     return Array.from(byWallId.values());
                 });
+                if (wallId) {
+                    const targetWall = snapshot.walls.find((wall) => wall.wallId === wallId);
+                    if (targetWall) {
+                        handleLiveBindingStatus(
+                            targetWall.wallId,
+                            targetWall.bound,
+                            targetWall.source
+                        );
+                    } else {
+                        handleLiveBindingStatus(wallId, false);
+                    }
+                }
             }),
             galleryEngine.onProjectPublishChanged((event) => {
                 if (!event.published) {
@@ -181,6 +211,7 @@ function HomePage() {
                 if (wallId && event.wallId === wallId) {
                     setAutoOpenRevision((v) => v + 1);
                 }
+                handleLiveBindingStatus(event.wallId, event.bound, event.source);
             }),
             galleryEngine.onWallUnbound((event) => {
                 setWallBinding({
@@ -190,6 +221,7 @@ function HomePage() {
                 if (wallId && event.wallId === wallId) {
                     setAutoOpenRevision((v) => v + 1);
                 }
+                handleLiveBindingStatus(event.wallId, false);
             }),
             galleryEngine.onBindOverrideRequested((req) => {
                 if (!wallId || req.wallId !== wallId) return;
@@ -306,6 +338,11 @@ function HomePage() {
         return `wall:${wallId}:project:${autoOpenProjectId}:sig:${autoOpenBindingSignature}:rev:${autoOpenRevision}`;
     }, [wallId, autoOpenProjectId, autoOpenBindingSignature, autoOpenRevision]);
 
+    const liveSessionStartedSignal = useMemo(() => {
+        if (!wallId) return null;
+        return `wall:${wallId}:live:${liveSessionRevision}`;
+    }, [wallId, liveSessionRevision]);
+
     useEffect(() => {
         if (!autoOpenProjectId) return;
         if (activeTag === null) return;
@@ -400,6 +437,7 @@ function HomePage() {
                                                     ? autoOpenSignal
                                                     : null
                                             }
+                                            forceDemoteFullscreenSignal={liveSessionStartedSignal}
                                         />
                                     </motion.div>
                                 ))}

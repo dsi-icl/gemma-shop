@@ -41,6 +41,7 @@ export type MorphingDialogProviderProps = {
     defaultState?: MorphingDialogState;
     onStateChange?: (state: MorphingDialogState) => void;
     forceOpenSignal?: string | number | null;
+    forceDemoteFullscreenSignal?: string | number | null;
 };
 
 function MorphingDialogProvider({
@@ -48,10 +49,12 @@ function MorphingDialogProvider({
     transition,
     defaultState = 'closed',
     onStateChange,
-    forceOpenSignal
+    forceOpenSignal,
+    forceDemoteFullscreenSignal
 }: MorphingDialogProviderProps) {
     const [state, setState] = useState<MorphingDialogState>(defaultState);
     const lastForceOpenSignalRef = useRef<string | number | null | undefined>(undefined);
+    const lastForceDemoteSignalRef = useRef<string | number | null | undefined>(undefined);
     const closeRafRef = useRef<number | null>(null);
     const closeLockRef = useRef(false);
     const triggerCloseGuardRef = useRef(false);
@@ -165,6 +168,16 @@ function MorphingDialogProvider({
         setState('fullscreen');
     }, [forceOpenSignal, state]);
 
+    useEffect(() => {
+        if (forceDemoteFullscreenSignal === null || forceDemoteFullscreenSignal === undefined) {
+            lastForceDemoteSignalRef.current = forceDemoteFullscreenSignal;
+            return;
+        }
+        if (Object.is(lastForceDemoteSignalRef.current, forceDemoteFullscreenSignal)) return;
+        lastForceDemoteSignalRef.current = forceDemoteFullscreenSignal;
+        setState((prev) => (prev === 'fullscreen' ? 'expanded' : prev));
+    }, [forceDemoteFullscreenSignal]);
+
     return (
         <MorphingDialogContext.Provider value={contextValue}>
             <MotionConfig transition={transition}>{children}</MotionConfig>
@@ -178,6 +191,7 @@ export type MorphingDialogProps = {
     defaultState?: MorphingDialogState;
     onStateChange?: (state: MorphingDialogState) => void;
     forceOpenSignal?: string | number | null;
+    forceDemoteFullscreenSignal?: string | number | null;
 };
 
 function MorphingDialog({
@@ -185,13 +199,15 @@ function MorphingDialog({
     transition,
     defaultState,
     onStateChange,
-    forceOpenSignal
+    forceOpenSignal,
+    forceDemoteFullscreenSignal
 }: MorphingDialogProps) {
     return (
         <MorphingDialogProvider
             defaultState={defaultState}
             onStateChange={onStateChange}
             forceOpenSignal={forceOpenSignal}
+            forceDemoteFullscreenSignal={forceDemoteFullscreenSignal}
         >
             <MotionConfig transition={transition}>{children}</MotionConfig>
         </MorphingDialogProvider>

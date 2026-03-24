@@ -35,6 +35,7 @@ export interface Project {
 interface ProjectCardProps {
     project: Project;
     autoOpenSignal?: string | number | null;
+    forceDemoteFullscreenSignal?: string | number | null;
     presetWallId?: string | null;
     availableWalls?: Array<{
         id: string;
@@ -327,6 +328,7 @@ function ProjectCardDialogBody({
 export function ProjectCard({
     project,
     autoOpenSignal,
+    forceDemoteFullscreenSignal,
     onLoadProject,
     onWallRebootRequest,
     onWallUnbindRequest,
@@ -357,6 +359,7 @@ export function ProjectCard({
     return (
         <MorphingDialog
             forceOpenSignal={autoOpenSignal}
+            forceDemoteFullscreenSignal={forceDemoteFullscreenSignal}
             onStateChange={handleDialogStateChange}
             transition={{
                 type: 'spring',

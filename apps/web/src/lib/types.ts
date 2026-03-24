@@ -300,7 +300,8 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
                 bound: z.boolean(),
                 projectId: z.string().optional(),
                 commitId: z.string().optional(),
-                slideId: z.string().optional()
+                slideId: z.string().optional(),
+                source: z.enum(['live', 'gallery']).optional()
             })
         ),
         publishedProjects: z.array(
