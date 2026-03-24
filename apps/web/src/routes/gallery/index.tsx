@@ -49,6 +49,7 @@ function HomePage() {
         requesterEmail?: string;
     } | null>(null);
     const [overrideClockNow, setOverrideClockNow] = useState<number>(() => Date.now());
+    const filtersAsideRef = useRef<HTMLElement | null>(null);
     const liveBoundForTargetRef = useRef(false);
     const lastGalleryBoundProjectRef = useRef<string | null>(null);
 
@@ -322,6 +323,27 @@ function HomePage() {
         document.body.removeAttribute('data-takeover-lock');
     }, [pendingOverride]);
 
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+
+        const updateMinimizedLeft = () => {
+            const aside = filtersAsideRef.current;
+            if (!aside) return;
+            const left = Math.max(16, Math.round(aside.getBoundingClientRect().left));
+            document.documentElement.style.setProperty('--gallery-minimized-left', `${left}px`);
+        };
+
+        updateMinimizedLeft();
+        const rafId = window.requestAnimationFrame(updateMinimizedLeft);
+        window.addEventListener('resize', updateMinimizedLeft);
+
+        return () => {
+            window.cancelAnimationFrame(rafId);
+            window.removeEventListener('resize', updateMinimizedLeft);
+            document.documentElement.style.removeProperty('--gallery-minimized-left');
+        };
+    }, []);
+
     const overrideSecondsLeft = pendingOverride
         ? Math.ceil(Math.max(0, pendingOverride.expiresAt - overrideClockNow) / 1000)
         : 0;
@@ -447,7 +469,7 @@ function HomePage() {
                 </div>
             ) : null}
             <div className="flex flex-col gap-8 md:flex-row">
-                <aside className="w-full md:w-1/5">
+                <aside ref={filtersAsideRef} className="w-full md:w-1/5">
                     <h2 className="mb-4 text-lg font-semibold">Filters</h2>
                     <div className="flex flex-wrap gap-2 md:flex-col md:flex-nowrap">
                         <Button

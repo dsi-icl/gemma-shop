@@ -328,9 +328,17 @@ export type MorphingDialogContentProps = {
     children: React.ReactNode;
     className?: string;
     style?: React.CSSProperties;
+    minimizedPreviewSrc?: string;
+    minimizedLabel?: string;
 };
 
-function MorphingDialogContent({ children, className, style }: MorphingDialogContentProps) {
+function MorphingDialogContent({
+    children,
+    className,
+    style,
+    minimizedPreviewSrc,
+    minimizedLabel
+}: MorphingDialogContentProps) {
     const { state, close, fullscreen, isOpen, uniqueId, triggerRef } = useMorphingDialog();
     const containerRef = useRef<HTMLDivElement>(null!);
     const [firstFocusableElement, setFirstFocusableElement] = useState<HTMLElement | null>(null);
@@ -395,8 +403,20 @@ function MorphingDialogContent({ children, className, style }: MorphingDialogCon
         state === 'fullscreen'
             ? '!fixed !inset-4 !z-50 !w-[calc(100vw-2rem)] !h-[calc(100vh-2rem)] !max-w-none !rounded-2xl'
             : state === 'minimized'
-              ? '!fixed !left-4 !bottom-4 !z-50 !h-14 !w-14 !max-w-14 !rounded-full shadow-lg'
+              ? '!fixed !bottom-20 !z-50 !h-36 !w-36 !max-w-36 !rounded-full !border-0'
               : '';
+
+    const ringToken = `Resume ${minimizedLabel ?? 'project'} • `.toUpperCase();
+    let minimizedRingText = ringToken;
+    while (minimizedRingText.length < 80) {
+        minimizedRingText += ringToken;
+    }
+    const mergedStyle: React.CSSProperties = {
+        ...style,
+        ...(state === 'minimized' ? { left: 'var(--gallery-minimized-left, 1rem)' } : {})
+    };
+
+    const minimizedRingPathId = `dialog-minimized-ring-${uniqueId}`;
 
     return (
         <motion.div
@@ -404,7 +424,7 @@ function MorphingDialogContent({ children, className, style }: MorphingDialogCon
             layout
             layoutId={state === 'minimized' ? undefined : `dialog-${uniqueId}`}
             className={cn('overflow-hidden', className, stateClassName)}
-            style={style}
+            style={mergedStyle}
             role="dialog"
             aria-modal="true"
             aria-labelledby={`motion-ui-morphing-dialog-title-${uniqueId}`}
@@ -425,13 +445,42 @@ function MorphingDialogContent({ children, className, style }: MorphingDialogCon
                 <button
                     type="button"
                     aria-label="Restore fullscreen dialog"
-                    className="absolute inset-0 z-10 flex h-full w-full items-center justify-center bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    className="absolute inset-0 z-10 flex h-full w-full items-center justify-center rounded-full bg-transparent text-white"
                     onClick={(e) => {
                         e.stopPropagation();
                         fullscreen();
                     }}
                 >
-                    <ArrowsOutSimpleIcon size={16} />
+                    <svg
+                        viewBox="0 0 140 140"
+                        className="pointer-events-none absolute inset-0 h-full w-full animate-spin [animation-duration:18s]"
+                        aria-hidden="true"
+                    >
+                        <defs>
+                            <path
+                                id={minimizedRingPathId}
+                                d="M 70,70 m -55,0 a 55,55 0 1,1 110,0 a 55,55 0 1,1 -110,0"
+                            />
+                        </defs>
+                        <text fill="currentColor" fontSize="12" letterSpacing="1.5">
+                            <textPath href={`#${minimizedRingPathId}`} startOffset="0%">
+                                {minimizedRingText}
+                            </textPath>
+                        </text>
+                    </svg>
+                    <div className="relative h-24 w-24 overflow-hidden rounded-full">
+                        {minimizedPreviewSrc ? (
+                            <img
+                                src={minimizedPreviewSrc}
+                                alt={minimizedLabel ?? 'Project preview'}
+                                className="absolute inset-0 h-full w-full object-cover"
+                            />
+                        ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-zinc-900/70">
+                                <ArrowsOutSimpleIcon size={22} />
+                            </div>
+                        )}
+                    </div>
                 </button>
             ) : null}
         </motion.div>

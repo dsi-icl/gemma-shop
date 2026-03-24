@@ -455,6 +455,8 @@ export function ProjectCard({
                         borderRadius: '24px'
                     }}
                     className="pointer-events-auto relative mx-auto flex h-auto w-md flex-col overflow-hidden border"
+                    minimizedPreviewSrc={project.imageUrl}
+                    minimizedLabel={project.name}
                 >
                     <ProjectCardDialogBody
                         project={project}
