@@ -46,6 +46,7 @@ interface BindingStatus {
     commitId?: string;
     slideId?: string;
     customRenderUrl?: string;
+    boundSource?: 'live' | 'gallery';
 }
 
 interface SlideEntry {
@@ -196,7 +197,8 @@ function Controller() {
                     prev.projectId === status.projectId &&
                     prev.commitId === status.commitId &&
                     prev.slideId === status.slideId &&
-                    prev.customRenderUrl === status.customRenderUrl
+                    prev.customRenderUrl === status.customRenderUrl &&
+                    prev.boundSource === status.boundSource
                 ) {
                     return prev;
                 }
@@ -362,6 +364,11 @@ function Controller() {
                     hydrationReady: true,
                     customRenderUrl: data.customRender?.url ?? undefined
                 });
+                setBinding((prev) =>
+                    prev.boundSource === data.boundSource
+                        ? prev
+                        : { ...prev, boundSource: data.boundSource }
+                );
 
                 let targetSlideId =
                     binding.slideId ??
@@ -710,6 +717,24 @@ function Controller() {
                 )}
             >
                 <CircleNotchIcon className="animate-spin" />
+            </div>
+        );
+
+    if (binding.bound && binding.boundSource === 'live')
+        return (
+            <div
+                className={cn(
+                    'container flex h-full max-h-full min-h-0 min-w-full flex-col items-center justify-center gap-4 overflow-hidden bg-background text-center',
+                    showHideHeadAndFoot
+                        ? 'fixed inset-0 top-0 right-0 bottom-0 left-0 z-1000! p-0'
+                        : 'pt-18 pb-13'
+                )}
+            >
+                <h2 className="text-xl font-semibold">Gemma Controller Unavailable</h2>
+                <p className="max-w-md text-muted-foreground">
+                    This wall is currently in a live editing session. The gallery controller is
+                    disabled while live control is active.
+                </p>
             </div>
         );
 

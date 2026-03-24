@@ -14,6 +14,7 @@ type BindingStatus = {
     commitId?: string;
     slideId?: string;
     customRenderUrl?: string;
+    boundSource?: 'live' | 'gallery';
 };
 
 type BindingCallback = (status: BindingStatus) => void;
@@ -63,7 +64,8 @@ export class ControllerEngine {
                             projectId: data.projectId,
                             commitId: data.commitId,
                             slideId: data.slideId,
-                            customRenderUrl: data.customRenderUrl
+                            customRenderUrl: data.customRenderUrl,
+                            boundSource: data.boundSource
                         })
                     );
                 }

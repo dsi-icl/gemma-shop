@@ -355,6 +355,7 @@ async function resolveBoundSlideId(
 function broadcastWallBindingToEditors(wallId: string) {
     const boundScope = wallBindings.get(wallId);
     const scope = boundScope !== undefined ? scopedState.get(boundScope) : null;
+    const boundSource = wallBindingSources.get(wallId);
     const payload = JSON.stringify({
         type: 'wall_binding_status',
         wallId,
@@ -364,7 +365,8 @@ function broadcastWallBindingToEditors(wallId: string) {
                   projectId: scope.projectId,
                   commitId: scope.commitId,
                   slideId: scope.slideId,
-                  customRenderUrl: scope.customRenderUrl
+                  customRenderUrl: scope.customRenderUrl,
+                  boundSource
               }
             : {})
     } satisfies GSMessage);
@@ -964,7 +966,8 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
                                       projectId: s.projectId,
                                       commitId: s.commitId,
                                       slideId: s.slideId,
-                                      customRenderUrl: s.customRenderUrl
+                                      customRenderUrl: s.customRenderUrl,
+                                      boundSource: wallBindingSources.get(wallId)
                                   }
                                 : {})
                         } satisfies GSMessage)
@@ -994,7 +997,8 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
                                   projectId: s.projectId,
                                   commitId: s.commitId,
                                   slideId: s.slideId,
-                                  customRenderUrl: s.customRenderUrl
+                                  customRenderUrl: s.customRenderUrl,
+                                  boundSource: wallBindingSources.get(wallId)
                               }
                             : {})
                     } satisfies GSMessage)
@@ -1053,7 +1057,8 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
                       projectId: scope.projectId,
                       commitId: scope.commitId,
                       slideId: scope.slideId,
-                      customRenderUrl: scope.customRenderUrl
+                      customRenderUrl: scope.customRenderUrl,
+                      boundSource: wallBindingSources.get(parsed.wallId)
                   }
                 : {})
         });

@@ -255,7 +255,8 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         projectId: z.string().optional(),
         commitId: z.string().optional(),
         slideId: z.string().optional(),
-        customRenderUrl: z.string().optional()
+        customRenderUrl: z.string().optional(),
+        boundSource: z.enum(['live', 'gallery']).optional()
     }),
     z.object({
         type: z.literal('wall_node_count'),
