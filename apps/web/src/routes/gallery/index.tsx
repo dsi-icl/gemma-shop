@@ -33,6 +33,8 @@ function HomePage() {
     const [activeTag, setActiveTag] = useState<string | null>(null);
     const [autoOpenRevision, setAutoOpenRevision] = useState(0);
     const [liveSessionRevision, setLiveSessionRevision] = useState(0);
+    const [syncedCloseRevision, setSyncedCloseRevision] = useState(0);
+    const [syncedCloseProjectId, setSyncedCloseProjectId] = useState<string | null>(null);
     const { data: publishedProjects = [] } = useQuery(publishedProjectsQueryOptions());
     const { data: walls = [] } = useQuery(wallsQueryOptions());
     const queryClient = useQueryClient();
@@ -48,6 +50,7 @@ function HomePage() {
     } | null>(null);
     const [overrideClockNow, setOverrideClockNow] = useState<number>(() => Date.now());
     const liveBoundForTargetRef = useRef(false);
+    const lastGalleryBoundProjectRef = useRef<string | null>(null);
 
     const formatRequesterLabel = (email?: string) => {
         // TODO Lookup through university LDAP to get names maybe ?
@@ -73,6 +76,10 @@ function HomePage() {
         if (!galleryEngine) return;
         const wallsQueryKey = wallsQueryOptions().queryKey;
         const publishedProjectsQueryKey = publishedProjectsQueryOptions().queryKey;
+        const triggerSyncedCardClose = (projectId: string | null) => {
+            setSyncedCloseProjectId(projectId);
+            setSyncedCloseRevision((v) => v + 1);
+        };
         const handleLiveBindingStatus = (
             nextWallId: string,
             bound: boolean,
@@ -179,8 +186,30 @@ function HomePage() {
                             targetWall.bound,
                             targetWall.source
                         );
+                        const isGalleryBound =
+                            targetWall.bound &&
+                            targetWall.source === 'gallery' &&
+                            Boolean(targetWall.projectId);
+                        if (isGalleryBound && targetWall.projectId) {
+                            lastGalleryBoundProjectRef.current = targetWall.projectId;
+                        } else {
+                            const previouslyBoundProject = lastGalleryBoundProjectRef.current;
+                            if (previouslyBoundProject) {
+                                triggerSyncedCardClose(previouslyBoundProject);
+                            } else {
+                                triggerSyncedCardClose(null);
+                            }
+                            lastGalleryBoundProjectRef.current = null;
+                        }
                     } else {
                         handleLiveBindingStatus(wallId, false);
+                        const previouslyBoundProject = lastGalleryBoundProjectRef.current;
+                        if (previouslyBoundProject) {
+                            triggerSyncedCardClose(previouslyBoundProject);
+                        } else {
+                            triggerSyncedCardClose(null);
+                        }
+                        lastGalleryBoundProjectRef.current = null;
                     }
                 }
             }),
@@ -210,6 +239,19 @@ function HomePage() {
                 });
                 if (wallId && event.wallId === wallId) {
                     setAutoOpenRevision((v) => v + 1);
+                    if (event.bound && event.source === 'gallery' && event.projectId) {
+                        lastGalleryBoundProjectRef.current = event.projectId;
+                    } else if (!event.bound) {
+                        const previouslyBoundProject = lastGalleryBoundProjectRef.current;
+                        if (previouslyBoundProject) {
+                            triggerSyncedCardClose(previouslyBoundProject);
+                        } else {
+                            triggerSyncedCardClose(null);
+                        }
+                        lastGalleryBoundProjectRef.current = null;
+                    } else if (event.source === 'live') {
+                        lastGalleryBoundProjectRef.current = null;
+                    }
                 }
                 handleLiveBindingStatus(event.wallId, event.bound, event.source);
             }),
@@ -220,6 +262,13 @@ function HomePage() {
                 });
                 if (wallId && event.wallId === wallId) {
                     setAutoOpenRevision((v) => v + 1);
+                    const previouslyBoundProject = lastGalleryBoundProjectRef.current;
+                    if (previouslyBoundProject) {
+                        triggerSyncedCardClose(previouslyBoundProject);
+                    } else {
+                        triggerSyncedCardClose(null);
+                    }
+                    lastGalleryBoundProjectRef.current = null;
                 }
                 handleLiveBindingStatus(event.wallId, false);
             }),
@@ -342,6 +391,10 @@ function HomePage() {
         if (!wallId) return null;
         return `wall:${wallId}:live:${liveSessionRevision}`;
     }, [wallId, liveSessionRevision]);
+    const syncedCloseSignal = useMemo(() => {
+        if (!wallId || syncedCloseRevision <= 0) return null;
+        return `wall:${wallId}:close:${syncedCloseProjectId}:rev:${syncedCloseRevision}`;
+    }, [wallId, syncedCloseProjectId, syncedCloseRevision]);
 
     useEffect(() => {
         if (!autoOpenProjectId) return;
@@ -438,6 +491,12 @@ function HomePage() {
                                                     : null
                                             }
                                             forceDemoteFullscreenSignal={liveSessionStartedSignal}
+                                            forceCloseSignal={
+                                                syncedCloseProjectId === null ||
+                                                syncedCloseProjectId === project._id
+                                                    ? syncedCloseSignal
+                                                    : null
+                                            }
                                         />
                                     </motion.div>
                                 ))}

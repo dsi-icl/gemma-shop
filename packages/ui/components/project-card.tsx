@@ -36,6 +36,7 @@ interface ProjectCardProps {
     project: Project;
     autoOpenSignal?: string | number | null;
     forceDemoteFullscreenSignal?: string | number | null;
+    forceCloseSignal?: string | number | null;
     presetWallId?: string | null;
     availableWalls?: Array<{
         id: string;
@@ -329,6 +330,7 @@ export function ProjectCard({
     project,
     autoOpenSignal,
     forceDemoteFullscreenSignal,
+    forceCloseSignal,
     onLoadProject,
     onWallRebootRequest,
     onWallUnbindRequest,
@@ -337,6 +339,23 @@ export function ProjectCard({
 }: ProjectCardProps) {
     const activeWallIdRef = useRef<string | null>(null);
     const prevDialogStateRef = useRef<'closed' | 'expanded' | 'fullscreen' | 'minimized'>('closed');
+    const skipUnbindOnNextCloseRef = useRef(false);
+    const lastExternalCloseSignalRef = useRef<string | number | null | undefined>(undefined);
+
+    useEffect(() => {
+        if (forceCloseSignal === null || forceCloseSignal === undefined) {
+            lastExternalCloseSignalRef.current = forceCloseSignal;
+            return;
+        }
+        if (Object.is(lastExternalCloseSignalRef.current, forceCloseSignal)) return;
+        lastExternalCloseSignalRef.current = forceCloseSignal;
+        if (
+            prevDialogStateRef.current === 'fullscreen' ||
+            prevDialogStateRef.current === 'minimized'
+        ) {
+            skipUnbindOnNextCloseRef.current = true;
+        }
+    }, [forceCloseSignal]);
 
     const handleActiveWallIdChange = useCallback((wallId: string | null) => {
         activeWallIdRef.current = wallId;
@@ -349,6 +368,11 @@ export function ProjectCard({
 
             if (state !== 'closed' || prev === 'closed') return;
             const activeWallId = activeWallIdRef.current;
+            if (skipUnbindOnNextCloseRef.current) {
+                skipUnbindOnNextCloseRef.current = false;
+                activeWallIdRef.current = null;
+                return;
+            }
             if (!activeWallId || !onWallUnbindRequest) return;
             void Promise.resolve(onWallUnbindRequest(activeWallId));
             activeWallIdRef.current = null;
@@ -360,6 +384,7 @@ export function ProjectCard({
         <MorphingDialog
             forceOpenSignal={autoOpenSignal}
             forceDemoteFullscreenSignal={forceDemoteFullscreenSignal}
+            forceCloseSignal={forceCloseSignal}
             onStateChange={handleDialogStateChange}
             transition={{
                 type: 'spring',

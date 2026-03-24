@@ -16,12 +16,14 @@ interface GalleryProjectCardProps {
     };
     autoOpenSignal?: string | number | null;
     forceDemoteFullscreenSignal?: string | number | null;
+    forceCloseSignal?: string | number | null;
 }
 
 export function GalleryProjectCard({
     project,
     autoOpenSignal,
-    forceDemoteFullscreenSignal
+    forceDemoteFullscreenSignal,
+    forceCloseSignal
 }: GalleryProjectCardProps) {
     const { data: walls = [] } = useQuery(wallsQueryOptions());
     const presetWallId = useMemo(() => {
@@ -87,6 +89,7 @@ export function GalleryProjectCard({
             project={project}
             autoOpenSignal={autoOpenSignal}
             forceDemoteFullscreenSignal={forceDemoteFullscreenSignal}
+            forceCloseSignal={forceCloseSignal}
             availableWalls={availableWalls}
             onLoadProject={handleLoadProject}
             onWallRebootRequest={handleWallRebootRequest}
