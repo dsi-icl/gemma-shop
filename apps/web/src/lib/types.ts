@@ -170,9 +170,13 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal('hydrate'),
         layers: LayerSchema.array(),
-        customRenderUrl: z.string().optional(),
-        customRenderCompat: z.boolean().optional(),
-        customRenderProxy: z.boolean().optional(),
+        customRender: z
+            .object({
+                url: z.string(),
+                compat: z.boolean().default(false),
+                proxy: z.boolean().default(false)
+            })
+            .optional(),
         boundSource: z.enum(['live', 'gallery']).optional()
     }),
     z.object({ type: z.literal('rehydrate_please') }),

@@ -347,12 +347,14 @@ export function getEditorHydratePayload(scopeId: ScopeId): string {
         scope.hydrateCache = JSON.stringify({
             type: 'hydrate',
             layers: Array.from(scope.layers.values()),
-            ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {}),
             ...(scope.customRenderUrl
-                ? { customRenderCompat: Boolean(scope.customRenderCompat) }
-                : {}),
-            ...(scope.customRenderUrl
-                ? { customRenderProxy: Boolean(scope.customRenderProxy) }
+                ? {
+                      customRender: {
+                          url: scope.customRenderUrl,
+                          compat: Boolean(scope.customRenderCompat),
+                          proxy: Boolean(scope.customRenderProxy)
+                      }
+                  }
                 : {})
         });
     }
@@ -369,12 +371,14 @@ export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string 
         return JSON.stringify({
             type: 'hydrate',
             layers: Array.from(scope.layers.values()),
-            ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {}),
             ...(scope.customRenderUrl
-                ? { customRenderCompat: Boolean(scope.customRenderCompat) }
-                : {}),
-            ...(scope.customRenderUrl
-                ? { customRenderProxy: Boolean(scope.customRenderProxy) }
+                ? {
+                      customRender: {
+                          url: scope.customRenderUrl,
+                          compat: Boolean(scope.customRenderCompat),
+                          proxy: Boolean(scope.customRenderProxy)
+                      }
+                  }
                 : {}),
             ...(boundSource ? { boundSource } : {})
         });
@@ -391,9 +395,15 @@ export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string 
     const payload = JSON.stringify({
         type: 'hydrate',
         layers: Array.from(mergedByNumericId.values()),
-        ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {}),
-        ...(scope.customRenderUrl ? { customRenderCompat: Boolean(scope.customRenderCompat) } : {}),
-        ...(scope.customRenderUrl ? { customRenderProxy: Boolean(scope.customRenderProxy) } : {}),
+        ...(scope.customRenderUrl
+            ? {
+                  customRender: {
+                      url: scope.customRenderUrl,
+                      compat: Boolean(scope.customRenderCompat),
+                      proxy: Boolean(scope.customRenderProxy)
+                  }
+              }
+            : {}),
         ...(boundSource ? { boundSource } : {})
     });
     return payload;

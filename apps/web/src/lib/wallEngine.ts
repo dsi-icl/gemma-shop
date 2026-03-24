@@ -268,7 +268,7 @@ export class WallEngine {
             const data = GSMessageSchema.parse(JSON.parse(event.data));
 
             if (data.type === 'hydrate') {
-                this.customRenderUrl = data.customRenderUrl;
+                this.customRenderUrl = data.customRender?.url;
                 this.boundSource = data.boundSource;
             }
 

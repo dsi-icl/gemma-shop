@@ -70,9 +70,9 @@ function WallApp() {
                 // when numericIds are reused across slides.
                 engine.layers.clear();
                 setLayers(data.layers);
-                setCustomRenderUrl(data.customRenderUrl);
-                setCustomRenderCompat(Boolean(data.customRenderCompat));
-                setCustomRenderProxy(Boolean(data.customRenderProxy));
+                setCustomRenderUrl(data.customRender?.url);
+                setCustomRenderCompat(Boolean(data.customRender?.compat));
+                setCustomRenderProxy(Boolean(data.customRender?.proxy));
             } else if (data.type === 'upsert_layer') {
                 setLayers((prev) => {
                     const existing = prev.find((l) => l.numericId === data.layer.numericId);

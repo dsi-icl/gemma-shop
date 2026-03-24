@@ -1,4 +1,10 @@
-import { ImageIcon, TrashIcon } from '@phosphor-icons/react';
+import {
+    ImageIcon,
+    LightningIcon,
+    LightningSlashIcon,
+    PuzzlePieceIcon,
+    TrashIcon
+} from '@phosphor-icons/react';
 import type { CreateProjectInput } from '@repo/db/schema';
 import { Button } from '@repo/ui/components/button';
 import {
@@ -29,6 +35,21 @@ interface ProjectFormProps {
     submitLabel?: string;
     autoSave?: boolean;
     autoSaveDelayMs?: number;
+}
+
+function isValidHttpUrl(value: string): boolean {
+    try {
+        const parsed = new URL(value);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+function isOptionalHttpUrl(value: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed) return true;
+    return isValidHttpUrl(trimmed);
 }
 
 export function ProjectForm({
@@ -243,7 +264,17 @@ export function ProjectForm({
                         )}
                     </form.Field>
 
-                    <form.Field name="customControlUrl">
+                    <form.Field
+                        name="customControlUrl"
+                        validators={{
+                            onChange: z
+                                .string()
+                                .refine(
+                                    isOptionalHttpUrl,
+                                    'Enter a valid URL starting with http:// or https://.'
+                                )
+                        }}
+                    >
                         {(field) => (
                             <div className="grid gap-2">
                                 <Label htmlFor={field.name}>Custom Control URL</Label>
@@ -256,61 +287,119 @@ export function ProjectForm({
                                         scheduleAutoSave();
                                     }}
                                 />
+                                {field.state.meta.errors ? (
+                                    <em className="text-xs text-red-500">
+                                        {field.state.meta.errors.map((e) => e?.message).join(', ')}
+                                    </em>
+                                ) : null}
                             </div>
                         )}
                     </form.Field>
 
-                    <form.Field name="customRenderUrl">
-                        {(field) => (
-                            <div className="grid gap-2">
-                                <Label htmlFor={field.name}>Custom Render URL</Label>
-                                <Input
-                                    id={field.name}
-                                    value={field.state.value}
-                                    onBlur={field.handleBlur}
-                                    onChange={(e) => {
-                                        field.handleChange(e.target.value);
-                                        scheduleAutoSave();
-                                    }}
-                                />
-                            </div>
-                        )}
-                    </form.Field>
-
-                    <form.Field name="customRenderCompat">
-                        {(field) => (
-                            <div className="flex items-center gap-2">
-                                <input
-                                    id={field.name}
-                                    type="checkbox"
-                                    checked={field.state.value}
-                                    onBlur={field.handleBlur}
-                                    onChange={(e) => {
-                                        field.handleChange(e.target.checked);
-                                        scheduleAutoSave();
-                                    }}
-                                />
-                                <Label htmlFor={field.name}>Custom Render Compat</Label>
-                            </div>
-                        )}
-                    </form.Field>
-
-                    <form.Field name="customRenderProxy">
-                        {(field) => (
-                            <div className="flex items-center gap-2">
-                                <input
-                                    id={field.name}
-                                    type="checkbox"
-                                    checked={field.state.value}
-                                    onBlur={field.handleBlur}
-                                    onChange={(e) => {
-                                        field.handleChange(e.target.checked);
-                                        scheduleAutoSave();
-                                    }}
-                                />
-                                <Label htmlFor={field.name}>Custom Render Proxy</Label>
-                            </div>
-                        )}
+                    <form.Field
+                        name="customRenderUrl"
+                        validators={{
+                            onChange: z
+                                .string()
+                                .refine(
+                                    isOptionalHttpUrl,
+                                    'Enter a valid URL starting with http:// or https://.'
+                                )
+                        }}
+                    >
+                        {(field) => {
+                            const hasValidRenderUrl = isValidHttpUrl(field.state.value.trim());
+                            return (
+                                <div className="grid gap-2">
+                                    <Label htmlFor={field.name}>Custom Render URL</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            id={field.name}
+                                            value={field.state.value}
+                                            onBlur={field.handleBlur}
+                                            onChange={(e) => {
+                                                field.handleChange(e.target.value);
+                                                scheduleAutoSave();
+                                            }}
+                                            className="flex-1"
+                                        />
+                                        {hasValidRenderUrl ? (
+                                            <>
+                                                <form.Field name="customRenderProxy">
+                                                    {(proxyField) => (
+                                                        <Button
+                                                            type="button"
+                                                            size="icon-sm"
+                                                            variant={
+                                                                proxyField.state.value
+                                                                    ? 'outline'
+                                                                    : 'ghost'
+                                                            }
+                                                            title={
+                                                                proxyField.state.value
+                                                                    ? 'Disable custom render proxy'
+                                                                    : 'Enable custom render proxy'
+                                                            }
+                                                            onClick={() => {
+                                                                proxyField.handleChange(
+                                                                    !proxyField.state.value
+                                                                );
+                                                                scheduleAutoSave();
+                                                            }}
+                                                        >
+                                                            {proxyField.state.value ? (
+                                                                <LightningIcon />
+                                                            ) : (
+                                                                <LightningSlashIcon />
+                                                            )}
+                                                        </Button>
+                                                    )}
+                                                </form.Field>
+                                                <form.Field name="customRenderCompat">
+                                                    {(compatField) => (
+                                                        <Button
+                                                            type="button"
+                                                            size="icon-sm"
+                                                            variant={
+                                                                compatField.state.value
+                                                                    ? 'outline'
+                                                                    : 'ghost'
+                                                            }
+                                                            title={
+                                                                compatField.state.value
+                                                                    ? 'Disable custom render compatibility mode'
+                                                                    : 'Enable custom render compatibility mode'
+                                                            }
+                                                            onClick={() => {
+                                                                compatField.handleChange(
+                                                                    !compatField.state.value
+                                                                );
+                                                                scheduleAutoSave();
+                                                            }}
+                                                        >
+                                                            <PuzzlePieceIcon
+                                                                weight={
+                                                                    compatField.state.value
+                                                                        ? 'fill'
+                                                                        : 'regular'
+                                                                }
+                                                            />
+                                                        </Button>
+                                                    )}
+                                                </form.Field>
+                                            </>
+                                        ) : null}
+                                    </div>
+                                    {field.state.meta.errors ? (
+                                        <em className="text-xs text-red-500">
+                                            {field.state.meta.errors
+                                                .map((e) => e?.message)
+                                                .join(', ')}
+                                        </em>
+                                    ) : null}
+                                </div>
+                            );
+                        }}
                     </form.Field>
                 </div>
 
