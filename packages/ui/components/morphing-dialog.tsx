@@ -631,7 +631,14 @@ function MorphingDialogImage({
 
     if (!src)
         return (
-            <AnimatedBlurPattern key={src} seed={alt} height={200} animate={state === 'closed'} />
+            <AnimatedBlurPattern
+                key={src}
+                seed={alt}
+                height={200}
+                animate={state === 'closed'}
+                className={className}
+                style={style}
+            />
         );
     return (
         <motion.img

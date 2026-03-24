@@ -1,6 +1,8 @@
 import { useDebouncedCallback } from '@tanstack/react-pacer';
 import React, { useEffect, useRef } from 'react';
 
+import { cn } from '../lib/utils';
+
 type Blob = {
     x: number;
     y: number;
@@ -15,6 +17,8 @@ type Props = {
     height?: number;
     blobs?: number;
     animate?: boolean;
+    className?: string;
+    style?: React.CSSProperties;
 };
 
 function hashString(str: string) {
@@ -59,7 +63,9 @@ export default function AnimatedBlurPattern({
     width = 400,
     height = 400,
     blobs = 6,
-    animate = true
+    animate = true,
+    className,
+    style
 }: Props) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const currentBlobs = useRef<Blob[]>([]);
@@ -142,5 +148,13 @@ export default function AnimatedBlurPattern({
         updateSeed(seed);
     }, [seed, updateSeed]);
 
-    return <canvas ref={canvasRef} width={width} height={height} />;
+    return (
+        <canvas
+            ref={canvasRef}
+            width={width}
+            height={height}
+            className={cn('h-full w-full', className)}
+            style={style}
+        />
+    );
 }
