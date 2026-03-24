@@ -363,7 +363,7 @@ function MorphingDialogContainer({ children }: MorphingDialogContainerProps) {
                     <motion.div
                         key={`backdrop-${uniqueId}`}
                         className={cn(
-                            'fixed inset-0 h-full w-full bg-white/40 backdrop-blur-xs dark:bg-black/40',
+                            'fixed inset-0 h-full w-full bg-black/65 backdrop-blur-sm',
                             state === 'minimized' && 'pointer-events-none opacity-0'
                         )}
                         initial={{ opacity: 0 }}

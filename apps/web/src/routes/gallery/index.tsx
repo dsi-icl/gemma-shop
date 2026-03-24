@@ -19,6 +19,15 @@ export const Route = createFileRoute('/gallery/')({
 });
 
 type ProjectWithId = Project & { _id: string; publishedCommitId?: string | null };
+type WallListEntry = {
+    wallId: string;
+    name: string;
+    connectedNodes: number;
+    boundProjectId?: string | null;
+    boundCommitId?: string | null;
+    boundSlideId?: string | null;
+    boundSource?: 'live' | 'gallery' | null;
+};
 
 function HomePage() {
     const [activeTag, setActiveTag] = useState<string | null>(null);
@@ -48,17 +57,125 @@ function HomePage() {
 
     useEffect(() => {
         if (!galleryEngine) return;
+        const wallsQueryKey = wallsQueryOptions().queryKey;
+        const publishedProjectsQueryKey = publishedProjectsQueryOptions().queryKey;
+
+        const setWallBinding = (
+            wallState:
+                | {
+                      wallId: string;
+                      connectedNodes?: number;
+                      bound: boolean;
+                      projectId?: string;
+                      commitId?: string;
+                      slideId?: string;
+                      source?: 'live' | 'gallery';
+                  }
+                | {
+                      wallId: string;
+                      connectedNodes?: number;
+                      boundProjectId: string | null;
+                      boundCommitId: string | null;
+                      boundSlideId: string | null;
+                      boundSource: 'live' | 'gallery' | null;
+                  }
+        ) => {
+            queryClient.setQueryData<WallListEntry[]>(wallsQueryKey, (current) => {
+                const list: WallListEntry[] = Array.isArray(current) ? [...current] : [];
+                const idx = list.findIndex((wall) => wall.wallId === wallState.wallId);
+                const existing: WallListEntry | undefined = idx >= 0 ? list[idx] : undefined;
+
+                const next: WallListEntry = existing
+                    ? { ...existing }
+                    : {
+                          wallId: wallState.wallId,
+                          name: wallState.wallId,
+                          connectedNodes:
+                              typeof wallState.connectedNodes === 'number'
+                                  ? wallState.connectedNodes
+                                  : 0,
+                          boundProjectId: null,
+                          boundCommitId: null,
+                          boundSlideId: null,
+                          boundSource: null
+                      };
+
+                if ('bound' in wallState) {
+                    next.boundProjectId = wallState.bound ? (wallState.projectId ?? null) : null;
+                    next.boundCommitId = wallState.bound ? (wallState.commitId ?? null) : null;
+                    next.boundSlideId = wallState.bound ? (wallState.slideId ?? null) : null;
+                    next.boundSource = wallState.bound ? (wallState.source ?? null) : null;
+                } else {
+                    next.boundProjectId = wallState.boundProjectId;
+                    next.boundCommitId = wallState.boundCommitId;
+                    next.boundSlideId = wallState.boundSlideId;
+                    next.boundSource = wallState.boundSource;
+                }
+
+                if (typeof wallState.connectedNodes === 'number') {
+                    next.connectedNodes = wallState.connectedNodes;
+                }
+
+                if (idx >= 0) {
+                    list[idx] = next;
+                } else {
+                    list.push(next);
+                }
+                return list;
+            });
+        };
+
         const unsubs = [
-            galleryEngine.onProjectPublishChanged(() => {
-                void queryClient.invalidateQueries({
-                    queryKey: publishedProjectsQueryOptions().queryKey
+            galleryEngine.onGalleryState((snapshot) => {
+                queryClient.setQueryData<WallListEntry[]>(wallsQueryKey, (current) => {
+                    const byWallId = new Map(
+                        (Array.isArray(current) ? current : []).map((wall) => [wall.wallId, wall])
+                    );
+                    for (const wall of snapshot.walls) {
+                        const existing = byWallId.get(wall.wallId);
+                        byWallId.set(wall.wallId, {
+                            wallId: wall.wallId,
+                            name: existing?.name ?? wall.wallId,
+                            connectedNodes: wall.connectedNodes,
+                            boundProjectId: wall.bound ? (wall.projectId ?? null) : null,
+                            boundCommitId: wall.bound ? (wall.commitId ?? null) : null,
+                            boundSlideId: wall.bound ? (wall.slideId ?? null) : null,
+                            boundSource: existing?.boundSource ?? null
+                        });
+                    }
+                    return Array.from(byWallId.values());
                 });
             }),
-            galleryEngine.onWallBindingChanged(() => {
-                void queryClient.invalidateQueries({ queryKey: wallsQueryOptions().queryKey });
+            galleryEngine.onProjectPublishChanged((event) => {
+                if (!event.published) {
+                    queryClient.setQueryData<ProjectWithId[]>(
+                        publishedProjectsQueryKey,
+                        (current) =>
+                            (Array.isArray(current) ? current : []).filter(
+                                (project) => project._id !== event.projectId
+                            )
+                    );
+                }
+
+                void queryClient.invalidateQueries({
+                    queryKey: publishedProjectsQueryKey
+                });
             }),
-            galleryEngine.onWallUnbound(() => {
-                void queryClient.invalidateQueries({ queryKey: wallsQueryOptions().queryKey });
+            galleryEngine.onWallBindingChanged((event) => {
+                setWallBinding({
+                    wallId: event.wallId,
+                    bound: event.bound,
+                    projectId: event.projectId,
+                    commitId: event.commitId,
+                    slideId: event.slideId,
+                    source: event.source
+                });
+            }),
+            galleryEngine.onWallUnbound((event) => {
+                setWallBinding({
+                    wallId: event.wallId,
+                    bound: false
+                });
             }),
             galleryEngine.onBindOverrideRequested((req) => {
                 if (!wallId || req.wallId !== wallId) return;
@@ -134,28 +251,31 @@ function HomePage() {
     return (
         <div className="container mx-auto p-4 pt-24">
             {pendingOverride ? (
-                <div className="fixed top-4 left-1/2 z-50 w-[min(42rem,95vw)] -translate-x-1/2 rounded-lg border border-border bg-card p-4 shadow-lg">
-                    <div className="flex flex-col gap-3">
-                        <div className="text-sm font-semibold">Live Override Request</div>
-                        <div className="text-xs text-muted-foreground">
-                            Editor requested wall override for{' '}
-                            <span className="font-mono">{pendingOverride.wallId}</span>. This will
-                            replace the currently bound live content.
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                            Auto-deny in {overrideSecondsLeft}s
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => decideOverride(false)}
-                            >
-                                Deny
-                            </Button>
-                            <Button size="sm" onClick={() => decideOverride(true)}>
-                                Approve
-                            </Button>
+                <div className="fixed inset-0 z-[80] flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/85" />
+                    <div className="relative z-[81] w-[min(42rem,95vw)] rounded-lg border border-border bg-card p-4 shadow-2xl">
+                        <div className="flex flex-col gap-3">
+                            <div className="text-sm font-semibold">Live Override Request</div>
+                            <div className="text-xs text-muted-foreground">
+                                Editor requested wall override for{' '}
+                                <span className="font-mono">{pendingOverride.wallId}</span>. This
+                                will replace the currently bound live content.
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                                Auto-deny in {overrideSecondsLeft}s
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => decideOverride(false)}
+                                >
+                                    Deny
+                                </Button>
+                                <Button size="sm" onClick={() => decideOverride(true)}>
+                                    Approve
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>

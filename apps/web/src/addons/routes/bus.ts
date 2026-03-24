@@ -383,6 +383,18 @@ function broadcastWallBindingToGalleries(wallId: string) {
     }
 }
 
+function broadcastProjectPublishChanged(projectId: string, publishedCommitId: string | null) {
+    const payload = JSON.stringify({
+        type: 'project_publish_changed',
+        projectId,
+        published: Boolean(publishedCommitId),
+        publishedCommitId
+    } satisfies GSMessage);
+    for (const entry of allGalleries) {
+        entry.peer.send(payload);
+    }
+}
+
 async function sendGalleryStateSnapshot(peer: import('crossws').Peer, wallId?: string) {
     const candidateWallIds = new Set<string>();
     if (wallId) {
@@ -1325,6 +1337,20 @@ export default defineWebSocketHandler({
     asset: Record<string, unknown>
 ) => {
     broadcastAssetToEditorsByProject(projectId, asset);
+};
+
+// Bridge for non-WS wall binding mutations (gallery/admin server functions)
+(process as any).__BROADCAST_WALL_BINDING_CHANGED__ = (wallId: string) => {
+    broadcastWallBindingToEditors(wallId);
+    broadcastWallBindingToGalleries(wallId);
+};
+
+// Bridge for publish/unpublish mutations performed via server functions
+(process as any).__BROADCAST_PROJECT_PUBLISH_CHANGED__ = (
+    projectId: string,
+    publishedCommitId: string | null
+) => {
+    broadcastProjectPublishChanged(projectId, publishedCommitId);
 };
 
 // Bridge for YJS text updates — scope-targeted upsert into bus state + fanout.

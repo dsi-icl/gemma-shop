@@ -333,6 +333,8 @@ export async function publishCommit(projectId: string, commitId: string | null, 
         createdAt: new Date()
     });
 
+    process.__BROADCAST_PROJECT_PUBLISH_CHANGED__?.(projectId, commitId);
+
     return isPublishing;
 }
 

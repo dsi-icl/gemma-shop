@@ -111,4 +111,6 @@ export async function bindWallToScope(
         },
         { upsert: true }
     );
+
+    process.__BROADCAST_WALL_BINDING_CHANGED__?.(wallId);
 }

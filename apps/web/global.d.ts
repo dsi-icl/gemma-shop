@@ -26,6 +26,11 @@ declare global {
             __SCOPED_STAGE_STATE__?: Map<ScopeKey, ScopeState>;
             __BROADCAST_EDITORS__?: (data: GSMessage) => void;
             __BROADCAST_ASSET_ADDED__?: (projectId: string, asset: Record<string, unknown>) => void;
+            __BROADCAST_WALL_BINDING_CHANGED__?: (wallId: string) => void;
+            __BROADCAST_PROJECT_PUBLISH_CHANGED__?: (
+                projectId: string,
+                publishedCommitId: string | null
+            ) => void;
             __YJS_UPSERT_LAYER__?: (payload: {
                 projectId: string;
                 commitId: string;

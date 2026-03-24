@@ -65,6 +65,8 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
 - Broadcast bridges:
     - `__BROADCAST_EDITORS__` for processing progress
     - `__BROADCAST_ASSET_ADDED__` for newly created assets
+    - `__BROADCAST_WALL_BINDING_CHANGED__` for server-side bind/unbind mutations
+    - `__BROADCAST_PROJECT_PUBLISH_CHANGED__` for publish/unpublish propagation to gallery peers
 
 For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see [PIPING](./docs/BUS_PIPING.md).
 
@@ -72,7 +74,11 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
 
 - `gallery` socket scaffolding is now available via `apps/web/src/lib/galleryEngine.ts`.
 - Initial `/bus` handshake support for `specimen: 'gallery'` and `gallery_state` snapshots is in place.
-- Some gallery behavior is still query-driven and will be migrated incrementally to socket events in follow-up slices (bind override approval, publish/unpublish live feed, admin unbind propagation).
+- Implemented over WS:
+    - bind override approval flow for editor bind requests
+    - publish/unpublish live feed
+    - admin/gallery wall bind/unbind propagation
+- Remaining migration work is mostly UX-level data shaping and removing residual query polling paths.
 
 ### 2) Editor State (`apps/web/src/lib/editorStore.ts`)
 

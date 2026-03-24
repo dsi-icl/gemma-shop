@@ -215,6 +215,8 @@ export async function adminUnbindWall(wallId: string) {
             }
         }
     );
+
+    process.__BROADCAST_WALL_BINDING_CHANGED__?.(wallId);
 }
 
 export async function adminListPublicAssets() {
