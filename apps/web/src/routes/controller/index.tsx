@@ -33,6 +33,8 @@ const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 const COLS = 16;
 const ROWS = 4;
+const BINDING_SIGNAL_TIMEOUT_MS = 4000;
+const HYDRATE_TIMEOUT_MS = 5000;
 
 export const Route = createFileRoute('/controller/')({
     component: Controller
@@ -43,6 +45,7 @@ interface BindingStatus {
     projectId?: string;
     commitId?: string;
     slideId?: string;
+    customRenderUrl?: string;
 }
 
 interface SlideEntry {
@@ -184,12 +187,16 @@ function Controller() {
         setHasBindingSignal(false);
         return engine.onBindingStatus((status) => {
             setHasBindingSignal(true);
+            if (status.bound && status.customRenderUrl) {
+                setRenderState({ hydrationReady: true, customRenderUrl: status.customRenderUrl });
+            }
             setBinding((prev) => {
                 if (
                     prev.bound === status.bound &&
                     prev.projectId === status.projectId &&
                     prev.commitId === status.commitId &&
-                    prev.slideId === status.slideId
+                    prev.slideId === status.slideId &&
+                    prev.customRenderUrl === status.customRenderUrl
                 ) {
                     return prev;
                 }
@@ -197,6 +204,20 @@ function Controller() {
             });
         });
     }, [engine]);
+
+    // Public/controller fallback: do not stay blocked forever when bus status cannot be reached.
+    useEffect(() => {
+        if (!engine) {
+            setHasBindingSignal(true);
+            return;
+        }
+        if (hasBindingSignal) return;
+        const timeout = window.setTimeout(() => {
+            setHasBindingSignal(true);
+            setBinding((prev) => (prev.bound ? prev : { bound: false }));
+        }, BINDING_SIGNAL_TIMEOUT_MS);
+        return () => window.clearTimeout(timeout);
+    }, [engine, hasBindingSignal]);
 
     // Hydrate metadata from bus is authoritative for custom render config.
     // Reset readiness when binding changes so we don't flash stale content.
@@ -210,8 +231,30 @@ function Controller() {
             setRenderState({ hydrationReady: true, customRenderUrl: undefined });
             return;
         }
+        if (binding.customRenderUrl) {
+            setRenderState({ hydrationReady: true, customRenderUrl: binding.customRenderUrl });
+            return;
+        }
         setRenderState({ hydrationReady: false });
-    }, [hasBindingSignal, binding.bound, binding.projectId, binding.commitId, binding.slideId]);
+    }, [
+        hasBindingSignal,
+        binding.bound,
+        binding.projectId,
+        binding.commitId,
+        binding.slideId,
+        binding.customRenderUrl
+    ]);
+
+    // If bound but hydrate never arrives (network/proxy hiccup), fail open to avoid infinite spinner.
+    useEffect(() => {
+        if (!hasBindingSignal || !binding.bound || renderState.hydrationReady) return;
+        const timeout = window.setTimeout(() => {
+            setRenderState((prev) =>
+                prev.hydrationReady ? prev : { ...prev, hydrationReady: true }
+            );
+        }, HYDRATE_TIMEOUT_MS);
+        return () => window.clearTimeout(timeout);
+    }, [hasBindingSignal, binding.bound, renderState.hydrationReady]);
 
     // Fetch slides from the bound commit
     const loadSlides = useCallback(async (commitId: string) => {
@@ -468,6 +511,8 @@ function Controller() {
 
     useEffect(() => {
         if (!engine || !binding.projectId || !binding.commitId || !requestedSlideId) return;
+        if (!binding.slideId) return;
+        if (!pendingSlideId || pendingSlideId !== requestedSlideId) return;
         const bindKey = `${binding.projectId}:${binding.commitId}:${requestedSlideId}`;
         if (lastRequestedBindRef.current === bindKey) return;
         if (binding.slideId === requestedSlideId) {
@@ -477,7 +522,14 @@ function Controller() {
 
         lastRequestedBindRef.current = bindKey;
         engine.bindSlide(binding.projectId, binding.commitId, requestedSlideId);
-    }, [engine, binding.projectId, binding.commitId, binding.slideId, requestedSlideId]);
+    }, [
+        engine,
+        binding.projectId,
+        binding.commitId,
+        binding.slideId,
+        requestedSlideId,
+        pendingSlideId
+    ]);
 
     useEffect(() => {
         if (!pendingSlideId) return;
@@ -629,6 +681,23 @@ function Controller() {
 
         return () => observer.disconnect();
     }, []);
+
+    if (!wallId)
+        return (
+            <div
+                className={cn(
+                    'container flex h-full max-h-full min-h-0 min-w-full flex-col items-center justify-center gap-2 overflow-hidden bg-background text-center',
+                    showHideHeadAndFoot
+                        ? 'fixed inset-0 top-0 right-0 bottom-0 left-0 z-1000! p-0'
+                        : 'pt-18 pb-13'
+                )}
+            >
+                <h2 className="text-lg font-semibold">Controller unavailable</h2>
+                <p className="max-w-md text-sm text-muted-foreground">
+                    Missing wall id in URL. Open this page with <code>?w=&lt;wallId&gt;</code>.
+                </p>
+            </div>
+        );
 
     if (!renderState.hydrationReady)
         return (

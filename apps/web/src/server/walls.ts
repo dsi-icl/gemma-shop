@@ -95,7 +95,7 @@ export async function bindWallToScope(
     }
     hydrateWallNodes(wallId);
     broadcastToControllersByWallRaw(wallId, getWallHydratePayload(scopeId, wallId));
-    notifyControllers(wallId, true, projectId, commitId, resolvedSlideId);
+    notifyControllers(wallId, true, projectId, commitId, resolvedSlideId, scope.customRenderUrl);
 
     // Persist binding in DB
     await walls.updateOne(

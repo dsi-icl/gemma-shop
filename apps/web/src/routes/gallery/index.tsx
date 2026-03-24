@@ -282,10 +282,29 @@ function HomePage() {
         return targetWall.boundProjectId;
     }, [wallId, walls]);
 
+    const autoOpenBindingSignature = useMemo(() => {
+        if (!wallId) return null;
+        const targetWall = walls.find((wall) => wall.wallId === wallId);
+        if (!targetWall?.boundProjectId) return null;
+        const boundSource = (targetWall as { boundSource?: 'live' | 'gallery' | null }).boundSource;
+        if (boundSource === 'live') return null;
+        const withCommit = targetWall as {
+            boundCommitId?: string | null;
+            boundSlideId?: string | null;
+        };
+        return [
+            wallId,
+            targetWall.boundProjectId,
+            withCommit.boundCommitId ?? '',
+            withCommit.boundSlideId ?? '',
+            boundSource ?? ''
+        ].join(':');
+    }, [wallId, walls]);
+
     const autoOpenSignal = useMemo(() => {
-        if (!wallId || !autoOpenProjectId) return null;
-        return `wall:${wallId}:project:${autoOpenProjectId}:rev:${autoOpenRevision}`;
-    }, [wallId, autoOpenProjectId, autoOpenRevision]);
+        if (!wallId || !autoOpenProjectId || !autoOpenBindingSignature) return null;
+        return `wall:${wallId}:project:${autoOpenProjectId}:sig:${autoOpenBindingSignature}:rev:${autoOpenRevision}`;
+    }, [wallId, autoOpenProjectId, autoOpenBindingSignature, autoOpenRevision]);
 
     useEffect(() => {
         if (!autoOpenProjectId) return;

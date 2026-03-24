@@ -51,6 +51,7 @@ function MorphingDialogProvider({
     forceOpenSignal
 }: MorphingDialogProviderProps) {
     const [state, setState] = useState<MorphingDialogState>(defaultState);
+    const lastForceOpenSignalRef = useRef<string | number | null | undefined>(undefined);
     const closeRafRef = useRef<number | null>(null);
     const closeLockRef = useRef(false);
     const triggerCloseGuardRef = useRef(false);
@@ -153,9 +154,16 @@ function MorphingDialogProvider({
     }, [state, onStateChange]);
 
     useEffect(() => {
-        if (forceOpenSignal === null || forceOpenSignal === undefined) return;
+        if (forceOpenSignal === null || forceOpenSignal === undefined) {
+            lastForceOpenSignalRef.current = forceOpenSignal;
+            return;
+        }
+        if (Object.is(lastForceOpenSignalRef.current, forceOpenSignal)) return;
+        lastForceOpenSignalRef.current = forceOpenSignal;
+        // Keep reopen deterministic without remounting cards when a new force-open signal arrives.
+        if (state === 'fullscreen') return;
         setState('fullscreen');
-    }, [forceOpenSignal]);
+    }, [forceOpenSignal, state]);
 
     return (
         <MorphingDialogContext.Provider value={contextValue}>

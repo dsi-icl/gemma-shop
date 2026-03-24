@@ -777,7 +777,8 @@ export function notifyControllers(
     bound: boolean,
     projectId?: string,
     commitId?: string,
-    slideId?: string
+    slideId?: string,
+    customRenderUrl?: string
 ) {
     const entries = controllersByWallId.get(wallId);
     if (!entries) return;
@@ -788,7 +789,8 @@ export function notifyControllers(
         bound,
         ...(projectId ? { projectId } : {}),
         ...(commitId ? { commitId } : {}),
-        ...(slideId ? { slideId } : {})
+        ...(slideId ? { slideId } : {}),
+        ...(customRenderUrl ? { customRenderUrl } : {})
     } satisfies GSMessage);
 
     for (const entry of entries) entry.peer.send(payload);

@@ -81,6 +81,7 @@ function ProjectCardDialogBody({
     presetWallId
 }: ProjectCardProps) {
     const { state, fullscreen } = useMorphingDialog();
+    const loadInFlightRef = useRef(false);
     const [showWallPicker, setShowWallPicker] = useState(false);
     const [isLoadingWall, setIsLoadingWall] = useState(false);
     const [activeWallId, setActiveWallId] = useState<string | null>(null);
@@ -95,10 +96,12 @@ function ProjectCardDialogBody({
 
     const handleSelectWall = async (wallId: string) => {
         if (!onLoadProject) return;
+        if (loadInFlightRef.current) return;
         if (!wallId || wallId.trim().length === 0) {
             setErrorMessage('Invalid wall selection');
             return;
         }
+        loadInFlightRef.current = true;
         setIsLoadingWall(true);
         setErrorMessage(null);
         try {
@@ -111,6 +114,7 @@ function ProjectCardDialogBody({
             setErrorMessage(error?.message ?? 'Could not load project on this wall');
         } finally {
             setIsLoadingWall(false);
+            loadInFlightRef.current = false;
         }
     };
 
@@ -381,13 +385,12 @@ export function ProjectCard({
                                     {project.author}
                                 </MorphingDialogSubtitle>
                             </div>
-                            <button
-                                type="button"
-                                className="select-nonefocus-visible:ring-2 relative ml-1 flex h-6 w-6 shrink-0 scale-100 appearance-none items-center justify-center rounded-lg border transition-colors active:scale-[0.98]"
-                                aria-label="Open dialog"
+                            <span
+                                aria-hidden="true"
+                                className="relative ml-1 flex h-6 w-6 shrink-0 scale-100 items-center justify-center rounded-lg border"
                             >
                                 <EyeIcon size={12} />
-                            </button>
+                            </span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1">
                             {project.tags.slice(0, 3).map((tag) => (
