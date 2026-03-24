@@ -440,7 +440,41 @@ function Controller() {
         [activeLayers]
     );
     const sortedSlides = useMemo(() => [...slides].sort((a, b) => a.order - b.order), [slides]);
+    const videoLayers = useMemo(
+        () => activeLayers.filter((l) => l.type === 'video'),
+        [activeLayers]
+    );
     const canDraw = Boolean(engine && binding.bound && activeSlideId);
+
+    const handleVideoCommand = useCallback(
+        (cmd: 'play' | 'pause' | 'rewind') => {
+            if (!engine) return;
+            const now = Date.now();
+            for (const layer of videoLayers) {
+                if (cmd === 'play') {
+                    engine.sendJSON({
+                        type: 'video_play',
+                        numericId: layer.numericId,
+                        issuedAt: now
+                    });
+                } else if (cmd === 'pause') {
+                    engine.sendJSON({
+                        type: 'video_pause',
+                        numericId: layer.numericId,
+                        issuedAt: now
+                    });
+                } else {
+                    engine.sendJSON({
+                        type: 'video_seek',
+                        numericId: layer.numericId,
+                        mediaTime: 0,
+                        issuedAt: now
+                    });
+                }
+            }
+        },
+        [engine, videoLayers]
+    );
 
     const addLineLayer = useCallback(
         (line: number[]) => {
@@ -614,6 +648,8 @@ function Controller() {
                                     setStrokeWidth={setStrokeWidth}
                                     strokeDash={strokeDash}
                                     setStrokeDash={setStrokeDash}
+                                    hasVideoLayers={videoLayers.length > 0}
+                                    onVideoCommand={handleVideoCommand}
                                 />
 
                                 <ViewerSlatePreview

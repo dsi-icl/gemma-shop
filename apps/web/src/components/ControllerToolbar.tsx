@@ -1,7 +1,8 @@
-import { PencilSimpleIcon } from '@phosphor-icons/react';
+import { PauseIcon, PencilSimpleIcon, PlayIcon, SkipBackIcon } from '@phosphor-icons/react';
 import { Separator } from '@repo/ui/components/separator';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { TooltipProvider } from '@repo/ui/components/tooltip';
+import { useState } from 'react';
 
 import { StrokeTool } from '~/components/StrokeTool';
 
@@ -15,6 +16,8 @@ interface ControllerToolbarProps {
     setStrokeWidth: (width: number) => void;
     strokeDash: number[];
     setStrokeDash: (dash: number[]) => void;
+    hasVideoLayers: boolean;
+    onVideoCommand: (cmd: 'play' | 'pause' | 'rewind') => void;
 }
 
 export function ControllerToolbar({
@@ -26,8 +29,12 @@ export function ControllerToolbar({
     strokeWidth,
     setStrokeWidth,
     strokeDash,
-    setStrokeDash
+    setStrokeDash,
+    hasVideoLayers,
+    onVideoCommand
 }: ControllerToolbarProps) {
+    const [isPlaying, setIsPlaying] = useState(false);
+
     return (
         <TooltipProvider>
             <div
@@ -54,6 +61,47 @@ export function ControllerToolbar({
                     />
                 ) : null}
                 <Separator orientation="vertical" className="mx-1 my-1 h-6" />
+                {hasVideoLayers && (
+                    <>
+                        <TipButton
+                            tip="Rewind all videos"
+                            tipSide="bottom"
+                            variant="ghost"
+                            onClick={() => {
+                                onVideoCommand('rewind');
+                                setIsPlaying(false);
+                            }}
+                        >
+                            <SkipBackIcon />
+                        </TipButton>
+                        {isPlaying ? (
+                            <TipButton
+                                tip="Pause all videos"
+                                tipSide="bottom"
+                                variant="ghost"
+                                onClick={() => {
+                                    onVideoCommand('pause');
+                                    setIsPlaying(false);
+                                }}
+                            >
+                                <PauseIcon />
+                            </TipButton>
+                        ) : (
+                            <TipButton
+                                tip="Play all videos"
+                                tipSide="bottom"
+                                variant="ghost"
+                                onClick={() => {
+                                    onVideoCommand('play');
+                                    setIsPlaying(true);
+                                }}
+                            >
+                                <PlayIcon />
+                            </TipButton>
+                        )}
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
+                    </>
+                )}
             </div>
         </TooltipProvider>
     );
