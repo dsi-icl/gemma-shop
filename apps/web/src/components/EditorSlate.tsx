@@ -30,6 +30,8 @@ const SCREEN_H = 1080;
 const SNAP_GRID = 120;
 const COLS = 16;
 const ROWS = 4;
+const EDGE_SCROLL_ZONE_PX = 96;
+const EDGE_SCROLL_MAX_STEP_PX = 24;
 
 function normalizeRotationToQuadrant(rotation: number): number {
     return ((Math.round(rotation) % 360) + 360) % 360;
@@ -108,6 +110,60 @@ export function EditorSlate() {
         [layers]
     );
     const selectedLayerIdSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
+
+    const autoScrollStageDuringDrag = useCallback((evt: Event) => {
+        const slot = stageSlot.current;
+        if (!slot) return;
+
+        let clientX: number | null = null;
+        let clientY: number | null = null;
+
+        if (evt instanceof TouchEvent) {
+            const touch = evt.touches[0] ?? evt.changedTouches?.[0];
+            if (!touch) return;
+            clientX = touch.clientX;
+            clientY = touch.clientY;
+        } else if ('clientX' in evt && 'clientY' in evt) {
+            const pointerEvt = evt as MouseEvent;
+            clientX = pointerEvt.clientX;
+            clientY = pointerEvt.clientY;
+        }
+
+        if (clientX === null || clientY === null) return;
+
+        const rect = slot.getBoundingClientRect();
+
+        const edgeStep = (distanceIntoEdge: number) =>
+            Math.round(
+                Math.min(
+                    EDGE_SCROLL_MAX_STEP_PX,
+                    (distanceIntoEdge / EDGE_SCROLL_ZONE_PX) * EDGE_SCROLL_MAX_STEP_PX
+                )
+            );
+
+        let dx = 0;
+        if (clientX < rect.left + EDGE_SCROLL_ZONE_PX) {
+            dx = -edgeStep(rect.left + EDGE_SCROLL_ZONE_PX - clientX);
+        } else if (clientX > rect.right - EDGE_SCROLL_ZONE_PX) {
+            dx = edgeStep(clientX - (rect.right - EDGE_SCROLL_ZONE_PX));
+        }
+
+        let dy = 0;
+        if (clientY < rect.top + EDGE_SCROLL_ZONE_PX) {
+            dy = -edgeStep(rect.top + EDGE_SCROLL_ZONE_PX - clientY);
+        } else if (clientY > rect.bottom - EDGE_SCROLL_ZONE_PX) {
+            dy = edgeStep(clientY - (rect.bottom - EDGE_SCROLL_ZONE_PX));
+        }
+
+        if (dx !== 0) {
+            const maxLeft = Math.max(0, slot.scrollWidth - slot.clientWidth);
+            slot.scrollLeft = Math.max(0, Math.min(maxLeft, slot.scrollLeft + dx));
+        }
+        if (dy !== 0) {
+            const maxTop = Math.max(0, slot.scrollHeight - slot.clientHeight);
+            slot.scrollTop = Math.max(0, Math.min(maxTop, slot.scrollTop + dy));
+        }
+    }, []);
 
     const syncInsertionCenter = useCallback(() => {
         const slot = stageSlot.current;
@@ -484,10 +540,18 @@ export function EditorSlate() {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const handleTransform = (e: Pick<KonvaEventObject<Event>, 'target'>, numericId: number) => {
+    const handleTransform = (
+        e: Pick<KonvaEventObject<Event>, 'target' | 'evt'>,
+        numericId: number
+    ) => {
         const node = e.target as Konva.Shape;
         const layer = layersRef.current.get(numericId);
         if (!node || !layer) return;
+
+        if (node.isDragging()) {
+            autoScrollStageDuringDrag(e.evt);
+        }
+
         const activeAnchor = trRef.current?.getActiveAnchor() ?? null;
         node.setAttr('lastActiveAnchor', activeAnchor);
 
