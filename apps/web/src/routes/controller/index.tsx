@@ -26,7 +26,7 @@ import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { ControllerEngine } from '~/lib/controllerEngine';
 import { useControllerStore } from '~/lib/controllerStore';
 import type { LayerWithEditorState } from '~/lib/types';
-import { $getCommit, $getProject } from '~/server/projects.fns';
+import { $getCommit } from '~/server/projects.fns';
 
 const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
 const SCREEN_W = 1920;
@@ -51,6 +51,11 @@ interface SlideEntry {
     order: number;
     layers: LayerWithEditorState[];
     layerCount: number;
+}
+
+interface RenderState {
+    hydrationReady: boolean;
+    customRenderUrl?: string;
 }
 
 function buildLineLayer(
@@ -130,7 +135,8 @@ function Controller() {
         [wallId]
     );
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
-    const [customRenderUrl, setCustomRenderUrl] = useState<string | null | undefined>(null);
+    const [renderState, setRenderState] = useState<RenderState>({ hydrationReady: false });
+    const [hasBindingSignal, setHasBindingSignal] = useState(false);
     const [slides, setSlides] = useState<SlideEntry[]>([]);
     const [loadingSlides, setLoadingSlides] = useState(false);
     const [pendingSlideId, setPendingSlideId] = useState<string | null>(null);
@@ -174,7 +180,9 @@ function Controller() {
     // Listen for binding status from bus
     useEffect(() => {
         if (!engine) return;
+        setHasBindingSignal(false);
         return engine.onBindingStatus((status) => {
+            setHasBindingSignal(true);
             setBinding((prev) => {
                 if (
                     prev.bound === status.bound &&
@@ -189,24 +197,20 @@ function Controller() {
         });
     }, [engine]);
 
-    // Check if the bound project uses a custom render URL
+    // Hydrate metadata from bus is authoritative for custom render config.
+    // Reset readiness when binding changes so we don't flash stale content.
     useEffect(() => {
-        if (!binding.bound || !binding.projectId) {
-            setCustomRenderUrl(null);
+        if (!hasBindingSignal) {
+            setRenderState({ hydrationReady: false });
             return;
         }
-        let cancelled = false;
-        $getProject({ data: { id: binding.projectId } })
-            .then((project) => {
-                if (!cancelled) setCustomRenderUrl(project?.customRenderUrl ?? undefined);
-            })
-            .catch(() => {
-                if (!cancelled) setCustomRenderUrl(undefined);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [binding.bound, binding.projectId]);
+
+        if (!binding.bound) {
+            setRenderState({ hydrationReady: true, customRenderUrl: undefined });
+            return;
+        }
+        setRenderState({ hydrationReady: false });
+    }, [hasBindingSignal, binding.bound, binding.projectId, binding.commitId, binding.slideId]);
 
     // Fetch slides from the bound commit
     const loadSlides = useCallback(async (commitId: string) => {
@@ -305,10 +309,35 @@ function Controller() {
     useEffect(() => {
         if (!engine) return;
         return engine.onMessage((data) => {
-            const targetSlideId = binding.slideId ?? requestedSlideId ?? activeSlideId;
-            if (!targetSlideId) return;
-
             if (data.type === 'hydrate') {
+                setRenderState({
+                    hydrationReady: true,
+                    customRenderUrl: data.customRender?.url ?? undefined
+                });
+
+                let targetSlideId =
+                    binding.slideId ??
+                    requestedSlideId ??
+                    activeSlideId ??
+                    slidesRef.current[0]?.id ??
+                    null;
+
+                if (!targetSlideId) {
+                    // Fallback safety: accept hydrate even when slide metadata failed/raced.
+                    targetSlideId = binding.slideId ?? 'bound-slide';
+                    setSlides([
+                        {
+                            id: targetSlideId,
+                            name: 'Bound slide',
+                            order: 0,
+                            layers: [],
+                            layerCount: 0
+                        }
+                    ]);
+                    setActiveSlideId(targetSlideId);
+                    setRequestedSlideId(targetSlideId);
+                }
+
                 replaceSlideLayers(targetSlideId, data.layers as LayerWithEditorState[]);
                 const pendingId = pendingSlideIdRef.current;
                 if (pendingId && pendingId === targetSlideId) {
@@ -316,6 +345,9 @@ function Controller() {
                 }
                 return;
             }
+
+            const targetSlideId = binding.slideId ?? requestedSlideId ?? activeSlideId;
+            if (!targetSlideId) return;
             if (data.type === 'upsert_layer') {
                 upsertLayerOnSlide(targetSlideId, data.layer as LayerWithEditorState);
                 return;
@@ -574,7 +606,7 @@ function Controller() {
         return () => observer.disconnect();
     }, []);
 
-    if (customRenderUrl === null)
+    if (!renderState.hydrationReady)
         return (
             <div
                 className={cn(
@@ -588,7 +620,7 @@ function Controller() {
             </div>
         );
 
-    if (customRenderUrl)
+    if (renderState.customRenderUrl)
         return (
             <div
                 className={cn(

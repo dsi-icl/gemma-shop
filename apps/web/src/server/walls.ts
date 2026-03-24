@@ -5,7 +5,9 @@ import { ObjectId } from 'mongodb';
 
 import {
     bindWall,
+    broadcastToControllersByWallRaw,
     getOrCreateScope,
+    getWallHydratePayload,
     getWallNodeCount,
     hydrateWallNodes,
     internScope,
@@ -92,6 +94,7 @@ export async function bindWallToScope(
         await seedScopeFromDb(scopeId);
     }
     hydrateWallNodes(wallId);
+    broadcastToControllersByWallRaw(wallId, getWallHydratePayload(scopeId, wallId));
     notifyControllers(wallId, true, projectId, commitId, resolvedSlideId);
 
     // Persist binding in DB

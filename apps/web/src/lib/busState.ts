@@ -726,6 +726,10 @@ export function updateProjectCustomRenderSettings(
     }
     for (const wallId of affectedWallIds) {
         hydrateWallNodes(wallId);
+        const boundScope = wallBindings.get(wallId);
+        if (boundScope !== undefined) {
+            broadcastToControllersByWallRaw(wallId, getWallHydratePayload(boundScope, wallId));
+        }
     }
 }
 

@@ -496,6 +496,13 @@ handlers.set('bind_wall', ({ data }) => {
             notifyControllers(data.wallId, true, data.projectId, data.commitId, resolvedSlideId);
             try {
                 hydrateWallNodes(data.wallId);
+                // Controllers need the same scope hydrate as wall nodes on (re)bind.
+                // Without this, already-connected controllers can retain stale/empty state
+                // after slide switches and miss customRender metadata.
+                broadcastToControllersByWallRaw(
+                    data.wallId,
+                    getWallHydratePayload(scopeId, data.wallId)
+                );
             } catch (err) {
                 console.error(
                     `[WS] bind_wall hydrate failed for ${data.wallId} (${makeScopeLabel(data.projectId, data.commitId, resolvedSlideId)}):`,
