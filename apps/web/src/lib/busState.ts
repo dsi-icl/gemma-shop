@@ -340,10 +340,16 @@ export function getEditorHydratePayload(scopeId: ScopeId): string {
 export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string {
     const scope = scopedState.get(scopeId);
     if (!scope) return EMPTY_HYDRATE;
+    const boundSource = wallBindingSources.get(wallId);
 
     const controllerTransient = controllerTransientByWallId.get(wallId);
     if (!controllerTransient || controllerTransient.size === 0) {
-        return getEditorHydratePayload(scopeId);
+        return JSON.stringify({
+            type: 'hydrate',
+            layers: Array.from(scope.layers.values()),
+            ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {}),
+            ...(boundSource ? { boundSource } : {})
+        });
     }
 
     const mergedByNumericId = new Map<number, Layer>();
@@ -357,7 +363,8 @@ export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string 
     const payload = JSON.stringify({
         type: 'hydrate',
         layers: Array.from(mergedByNumericId.values()),
-        ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {})
+        ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {}),
+        ...(boundSource ? { boundSource } : {})
     });
     return payload;
 }

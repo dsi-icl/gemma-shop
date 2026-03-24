@@ -41,6 +41,7 @@ export class WallEngine {
     public viewport: Viewport;
     public wallId: string | null;
     public customRenderUrl: string | undefined;
+    public boundSource: 'live' | 'gallery' | undefined;
 
     private constructor(wallId: string, viewport: Viewport) {
         this.wallId = wallId;
@@ -268,6 +269,7 @@ export class WallEngine {
 
             if (data.type === 'hydrate') {
                 this.customRenderUrl = data.customRenderUrl;
+                this.boundSource = data.boundSource;
             }
 
             if (
