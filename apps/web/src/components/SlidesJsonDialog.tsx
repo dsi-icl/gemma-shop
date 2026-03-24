@@ -1,20 +1,11 @@
-import { CodeHighlightNode, CodeNode, $createCodeNode } from '@lexical/code';
-import { LexicalComposer } from '@lexical/react/LexicalComposer';
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { ContentEditable } from '@lexical/react/LexicalContentEditable';
-import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
-import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
-import { $createTextNode, $getRoot } from 'lexical';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { useEditorStore } from '~/lib/editorStore';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
 import { $getCommit } from '~/server/projects.fns';
-
-import theme from './editor/theme';
 
 interface SlidesJsonDialogProps {
     open: boolean;
@@ -62,76 +53,39 @@ function toSerializableLayer(layer: unknown): Layer | null {
     return rest as Layer;
 }
 
-function JsonContentPlugin({ json }: { json: string }) {
-    const [editor] = useLexicalComposerContext();
+function escapeHtml(input: string): string {
+    return input.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        let unsubscribe: (() => void) | null = null;
-        let cancelled = false;
+function highlightJson(input: string): string {
+    const escaped = escapeHtml(input);
+    const tokenRegex =
+        /("(\\u[a-zA-Z\d]{4}|\\[^u]|[^\\"])*"(\s*:)?|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
 
-        void (async () => {
-            try {
-                await import('prismjs');
-                await import('prismjs/components/prism-json');
-                const { registerCodeHighlighting } = await import('@lexical/code-prism');
-                if (cancelled) return;
-                unsubscribe = registerCodeHighlighting(editor);
-            } catch {
-                // Keep rendering plain code when Prism fails to initialize.
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-            unsubscribe?.();
-        };
-    }, [editor]);
-
-    useEffect(() => {
-        editor.update(() => {
-            const root = $getRoot();
-            root.clear();
-            const codeNode = $createCodeNode('json');
-            codeNode.append($createTextNode(json));
-            root.append(codeNode);
-        });
-    }, [editor, json]);
-
-    return null;
+    return escaped.replace(tokenRegex, (token) => {
+        if (token.startsWith('"') && token.endsWith(':')) {
+            return `<span class="text-cyan-400">${token}</span>`;
+        }
+        if (token.startsWith('"')) {
+            return `<span class="text-emerald-400">${token}</span>`;
+        }
+        if (token === 'true' || token === 'false') {
+            return `<span class="text-fuchsia-400">${token}</span>`;
+        }
+        if (token === 'null') {
+            return `<span class="text-slate-400">${token}</span>`;
+        }
+        return `<span class="text-amber-400">${token}</span>`;
+    });
 }
 
 function JsonCodeViewer({ json }: { json: string }) {
-    const initialConfig = useMemo(
-        () => ({
-            namespace: 'GemmaSlidesJsonViewer',
-            editable: false,
-            theme,
-            nodes: [CodeNode, CodeHighlightNode],
-            onError(error: Error) {
-                throw error;
-            }
-        }),
-        []
-    );
-
+    const highlighted = useMemo(() => highlightJson(json), [json]);
     return (
-        <div className="overflow-auto rounded-md border border-border bg-muted/20">
-            <div className="min-h-80 p-2">
-                <LexicalComposer initialConfig={initialConfig}>
-                    <RichTextPlugin
-                        contentEditable={
-                            <ContentEditable
-                                className="editor-input min-h-[60vh] w-full p-0 font-mono text-xs whitespace-pre outline-none"
-                                spellCheck={false}
-                            />
-                        }
-                        ErrorBoundary={LexicalErrorBoundary}
-                    />
-                    <JsonContentPlugin json={json} />
-                </LexicalComposer>
-            </div>
-        </div>
+        <pre
+            className="max-h-[70vh] min-h-80 overflow-auto rounded-md border border-border bg-zinc-950 p-3 font-mono text-xs leading-relaxed whitespace-pre text-zinc-100"
+            dangerouslySetInnerHTML={{ __html: highlighted }}
+        />
     );
 }
 
