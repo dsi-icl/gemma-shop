@@ -59,6 +59,7 @@ import {
     notifyControllersByCommit,
     broadcastAssetToEditorsByProject,
     getWallNodeCount,
+    galleriesByWallId,
     allGalleries,
     markIncomingBinary,
     markIncomingJson,
@@ -127,6 +128,21 @@ type Handler = (ctx: HandlerCtx) => void;
 const handlers = new Map<string, Handler>();
 const lastPlaybackCommandAt = new Map<string, number>();
 
+const BIND_OVERRIDE_TIMEOUT_MS = 20_000;
+
+interface PendingBindOverride {
+    requestId: string;
+    requesterPeerId: string;
+    wallId: string;
+    projectId: string;
+    commitId: string;
+    slideId: string;
+    timer: ReturnType<typeof setTimeout>;
+}
+
+const pendingBindOverrides = new Map<string, PendingBindOverride>();
+const pendingBindOverrideByWall = new Map<string, string>();
+
 function playbackCommandKey(scopeId: number, numericId: number): string {
     return `${scopeId}:${numericId}`;
 }
@@ -149,6 +165,122 @@ function shouldApplyPlaybackCommand(
 
 function clearPlaybackCommand(scopeId: number, numericId: number) {
     lastPlaybackCommandAt.delete(playbackCommandKey(scopeId, numericId));
+}
+
+async function performLiveBind(
+    wallId: string,
+    projectId: string,
+    commitId: string,
+    requestedSlideId: string
+): Promise<{ ok: boolean; resolvedSlideId?: string; error?: string }> {
+    try {
+        cancelWallUnbindGrace(wallId);
+        const [resolvedSlideId, project] = await Promise.all([
+            resolveBoundSlideId(projectId, commitId, requestedSlideId),
+            db.collection('projects').findOne(
+                { _id: new ObjectId(projectId) },
+                {
+                    projection: {
+                        customRenderUrl: 1,
+                        customRenderCompat: 1,
+                        customRenderProxy: 1
+                    }
+                }
+            )
+        ]);
+        if (!resolvedSlideId) {
+            return { ok: false, error: 'invalid_slide' };
+        }
+
+        const scopeId = internScope(projectId, commitId, resolvedSlideId);
+        const scope = getOrCreateScope(
+            scopeId,
+            projectId,
+            commitId,
+            resolvedSlideId,
+            project?.customRenderUrl,
+            project?.customRenderCompat,
+            project?.customRenderProxy
+        );
+        bindWall(wallId, scopeId, 'live');
+
+        if (scope.layers.size === 0) {
+            await seedScopeFromDb(scopeId);
+        }
+
+        notifyControllers(wallId, true, projectId, commitId, resolvedSlideId);
+        try {
+            hydrateWallNodes(wallId);
+            broadcastToControllersByWallRaw(wallId, getWallHydratePayload(scopeId, wallId));
+        } catch (err) {
+            console.error(
+                `[WS] bind_wall hydrate failed for ${wallId} (${makeScopeLabel(projectId, commitId, resolvedSlideId)}):`,
+                err
+            );
+        }
+
+        await db.collection('walls').updateOne(
+            { wallId },
+            {
+                $set: {
+                    boundProjectId: projectId,
+                    boundCommitId: commitId,
+                    boundSlideId: resolvedSlideId,
+                    boundSource: 'live',
+                    updatedAt: new Date().toISOString()
+                },
+                $setOnInsert: {
+                    wallId,
+                    name: wallId,
+                    createdAt: new Date().toISOString()
+                }
+            },
+            { upsert: true }
+        );
+
+        broadcastWallBindingToEditors(wallId);
+        broadcastWallBindingToGalleries(wallId);
+        broadcastWallNodeCountToEditors(wallId);
+
+        console.log(
+            `[WS] Wall ${wallId} bound to scope=${makeScopeLabel(projectId, commitId, resolvedSlideId)}`
+        );
+        return { ok: true, resolvedSlideId };
+    } catch (err) {
+        console.error(
+            `[WS] bind_wall failed for ${wallId} (${makeScopeLabel(projectId, commitId, requestedSlideId)}):`,
+            err
+        );
+        return { ok: false, error: 'bind_failed' };
+    }
+}
+
+function clearPendingBindOverride(requestId: string): PendingBindOverride | null {
+    const pending = pendingBindOverrides.get(requestId);
+    if (!pending) return null;
+    clearTimeout(pending.timer);
+    pendingBindOverrides.delete(requestId);
+    if (pendingBindOverrideByWall.get(pending.wallId) === requestId) {
+        pendingBindOverrideByWall.delete(pending.wallId);
+    }
+    return pending;
+}
+
+function sendBindOverrideResult(
+    requesterPeerId: string,
+    payload: Extract<GSMessage, { type: 'bind_override_result' }>
+) {
+    const requester = peers.get(requesterPeerId);
+    if (requester) {
+        sendJSON(requester.peer, payload);
+    }
+    const galleries = galleriesByWallId.get(payload.wallId);
+    if (galleries) {
+        const raw = JSON.stringify(payload);
+        for (const gallery of galleries) {
+            gallery.peer.send(raw);
+        }
+    }
 }
 
 function broadcastWallNodeCountToEditors(wallId: string) {
@@ -523,96 +655,160 @@ handlers.set('stage_save', ({ entry, data, scopeId }) => {
 });
 
 handlers.set('bind_wall', ({ data }) => {
+    // Editors should route through request_bind_wall (approval gate).
+    // Keep bind_wall for controllers and system/internal callers.
     void (async () => {
-        try {
-            cancelWallUnbindGrace(data.wallId);
-            const [resolvedSlideId, project] = await Promise.all([
-                resolveBoundSlideId(data.projectId, data.commitId, data.slideId),
-                db.collection('projects').findOne(
-                    { _id: new ObjectId(data.projectId) },
-                    {
-                        projection: {
-                            customRenderUrl: 1,
-                            customRenderCompat: 1,
-                            customRenderProxy: 1
-                        }
-                    }
-                )
-            ]);
-            if (!resolvedSlideId) {
-                console.warn(
-                    `[WS] Refusing bind_wall for ${data.wallId}: no valid slide for ${makeScopeLabel(data.projectId, data.commitId, data.slideId)}`
-                );
-                return;
-            }
+        await performLiveBind(data.wallId, data.projectId, data.commitId, data.slideId);
+    })();
+});
 
-            const scopeId = internScope(data.projectId, data.commitId, resolvedSlideId);
-            const scope = getOrCreateScope(
-                scopeId,
+handlers.set('request_bind_wall', ({ entry, data }) => {
+    if (entry.meta.specimen !== 'editor') {
+        sendJSON(entry.peer, {
+            type: 'bind_override_result',
+            requestId: data.requestId,
+            wallId: data.wallId,
+            allow: false,
+            reason: 'invalid'
+        });
+        return;
+    }
+
+    void (async () => {
+        const resolvedSlideId = await resolveBoundSlideId(
+            data.projectId,
+            data.commitId,
+            data.slideId
+        );
+        if (!resolvedSlideId) {
+            sendBindOverrideResult(entry.peer.id, {
+                type: 'bind_override_result',
+                requestId: data.requestId,
+                wallId: data.wallId,
+                allow: false,
+                reason: 'invalid'
+            });
+            return;
+        }
+
+        const targetScopeId = internScope(data.projectId, data.commitId, resolvedSlideId);
+        const currentScopeId = wallBindings.get(data.wallId);
+        const hasConflict = currentScopeId !== undefined && currentScopeId !== targetScopeId;
+
+        if (!hasConflict) {
+            const result = await performLiveBind(
+                data.wallId,
                 data.projectId,
                 data.commitId,
-                resolvedSlideId,
-                project?.customRenderUrl,
-                project?.customRenderCompat,
-                project?.customRenderProxy
+                resolvedSlideId
             );
-            bindWall(data.wallId, scopeId, 'live');
-
-            if (scope.layers.size === 0) {
-                // Fresh scope — auto-seed from DB before hydrating walls
-                await seedScopeFromDb(scopeId);
-            }
-
-            // Keep control-plane updates resilient even if hydrate throws.
-            notifyControllers(data.wallId, true, data.projectId, data.commitId, resolvedSlideId);
-            try {
-                hydrateWallNodes(data.wallId);
-                // Controllers need the same scope hydrate as wall nodes on (re)bind.
-                // Without this, already-connected controllers can retain stale/empty state
-                // after slide switches and miss customRender metadata.
-                broadcastToControllersByWallRaw(
-                    data.wallId,
-                    getWallHydratePayload(scopeId, data.wallId)
-                );
-            } catch (err) {
-                console.error(
-                    `[WS] bind_wall hydrate failed for ${data.wallId} (${makeScopeLabel(data.projectId, data.commitId, resolvedSlideId)}):`,
-                    err
-                );
-            }
-
-            await db.collection('walls').updateOne(
-                { wallId: data.wallId },
-                {
-                    $set: {
-                        boundProjectId: data.projectId,
-                        boundCommitId: data.commitId,
-                        boundSlideId: resolvedSlideId,
-                        boundSource: 'live',
-                        updatedAt: new Date().toISOString()
-                    },
-                    $setOnInsert: {
-                        wallId: data.wallId,
-                        name: data.wallId,
-                        createdAt: new Date().toISOString()
-                    }
-                },
-                { upsert: true }
-            );
-
-            broadcastWallBindingToEditors(data.wallId);
-            broadcastWallBindingToGalleries(data.wallId);
-            broadcastWallNodeCountToEditors(data.wallId);
-
-            console.log(
-                `[WS] Wall ${data.wallId} bound to scope=${makeScopeLabel(data.projectId, data.commitId, resolvedSlideId)}`
-            );
-        } catch (err) {
-            console.error(
-                `[WS] bind_wall failed for ${data.wallId} (${makeScopeLabel(data.projectId, data.commitId, data.slideId)}):`,
-                err
-            );
+            sendBindOverrideResult(entry.peer.id, {
+                type: 'bind_override_result',
+                requestId: data.requestId,
+                wallId: data.wallId,
+                allow: result.ok,
+                reason: result.ok ? 'not_required' : 'invalid'
+            });
+            return;
         }
+
+        const galleries = galleriesByWallId.get(data.wallId);
+        const hasGalleryApprover = Boolean(galleries && galleries.size > 0);
+        if (!hasGalleryApprover) {
+            const result = await performLiveBind(
+                data.wallId,
+                data.projectId,
+                data.commitId,
+                resolvedSlideId
+            );
+            sendBindOverrideResult(entry.peer.id, {
+                type: 'bind_override_result',
+                requestId: data.requestId,
+                wallId: data.wallId,
+                allow: result.ok,
+                reason: result.ok ? 'not_required' : 'invalid'
+            });
+            return;
+        }
+
+        const existingRequestId = pendingBindOverrideByWall.get(data.wallId);
+        if (existingRequestId) {
+            clearPendingBindOverride(existingRequestId);
+        }
+
+        const expiresAt = Date.now() + BIND_OVERRIDE_TIMEOUT_MS;
+        const timer = setTimeout(() => {
+            const pending = clearPendingBindOverride(data.requestId);
+            if (!pending) return;
+            sendBindOverrideResult(pending.requesterPeerId, {
+                type: 'bind_override_result',
+                requestId: pending.requestId,
+                wallId: pending.wallId,
+                allow: false,
+                reason: 'timeout'
+            });
+        }, BIND_OVERRIDE_TIMEOUT_MS);
+
+        pendingBindOverrides.set(data.requestId, {
+            requestId: data.requestId,
+            requesterPeerId: entry.peer.id,
+            wallId: data.wallId,
+            projectId: data.projectId,
+            commitId: data.commitId,
+            slideId: resolvedSlideId,
+            timer
+        });
+        pendingBindOverrideByWall.set(data.wallId, data.requestId);
+
+        const requestPayload = JSON.stringify({
+            type: 'bind_override_requested',
+            requestId: data.requestId,
+            wallId: data.wallId,
+            projectId: data.projectId,
+            commitId: data.commitId,
+            slideId: resolvedSlideId,
+            expiresAt
+        } satisfies GSMessage);
+
+        for (const galleryEntry of galleries!) {
+            galleryEntry.peer.send(requestPayload);
+        }
+    })();
+});
+
+handlers.set('bind_override_decision', ({ entry, data }) => {
+    if (entry.meta.specimen !== 'gallery') return;
+    if (entry.meta.wallId !== data.wallId) return;
+
+    const pending = clearPendingBindOverride(data.requestId);
+    if (!pending) return;
+    if (pending.wallId !== data.wallId) return;
+
+    if (!data.allow) {
+        sendBindOverrideResult(pending.requesterPeerId, {
+            type: 'bind_override_result',
+            requestId: pending.requestId,
+            wallId: pending.wallId,
+            allow: false,
+            reason: 'denied'
+        });
+        return;
+    }
+
+    void (async () => {
+        const result = await performLiveBind(
+            pending.wallId,
+            pending.projectId,
+            pending.commitId,
+            pending.slideId
+        );
+        sendBindOverrideResult(pending.requesterPeerId, {
+            type: 'bind_override_result',
+            requestId: pending.requestId,
+            wallId: pending.wallId,
+            allow: result.ok,
+            reason: result.ok ? 'approved' : 'invalid'
+        });
     })();
 });
 
@@ -920,6 +1116,12 @@ export default defineWebSocketHandler({
     },
 
     close(peer) {
+        // Cancel pending override requests from disconnected requester.
+        for (const [requestId, pending] of pendingBindOverrides) {
+            if (pending.requesterPeerId !== peer.id) continue;
+            clearPendingBindOverride(requestId);
+        }
+
         const meta = unregisterPeer(peer.id);
         if (meta?.specimen === 'editor') {
             const remainingEditors = editorsByScope.get(meta.scopeId)?.size ?? 0;

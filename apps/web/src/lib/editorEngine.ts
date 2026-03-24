@@ -27,6 +27,9 @@ type PlaybackCallback = (
     playback: Extract<Layer, { type: 'video' }>['playback']
 ) => void;
 type ConnectionStatusCallback = (status: ConnectionStatus) => void;
+type BindOverrideResultCallback = (
+    data: Extract<GSMessage, { type: 'bind_override_result' }>
+) => void;
 
 export class EditorEngine {
     private rws: ReconnectingWebSocket;
@@ -36,6 +39,7 @@ export class EditorEngine {
     private playbackStates = new Map<number, Extract<Layer, { type: 'video' }>['playback']>();
     private saveCallbacks = new Set<SaveResponseCallback>();
     private connectionStatusCallbacks = new Set<ConnectionStatusCallback>();
+    private bindOverrideResultCallbacks = new Set<BindOverrideResultCallback>();
     private bufferedHydration: Extract<GSMessage, { type: 'hydrate' }> | null = null;
     private hydrateResolver: ((data: Extract<GSMessage, { type: 'hydrate' }>) => void) | null =
         null;
@@ -142,6 +146,11 @@ export class EditorEngine {
                 return;
             }
 
+            if (data.type === 'bind_override_result') {
+                this.bindOverrideResultCallbacks.forEach((cb) => cb(data));
+                return;
+            }
+
             if (data.type === 'hydrate') {
                 this.bufferedHydration = data;
                 data.layers.forEach((l) => {
@@ -176,6 +185,7 @@ export class EditorEngine {
         this.binaryCallbacks.clear();
         this.playbackCallbacks.clear();
         this.connectionStatusCallbacks.clear();
+        this.bindOverrideResultCallbacks.clear();
     }
 
     /**
@@ -259,6 +269,7 @@ export class EditorEngine {
 
     /** Wall currently bound to this editor session (if any) */
     public boundWallId: string | null = null;
+    private lastBindRequestId: string | null = null;
 
     /** Join a project/commit/slide scope. Re-sends hello if already connected. */
     public joinScope(projectId: string, commitId: string, slideId: string) {
@@ -278,8 +289,11 @@ export class EditorEngine {
 
         // Auto-rebind the wall to the new slide when navigating
         if (this.boundWallId) {
+            const requestId = this.makeBindRequestId();
+            this.lastBindRequestId = requestId;
             this.sendJSON({
-                type: 'bind_wall',
+                type: 'request_bind_wall',
+                requestId,
                 wallId: this.boundWallId,
                 projectId,
                 commitId,
@@ -291,8 +305,11 @@ export class EditorEngine {
     /** Bind a wall to follow this editor's current scope */
     public bindWall(wallId: string, projectId: string, commitId: string, slideId: string) {
         this.boundWallId = wallId;
+        const requestId = this.makeBindRequestId();
+        this.lastBindRequestId = requestId;
         this.sendJSON({
-            type: 'bind_wall',
+            type: 'request_bind_wall',
+            requestId,
             wallId,
             projectId,
             commitId,
@@ -336,9 +353,25 @@ export class EditorEngine {
         };
     }
 
+    public onBindOverrideResult(cb: BindOverrideResultCallback) {
+        this.bindOverrideResultCallbacks.add(cb);
+        return () => {
+            this.bindOverrideResultCallbacks.delete(cb);
+        };
+    }
+
+    public getLastBindRequestId() {
+        return this.lastBindRequestId;
+    }
+
     /** Current connection status */
     public get connectionStatus(): ConnectionStatus {
         return this.rws.status;
+    }
+
+    private makeBindRequestId(): string {
+        const rand = Math.random().toString(36).slice(2, 10);
+        return `bind_${Date.now()}_${rand}`;
     }
 
     public sendJSON = (data: GSMessage) => {
