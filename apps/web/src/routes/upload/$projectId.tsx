@@ -66,7 +66,11 @@ function MobileUpload() {
                     restrictions: { allowedFileTypes: ['image/*', 'video/*'] }
                 }).use(Tus, {
                     endpoint: '/api/uploads/',
-                    chunkSize: 5 * 1024 * 1024
+                    chunkSize: 5 * 1024 * 1024,
+                    // Avoid reusing stale absolute upload URLs from previous sessions
+                    // (e.g. cached http:// links after moving behind HTTPS).
+                    storeFingerprintForResuming: false,
+                    removeFingerprintOnSuccess: true
                 });
             uppyRef.current = uppy;
 
