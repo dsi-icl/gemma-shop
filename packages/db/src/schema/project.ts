@@ -24,6 +24,7 @@ export const ProjectSchema = z.object({
     heroImages: z.array(z.string()).default([]),
     customControlUrl: z.string().optional(),
     customRenderUrl: z.string().optional(),
+    customRenderCompat: z.boolean().default(false),
     collaborators: z.array(Collaborator).default([]),
     // DAG Pointer (content history, from CommitSchema)
     headCommitId: oid.nullable().default(null),
@@ -44,6 +45,7 @@ export const CreateProjectInput = z.object({
     heroImages: z.array(z.string()).default([]),
     customControlUrl: z.string().optional(),
     customRenderUrl: z.string().optional(),
+    customRenderCompat: z.boolean().default(false),
     collaborators: z.array(Collaborator).default([])
 });
 export type CreateProjectInput = z.infer<typeof CreateProjectInput>;
@@ -57,6 +59,7 @@ export const UpdateProjectInput = z.object({
     heroImages: z.array(z.string()).optional(),
     customControlUrl: z.string().optional(),
     customRenderUrl: z.string().optional(),
+    customRenderCompat: z.boolean().optional(),
     collaborators: z.array(Collaborator).optional(),
     publishedCommitId: z.string().nullable().optional()
 });

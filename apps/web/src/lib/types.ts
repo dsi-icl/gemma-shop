@@ -171,6 +171,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         type: z.literal('hydrate'),
         layers: LayerSchema.array(),
         customRenderUrl: z.string().optional(),
+        customRenderCompat: z.boolean().optional(),
         boundSource: z.enum(['live', 'gallery']).optional()
     }),
     z.object({ type: z.literal('rehydrate_please') }),
@@ -305,6 +306,8 @@ export interface ScopeState {
     hydrateCache: string | null;
     /** Optional custom render URL from the project configuration. */
     customRenderUrl?: string;
+    /** Whether the custom render URL should be displayed in compatibility mode. */
+    customRenderCompat?: boolean;
 }
 
 export interface Slide {

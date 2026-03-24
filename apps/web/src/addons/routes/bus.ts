@@ -461,7 +461,7 @@ handlers.set('bind_wall', ({ data }) => {
                     .collection('projects')
                     .findOne(
                         { _id: new ObjectId(data.projectId) },
-                        { projection: { customRenderUrl: 1 } }
+                        { projection: { customRenderUrl: 1, customRenderCompat: 1 } }
                     )
             ]);
             if (!resolvedSlideId) {
@@ -477,7 +477,8 @@ handlers.set('bind_wall', ({ data }) => {
                 data.projectId,
                 data.commitId,
                 resolvedSlideId,
-                project?.customRenderUrl
+                project?.customRenderUrl,
+                project?.customRenderCompat
             );
             bindWall(data.wallId, scopeId, 'live');
 

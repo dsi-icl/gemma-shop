@@ -12,7 +12,7 @@ import type {
 } from '@repo/db/schema';
 import { ObjectId } from 'mongodb';
 
-import { scopedState, updateProjectCustomRenderUrl } from '~/lib/busState';
+import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { ASSET_DIR } from '~/lib/serverVariables';
 
 const projects = db.collection('projects');
@@ -222,9 +222,13 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
         createdAt: new Date()
     });
 
-    // Live-push customRenderUrl changes to any bound walls
-    if ('customRenderUrl' in updates) {
-        updateProjectCustomRenderUrl(_id, updates.customRenderUrl);
+    // Live-push custom render settings changes to any bound walls
+    if ('customRenderUrl' in updates || 'customRenderCompat' in updates) {
+        updateProjectCustomRenderSettings(
+            _id,
+            updates.customRenderUrl ?? existing.customRenderUrl,
+            updates.customRenderCompat
+        );
     }
 
     return serializeProject(result);

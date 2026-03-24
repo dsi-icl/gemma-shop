@@ -13,6 +13,8 @@ import { WallEngine, type Viewport } from '~/lib/wallEngine';
 // Define the physical screen resolution
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
+const COLS = 16;
+const ROWS = 4;
 
 export const Route = createFileRoute('/wall/')({
     component: WallApp
@@ -21,6 +23,7 @@ export const Route = createFileRoute('/wall/')({
 function WallApp() {
     const [layers, setLayers] = useState<LayerWithWallComponentState[]>([]);
     const [customRenderUrl, setCustomRenderUrl] = useState<string | undefined>();
+    const [customRenderCompat, setCustomRenderCompat] = useState(false);
     const [frameabilityByUrl, setFrameabilityByUrl] = useState<
         Record<string, { ok: boolean; reason?: string; fallback?: string }>
     >({});
@@ -67,6 +70,7 @@ function WallApp() {
                 engine.layers.clear();
                 setLayers(data.layers);
                 setCustomRenderUrl(data.customRenderUrl);
+                setCustomRenderCompat(Boolean(data.customRenderCompat));
             } else if (data.type === 'upsert_layer') {
                 setLayers((prev) => {
                     const existing = prev.find((l) => l.numericId === data.layer.numericId);
@@ -205,18 +209,23 @@ function WallApp() {
 
     if (customRenderUrl) {
         const iframeSrc = new URL(customRenderUrl);
-        iframeSrc.searchParams.set('c', String(myViewport.x / SCREEN_W));
-        iframeSrc.searchParams.set('r', String(myViewport.y / SCREEN_H));
+        if (!customRenderCompat) {
+            iframeSrc.searchParams.set('c', String(myViewport.x / SCREEN_W));
+            iframeSrc.searchParams.set('r', String(myViewport.y / SCREEN_H));
+        }
+        const worldWidth = SCREEN_W * COLS;
+        const worldHeight = SCREEN_H * ROWS;
         return (
             <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">
                 <iframe
+                    title="Custom Render Wall"
                     src={iframeSrc.toString()}
                     style={{
                         position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: `${SCREEN_W}px`,
-                        height: `${SCREEN_H}px`,
+                        top: customRenderCompat ? `${-myViewport.y}px` : 0,
+                        left: customRenderCompat ? `${-myViewport.x}px` : 0,
+                        width: customRenderCompat ? `${worldWidth}px` : `${SCREEN_W}px`,
+                        height: customRenderCompat ? `${worldHeight}px` : `${SCREEN_H}px`,
                         border: 'none'
                     }}
                     allow="autoplay; fullscreen"

@@ -271,7 +271,8 @@ export function getOrCreateScope(
     projectId: string,
     commitId: string,
     slideId: string,
-    customRenderUrl?: string
+    customRenderUrl?: string,
+    customRenderCompat?: boolean
 ): ScopeState {
     let scope = scopedState.get(scopeId);
     if (!scope) {
@@ -282,7 +283,8 @@ export function getOrCreateScope(
             slideId,
             dirty: false,
             hydrateCache: null,
-            customRenderUrl
+            customRenderUrl,
+            customRenderCompat: customRenderCompat ?? false
         };
         scopedState.set(scopeId, scope);
 
@@ -292,9 +294,17 @@ export function getOrCreateScope(
             commitToScopeIds.set(commitId, scopeIds);
         }
         scopeIds.add(scopeId);
-    } else if (customRenderUrl !== undefined && scope.customRenderUrl !== customRenderUrl) {
-        scope.customRenderUrl = customRenderUrl;
-        scope.hydrateCache = null;
+    } else {
+        let changed = false;
+        if (customRenderUrl !== undefined && scope.customRenderUrl !== customRenderUrl) {
+            scope.customRenderUrl = customRenderUrl;
+            changed = true;
+        }
+        if (customRenderCompat !== undefined && scope.customRenderCompat !== customRenderCompat) {
+            scope.customRenderCompat = customRenderCompat;
+            changed = true;
+        }
+        if (changed) scope.hydrateCache = null;
     }
     return scope;
 }
@@ -331,7 +341,10 @@ export function getEditorHydratePayload(scopeId: ScopeId): string {
         scope.hydrateCache = JSON.stringify({
             type: 'hydrate',
             layers: Array.from(scope.layers.values()),
-            ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {})
+            ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {}),
+            ...(scope.customRenderUrl
+                ? { customRenderCompat: Boolean(scope.customRenderCompat) }
+                : {})
         });
     }
     return scope.hydrateCache;
@@ -348,6 +361,9 @@ export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string 
             type: 'hydrate',
             layers: Array.from(scope.layers.values()),
             ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {}),
+            ...(scope.customRenderUrl
+                ? { customRenderCompat: Boolean(scope.customRenderCompat) }
+                : {}),
             ...(boundSource ? { boundSource } : {})
         });
     }
@@ -364,6 +380,7 @@ export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string 
         type: 'hydrate',
         layers: Array.from(mergedByNumericId.values()),
         ...(scope.customRenderUrl ? { customRenderUrl: scope.customRenderUrl } : {}),
+        ...(scope.customRenderUrl ? { customRenderCompat: Boolean(scope.customRenderCompat) } : {}),
         ...(boundSource ? { boundSource } : {})
     });
     return payload;
@@ -662,14 +679,18 @@ export function hydrateWallNodes(wallId: string) {
  * Update customRenderUrl for all active scopes belonging to a project,
  * invalidate their hydrate caches, and re-hydrate any bound walls.
  */
-export function updateProjectCustomRenderUrl(
+export function updateProjectCustomRenderSettings(
     projectId: string,
-    customRenderUrl: string | undefined
+    customRenderUrl: string | undefined,
+    customRenderCompat?: boolean
 ) {
     const affectedWallIds = new Set<string>();
     for (const [scopeId, scope] of scopedState) {
         if (scope.projectId !== projectId) continue;
         scope.customRenderUrl = customRenderUrl;
+        if (customRenderCompat !== undefined) {
+            scope.customRenderCompat = customRenderCompat;
+        }
         scope.hydrateCache = null;
         // Find walls bound to this scope
         for (const [wallId, boundScopeId] of wallBindings) {

@@ -55,6 +55,7 @@ export function ProjectForm({
             heroImages: [],
             customControlUrl: '',
             customRenderUrl: '',
+            customRenderCompat: false,
             collaborators: [],
             ...defaultValues
         },
@@ -72,6 +73,7 @@ export function ProjectForm({
             heroImages: form.getFieldValue('heroImages'),
             customControlUrl: form.getFieldValue('customControlUrl') || undefined,
             customRenderUrl: form.getFieldValue('customRenderUrl') || undefined,
+            customRenderCompat: form.getFieldValue('customRenderCompat'),
             collaborators: form.getFieldValue('collaborators')
         }),
         [form]
@@ -269,6 +271,24 @@ export function ProjectForm({
                                         scheduleAutoSave();
                                     }}
                                 />
+                            </div>
+                        )}
+                    </form.Field>
+
+                    <form.Field name="customRenderCompat">
+                        {(field) => (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    id={field.name}
+                                    type="checkbox"
+                                    checked={field.state.value}
+                                    onBlur={field.handleBlur}
+                                    onChange={(e) => {
+                                        field.handleChange(e.target.checked);
+                                        scheduleAutoSave();
+                                    }}
+                                />
+                                <Label htmlFor={field.name}>Custom Render Compat</Label>
                             </div>
                         )}
                     </form.Field>
