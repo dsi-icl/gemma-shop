@@ -32,6 +32,8 @@ const source =
     ) || 'https://github.com/dsi-icl/gemma-cast';
 
 const image = process.env.IMAGE_NAME || 'gemma-shop:local';
+const buildSourceMaps = process.env.BUILD_SOURCEMAPS || 'false';
+const keepSourceMaps = process.env.KEEP_SOURCE_MAPS || buildSourceMaps;
 const extraArgs = process.argv.slice(2);
 
 const dockerArgs = [
@@ -46,6 +48,10 @@ const dockerArgs = [
     `OCI_REVISION=${fullRevision}`,
     '--build-arg',
     `OCI_SOURCE=${source}`,
+    '--build-arg',
+    `BUILD_SOURCEMAPS=${buildSourceMaps}`,
+    '--build-arg',
+    `KEEP_SOURCE_MAPS=${keepSourceMaps}`,
     ...extraArgs,
     '.'
 ];
@@ -55,6 +61,8 @@ console.log(`[docker:build] OCI_CREATED=${created}`);
 console.log(`[docker:build] OCI_VERSION=${version}`);
 console.log(`[docker:build] OCI_REVISION=${fullRevision}`);
 console.log(`[docker:build] OCI_SOURCE=${source}`);
+console.log(`[docker:build] BUILD_SOURCEMAPS=${buildSourceMaps}`);
+console.log(`[docker:build] KEEP_SOURCE_MAPS=${keepSourceMaps}`);
 
 const docker = spawnSync('docker', dockerArgs, { stdio: 'inherit' });
 if (docker.status !== 0) {

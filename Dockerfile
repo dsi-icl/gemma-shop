@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1.7
 
 FROM oven/bun:1.3.11 AS build
+ARG BUILD_SOURCEMAPS=false
 WORKDIR /workspace
 ENV TURBO_TELEMETRY_DISABLED=1
+ENV BUILD_SOURCEMAPS=${BUILD_SOURCEMAPS}
 
 # Install dependencies first for better cache reuse.
 COPY package.json bun.lock bunfig.toml turbo.json ./
@@ -21,6 +23,7 @@ COPY . .
 RUN NITRO_PRESET=bun bun run build --filter=@repo/web
 
 FROM oven/bun:1.3.11 AS runtime
+ARG KEEP_SOURCE_MAPS=false
 
 ARG OCI_CREATED=unknown
 ARG OCI_VERSION=dev
@@ -91,7 +94,11 @@ COPY --from=build --chown=app:app /workspace/apps/web/.output/public ./.output/p
 COPY --from=build --chown=app:app /workspace/apps/web/.output/nitro.json ./.output/nitro.json
 
 # Source maps are not needed in production runtime image.
-RUN find ./.output -type f -name '*.map' -delete || true
+RUN if [ "${KEEP_SOURCE_MAPS}" = "true" ] || [ "${KEEP_SOURCE_MAPS}" = "1" ]; then \
+      echo "Keeping sourcemaps in runtime image"; \
+    else \
+      find ./.output -type f -name '*.map' -delete || true; \
+    fi
 
 COPY apps/web/container-start.sh /usr/local/bin/container-start.sh
 RUN sed -i 's/\r$//' /usr/local/bin/container-start.sh && chmod +x /usr/local/bin/container-start.sh

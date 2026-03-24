@@ -8,8 +8,13 @@ import { defineConfig } from 'vite';
 import { thirdPartyNoticesPlugin } from './plugins/thirdPartyNotices';
 import { ttfPlugin } from './plugins/ttf';
 
+const shouldEnableSourceMaps = ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.BUILD_SOURCEMAPS ?? '').toLowerCase()
+);
+
 export default defineConfig({
     build: {
+        sourcemap: shouldEnableSourceMaps,
         rollupOptions: {
             // Keep Playwright out of bundled server chunks. It is a runtime-only dependency
             // for the screenshot endpoint and may reference deep optional modules.

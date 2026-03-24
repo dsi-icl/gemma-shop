@@ -123,6 +123,14 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
 - Docker test stack down: `bun run docker:test:down`
 - Docker test stack reset (remove volumes): `bun run docker:test:reset`
 
+### Container Source Maps (Debug Builds)
+
+- Local debug image with source maps embedded:
+  `BUILD_SOURCEMAPS=true KEEP_SOURCE_MAPS=true bun run docker:build`
+- Local production-like image without source maps:
+  `BUILD_SOURCEMAPS=false KEEP_SOURCE_MAPS=false bun run docker:build`
+- CI workflow `Container Image (OCI)` supports a manual `workflow_dispatch` toggle (`include_sourcemaps`) to keep `.map` files in published images.
+
 ## Main application entry points
 
 - `/gallery` project listing

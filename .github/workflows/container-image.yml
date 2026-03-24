@@ -1,4 +1,4 @@
-name: Container Image (OCI)
+﻿name: Container Image (OCI)
 
 on:
     push:
@@ -8,6 +8,12 @@ on:
         tags:
             - 'v*'
     workflow_dispatch:
+        inputs:
+            include_sourcemaps:
+                description: Keep JS sourcemaps in the container image for debugging
+                required: false
+                default: false
+                type: boolean
 
 permissions:
     contents: read
@@ -34,6 +40,15 @@ jobs:
                     echo "version=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
                   fi
 
+            - name: Resolve sourcemap mode
+              id: sourcemaps
+              run: |
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.include_sourcemaps }}" == "true" ]]; then
+                    echo "enabled=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "enabled=false" >> "$GITHUB_OUTPUT"
+                  fi
+
             - name: Build OCI image with Buildah
               id: build
               uses: redhat-actions/buildah-build@v2
@@ -49,6 +64,8 @@ jobs:
                       OCI_VERSION=${{ steps.meta.outputs.version }}
                       OCI_REVISION=${{ github.sha }}
                       OCI_SOURCE=https://github.com/${{ github.repository }}
+                      BUILD_SOURCEMAPS=${{ steps.sourcemaps.outputs.enabled }}
+                      KEEP_SOURCE_MAPS=${{ steps.sourcemaps.outputs.enabled }}
                   oci: true
 
             - name: Push image to GHCR

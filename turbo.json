@@ -4,6 +4,7 @@
     "globalPassThroughEnv": [
         "BASE_URL",
         "NODE_ENV",
+        "BUILD_SOURCEMAPS",
         "PROD",
         "YJS_DEBUG",
         "PROXY_ALLOWED_REFERRERS",
