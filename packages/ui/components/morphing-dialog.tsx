@@ -26,6 +26,17 @@ export type MorphingDialogContextType = {
 };
 
 const MorphingDialogContext = React.createContext<MorphingDialogContextType | null>(null);
+const dialogStateRegistry = new Map<string, MorphingDialogState>();
+
+function hasCompetingOpenDialog(currentId: string): boolean {
+    for (const [id, state] of dialogStateRegistry) {
+        if (id === currentId) continue;
+        if (state === 'expanded' || state === 'fullscreen' || state === 'minimized') {
+            return true;
+        }
+    }
+    return false;
+}
 
 function useMorphingDialog() {
     const context = useContext(MorphingDialogContext);
@@ -157,16 +168,27 @@ function MorphingDialogProvider({
     }, [state, onStateChange]);
 
     useEffect(() => {
+        dialogStateRegistry.set(uniqueId, state);
+        return () => {
+            dialogStateRegistry.delete(uniqueId);
+        };
+    }, [uniqueId, state]);
+
+    useEffect(() => {
         if (forceOpenSignal === null || forceOpenSignal === undefined) {
             lastForceOpenSignalRef.current = forceOpenSignal;
             return;
         }
         if (Object.is(lastForceOpenSignalRef.current, forceOpenSignal)) return;
         lastForceOpenSignalRef.current = forceOpenSignal;
-        // Keep reopen deterministic without remounting cards when a new force-open signal arrives.
-        if (state === 'fullscreen') return;
-        setState('fullscreen');
-    }, [forceOpenSignal, state]);
+        // Remote-triggered open:
+        // - if another dialog is already open, open this one minimized to avoid stealing focus
+        // - otherwise open fullscreen as before
+        setState((prev) => {
+            if (prev !== 'closed') return prev;
+            return hasCompetingOpenDialog(uniqueId) ? 'minimized' : 'fullscreen';
+        });
+    }, [forceOpenSignal, uniqueId]);
 
     useEffect(() => {
         if (forceDemoteFullscreenSignal === null || forceDemoteFullscreenSignal === undefined) {
