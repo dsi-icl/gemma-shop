@@ -128,6 +128,7 @@ function Controller() {
     }, [searchStr]);
 
     const showHideHeadAndFoot = mountLocation === 'gallery';
+    const canUseProtectedCommitApi = mountLocation !== 'gallery';
 
     const engine = useMemo(
         () =>
@@ -235,7 +236,11 @@ function Controller() {
 
     useEffect(() => {
         if (binding.bound && binding.commitId) {
-            loadSlides(binding.commitId);
+            if (canUseProtectedCommitApi) {
+                loadSlides(binding.commitId);
+            } else {
+                setLoadingSlides(false);
+            }
             lastRequestedBindRef.current = null;
         } else {
             setSlides([]);
@@ -243,7 +248,7 @@ function Controller() {
             setPendingSlideId(null);
             lastRequestedBindRef.current = null;
         }
-    }, [binding.bound, binding.commitId, loadSlides]);
+    }, [binding.bound, binding.commitId, loadSlides, canUseProtectedCommitApi]);
 
     useEffect(() => {
         slidesRef.current = slides;
@@ -380,7 +385,26 @@ function Controller() {
                 currentSlides.some((s) => !nextIdSet.has(s.id));
 
             if (hasStructuralChange) {
-                if (binding.commitId) void loadSlides(binding.commitId);
+                if (binding.commitId && canUseProtectedCommitApi) {
+                    void loadSlides(binding.commitId);
+                } else {
+                    // Public/gallery controller cannot call protected commit APIs.
+                    // Keep structural metadata from bus and preserve any known layer snapshots.
+                    setSlides((prev) => {
+                        const byId = new Map(prev.map((slide) => [slide.id, slide]));
+                        return updatedSlides.map((updated) => {
+                            const existing = byId.get(updated.id);
+                            const layers = existing?.layers ?? [];
+                            return {
+                                id: updated.id,
+                                name: updated.name,
+                                order: updated.order,
+                                layers,
+                                layerCount: layers.length
+                            };
+                        });
+                    });
+                }
                 return;
             }
 
@@ -406,7 +430,7 @@ function Controller() {
                 });
             });
         });
-    }, [engine, binding.commitId, loadSlides]);
+    }, [engine, binding.commitId, loadSlides, canUseProtectedCommitApi]);
 
     // HMR rehydrate
     useEffect(() => {
