@@ -13,7 +13,7 @@
         "@dnd-kit/modifiers": "catalog:",
         "@dnd-kit/sortable": "catalog:",
         "@fontsource-variable/inter": "catalog:",
-        "@lexical/code": "catalog:",
+        "@lexical/code-prism": "catalog:",
         "@lexical/headless": "catalog:",
         "@lexical/html": "catalog:",
         "@lexical/link": "catalog:",
