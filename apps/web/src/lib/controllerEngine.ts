@@ -34,6 +34,7 @@ export class ControllerEngine {
     private slidesUpdatedCallbacks = new Set<SlidesUpdatedCallback>();
     private messageCallbacks = new Set<ServerMessageCallback>();
     private lastBindSignature: string | null = null;
+    private pendingJsonMessages: string[] = [];
 
     private constructor(wallId: string) {
         this.wallId = wallId;
@@ -47,6 +48,7 @@ export class ControllerEngine {
                     specimen: 'controller',
                     wallId: this.wallId
                 });
+                this.flushPendingMessages();
             },
             onMessage: (event) => {
                 if (typeof event.data !== 'string') return;
@@ -96,6 +98,7 @@ export class ControllerEngine {
     public destroy() {
         console.log('Controller Engine: Assassinating ghost instance...');
         this.rws.destroy();
+        this.pendingJsonMessages = [];
         this.bindingCallbacks.clear();
         this.hydrateCallbacks.clear();
         this.slidesUpdatedCallbacks.clear();
@@ -103,8 +106,41 @@ export class ControllerEngine {
     }
 
     public sendJSON = (data: GSMessage) => {
-        this.rws.send(JSON.stringify(data));
+        const payload = JSON.stringify(data);
+        if (this.rws.status === 'connected') {
+            this.rws.send(payload);
+            return;
+        }
+
+        // Control-plane reliability: preserve intent issued before socket open
+        // (e.g. first reboot click on gallery card).
+        if (data.type === 'reboot') {
+            const hasQueuedReboot = this.pendingJsonMessages.some((msg) => {
+                try {
+                    const parsed = JSON.parse(msg) as { type?: string };
+                    return parsed.type === 'reboot';
+                } catch {
+                    return false;
+                }
+            });
+            if (hasQueuedReboot) return;
+        }
+
+        this.pendingJsonMessages.push(payload);
+        // Safety guard: keep queue bounded during long disconnects.
+        if (this.pendingJsonMessages.length > 50) {
+            this.pendingJsonMessages = this.pendingJsonMessages.slice(-50);
+        }
     };
+
+    private flushPendingMessages() {
+        if (this.rws.status !== 'connected' || this.pendingJsonMessages.length === 0) return;
+        const queued = this.pendingJsonMessages;
+        this.pendingJsonMessages = [];
+        for (const payload of queued) {
+            this.rws.send(payload);
+        }
+    }
 
     /** Navigate the bound wall to a different slide */
     public bindSlide(projectId: string, commitId: string, slideId: string) {
