@@ -116,6 +116,12 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
 - Lint: `bun run lint`
 - Format: `bun run format`
 - Quality checks: `bun run check`
+- Build web (generates legal notice artifacts): `bun run --filter=@repo/web build`
+- Docker test stack up (build + detached): `bun run docker:test:up`
+- Docker test stack status: `bun run docker:test:ps`
+- Docker test stack logs (follow): `bun run docker:test:logs`
+- Docker test stack down: `bun run docker:test:down`
+- Docker test stack reset (remove volumes): `bun run docker:test:reset`
 
 ## Main application entry points
 
@@ -130,6 +136,16 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
 - Bus cleanup must not delete active scopes (editors/walls present)
 - Video sync timestamps are authoritative server-side once playback starts
 - Autosave only updates mutable HEAD context
+
+## Third-Party Notices
+
+- Build-time plugin: `apps/web/plugins/thirdPartyNotices.ts`
+- Generated artifacts:
+    - `/third-party-notices.json`
+    - `/THIRD_PARTY_NOTICES.txt`
+- In-app page: `/legal/notices`
+
+The notices are generated from tree-shaken modules detected in production bundle chunks.
 
 ## Text Rendering Model
 
