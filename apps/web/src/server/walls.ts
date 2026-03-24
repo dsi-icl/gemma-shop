@@ -65,7 +65,7 @@ export async function bindWallToScope(
         ),
         projects.findOne(
             { _id: new ObjectId(projectId) },
-            { projection: { customRenderUrl: 1, customRenderCompat: 1 } }
+            { projection: { customRenderUrl: 1, customRenderCompat: 1, customRenderProxy: 1 } }
         )
     ]);
     if (!commit) throw new Error('Commit not found for project');
@@ -82,7 +82,8 @@ export async function bindWallToScope(
         commitId,
         resolvedSlideId,
         project?.customRenderUrl,
-        project?.customRenderCompat
+        project?.customRenderCompat,
+        project?.customRenderProxy
     );
     bindWall(wallId, scopeId, 'gallery');
 

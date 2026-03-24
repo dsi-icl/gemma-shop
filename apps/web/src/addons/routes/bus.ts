@@ -457,12 +457,16 @@ handlers.set('bind_wall', ({ data }) => {
             cancelWallUnbindGrace(data.wallId);
             const [resolvedSlideId, project] = await Promise.all([
                 resolveBoundSlideId(data.projectId, data.commitId, data.slideId),
-                db
-                    .collection('projects')
-                    .findOne(
-                        { _id: new ObjectId(data.projectId) },
-                        { projection: { customRenderUrl: 1, customRenderCompat: 1 } }
-                    )
+                db.collection('projects').findOne(
+                    { _id: new ObjectId(data.projectId) },
+                    {
+                        projection: {
+                            customRenderUrl: 1,
+                            customRenderCompat: 1,
+                            customRenderProxy: 1
+                        }
+                    }
+                )
             ]);
             if (!resolvedSlideId) {
                 console.warn(
@@ -478,7 +482,8 @@ handlers.set('bind_wall', ({ data }) => {
                 data.commitId,
                 resolvedSlideId,
                 project?.customRenderUrl,
-                project?.customRenderCompat
+                project?.customRenderCompat,
+                project?.customRenderProxy
             );
             bindWall(data.wallId, scopeId, 'live');
 

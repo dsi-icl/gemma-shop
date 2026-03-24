@@ -56,6 +56,7 @@ export function ProjectForm({
             customControlUrl: '',
             customRenderUrl: '',
             customRenderCompat: false,
+            customRenderProxy: false,
             collaborators: [],
             ...defaultValues
         },
@@ -74,6 +75,7 @@ export function ProjectForm({
             customControlUrl: form.getFieldValue('customControlUrl') || undefined,
             customRenderUrl: form.getFieldValue('customRenderUrl') || undefined,
             customRenderCompat: form.getFieldValue('customRenderCompat'),
+            customRenderProxy: form.getFieldValue('customRenderProxy'),
             collaborators: form.getFieldValue('collaborators')
         }),
         [form]
@@ -289,6 +291,24 @@ export function ProjectForm({
                                     }}
                                 />
                                 <Label htmlFor={field.name}>Custom Render Compat</Label>
+                            </div>
+                        )}
+                    </form.Field>
+
+                    <form.Field name="customRenderProxy">
+                        {(field) => (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    id={field.name}
+                                    type="checkbox"
+                                    checked={field.state.value}
+                                    onBlur={field.handleBlur}
+                                    onChange={(e) => {
+                                        field.handleChange(e.target.checked);
+                                        scheduleAutoSave();
+                                    }}
+                                />
+                                <Label htmlFor={field.name}>Custom Render Proxy</Label>
                             </div>
                         )}
                     </form.Field>

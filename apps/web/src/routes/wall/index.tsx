@@ -24,6 +24,7 @@ function WallApp() {
     const [layers, setLayers] = useState<LayerWithWallComponentState[]>([]);
     const [customRenderUrl, setCustomRenderUrl] = useState<string | undefined>();
     const [customRenderCompat, setCustomRenderCompat] = useState(false);
+    const [customRenderProxy, setCustomRenderProxy] = useState(false);
     const [frameabilityByUrl, setFrameabilityByUrl] = useState<
         Record<string, { ok: boolean; reason?: string; fallback?: string }>
     >({});
@@ -71,6 +72,7 @@ function WallApp() {
                 setLayers(data.layers);
                 setCustomRenderUrl(data.customRenderUrl);
                 setCustomRenderCompat(Boolean(data.customRenderCompat));
+                setCustomRenderProxy(Boolean(data.customRenderProxy));
             } else if (data.type === 'upsert_layer') {
                 setLayers((prev) => {
                     const existing = prev.find((l) => l.numericId === data.layer.numericId);
@@ -213,13 +215,17 @@ function WallApp() {
             iframeSrc.searchParams.set('c', String(myViewport.x / SCREEN_W));
             iframeSrc.searchParams.set('r', String(myViewport.y / SCREEN_H));
         }
+        const finalSrc =
+            customRenderProxy && /^https?:\/\//i.test(iframeSrc.toString())
+                ? `/proxy?url=${encodeURIComponent(iframeSrc.toString())}`
+                : iframeSrc.toString();
         const worldWidth = SCREEN_W * COLS;
         const worldHeight = SCREEN_H * ROWS;
         return (
             <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">
                 <iframe
                     title="Custom Render Wall"
-                    src={iframeSrc.toString()}
+                    src={finalSrc}
                     style={{
                         position: 'absolute',
                         top: customRenderCompat ? `${-myViewport.y}px` : 0,

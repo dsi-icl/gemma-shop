@@ -172,6 +172,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         layers: LayerSchema.array(),
         customRenderUrl: z.string().optional(),
         customRenderCompat: z.boolean().optional(),
+        customRenderProxy: z.boolean().optional(),
         boundSource: z.enum(['live', 'gallery']).optional()
     }),
     z.object({ type: z.literal('rehydrate_please') }),
@@ -308,6 +309,8 @@ export interface ScopeState {
     customRenderUrl?: string;
     /** Whether the custom render URL should be displayed in compatibility mode. */
     customRenderCompat?: boolean;
+    /** Whether custom render should be loaded via the built-in proxy. */
+    customRenderProxy?: boolean;
 }
 
 export interface Slide {

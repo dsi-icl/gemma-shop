@@ -223,11 +223,16 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
     });
 
     // Live-push custom render settings changes to any bound walls
-    if ('customRenderUrl' in updates || 'customRenderCompat' in updates) {
+    if (
+        'customRenderUrl' in updates ||
+        'customRenderCompat' in updates ||
+        'customRenderProxy' in updates
+    ) {
         updateProjectCustomRenderSettings(
             _id,
             updates.customRenderUrl ?? existing.customRenderUrl,
-            updates.customRenderCompat
+            updates.customRenderCompat,
+            updates.customRenderProxy
         );
     }
 
