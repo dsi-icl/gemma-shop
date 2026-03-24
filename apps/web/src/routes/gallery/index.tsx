@@ -1,12 +1,15 @@
 import { Button } from '@repo/ui/components/button';
 import type { Project } from '@repo/ui/components/project-card';
-import { useQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { createFileRoute, useLocation } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 import { GalleryProjectCard } from '~/components/GalleryProjectCard';
+import { GalleryEngine } from '~/lib/galleryEngine';
 import { publishedProjectsQueryOptions } from '~/server/projects.queries';
+import { wallsQueryOptions } from '~/server/walls.queries';
 
 export const Route = createFileRoute('/gallery/')({
     component: HomePage,
@@ -20,6 +23,84 @@ type ProjectWithId = Project & { _id: string; publishedCommitId?: string | null 
 function HomePage() {
     const [activeTag, setActiveTag] = useState<string | null>(null);
     const { data: publishedProjects = [] } = useQuery(publishedProjectsQueryOptions());
+    const queryClient = useQueryClient();
+    const searchStr = useLocation({ select: (location) => location.searchStr });
+    const [pendingOverride, setPendingOverride] = useState<{
+        requestId: string;
+        wallId: string;
+        projectId: string;
+        commitId: string;
+        slideId: string;
+        expiresAt: number;
+    } | null>(null);
+    const [overrideClockNow, setOverrideClockNow] = useState<number>(() => Date.now());
+
+    const wallId = useMemo(() => {
+        const params = new URLSearchParams(searchStr);
+        const w = params.get('w');
+        return w && w.trim().length > 0 ? w : null;
+    }, [searchStr]);
+
+    const galleryEngine = useMemo(
+        () => (typeof window !== 'undefined' ? GalleryEngine.getInstance(wallId) : null),
+        [wallId]
+    );
+
+    useEffect(() => {
+        if (!galleryEngine) return;
+        const unsubs = [
+            galleryEngine.onProjectPublishChanged(() => {
+                void queryClient.invalidateQueries({
+                    queryKey: publishedProjectsQueryOptions().queryKey
+                });
+            }),
+            galleryEngine.onWallBindingChanged(() => {
+                void queryClient.invalidateQueries({ queryKey: wallsQueryOptions().queryKey });
+            }),
+            galleryEngine.onWallUnbound(() => {
+                void queryClient.invalidateQueries({ queryKey: wallsQueryOptions().queryKey });
+            }),
+            galleryEngine.onBindOverrideRequested((req) => {
+                if (!wallId || req.wallId !== wallId) return;
+                setPendingOverride(req);
+                toast.message('Live override request received');
+            }),
+            galleryEngine.onBindOverrideResult((result) => {
+                if (!pendingOverride || result.requestId !== pendingOverride.requestId) return;
+                setPendingOverride(null);
+                if (!result.allow) {
+                    toast.message(
+                        result.reason === 'timeout'
+                            ? 'Override request timed out'
+                            : 'Override request denied'
+                    );
+                }
+            })
+        ];
+        return () => {
+            for (const unsub of unsubs) unsub();
+        };
+    }, [galleryEngine, queryClient, wallId, pendingOverride]);
+
+    useEffect(() => {
+        if (!pendingOverride) return;
+        const tick = () => {
+            setOverrideClockNow(Date.now());
+        };
+        tick();
+        const id = window.setInterval(tick, 250);
+        return () => window.clearInterval(id);
+    }, [pendingOverride]);
+
+    const overrideSecondsLeft = pendingOverride
+        ? Math.ceil(Math.max(0, pendingOverride.expiresAt - overrideClockNow) / 1000)
+        : 0;
+
+    const decideOverride = (allow: boolean) => {
+        if (!galleryEngine || !pendingOverride) return;
+        galleryEngine.decideBindOverride(pendingOverride.requestId, pendingOverride.wallId, allow);
+        setPendingOverride(null);
+    };
 
     const projectsData: ProjectWithId[] = useMemo(
         () =>
@@ -52,6 +133,33 @@ function HomePage() {
 
     return (
         <div className="container mx-auto p-4 pt-24">
+            {pendingOverride ? (
+                <div className="fixed top-4 left-1/2 z-50 w-[min(42rem,95vw)] -translate-x-1/2 rounded-lg border border-border bg-card p-4 shadow-lg">
+                    <div className="flex flex-col gap-3">
+                        <div className="text-sm font-semibold">Live Override Request</div>
+                        <div className="text-xs text-muted-foreground">
+                            Editor requested wall override for{' '}
+                            <span className="font-mono">{pendingOverride.wallId}</span>. This will
+                            replace the currently bound live content.
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            Auto-deny in {overrideSecondsLeft}s
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => decideOverride(false)}
+                            >
+                                Deny
+                            </Button>
+                            <Button size="sm" onClick={() => decideOverride(true)}>
+                                Approve
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
             <div className="flex flex-col gap-8 md:flex-row">
                 <aside className="w-full md:w-1/5">
                     <h2 className="mb-4 text-lg font-semibold">Filters</h2>

@@ -32,7 +32,7 @@ import { Slider } from '@repo/ui/components/slider';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { TooltipProvider } from '@repo/ui/components/tooltip';
 import { throttle } from '@tanstack/pacer';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -143,6 +143,17 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     const [savePopoverOpen, setSavePopoverOpen] = useState(false);
     const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
     const commitInputRef = useRef<HTMLInputElement>(null);
+    const [bindPending, setBindPending] = useState<{ requestId: string; wallId: string } | null>(
+        null
+    );
+    const [lastBindAttempt, setLastBindAttempt] = useState<{
+        wallId: string;
+        projectId: string;
+        commitId: string;
+        slideId: string;
+        denied: boolean;
+    } | null>(null);
+    const ignoredBindRequestIdsRef = useRef<Set<string>>(new Set());
 
     const handleManualSave = () => {
         const msg = commitMessage.trim() || 'Manual save';
@@ -275,13 +286,81 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         const { projectId, commitId, activeSlideId } = useEditorStore.getState();
         if (!projectId || !commitId || !activeSlideId) return;
         engine.bindWall(wallId, projectId, commitId, activeSlideId);
+        const requestId = engine.getLastBindRequestId();
+        if (requestId) {
+            setBindPending({ requestId, wallId });
+            setLastBindAttempt({
+                wallId,
+                projectId,
+                commitId,
+                slideId: activeSlideId,
+                denied: false
+            });
+        }
     };
 
     const handleWallUnbind = () => {
         if (!engine) return;
         engine.unbindWall();
         useEditorStore.setState({ boundWallId: null });
+        setBindPending(null);
     };
+
+    const retryWallBind = () => {
+        if (!engine || !lastBindAttempt) return;
+        engine.bindWall(
+            lastBindAttempt.wallId,
+            lastBindAttempt.projectId,
+            lastBindAttempt.commitId,
+            lastBindAttempt.slideId
+        );
+        const requestId = engine.getLastBindRequestId();
+        if (requestId) {
+            setBindPending({ requestId, wallId: lastBindAttempt.wallId });
+            setLastBindAttempt((prev) => (prev ? { ...prev, denied: false } : prev));
+        }
+    };
+
+    const cancelPendingBind = () => {
+        if (bindPending) {
+            ignoredBindRequestIdsRef.current.add(bindPending.requestId);
+        }
+        setBindPending(null);
+    };
+
+    useEffect(() => {
+        if (!engine) return;
+        return engine.onBindOverrideResult((result) => {
+            if (ignoredBindRequestIdsRef.current.has(result.requestId)) return;
+            if (!bindPending || bindPending.requestId !== result.requestId) return;
+
+            if (result.allow) {
+                setBindPending(null);
+                setLastBindAttempt((prev) => (prev ? { ...prev, denied: false } : prev));
+                if (result.reason === 'approved') {
+                    toast.success('Wall override approved');
+                }
+                return;
+            }
+
+            setBindPending(null);
+            setLastBindAttempt((prev) => (prev ? { ...prev, denied: true } : prev));
+            if (result.reason === 'timeout') {
+                toast.error('Wall override request timed out');
+            } else if (result.reason === 'denied') {
+                toast.error('Wall override was denied');
+            } else {
+                toast.error('Wall bind request failed');
+            }
+        });
+    }, [engine, bindPending]);
+
+    useEffect(() => {
+        if (boundWallId) {
+            setBindPending(null);
+            setLastBindAttempt((prev) => (prev ? { ...prev, denied: false } : prev));
+        }
+    }, [boundWallId]);
 
     return (
         <TooltipProvider>
@@ -368,15 +447,34 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                     <TipButton tip="Disconnect wall" variant="outline" onClick={handleWallUnbind}>
                         <MonitorIcon weight="fill" className="text-green-500" />
                     </TipButton>
+                ) : bindPending ? (
+                    <div className="flex items-center gap-1">
+                        <TipButton
+                            tip={`Awaiting approval for ${bindPending.wallId}`}
+                            variant="outline"
+                        >
+                            <CircleNotchIcon className="animate-spin" />
+                        </TipButton>
+                        <TipButton tip="Cancel pending bind request" onClick={cancelPendingBind}>
+                            <WarningCircleIcon />
+                        </TipButton>
+                    </div>
                 ) : (
-                    <WallPickerPopover
-                        onSelect={handleWallSelect}
-                        trigger={
-                            <TipButton tip="Launch live preview">
-                                <MonitorIcon />
+                    <div className="flex items-center gap-1">
+                        <WallPickerPopover
+                            onSelect={handleWallSelect}
+                            trigger={
+                                <TipButton tip="Launch live preview">
+                                    <MonitorIcon />
+                                </TipButton>
+                            }
+                        />
+                        {lastBindAttempt?.denied ? (
+                            <TipButton tip="Retry last bind request" onClick={retryWallBind}>
+                                <ArrowsClockwiseIcon />
                             </TipButton>
-                        }
-                    />
+                        ) : null}
+                    </div>
                 )}
                 {/* ── Save ── */}
                 <div className="flex items-center gap-0.5">
