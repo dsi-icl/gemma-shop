@@ -223,6 +223,17 @@ function HomePage() {
         return () => window.clearInterval(id);
     }, [pendingOverride]);
 
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+        if (pendingOverride) {
+            document.body.setAttribute('data-takeover-lock', '1');
+            return () => {
+                document.body.removeAttribute('data-takeover-lock');
+            };
+        }
+        document.body.removeAttribute('data-takeover-lock');
+    }, [pendingOverride]);
+
     const overrideSecondsLeft = pendingOverride
         ? Math.ceil(Math.max(0, pendingOverride.expiresAt - overrideClockNow) / 1000)
         : 0;
