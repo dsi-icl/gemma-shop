@@ -5,7 +5,7 @@ import {
     EyeIcon
 } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from './badge';
 import { Button } from './button';
@@ -44,6 +44,8 @@ interface ProjectCardProps {
     }>;
     onLoadProject?: (wallId: string) => Promise<boolean | void>;
     onWallRebootRequest?: (wallId: string) => Promise<boolean | void> | boolean | void;
+    onWallUnbindRequest?: (wallId: string) => Promise<boolean | void> | boolean | void;
+    onActiveWallIdChange?: (wallId: string | null) => void;
 }
 
 function buildControllerUrl(customControlUrl: string | undefined, wallId: string): string {
@@ -74,6 +76,7 @@ function ProjectCardDialogBody({
     autoOpenSignal,
     onLoadProject,
     onWallRebootRequest,
+    onActiveWallIdChange,
     availableWalls = [],
     presetWallId
 }: ProjectCardProps) {
@@ -141,6 +144,10 @@ function ProjectCardDialogBody({
         if (activeWallId === presetWallId) return;
         setActiveWallId(presetWallId);
     }, [isFullscreen, presetWallId, activeWallId]);
+
+    useEffect(() => {
+        onActiveWallIdChange?.(activeWallId);
+    }, [activeWallId, onActiveWallIdChange]);
 
     const controllerUrl = useMemo(() => {
         if (!activeWallId) return '';
@@ -318,12 +325,35 @@ export function ProjectCard({
     autoOpenSignal,
     onLoadProject,
     onWallRebootRequest,
+    onWallUnbindRequest,
     availableWalls,
     presetWallId
 }: ProjectCardProps) {
+    const activeWallIdRef = useRef<string | null>(null);
+    const prevDialogStateRef = useRef<'closed' | 'expanded' | 'fullscreen' | 'minimized'>('closed');
+
+    const handleActiveWallIdChange = useCallback((wallId: string | null) => {
+        activeWallIdRef.current = wallId;
+    }, []);
+
+    const handleDialogStateChange = useCallback(
+        (state: 'closed' | 'expanded' | 'fullscreen' | 'minimized') => {
+            const prev = prevDialogStateRef.current;
+            prevDialogStateRef.current = state;
+
+            if (state !== 'closed' || prev === 'closed') return;
+            const activeWallId = activeWallIdRef.current;
+            if (!activeWallId || !onWallUnbindRequest) return;
+            void Promise.resolve(onWallUnbindRequest(activeWallId));
+            activeWallIdRef.current = null;
+        },
+        [onWallUnbindRequest]
+    );
+
     return (
         <MorphingDialog
             forceOpenSignal={autoOpenSignal}
+            onStateChange={handleDialogStateChange}
             transition={{
                 type: 'spring',
                 bounce: 0.05,
@@ -382,6 +412,7 @@ export function ProjectCard({
                         availableWalls={availableWalls}
                         onLoadProject={onLoadProject}
                         onWallRebootRequest={onWallRebootRequest}
+                        onActiveWallIdChange={handleActiveWallIdChange}
                     />
                 </MorphingDialogContent>
             </MorphingDialogContainer>

@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { toast } from 'sonner';
 
 import { ControllerEngine } from '~/lib/controllerEngine';
+import { GalleryEngine } from '~/lib/galleryEngine';
 import { $bindWall } from '~/server/walls.fns';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
@@ -65,6 +66,17 @@ export function GalleryProjectCard({ project, autoOpenSignal }: GalleryProjectCa
         }
     };
 
+    const handleWallUnbindRequest = async (wallId: string) => {
+        try {
+            const engine = GalleryEngine.getInstance(presetWallId);
+            engine.unbindWall(wallId);
+            return true;
+        } catch (e: any) {
+            toast.error(e?.message ?? 'Could not unbind wall');
+            return false;
+        }
+    };
+
     return (
         <ProjectCard
             project={project}
@@ -72,6 +84,7 @@ export function GalleryProjectCard({ project, autoOpenSignal }: GalleryProjectCa
             availableWalls={availableWalls}
             onLoadProject={handleLoadProject}
             onWallRebootRequest={handleWallRebootRequest}
+            onWallUnbindRequest={handleWallUnbindRequest}
             presetWallId={presetWallId}
         />
     );

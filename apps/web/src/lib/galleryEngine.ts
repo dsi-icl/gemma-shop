@@ -139,6 +139,13 @@ export class GalleryEngine {
         });
     }
 
+    public unbindWall(wallId: string) {
+        this.sendJSON({
+            type: 'unbind_wall',
+            wallId
+        });
+    }
+
     public onGalleryState(cb: GalleryStateCallback) {
         this.galleryStateCallbacks.add(cb);
         return () => this.galleryStateCallbacks.delete(cb);
