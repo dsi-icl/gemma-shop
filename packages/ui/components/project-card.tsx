@@ -364,7 +364,7 @@ export function ProjectCard({
                     style={{
                         borderRadius: '24px'
                     }}
-                    className="pointer-events-auto relative flex h-auto w-full flex-col overflow-hidden border"
+                    className="pointer-events-auto relative mx-auto flex h-auto w-full max-w-5xl flex-col overflow-hidden border"
                 >
                     <ProjectCardDialogBody
                         project={project}
