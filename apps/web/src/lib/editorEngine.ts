@@ -384,7 +384,7 @@ export class EditorEngine {
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        if (window.__EDITOR_ENGINE__) {
+        if (typeof window !== 'undefined' && window.__EDITOR_ENGINE__) {
             window.__EDITOR_ENGINE__.destroy();
             window.__EDITOR_ENGINE__ = undefined;
         }

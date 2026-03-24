@@ -21,8 +21,6 @@ import type { Layer, LayerWithEditorState } from '~/lib/types';
 // import DOPreview from './DOPreview';
 import { SlatePreview } from './SlatePreview';
 
-const engine = EditorEngine.getInstance();
-
 const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
 const SCREEN_W = 1920;
 const SCREEN_H = 1080;
@@ -70,6 +68,10 @@ function touchToStagePoint(stage: Konva.Stage, touch: Touch): { x: number; y: nu
 }
 
 export function EditorSlate() {
+    const engine = useMemo(
+        () => (typeof window !== 'undefined' ? EditorEngine.getInstance() : null),
+        []
+    );
     const layers = useEditorStore((s) => s.layers);
     // TODO This probably requires some attention: The Konva Stage only selects one item at a time, but we use the multi-select layer sorter here.
     const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
@@ -176,17 +178,19 @@ export function EditorSlate() {
     }, [layers]);
 
     useEffect(() => {
+        if (!engine) return;
         if (window.__EDITOR_RELOADING__) {
             setTimeout(() => {
                 engine.sendJSON({ type: 'rehydrate_please' });
             }, 500);
             window.__EDITOR_RELOADING__ = false;
         }
-    }, []);
+    }, [engine]);
 
     // JSON messages are handled by the store wiring in editorStore.ts.
     // Only the binary path stays here because it directly manipulates Konva nodes.
     useEffect(() => {
+        if (!engine) return;
         const unsubscribeBinary = engine.subscribeToBinary(
             (id, cx, cy, width, height, scaleX, scaleY, rotation) => {
                 if (trRef.current) {
@@ -261,7 +265,7 @@ export function EditorSlate() {
         );
 
         return () => unsubscribeBinary();
-    }, [isPinching]);
+    }, [engine, isPinching]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -295,6 +299,7 @@ export function EditorSlate() {
 
     // ── Upload handler (stays here — complex async + file APIs) ───────────
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!engine) return;
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -603,6 +608,7 @@ export function EditorSlate() {
 
     const handleTransformEnd = useCallback(
         (e: Pick<KonvaEventObject<Event>, 'target' | 'type'>, numericId: number) => {
+            if (!engine) return;
             const node = e.target as Konva.Shape;
 
             // Must use layersRef — has binary-updated positions
@@ -732,7 +738,7 @@ export function EditorSlate() {
                 layer: { ...layerToUpdate, config: updatedConfig }
             });
         },
-        [isSnapping]
+        [engine, isSnapping]
     );
 
     const flushNodeState = (idToFlush: string) => {
@@ -1234,6 +1240,8 @@ export function EditorSlate() {
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        window.__EDITOR_RELOADING__ = true;
+        if (typeof window !== 'undefined') {
+            window.__EDITOR_RELOADING__ = true;
+        }
     });
 }

@@ -28,12 +28,11 @@ export function TextEditorDialog({ layerId, open, onOpenChange }: TextEditorDial
     );
     const latestMeasuredHeightRef = useRef<number | null>(null);
     const openSyncDoneRef = useRef(false);
-    const engine = EditorEngine.getInstance();
-
     const commitMeasuredHeight = (
         origin: 'editor:text_editor_open' | 'editor:text_editor_close',
         measured?: number
     ) => {
+        if (typeof window === 'undefined') return;
         if (!textLayerMeta) return;
         const nextHeight = Math.max(
             40,
@@ -48,6 +47,7 @@ export function TextEditorDialog({ layerId, open, onOpenChange }: TextEditorDial
             config: { ...liveLayer.config, height: nextHeight }
         };
         useEditorStore.getState().updateLayerConfig(liveLayer.numericId, updatedLayer.config);
+        const engine = EditorEngine.getInstance();
         engine.sendJSON({
             type: 'upsert_layer',
             origin,

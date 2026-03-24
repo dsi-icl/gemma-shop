@@ -47,6 +47,10 @@ function WallApp() {
     );
 
     useEffect(() => {
+        document.body.classList.add('transition-opacity', 'duration-1000');
+    }, []);
+
+    useEffect(() => {
         if (window.__WALL_RELOADING__) {
             setTimeout(() => {
                 engine?.sendJSON({ type: 'rehydrate_please' });
@@ -75,7 +79,8 @@ function WallApp() {
             } else if (data.type === 'delete_layer') {
                 setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
             } else if (data.type === 'reboot') {
-                setTimeout(() => window.location.reload(), Math.random() * 1000 + 1000);
+                document.body.classList.add('opacity-0');
+                setTimeout(() => window.location.reload(), Math.random() * 1000 + 2000);
             }
         });
         let frameId: number;

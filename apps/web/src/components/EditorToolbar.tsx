@@ -110,7 +110,10 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         }))
     );
 
-    const engine = EditorEngine.getInstance();
+    const engine = useMemo(
+        () => (typeof window !== 'undefined' ? EditorEngine.getInstance() : null),
+        []
+    );
 
     const isVideo = activeLayer?.type === 'video';
     const isText = activeLayer?.type === 'text';
@@ -266,12 +269,14 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     );
 
     const handleWallSelect = (wallId: string) => {
+        if (!engine) return;
         const { projectId, commitId, activeSlideId } = useEditorStore.getState();
         if (!projectId || !commitId || !activeSlideId) return;
         engine.bindWall(wallId, projectId, commitId, activeSlideId);
     };
 
     const handleWallUnbind = () => {
+        if (!engine) return;
         engine.unbindWall();
         useEditorStore.setState({ boundWallId: null });
     };
@@ -724,7 +729,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 )}
 
                 {/* ── Video Playback ── */}
-                {isVideo && activeLayer && !activeLayer.isUploading && (
+                {isVideo && activeLayer && !activeLayer.isUploading && engine && (
                     <>
                         <Separator orientation="vertical" className="mx-1 my-1 h-6" />
                         <PlaybackControls
