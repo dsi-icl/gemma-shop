@@ -5,6 +5,29 @@ log() {
   printf '[boot-deps] %s\n' "$*"
 }
 
+normalize_wrapped_env() {
+  key="$1"
+  raw="$(printenv "$key" 2>/dev/null || true)"
+  if [ -z "$raw" ]; then
+    return 0
+  fi
+
+  cleaned="$(printf '%s' "$raw" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
+  if [ "$cleaned" != "$raw" ]; then
+    export "$key=$cleaned"
+    log "Normalized quoted env: $key"
+  fi
+}
+
+normalize_runtime_env() {
+  normalize_wrapped_env SERVER_DATABASE_URL
+  normalize_wrapped_env SERVER_AUTH_SECRET
+  normalize_wrapped_env SERVER_CONFIG_ENCRYPTION_KEY
+  normalize_wrapped_env VITE_BASE_URL
+  normalize_wrapped_env ALLOWED_HOSTS
+  normalize_wrapped_env TRUSTED_ORIGINS
+}
+
 as_app() {
   if [ "$(id -u)" = "0" ]; then
     gosu app "$@"
@@ -44,6 +67,8 @@ resolve_playwright_version() {
 
   printf '%s' latest
 }
+
+normalize_runtime_env
 
 # Runtime browser cache path. Mount this as a volume to persist binaries.
 DEPS_ROOT="${APP_DATA_DIR:-/app/data}"
