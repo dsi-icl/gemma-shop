@@ -9,6 +9,7 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
 - [Architecture Overview](./docs/ARCHITECTURE_OVERVIEW.md): high-level system structure, ownership boundaries, and onboarding path.
 - [Realtime Protocol](./docs/REALTIME_PROTOCOL.md): `/bus` and `/yjs` transport/message semantics.
 - [Bus Piping](./docs/BUS_PIPING.md): detailed topology for the realtime bus, scope model, YJS co-bus integration, and naming/refactor proposals.
+- [Gallery State Machine](./docs/GALLERY_STATE_MACHINE.md): current gallery card/dialog transitions, sync semantics, and refactor direction.
 - [README.md](./README.md): high-level project overview and contributor onboarding.
 
 ## What It Does
@@ -83,6 +84,7 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
     - `forceCloseSignal`: synced close for connected cards on wall unbind (applies to fullscreen/minimized).
     - `forceCloseMinimizedSignal`: live-session transition helper to close minimized cards while fullscreen cards are demoted to expanded.
       These are intentionally separate because unbind and live-transition flows require different state transitions.
+- Full transition contract is documented in [Gallery State Machine](./docs/GALLERY_STATE_MACHINE.md).
 
 ### 2) Editor State (`apps/web/src/lib/editorStore.ts`)
 
