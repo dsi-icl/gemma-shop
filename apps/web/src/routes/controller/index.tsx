@@ -33,8 +33,9 @@ const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 const COLS = 16;
 const ROWS = 4;
-const BINDING_SIGNAL_TIMEOUT_MS = 4000;
-const HYDRATE_TIMEOUT_MS = 5000;
+const BINDING_SIGNAL_TIMEOUT_MS = 1500;
+const HYDRATE_TIMEOUT_MS = 2000;
+const COMMIT_FETCH_TIMEOUT_MS = 2500;
 
 export const Route = createFileRoute('/controller/')({
     component: Controller
@@ -60,6 +61,25 @@ interface SlideEntry {
 interface RenderState {
     hydrationReady: boolean;
     customRenderUrl?: string;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+            reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+
+        promise.then(
+            (value) => {
+                window.clearTimeout(timeoutId);
+                resolve(value);
+            },
+            (error) => {
+                window.clearTimeout(timeoutId);
+                reject(error);
+            }
+        );
+    });
 }
 
 function buildLineLayer(
@@ -132,7 +152,6 @@ function Controller() {
     }, [searchStr]);
 
     const showHideHeadAndFoot = mountLocation === 'gallery';
-    const canUseProtectedCommitApi = mountLocation !== 'gallery';
 
     const engine = useMemo(
         () =>
@@ -262,7 +281,11 @@ function Controller() {
     const loadSlides = useCallback(async (commitId: string) => {
         setLoadingSlides(true);
         try {
-            const commit = await $getCommit({ data: { id: commitId } });
+            const commit = await withTimeout(
+                $getCommit({ data: { id: commitId } }),
+                COMMIT_FETCH_TIMEOUT_MS,
+                'loadSlides'
+            );
             if (!commit?.content?.slides) return;
             const commitSlides = commit.content.slides;
             setSlides(
@@ -281,11 +304,7 @@ function Controller() {
 
     useEffect(() => {
         if (binding.bound && binding.commitId) {
-            if (canUseProtectedCommitApi) {
-                loadSlides(binding.commitId);
-            } else {
-                setLoadingSlides(false);
-            }
+            loadSlides(binding.commitId);
             lastRequestedBindRef.current = null;
         } else {
             setSlides([]);
@@ -293,7 +312,7 @@ function Controller() {
             setPendingSlideId(null);
             lastRequestedBindRef.current = null;
         }
-    }, [binding.bound, binding.commitId, loadSlides, canUseProtectedCommitApi]);
+    }, [binding.bound, binding.commitId, loadSlides]);
 
     useEffect(() => {
         slidesRef.current = slides;
@@ -393,6 +412,22 @@ function Controller() {
                     setRequestedSlideId(targetSlideId);
                 }
 
+                const hasTargetSlide = slidesRef.current.some(
+                    (slide) => slide.id === targetSlideId
+                );
+                if (!hasTargetSlide) {
+                    setSlides((prev) => [
+                        ...prev,
+                        {
+                            id: targetSlideId,
+                            name: 'Bound slide',
+                            order: prev.length,
+                            layers: [],
+                            layerCount: 0
+                        }
+                    ]);
+                }
+
                 replaceSlideLayers(targetSlideId, data.layers as LayerWithEditorState[]);
                 const pendingId = pendingSlideIdRef.current;
                 if (pendingId && pendingId === targetSlideId) {
@@ -435,10 +470,9 @@ function Controller() {
                 currentSlides.some((s) => !nextIdSet.has(s.id));
 
             if (hasStructuralChange) {
-                if (binding.commitId && canUseProtectedCommitApi) {
+                if (binding.commitId) {
                     void loadSlides(binding.commitId);
                 } else {
-                    // Public/gallery controller cannot call protected commit APIs.
                     // Keep structural metadata from bus and preserve any known layer snapshots.
                     setSlides((prev) => {
                         const byId = new Map(prev.map((slide) => [slide.id, slide]));
@@ -480,7 +514,7 @@ function Controller() {
                 });
             });
         });
-    }, [engine, binding.commitId, loadSlides, canUseProtectedCommitApi]);
+    }, [engine, binding.commitId, loadSlides]);
 
     // HMR rehydrate
     useEffect(() => {
@@ -756,7 +790,7 @@ function Controller() {
             </div>
         );
 
-    if (loadingSlides)
+    if (loadingSlides && slides.length === 0)
         return (
             <div
                 className={cn(
