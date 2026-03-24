@@ -5,6 +5,46 @@ log() {
   printf '[boot-deps] %s\n' "$*"
 }
 
+as_app() {
+  if [ "$(id -u)" = "0" ]; then
+    gosu app "$@"
+    return
+  fi
+  "$@"
+}
+
+run_as_app() {
+  if [ "$(id -u)" = "0" ]; then
+    exec gosu app "$@"
+  fi
+  exec "$@"
+}
+
+resolve_playwright_version() {
+  if [ -n "${PLAYWRIGHT_VERSION:-}" ]; then
+    printf '%s' "$PLAYWRIGHT_VERSION"
+    return 0
+  fi
+
+  if [ -r /app/.playwright-version ]; then
+    v="$(cat /app/.playwright-version 2>/dev/null || true)"
+    if [ -n "$v" ]; then
+      printf '%s' "$v"
+      return 0
+    fi
+  fi
+
+  if [ -r /app/package.json ]; then
+    v="$(bun -e "import pkg from '/app/package.json'; const raw = pkg?.workspaces?.catalog?.playwright; if(!raw){process.exit(1)}; process.stdout.write(String(raw).replace(/^[~^]/,''));" 2>/dev/null || true)"
+    if [ -n "$v" ]; then
+      printf '%s' "$v"
+      return 0
+    fi
+  fi
+
+  printf '%s' latest
+}
+
 # Runtime browser cache path. Mount this as a volume to persist binaries.
 DEPS_ROOT="${APP_DATA_DIR:-/app/data}"
 PW_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$DEPS_ROOT/playwright}"
@@ -24,17 +64,30 @@ mkdir -p \
   "$PW_PATH" \
   "$BIN_PATH" \
   "$CACHE_PATH" \
-  "$FFMPEG_CACHE_PATH" >/dev/null 2>&1 || true
+  "$FFMPEG_CACHE_PATH"
+
+if [ "$(id -u)" = "0" ]; then
+  chown -R app:app \
+    "$DEPS_ROOT" \
+    "$UPLOAD_PATH" \
+    "$TMP_PATH" \
+    "$ASSET_PATH" \
+    "$PW_PATH" \
+    "$BIN_PATH" \
+    "$CACHE_PATH" \
+    "$FFMPEG_CACHE_PATH" >/dev/null 2>&1 || true
+fi
 
 log "Dependency root: $DEPS_ROOT"
 log "Playwright cache path: $PW_PATH"
 
 # Install Chromium silently in the background on every boot.
-PW_VERSION="$(cat /app/.playwright-version 2>/dev/null || true)"
+PW_VERSION="$(resolve_playwright_version)"
+log "Playwright version: ${PW_VERSION}"
 (
-  log "Chromium install started (version=${PW_VERSION:-latest})"
+  log "Chromium install started (version=${PW_VERSION})"
   if PLAYWRIGHT_BROWSERS_PATH="$PW_PATH" \
-    bunx "playwright@${PW_VERSION:-latest}" install chromium >/dev/null 2>&1; then
+    as_app bunx "playwright@${PW_VERSION}" install chromium >/dev/null 2>&1; then
     log "Chromium install completed"
   else
     log "Chromium install failed (app will continue; screenshot feature may be unavailable temporarily)"
@@ -103,4 +156,4 @@ else
 fi
 
 log "Starting app server"
-exec bun --dns-result-order="${DNS_RESULT_ORDER:-ipv4first}" .output/server/index.mjs
+run_as_app bun --dns-result-order="${DNS_RESULT_ORDER:-ipv4first}" .output/server/index.mjs

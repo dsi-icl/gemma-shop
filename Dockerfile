@@ -72,7 +72,7 @@ RUN set -eux; \
 # Layer B: minimal process/runtime essentials.
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends tini ca-certificates curl xz-utils iputils-ping netcat-openbsd curl; \
+    apt-get install -y --no-install-recommends tini ca-certificates curl xz-utils iputils-ping netcat-openbsd gosu; \
     rm -rf /var/lib/apt/lists/*
 
 # Layer C: browser shared-library dependencies used by Playwright Chromium.
@@ -96,7 +96,6 @@ RUN find ./.output -type f -name '*.map' -delete || true
 COPY apps/web/container-start.sh /usr/local/bin/container-start.sh
 RUN sed -i 's/\r$//' /usr/local/bin/container-start.sh && chmod +x /usr/local/bin/container-start.sh
 
-USER app
 EXPOSE 3000
 
 ENTRYPOINT ["tini", "--", "/usr/local/bin/container-start.sh"]
