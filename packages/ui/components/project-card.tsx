@@ -34,6 +34,7 @@ export interface Project {
 
 interface ProjectCardProps {
     project: Project;
+    autoOpenSignal?: string | number | null;
     presetWallId?: string | null;
     availableWalls?: Array<{
         id: string;
@@ -70,6 +71,7 @@ function buildControllerUrl(customControlUrl: string | undefined, wallId: string
 
 function ProjectCardDialogBody({
     project,
+    autoOpenSignal,
     onLoadProject,
     onWallRebootRequest,
     availableWalls = [],
@@ -79,7 +81,6 @@ function ProjectCardDialogBody({
     const [showWallPicker, setShowWallPicker] = useState(false);
     const [isLoadingWall, setIsLoadingWall] = useState(false);
     const [activeWallId, setActiveWallId] = useState<string | null>(null);
-    const [controllerMounted, setControllerMounted] = useState(false);
     const [controllerReloadNonce, setControllerReloadNonce] = useState(0);
     const [isRefreshingController, setIsRefreshingController] = useState(false);
     const [refreshRebootDone, setRefreshRebootDone] = useState(false);
@@ -129,10 +130,17 @@ function ProjectCardDialogBody({
             : 'grid-cols-[0fr_minmax(0,1fr)]';
 
     useEffect(() => {
-        if (isFullscreen && hasController && !controllerMounted) {
-            setControllerMounted(true);
-        }
-    }, [isFullscreen, hasController, controllerMounted]);
+        if (!autoOpenSignal) return;
+        if (!presetWallId) return;
+        setActiveWallId(presetWallId);
+    }, [autoOpenSignal, presetWallId]);
+
+    useEffect(() => {
+        if (!isFullscreen) return;
+        if (!presetWallId) return;
+        if (activeWallId === presetWallId) return;
+        setActiveWallId(presetWallId);
+    }, [isFullscreen, presetWallId, activeWallId]);
 
     const controllerUrl = useMemo(() => {
         if (!activeWallId) return '';
@@ -177,7 +185,7 @@ function ProjectCardDialogBody({
                             : 'pointer-events-none opacity-0'
                     } transition-opacity duration-300`}
                 >
-                    {controllerMounted && hasController ? (
+                    {hasController ? (
                         <iframe
                             title={`Controller for ${project.name}`}
                             src={controllerUrl}
@@ -307,6 +315,7 @@ function ProjectCardDialogBody({
 
 export function ProjectCard({
     project,
+    autoOpenSignal,
     onLoadProject,
     onWallRebootRequest,
     availableWalls,
@@ -314,6 +323,7 @@ export function ProjectCard({
 }: ProjectCardProps) {
     return (
         <MorphingDialog
+            forceOpenSignal={autoOpenSignal}
             transition={{
                 type: 'spring',
                 bounce: 0.05,

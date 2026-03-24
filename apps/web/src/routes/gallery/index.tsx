@@ -31,7 +31,9 @@ type WallListEntry = {
 
 function HomePage() {
     const [activeTag, setActiveTag] = useState<string | null>(null);
+    const [autoOpenRevision, setAutoOpenRevision] = useState(0);
     const { data: publishedProjects = [] } = useQuery(publishedProjectsQueryOptions());
+    const { data: walls = [] } = useQuery(wallsQueryOptions());
     const queryClient = useQueryClient();
     const searchStr = useLocation({ select: (location) => location.searchStr });
     const [pendingOverride, setPendingOverride] = useState<{
@@ -176,12 +178,18 @@ function HomePage() {
                     slideId: event.slideId,
                     source: event.source
                 });
+                if (wallId && event.wallId === wallId) {
+                    setAutoOpenRevision((v) => v + 1);
+                }
             }),
             galleryEngine.onWallUnbound((event) => {
                 setWallBinding({
                     wallId: event.wallId,
                     bound: false
                 });
+                if (wallId && event.wallId === wallId) {
+                    setAutoOpenRevision((v) => v + 1);
+                }
             }),
             galleryEngine.onBindOverrideRequested((req) => {
                 if (!wallId || req.wallId !== wallId) return;
@@ -254,6 +262,26 @@ function HomePage() {
         return projectsData.filter((p) => p.tags.includes(activeTag));
     }, [activeTag, projectsData]);
 
+    const autoOpenProjectId = useMemo(() => {
+        if (!wallId) return null;
+        const targetWall = walls.find((wall) => wall.wallId === wallId);
+        if (!targetWall?.boundProjectId) return null;
+        const boundSource = (targetWall as { boundSource?: 'live' | 'gallery' | null }).boundSource;
+        if (boundSource === 'live') return null;
+        return targetWall.boundProjectId;
+    }, [wallId, walls]);
+
+    const autoOpenSignal = useMemo(() => {
+        if (!wallId || !autoOpenProjectId) return null;
+        return `wall:${wallId}:project:${autoOpenProjectId}:rev:${autoOpenRevision}`;
+    }, [wallId, autoOpenProjectId, autoOpenRevision]);
+
+    useEffect(() => {
+        if (!autoOpenProjectId) return;
+        if (activeTag === null) return;
+        setActiveTag(null);
+    }, [autoOpenProjectId, activeTag]);
+
     return (
         <div className="container mx-auto p-4 pt-24">
             {pendingOverride ? (
@@ -324,7 +352,7 @@ function HomePage() {
                             <AnimatePresence mode="popLayout">
                                 {filteredProjects.map((project) => (
                                     <motion.div
-                                        key={project.name}
+                                        key={project._id}
                                         layout
                                         initial={{ opacity: 0, scale: 0.95 }}
                                         animate={{ opacity: 1, scale: 1 }}
@@ -335,7 +363,14 @@ function HomePage() {
                                             bounce: 0.2
                                         }}
                                     >
-                                        <GalleryProjectCard project={project} />
+                                        <GalleryProjectCard
+                                            project={project}
+                                            autoOpenSignal={
+                                                autoOpenProjectId === project._id
+                                                    ? autoOpenSignal
+                                                    : null
+                                            }
+                                        />
                                     </motion.div>
                                 ))}
                             </AnimatePresence>

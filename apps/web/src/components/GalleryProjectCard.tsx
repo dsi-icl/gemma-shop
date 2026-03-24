@@ -13,9 +13,10 @@ interface GalleryProjectCardProps {
         _id: string;
         publishedCommitId?: string | null;
     };
+    autoOpenSignal?: string | number | null;
 }
 
-export function GalleryProjectCard({ project }: GalleryProjectCardProps) {
+export function GalleryProjectCard({ project, autoOpenSignal }: GalleryProjectCardProps) {
     const { data: walls = [] } = useQuery(wallsQueryOptions());
     const presetWallId = useMemo(() => {
         if (typeof window === 'undefined') return null;
@@ -67,6 +68,7 @@ export function GalleryProjectCard({ project }: GalleryProjectCardProps) {
     return (
         <ProjectCard
             project={project}
+            autoOpenSignal={autoOpenSignal}
             availableWalls={availableWalls}
             onLoadProject={handleLoadProject}
             onWallRebootRequest={handleWallRebootRequest}
