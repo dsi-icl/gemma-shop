@@ -145,4 +145,4 @@ Lifecycle:
 1. Prefer additive message evolution (new optional fields/types).
 2. Keep binary opcode compatibility stable once clients are deployed.
 3. Any breaking schema changes should be gated by capability/version markers.
-4. Update this document and `PIPING.md` together when protocol semantics change.
+4. Update this document and `BUS_PIPING.md` together when protocol semantics change.

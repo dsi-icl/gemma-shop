@@ -4,7 +4,7 @@
 
 This document gives a high-level map of Gemma Shop runtime structure, ownership boundaries, and where to start for deep dives.
 
-Detailed flow-level analysis lives in [PIPING.md](./PIPING.md).
+Detailed flow-level analysis lives in [BUS_PIPING.md](./BUS_PIPING.md).
 
 ## System At A Glance
 
@@ -103,7 +103,7 @@ Key collections:
 - Commit fanout index: `commitId -> set(scopeId)`
 - YJS doc key: `${projectId}_${commitId}_${slideId}_${layerId}`
 
-See [PIPING.md](./PIPING.md) for detailed lifecycle semantics.
+See [BUS_PIPING.md](./BUS_PIPING.md) for detailed lifecycle semantics.
 
 ## Runtime Boundaries
 
@@ -112,7 +112,7 @@ See [PIPING.md](./PIPING.md) for detailed lifecycle semantics.
 
 ## Where To Start
 
-1. Read [PIPING.md](./PIPING.md) for transport/state details.
+1. Read [BUS_PIPING.md](./BUS_PIPING.md) for transport/state details.
 2. Trace client intents from `editorStore.ts` or `controller/index.tsx` into `bus.ts` handlers.
 3. Validate persistence implications in `server/walls.ts`, `server/admin.ts`, and `server/projects.ts`.
 4. For text sync issues, inspect YJS route flush + bridge flow first.

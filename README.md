@@ -65,7 +65,7 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
     - `__BROADCAST_EDITORS__` for processing progress
     - `__BROADCAST_ASSET_ADDED__` for newly created assets
 
-For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see [PIPING](./docs/PIPING.md).
+For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see [PIPING](./docs/BUS_PIPING.md).
 
 ### 2) Editor State (`apps/web/src/lib/editorStore.ts`)
 
