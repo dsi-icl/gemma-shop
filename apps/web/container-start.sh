@@ -8,7 +8,24 @@ log() {
 # Runtime browser cache path. Mount this as a volume to persist binaries.
 DEPS_ROOT="${APP_DATA_DIR:-/app/data}"
 PW_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$DEPS_ROOT/playwright}"
-mkdir -p "$PW_PATH" >/dev/null 2>&1 || true
+UPLOAD_PATH="${UPLOAD_DIR:-$DEPS_ROOT/uploads}"
+TMP_PATH="${TMP_DIR:-$DEPS_ROOT/tmp}"
+ASSET_PATH="${ASSET_DIR:-$DEPS_ROOT/assets}"
+BIN_PATH="$(dirname "${FFMPEG_PATH:-$DEPS_ROOT/bin/ffmpeg}")"
+CACHE_PATH="$DEPS_ROOT/cache"
+FFMPEG_CACHE_PATH="$CACHE_PATH/ffmpeg"
+
+# Create writable runtime folders on every boot.
+mkdir -p \
+  "$DEPS_ROOT" \
+  "$UPLOAD_PATH" \
+  "$TMP_PATH" \
+  "$ASSET_PATH" \
+  "$PW_PATH" \
+  "$BIN_PATH" \
+  "$CACHE_PATH" \
+  "$FFMPEG_CACHE_PATH" >/dev/null 2>&1 || true
+
 log "Dependency root: $DEPS_ROOT"
 log "Playwright cache path: $PW_PATH"
 
@@ -36,7 +53,7 @@ if [ ! -x "$FFMPEG_BIN" ]; then
       exit 0
     fi
 
-    CACHE_DIR="$DEPS_ROOT/cache/ffmpeg"
+    CACHE_DIR="$FFMPEG_CACHE_PATH"
     TMP_DIR="$(mktemp -d /tmp/ffmpeg.XXXXXX)"
     ARCHIVE="$TMP_DIR/ffmpeg.tar.xz"
     mkdir -p "$CACHE_DIR" "$(dirname "$FFMPEG_BIN")" >/dev/null 2>&1 || true
@@ -71,8 +88,11 @@ if [ ! -x "$FFMPEG_BIN" ]; then
     fi
     FOUND="$(find "$TMP_DIR" -type f -name ffmpeg | head -n 1)"
     if [ -n "$FOUND" ]; then
-      cp "$FOUND" "$FFMPEG_BIN.tmp" && chmod 0755 "$FFMPEG_BIN.tmp" && mv "$FFMPEG_BIN.tmp" "$FFMPEG_BIN"
-      log "FFmpeg install completed at $FFMPEG_BIN"
+      if cp "$FOUND" "$FFMPEG_BIN.tmp" && chmod 0755 "$FFMPEG_BIN.tmp" && mv "$FFMPEG_BIN.tmp" "$FFMPEG_BIN"; then
+        log "FFmpeg install completed at $FFMPEG_BIN"
+      else
+        log "FFmpeg install failed while copying binary to $FFMPEG_BIN"
+      fi
     else
       log "FFmpeg binary not found in extracted archive"
     fi
@@ -84,4 +104,3 @@ fi
 
 log "Starting app server"
 exec bun --dns-result-order="${DNS_RESULT_ORDER:-ipv4first}" .output/server/index.mjs
-

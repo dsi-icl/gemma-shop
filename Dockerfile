@@ -90,9 +90,6 @@ COPY --from=build --chown=app:app /workspace/apps/web/.output/server ./.output/s
 COPY --from=build --chown=app:app /workspace/apps/web/.output/public ./.output/public
 COPY --from=build --chown=app:app /workspace/apps/web/.output/nitro.json ./.output/nitro.json
 
-# Writable dirs used by server-side upload/asset pipeline.
-RUN mkdir -p /app/data/uploads /app/data/tmp /app/data/assets /app/data/playwright /app/data/bin /app/data/cache && chown -R app:app /app
-
 # Source maps are not needed in production runtime image.
 RUN find ./.output -type f -name '*.map' -delete || true
 
