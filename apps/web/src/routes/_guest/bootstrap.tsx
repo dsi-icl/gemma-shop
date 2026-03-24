@@ -163,6 +163,27 @@ function BootstrapPage() {
         }
     }, [otp, isVerifyOtpPending, verifyOtpMutate]);
 
+    useEffect(() => {
+        if (view !== 'otp') return;
+
+        const handlePaste = (e: ClipboardEvent) => {
+            if (isVerifyOtpPending) return;
+            const pasted = e.clipboardData?.getData('text');
+            if (!pasted) return;
+
+            e.preventDefault();
+            const newDigits = pasted.replace(/\D/g, '').slice(0, OTP_LENGTH);
+            if (newDigits) {
+                setOtp(newDigits);
+            }
+        };
+
+        document.addEventListener('paste', handlePaste);
+        return () => {
+            document.removeEventListener('paste', handlePaste);
+        };
+    }, [view, isVerifyOtpPending]);
+
     const detailsDisabled = useMemo(
         () =>
             !adminEmail.trim() ||
