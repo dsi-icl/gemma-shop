@@ -1,4 +1,5 @@
 @import '@repo/ui/styles/base.css';
+@import 'prismjs/themes/prism.css';
 @import './textEditor.css';
 
 @source './';

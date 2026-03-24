@@ -38,6 +38,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { AppearanceToolbar } from '~/components/AppearanceToolbar';
 import { PlaybackControls } from '~/components/PlaybackControls';
+import { SlidesJsonDialog } from '~/components/SlidesJsonDialog';
 import { VideoScrubber } from '~/components/VideoScrubber';
 import { WallPickerPopover } from '~/components/WallPicker';
 import { EditorEngine } from '~/lib/editorEngine';
@@ -140,6 +141,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     // Save popover state
     const [commitMessage, setCommitMessage] = useState('');
     const [savePopoverOpen, setSavePopoverOpen] = useState(false);
+    const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
     const commitInputRef = useRef<HTMLInputElement>(null);
 
     const handleManualSave = () => {
@@ -356,6 +358,10 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
 
                 {/* Spacer */}
                 <div className="flex-1" />
+
+                <TipButton tip="Extract JSON" onClick={() => setJsonDialogOpen(true)}>
+                    <span className="font-mono text-xs">{'{}'}</span>
+                </TipButton>
 
                 {/* ── Live Preview ── */}
                 {boundWallId ? (
@@ -746,6 +752,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                     </>
                 )}
             </div>
+            <SlidesJsonDialog open={jsonDialogOpen} onOpenChange={setJsonDialogOpen} />
         </TooltipProvider>
     );
 }
