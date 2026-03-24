@@ -1,14 +1,67 @@
-import { CastleTurretIcon, CircleNotchIcon, SignOutIcon, UserIcon } from '@phosphor-icons/react';
+import {
+    ArrowsInIcon,
+    ArrowsOutSimpleIcon,
+    CastleTurretIcon,
+    CircleNotchIcon,
+    SignOutIcon,
+    UserIcon
+} from '@phosphor-icons/react';
 import authClient from '@repo/auth/auth-client';
 import { useAuthSuspense } from '@repo/auth/tanstack/hooks';
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Button } from '@repo/ui/components/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useRouter } from '@tanstack/react-router';
-import { Suspense, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { KeyboardToggle } from './KeyboardToggle';
 import { ThemeToggle } from './ThemeToggle';
+
+function FullscreenToggle() {
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+        const sync = () => setIsFullscreen(Boolean(document.fullscreenElement));
+        sync();
+        document.addEventListener('fullscreenchange', sync);
+        return () => document.removeEventListener('fullscreenchange', sync);
+    }, []);
+
+    const toggleFullscreen = useCallback(async () => {
+        if (typeof document === 'undefined') return;
+        const root = document.documentElement;
+        if (!document.fullscreenElement) {
+            if (root.requestFullscreen) {
+                await root.requestFullscreen();
+            }
+            return;
+        }
+        if (document.exitFullscreen) {
+            await document.exitFullscreen();
+        }
+    }, []);
+
+    if (typeof document === 'undefined') return null;
+    const canFullscreen = document.fullscreenEnabled;
+    if (!canFullscreen) return null;
+
+    return (
+        <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void toggleFullscreen()}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        >
+            {isFullscreen ? (
+                <ArrowsInIcon className="h-[1.2rem] w-[1.2rem]" />
+            ) : (
+                <ArrowsOutSimpleIcon className="h-[1.2rem] w-[1.2rem]" />
+            )}
+        </Button>
+    );
+}
 
 function HeaderAuthSection() {
     const { user } = useAuthSuspense();
@@ -73,6 +126,7 @@ export function Header() {
                 Gemma Shop
             </Link>
             <KeyboardToggle />
+            <FullscreenToggle />
             <ThemeToggle />
             <Suspense
                 fallback={
