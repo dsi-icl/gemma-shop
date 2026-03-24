@@ -78,12 +78,25 @@ async function verifyMongoReplicaSet(): Promise<void> {
         await client.connect();
 
         const adminDb = client.db('admin');
-        const hello = await adminDb.command({ hello: 1 });
-        const setName = hello?.setName as string | undefined;
+        let hello: Record<string, unknown>;
+        try {
+            hello = (await adminDb.command({ hello: 1 })) as Record<string, unknown>;
+        } catch {
+            // Backward compatibility with older Mongo deployments that do not support hello.
+            hello = (await adminDb.command({ isMaster: 1 })) as Record<string, unknown>;
+        }
 
-        if (!setName) {
+        const setName = typeof hello?.setName === 'string' ? hello.setName : null;
+        const serverMsg = typeof hello?.msg === 'string' ? hello.msg : null;
+        const isMongos = serverMsg === 'isdbgrid';
+        const hasReplicaSet = typeof setName === 'string' && setName.length > 0;
+
+        // Accept either:
+        // 1) direct replica-set mongod topology (`setName` present), or
+        // 2) mongos router topology (`msg: isdbgrid`) in front of a sharded cluster.
+        if (!hasReplicaSet && !isMongos) {
             bootIssues.push(
-                'MongoDB is reachable but not configured as a replica set. Change streams require a replica set.'
+                'MongoDB is reachable but did not report replica-set or mongos topology. Change streams require replica-set-backed deployments (direct RS or mongos).'
             );
         }
     } catch (err) {
