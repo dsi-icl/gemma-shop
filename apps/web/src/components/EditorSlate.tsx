@@ -548,7 +548,8 @@ export function EditorSlate() {
         const layer = layersRef.current.get(numericId);
         if (!node || !layer) return;
 
-        if (node.isDragging()) {
+        const isTransformerActive = trRef.current?.isTransforming() ?? false;
+        if (node.isDragging() || isTransformerActive) {
             autoScrollStageDuringDrag(e.evt);
         }
 
