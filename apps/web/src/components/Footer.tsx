@@ -1,4 +1,6 @@
+import { HeartIcon } from '@phosphor-icons/react';
 import { Clock } from '@repo/ui/components/clock';
+import { Link } from '@tanstack/react-router';
 import { useLocation } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
@@ -16,7 +18,17 @@ export function Footer() {
 
     return (
         <footer className="absolute bottom-0 left-0 flex w-full items-center justify-between gap-2 p-4 text-sm text-accent">
-            <span className="grow">© 2026 Data Science Imperial. All rights reserved.</span>
+            <span className="grow">
+                © 2026 Data Science Imperial{' · '}Developed with{' '}
+                <HeartIcon weight="bold" className="inline" /> by{' '}
+                <a className="underline" href="mailto:f.guitton@imperial.ac.uk">
+                    Florian Guitton
+                </a>
+                {' · '}All rights reserved.
+                <Link className="underline" to="/legal/notices">
+                    Third-party notices
+                </Link>
+            </span>
             <Clock />
         </footer>
     );

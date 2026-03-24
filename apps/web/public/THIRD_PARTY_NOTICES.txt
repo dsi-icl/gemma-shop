@@ -1,0 +1,5 @@
+THIRD-PARTY NOTICES
+
+No generated notice artifact is available yet.
+Run a production build to generate the full tree-shaken notice set.
+

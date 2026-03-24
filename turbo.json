@@ -2,6 +2,7 @@
     "$schema": "https://turborepo.com/schema.json",
     "ui": "tui",
     "globalPassThroughEnv": [
+        "BASE_URL",
         "NODE_ENV",
         "PROD",
         "YJS_DEBUG",

@@ -5,6 +5,7 @@ import viteReact from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 import { defineConfig } from 'vite';
 
+import { thirdPartyNoticesPlugin } from './plugins/thirdPartyNotices';
 import { ttfPlugin } from './plugins/ttf';
 
 export default defineConfig({
@@ -25,6 +26,7 @@ export default defineConfig({
     },
     plugins: [
         ttfPlugin(),
+        thirdPartyNoticesPlugin(),
         devtools({
             // Avoid runtime console serialization loops in complex React/Nitro error paths.
             // Keeps devtools available while disabling the console-pipe injection.

@@ -22,6 +22,7 @@ import { Route as GalleryIndexRouteImport } from './routes/gallery/index'
 import { Route as ControllerIndexRouteImport } from './routes/controller/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
+import { Route as LegalNoticesRouteImport } from './routes/legal/notices'
 import { Route as ApiWebScreenshotRouteImport } from './routes/api/web-screenshot'
 import { Route as AdminWallsRouteImport } from './routes/admin/walls'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
@@ -110,6 +111,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const UploadProjectIdRoute = UploadProjectIdRouteImport.update({
   id: '/upload/$projectId',
   path: '/upload/$projectId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalNoticesRoute = LegalNoticesRouteImport.update({
+  id: '/legal/notices',
+  path: '/legal/notices',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiWebScreenshotRoute = ApiWebScreenshotRouteImport.update({
@@ -269,6 +275,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/admin/walls': typeof AdminWallsRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
+  '/legal/notices': typeof LegalNoticesRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
@@ -307,6 +314,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/admin/walls': typeof AdminWallsRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
+  '/legal/notices': typeof LegalNoticesRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/admin': typeof AdminIndexRoute
   '/controller': typeof ControllerIndexRoute
@@ -348,6 +356,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/admin/walls': typeof AdminWallsRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
+  '/legal/notices': typeof LegalNoticesRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
@@ -389,6 +398,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/walls'
     | '/api/web-screenshot'
+    | '/legal/notices'
     | '/upload/$projectId'
     | '/admin/'
     | '/controller/'
@@ -427,6 +437,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/walls'
     | '/api/web-screenshot'
+    | '/legal/notices'
     | '/upload/$projectId'
     | '/admin'
     | '/controller'
@@ -467,6 +478,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/walls'
     | '/api/web-screenshot'
+    | '/legal/notices'
     | '/upload/$projectId'
     | '/admin/'
     | '/controller/'
@@ -501,6 +513,7 @@ export interface RootRouteChildren {
   WebNonetRoute: typeof WebNonetRoute
   WebPlaceholderRoute: typeof WebPlaceholderRoute
   ApiWebScreenshotRoute: typeof ApiWebScreenshotRoute
+  LegalNoticesRoute: typeof LegalNoticesRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
   ControllerIndexRoute: typeof ControllerIndexRoute
   GalleryIndexRoute: typeof GalleryIndexRoute
@@ -601,6 +614,13 @@ declare module '@tanstack/react-router' {
       path: '/upload/$projectId'
       fullPath: '/upload/$projectId'
       preLoaderRoute: typeof UploadProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/notices': {
+      id: '/legal/notices'
+      path: '/legal/notices'
+      fullPath: '/legal/notices'
+      preLoaderRoute: typeof LegalNoticesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/web-screenshot': {
@@ -916,6 +936,7 @@ const rootRouteChildren: RootRouteChildren = {
   WebNonetRoute: WebNonetRoute,
   WebPlaceholderRoute: WebPlaceholderRoute,
   ApiWebScreenshotRoute: ApiWebScreenshotRoute,
+  LegalNoticesRoute: LegalNoticesRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,
   ControllerIndexRoute: ControllerIndexRoute,
   GalleryIndexRoute: GalleryIndexRoute,
