@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
     pull_request:
@@ -42,7 +42,6 @@ jobs:
     playwright-e2e:
         runs-on: ubuntu-latest
         needs: quality-and-build
-        if: ${{ hashFiles('playwright.config.ts', 'playwright.config.js', 'apps/web/playwright.config.ts', 'apps/web/playwright.config.js') != '' }}
         services:
             mongo:
                 image: mongo:7
@@ -68,8 +67,23 @@ jobs:
             - name: Install dependencies
               run: bun install
 
+            - name: Detect Playwright config
+              id: detect-playwright
+              run: |
+                  if [ -f playwright.config.ts ] || [ -f playwright.config.js ] || [ -f apps/web/playwright.config.ts ] || [ -f apps/web/playwright.config.js ]; then
+                    echo "has_config=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "has_config=false" >> "$GITHUB_OUTPUT"
+                  fi
+
             - name: Install Playwright browsers
+              if: ${{ steps.detect-playwright.outputs.has_config == 'true' }}
               run: bunx playwright install --with-deps chromium
 
             - name: Run Playwright tests
+              if: ${{ steps.detect-playwright.outputs.has_config == 'true' }}
               run: bunx playwright test
+
+            - name: Skip Playwright tests (no config found)
+              if: ${{ steps.detect-playwright.outputs.has_config != 'true' }}
+              run: echo "No Playwright config found, skipping E2E tests."
