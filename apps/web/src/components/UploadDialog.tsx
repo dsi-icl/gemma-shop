@@ -18,6 +18,7 @@ import QRCode from 'qrcode';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { scrubInsecureTusResumeEntries } from '~/lib/tusClient';
 import { $createUploadToken, $revokeUploadToken } from '~/server/projects.fns';
 
 interface UploadDialogProps {
@@ -128,6 +129,7 @@ export function UploadDialog({
     const uploadFiles = useCallback(
         (selectedFiles: File[]) => {
             if (selectedFiles.length === 0) return;
+            scrubInsecureTusResumeEntries();
 
             const uppy =
                 uppyRef.current ??

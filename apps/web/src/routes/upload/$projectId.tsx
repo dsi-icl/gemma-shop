@@ -12,6 +12,7 @@ import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { scrubInsecureTusResumeEntries } from '~/lib/tusClient';
 import { $validateUploadToken } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/upload/$projectId')({
@@ -59,6 +60,7 @@ function MobileUpload() {
     const uploadFiles = useCallback(
         (selectedFiles: File[]) => {
             if (selectedFiles.length === 0 || !token) return;
+            scrubInsecureTusResumeEntries();
 
             const uppy =
                 uppyRef.current ??

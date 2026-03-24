@@ -15,6 +15,7 @@ import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
 import { fitSizeToViewport } from '~/lib/fitSizeToViewport';
+import { scrubInsecureTusResumeEntries } from '~/lib/tusClient';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
 
@@ -405,6 +406,7 @@ export function EditorSlate() {
         // 3. Background tus upload with metadata for server-side post-processing
         const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
         const currentProjectId = useEditorStore.getState().projectId;
+        scrubInsecureTusResumeEntries();
 
         const uppy = new Uppy().use(Tus, {
             endpoint: '/api/uploads/',
