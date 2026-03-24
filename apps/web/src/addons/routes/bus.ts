@@ -171,7 +171,8 @@ async function performLiveBind(
     wallId: string,
     projectId: string,
     commitId: string,
-    requestedSlideId: string
+    requestedSlideId: string,
+    source: 'live' | 'gallery' = 'live'
 ): Promise<{ ok: boolean; resolvedSlideId?: string; error?: string }> {
     try {
         cancelWallUnbindGrace(wallId);
@@ -202,13 +203,20 @@ async function performLiveBind(
             project?.customRenderCompat,
             project?.customRenderProxy
         );
-        bindWall(wallId, scopeId, 'live');
+        bindWall(wallId, scopeId, source);
 
         if (scope.layers.size === 0) {
             await seedScopeFromDb(scopeId);
         }
 
-        notifyControllers(wallId, true, projectId, commitId, resolvedSlideId);
+        notifyControllers(
+            wallId,
+            true,
+            projectId,
+            commitId,
+            resolvedSlideId,
+            scope.customRenderUrl
+        );
         try {
             hydrateWallNodes(wallId);
             broadcastToControllersByWallRaw(wallId, getWallHydratePayload(scopeId, wallId));
@@ -226,7 +234,7 @@ async function performLiveBind(
                     boundProjectId: projectId,
                     boundCommitId: commitId,
                     boundSlideId: resolvedSlideId,
-                    boundSource: 'live',
+                    boundSource: source,
                     updatedAt: new Date().toISOString()
                 },
                 $setOnInsert: {
@@ -352,7 +360,12 @@ function broadcastWallBindingToEditors(wallId: string) {
         wallId,
         bound: boundScope !== undefined,
         ...(scope
-            ? { projectId: scope.projectId, commitId: scope.commitId, slideId: scope.slideId }
+            ? {
+                  projectId: scope.projectId,
+                  commitId: scope.commitId,
+                  slideId: scope.slideId,
+                  customRenderUrl: scope.customRenderUrl
+              }
             : {})
     } satisfies GSMessage);
     for (const entry of allEditors) {
@@ -670,7 +683,9 @@ handlers.set('bind_wall', ({ data }) => {
     // Editors should route through request_bind_wall (approval gate).
     // Keep bind_wall for controllers and system/internal callers.
     void (async () => {
-        await performLiveBind(data.wallId, data.projectId, data.commitId, data.slideId);
+        const currentSource = wallBindingSources.get(data.wallId);
+        const source = currentSource === 'gallery' ? 'gallery' : 'live';
+        await performLiveBind(data.wallId, data.projectId, data.commitId, data.slideId, source);
     })();
 });
 
@@ -948,7 +963,8 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
                                 ? {
                                       projectId: s.projectId,
                                       commitId: s.commitId,
-                                      slideId: s.slideId
+                                      slideId: s.slideId,
+                                      customRenderUrl: s.customRenderUrl
                                   }
                                 : {})
                         } satisfies GSMessage)
@@ -977,7 +993,8 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
                             ? {
                                   projectId: s.projectId,
                                   commitId: s.commitId,
-                                  slideId: s.slideId
+                                  slideId: s.slideId,
+                                  customRenderUrl: s.customRenderUrl
                               }
                             : {})
                     } satisfies GSMessage)
@@ -1032,7 +1049,12 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
             wallId: parsed.wallId,
             bound: boundScope !== undefined,
             ...(scope
-                ? { projectId: scope.projectId, commitId: scope.commitId, slideId: scope.slideId }
+                ? {
+                      projectId: scope.projectId,
+                      commitId: scope.commitId,
+                      slideId: scope.slideId,
+                      customRenderUrl: scope.customRenderUrl
+                  }
                 : {})
         });
         peer.send(
