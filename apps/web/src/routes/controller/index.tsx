@@ -110,6 +110,12 @@ function buildLineLayer(
     }
 
     if (minX === null || minY === null || maxX === null || maxY === null) return null;
+    const rawWidth = maxX - minX;
+    const rawHeight = maxY - minY;
+    const width = Math.max(1, Math.round(rawWidth));
+    const height = Math.max(1, Math.round(rawHeight));
+    const cx = Math.round(minX + rawWidth / 2);
+    const cy = Math.round(minY + rawHeight / 2);
 
     const nextNumericId =
         existingLayers.reduce((max, layer) => Math.max(max, layer.numericId), 0) + 10;
@@ -120,10 +126,10 @@ function buildLineLayer(
         numericId: nextNumericId,
         type: 'line',
         config: {
-            cx: minX,
-            cy: minY,
-            width: Math.round(maxX - minX),
-            height: Math.round(maxY - minY),
+            cx,
+            cy,
+            width,
+            height,
             rotation: 0,
             scaleX: 1,
             scaleY: 1,

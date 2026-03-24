@@ -825,15 +825,19 @@ export const useEditorStore =
                       }
                       if (minX === null || minY === null || maxX === null || maxY === null)
                           return null;
-                      const width = Math.round(maxX - minX);
-                      const height = Math.round(maxY - minY);
+                      const rawWidth = maxX - minX;
+                      const rawHeight = maxY - minY;
+                      const width = Math.max(1, Math.round(rawWidth));
+                      const height = Math.max(1, Math.round(rawHeight));
+                      const cx = Math.round(minX + rawWidth / 2);
+                      const cy = Math.round(minY + rawHeight / 2);
 
                       const newLayer: LayerWithEditorState = {
                           numericId,
                           type: 'line',
                           config: {
-                              cx: minX,
-                              cy: minY,
+                              cx,
+                              cy,
                               width,
                               height,
                               rotation: 0,

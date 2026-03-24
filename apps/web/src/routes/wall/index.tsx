@@ -18,6 +18,52 @@ const ROWS = 4;
 const HYDRATE_FADE_MS = 1000;
 const HYDRATE_IFRAME_TIMEOUT_MS = 2000;
 
+function getLineBounds(line: number[]) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (let i = 0; i < line.length; i += 2) {
+        const x = line[i];
+        const y = line[i + 1];
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+
+    if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
+        return null;
+    }
+
+    const rawWidth = maxX - minX;
+    const rawHeight = maxY - minY;
+    const width = Math.max(1, Math.round(rawWidth));
+    const height = Math.max(1, Math.round(rawHeight));
+    const cx = minX + rawWidth / 2;
+    const cy = minY + rawHeight / 2;
+
+    return { minX, minY, maxX, maxY, width, height, cx, cy };
+}
+
+function getCullingPadding(
+    layer: LayerWithWallComponentState,
+    pos: { scaleX: number; scaleY: number }
+) {
+    const scale = Math.max(Math.abs(pos.scaleX), Math.abs(pos.scaleY), 1);
+    const filterBlur =
+        layer.config.filters?.enabled === true ? (layer.config.filters.blur ?? 0) : 0;
+    const blurPadding = filterBlur * scale * 2;
+
+    let strokePadding = 0;
+    if (layer.type === 'line' || layer.type === 'shape') {
+        strokePadding = (layer.strokeWidth / 2) * scale;
+    }
+
+    return 20 + blurPadding + strokePadding;
+}
+
 export const Route = createFileRoute('/wall/')({
     component: WallApp
 });
@@ -242,39 +288,58 @@ function WallApp() {
                 }
 
                 const pos = engine.calculateCurrentPosition(layer);
+                const effectivePos =
+                    layer.type === 'line'
+                        ? (() => {
+                              const bounds = getLineBounds(layer.line);
+                              if (!bounds) return pos;
+                              return {
+                                  ...pos,
+                                  cx: bounds.cx,
+                                  cy: bounds.cy,
+                                  width: bounds.width,
+                                  height: bounds.height
+                              };
+                          })()
+                        : pos;
 
                 // --- UPGRADED CLIENT-SIDE CULLING MATH (Rotated AABB) ---
                 // 1. Get the scaled width and height
-                const sw = pos.width * pos.scaleX;
-                const sh = pos.height * pos.scaleY;
+                const sw = effectivePos.width * effectivePos.scaleX;
+                const sh = effectivePos.height * effectivePos.scaleY;
 
                 // 2. Convert degrees to radians for JS Math functions
-                const rad = pos.rotation * (Math.PI / 180);
+                const rad = effectivePos.rotation * (Math.PI / 180);
 
                 // 3. Calculate the true dynamic bounding box of the rotated rectangle
+                const cullingPadding = getCullingPadding(layer, effectivePos);
                 const radiusX =
-                    (sw / 2) * Math.abs(Math.cos(rad)) + (sh / 2) * Math.abs(Math.sin(rad)) + 20;
+                    (sw / 2) * Math.abs(Math.cos(rad)) +
+                    (sh / 2) * Math.abs(Math.sin(rad)) +
+                    cullingPadding;
                 const radiusY =
-                    (sw / 2) * Math.abs(Math.sin(rad)) + (sh / 2) * Math.abs(Math.cos(rad)) + 20;
+                    (sw / 2) * Math.abs(Math.sin(rad)) +
+                    (sh / 2) * Math.abs(Math.cos(rad)) +
+                    cullingPadding;
 
                 // Protect against network NaN poisoning
                 if (isNaN(radiusX) || isNaN(radiusY)) return;
 
                 // 4. Evaluate against the screen viewport
                 const isVisible =
-                    pos.cx + radiusX > myViewport.x &&
-                    pos.cx - radiusX < myViewport.x + myViewport.w &&
-                    pos.cy + radiusY > myViewport.y &&
-                    pos.cy - radiusY < myViewport.y + myViewport.h;
+                    effectivePos.cx + radiusX > myViewport.x &&
+                    effectivePos.cx - radiusX < myViewport.x + myViewport.w &&
+                    effectivePos.cy + radiusY > myViewport.y &&
+                    effectivePos.cy - radiusY < myViewport.y + myViewport.h;
 
                 if (isVisible) {
-                    const localX = pos.cx - pos.width / 2 - myViewport.x;
-                    const localY = pos.cy - pos.height / 2 - myViewport.y;
+                    const localX = effectivePos.cx - effectivePos.width / 2 - myViewport.x;
+                    const localY = effectivePos.cy - effectivePos.height / 2 - myViewport.y;
 
                     layer.visible = true;
-                    layer.el.style.width = `${pos.width}px`;
-                    layer.el.style.height = `${pos.height}px`;
-                    layer.el.style.transform = `translate3d(${localX}px, ${localY}px, 0) rotate(${pos.rotation}deg) scale(${pos.scaleX}, ${pos.scaleY})`;
+                    layer.el.style.width = `${effectivePos.width}px`;
+                    layer.el.style.height = `${effectivePos.height}px`;
+                    layer.el.style.transform = `translate3d(${localX}px, ${localY}px, 0) rotate(${effectivePos.rotation}deg) scale(${effectivePos.scaleX}, ${effectivePos.scaleY})`;
                     layer.el.style.opacity = '1';
                 } else {
                     layer.visible = false;
@@ -485,16 +550,27 @@ function WallApp() {
                 );
 
             if (layer.type === 'line') {
+                const bounds = getLineBounds(layer.line);
+                if (!bounds) return null;
                 let svgPoints = [];
                 for (let i = 0; i < layer.line.length; i += 2)
                     svgPoints.push(
-                        `${Math.round(layer.line[i] - layer.config.cx + layer.config.width / 2)},${Math.round(layer.line[i + 1] - layer.config.cy + layer.config.height / 2)}`
+                        `${Math.round(layer.line[i] - bounds.cx + bounds.width / 2)},${Math.round(layer.line[i + 1] - bounds.cy + bounds.height / 2)}`
                     );
                 return (
-                    <div key={layer.numericId} {...commonProps} className="origin-top-left">
+                    <div
+                        key={layer.numericId}
+                        {...commonProps}
+                        className="origin-top-left"
+                        style={{
+                            ...commonProps.style,
+                            width: `${bounds.width}px`,
+                            height: `${bounds.height}px`
+                        }}
+                    >
                         <svg
-                            width={layer.config.width * 1.5}
-                            height={layer.config.height * 1.5}
+                            width={bounds.width}
+                            height={bounds.height}
                             className="overflow-visible"
                             xmlns="http://www.w3.org/2000/svg"
                         >
