@@ -28,10 +28,10 @@ export type MorphingDialogContextType = {
 const MorphingDialogContext = React.createContext<MorphingDialogContextType | null>(null);
 const dialogStateRegistry = new Map<string, MorphingDialogState>();
 
-function hasCompetingOpenDialog(currentId: string): boolean {
+function hasCompetingExpandedDialog(currentId: string): boolean {
     for (const [id, state] of dialogStateRegistry) {
         if (id === currentId) continue;
-        if (state === 'expanded' || state === 'fullscreen' || state === 'minimized') {
+        if (state === 'expanded') {
             return true;
         }
     }
@@ -53,6 +53,7 @@ export type MorphingDialogProviderProps = {
     onStateChange?: (state: MorphingDialogState) => void;
     forceOpenSignal?: string | number | null;
     forceDemoteFullscreenSignal?: string | number | null;
+    forceCloseMinimizedSignal?: string | number | null;
     forceCloseSignal?: string | number | null;
 };
 
@@ -63,11 +64,13 @@ function MorphingDialogProvider({
     onStateChange,
     forceOpenSignal,
     forceDemoteFullscreenSignal,
+    forceCloseMinimizedSignal,
     forceCloseSignal
 }: MorphingDialogProviderProps) {
     const [state, setState] = useState<MorphingDialogState>(defaultState);
     const lastForceOpenSignalRef = useRef<string | number | null | undefined>(undefined);
     const lastForceDemoteSignalRef = useRef<string | number | null | undefined>(undefined);
+    const lastForceCloseMinimizedSignalRef = useRef<string | number | null | undefined>(undefined);
     const lastForceCloseSignalRef = useRef<string | number | null | undefined>(undefined);
     const closeRafRef = useRef<number | null>(null);
     const closeLockRef = useRef(false);
@@ -186,12 +189,13 @@ function MorphingDialogProvider({
         lastForceOpenSignalRef.current = forceOpenSignal;
         // Remote-triggered open:
         // - if this dialog is already open but not fullscreen, promote it to fullscreen
-        // - if another dialog is already open, open this one minimized to avoid stealing focus
+        // - if another dialog is expanded, open this one minimized to avoid stealing focus
+        // - fullscreen competitors are handled by synced close signaling and should not force minimize
         // - otherwise open fullscreen as before
         setState((prev) => {
             if (prev === 'expanded' || prev === 'minimized') return 'fullscreen';
             if (prev === 'fullscreen') return prev;
-            return hasCompetingOpenDialog(uniqueId) ? 'minimized' : 'fullscreen';
+            return hasCompetingExpandedDialog(uniqueId) ? 'minimized' : 'fullscreen';
         });
     }, [forceOpenSignal, uniqueId]);
 
@@ -204,6 +208,17 @@ function MorphingDialogProvider({
         lastForceDemoteSignalRef.current = forceDemoteFullscreenSignal;
         setState((prev) => (prev === 'fullscreen' ? 'expanded' : prev));
     }, [forceDemoteFullscreenSignal]);
+
+    useEffect(() => {
+        if (forceCloseMinimizedSignal === null || forceCloseMinimizedSignal === undefined) {
+            lastForceCloseMinimizedSignalRef.current = forceCloseMinimizedSignal;
+            return;
+        }
+        if (Object.is(lastForceCloseMinimizedSignalRef.current, forceCloseMinimizedSignal)) return;
+        lastForceCloseMinimizedSignalRef.current = forceCloseMinimizedSignal;
+        if (state !== 'minimized') return;
+        close();
+    }, [forceCloseMinimizedSignal, state, close]);
 
     useEffect(() => {
         if (forceCloseSignal === null || forceCloseSignal === undefined) {
@@ -230,6 +245,7 @@ export type MorphingDialogProps = {
     onStateChange?: (state: MorphingDialogState) => void;
     forceOpenSignal?: string | number | null;
     forceDemoteFullscreenSignal?: string | number | null;
+    forceCloseMinimizedSignal?: string | number | null;
     forceCloseSignal?: string | number | null;
 };
 
@@ -240,6 +256,7 @@ function MorphingDialog({
     onStateChange,
     forceOpenSignal,
     forceDemoteFullscreenSignal,
+    forceCloseMinimizedSignal,
     forceCloseSignal
 }: MorphingDialogProps) {
     return (
@@ -248,6 +265,7 @@ function MorphingDialog({
             onStateChange={onStateChange}
             forceOpenSignal={forceOpenSignal}
             forceDemoteFullscreenSignal={forceDemoteFullscreenSignal}
+            forceCloseMinimizedSignal={forceCloseMinimizedSignal}
             forceCloseSignal={forceCloseSignal}
         >
             <MotionConfig transition={transition}>{children}</MotionConfig>

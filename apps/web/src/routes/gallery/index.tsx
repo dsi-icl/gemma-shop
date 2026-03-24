@@ -80,6 +80,13 @@ function HomePage() {
             setSyncedCloseProjectId(projectId);
             setSyncedCloseRevision((v) => v + 1);
         };
+        const updateCurrentGalleryBoundProject = (nextProjectId: string | null) => {
+            const previousProjectId = lastGalleryBoundProjectRef.current;
+            if (previousProjectId && nextProjectId && previousProjectId !== nextProjectId) {
+                triggerSyncedCardClose(previousProjectId);
+            }
+            lastGalleryBoundProjectRef.current = nextProjectId;
+        };
         const handleLiveBindingStatus = (
             nextWallId: string,
             bound: boolean,
@@ -191,7 +198,7 @@ function HomePage() {
                             targetWall.source === 'gallery' &&
                             Boolean(targetWall.projectId);
                         if (isGalleryBound && targetWall.projectId) {
-                            lastGalleryBoundProjectRef.current = targetWall.projectId;
+                            updateCurrentGalleryBoundProject(targetWall.projectId);
                         } else {
                             const previouslyBoundProject = lastGalleryBoundProjectRef.current;
                             if (previouslyBoundProject) {
@@ -199,7 +206,7 @@ function HomePage() {
                             } else {
                                 triggerSyncedCardClose(null);
                             }
-                            lastGalleryBoundProjectRef.current = null;
+                            updateCurrentGalleryBoundProject(null);
                         }
                     } else {
                         handleLiveBindingStatus(wallId, false);
@@ -209,7 +216,7 @@ function HomePage() {
                         } else {
                             triggerSyncedCardClose(null);
                         }
-                        lastGalleryBoundProjectRef.current = null;
+                        updateCurrentGalleryBoundProject(null);
                     }
                 }
             }),
@@ -240,7 +247,7 @@ function HomePage() {
                 if (wallId && event.wallId === wallId) {
                     setAutoOpenRevision((v) => v + 1);
                     if (event.bound && event.source === 'gallery' && event.projectId) {
-                        lastGalleryBoundProjectRef.current = event.projectId;
+                        updateCurrentGalleryBoundProject(event.projectId);
                     } else if (!event.bound) {
                         const previouslyBoundProject = lastGalleryBoundProjectRef.current;
                         if (previouslyBoundProject) {
@@ -248,9 +255,9 @@ function HomePage() {
                         } else {
                             triggerSyncedCardClose(null);
                         }
-                        lastGalleryBoundProjectRef.current = null;
+                        updateCurrentGalleryBoundProject(null);
                     } else if (event.source === 'live') {
-                        lastGalleryBoundProjectRef.current = null;
+                        updateCurrentGalleryBoundProject(null);
                     }
                 }
                 handleLiveBindingStatus(event.wallId, event.bound, event.source);
@@ -268,7 +275,7 @@ function HomePage() {
                     } else {
                         triggerSyncedCardClose(null);
                     }
-                    lastGalleryBoundProjectRef.current = null;
+                    updateCurrentGalleryBoundProject(null);
                 }
                 handleLiveBindingStatus(event.wallId, false);
             }),
@@ -491,6 +498,7 @@ function HomePage() {
                                                     : null
                                             }
                                             forceDemoteFullscreenSignal={liveSessionStartedSignal}
+                                            forceCloseMinimizedSignal={liveSessionStartedSignal}
                                             forceCloseSignal={
                                                 syncedCloseProjectId === null ||
                                                 syncedCloseProjectId === project._id

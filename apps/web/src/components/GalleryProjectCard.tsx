@@ -16,6 +16,7 @@ interface GalleryProjectCardProps {
     };
     autoOpenSignal?: string | number | null;
     forceDemoteFullscreenSignal?: string | number | null;
+    forceCloseMinimizedSignal?: string | number | null;
     forceCloseSignal?: string | number | null;
 }
 
@@ -23,6 +24,7 @@ export function GalleryProjectCard({
     project,
     autoOpenSignal,
     forceDemoteFullscreenSignal,
+    forceCloseMinimizedSignal,
     forceCloseSignal
 }: GalleryProjectCardProps) {
     const { data: walls = [] } = useQuery(wallsQueryOptions());
@@ -89,6 +91,7 @@ export function GalleryProjectCard({
             project={project}
             autoOpenSignal={autoOpenSignal}
             forceDemoteFullscreenSignal={forceDemoteFullscreenSignal}
+            forceCloseMinimizedSignal={forceCloseMinimizedSignal}
             forceCloseSignal={forceCloseSignal}
             availableWalls={availableWalls}
             onLoadProject={handleLoadProject}

@@ -79,6 +79,10 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
     - publish/unpublish live feed
     - admin/gallery wall bind/unbind propagation
 - Remaining migration work is mostly UX-level data shaping and removing residual query polling paths.
+- Gallery dialog sync uses separate UI intent signals:
+    - `forceCloseSignal`: synced close for connected cards on wall unbind (applies to fullscreen/minimized).
+    - `forceCloseMinimizedSignal`: live-session transition helper to close minimized cards while fullscreen cards are demoted to expanded.
+      These are intentionally separate because unbind and live-transition flows require different state transitions.
 
 ### 2) Editor State (`apps/web/src/lib/editorStore.ts`)
 

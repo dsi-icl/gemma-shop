@@ -36,6 +36,7 @@ interface ProjectCardProps {
     project: Project;
     autoOpenSignal?: string | number | null;
     forceDemoteFullscreenSignal?: string | number | null;
+    forceCloseMinimizedSignal?: string | number | null;
     forceCloseSignal?: string | number | null;
     presetWallId?: string | null;
     availableWalls?: Array<{
@@ -330,6 +331,7 @@ export function ProjectCard({
     project,
     autoOpenSignal,
     forceDemoteFullscreenSignal,
+    forceCloseMinimizedSignal,
     forceCloseSignal,
     onLoadProject,
     onWallRebootRequest,
@@ -340,7 +342,23 @@ export function ProjectCard({
     const activeWallIdRef = useRef<string | null>(null);
     const prevDialogStateRef = useRef<'closed' | 'expanded' | 'fullscreen' | 'minimized'>('closed');
     const skipUnbindOnNextCloseRef = useRef(false);
+    const lastExternalCloseMinimizedSignalRef = useRef<string | number | null | undefined>(
+        undefined
+    );
     const lastExternalCloseSignalRef = useRef<string | number | null | undefined>(undefined);
+
+    useEffect(() => {
+        if (forceCloseMinimizedSignal === null || forceCloseMinimizedSignal === undefined) {
+            lastExternalCloseMinimizedSignalRef.current = forceCloseMinimizedSignal;
+            return;
+        }
+        if (Object.is(lastExternalCloseMinimizedSignalRef.current, forceCloseMinimizedSignal))
+            return;
+        lastExternalCloseMinimizedSignalRef.current = forceCloseMinimizedSignal;
+        if (prevDialogStateRef.current === 'minimized') {
+            skipUnbindOnNextCloseRef.current = true;
+        }
+    }, [forceCloseMinimizedSignal]);
 
     useEffect(() => {
         if (forceCloseSignal === null || forceCloseSignal === undefined) {
@@ -384,6 +402,7 @@ export function ProjectCard({
         <MorphingDialog
             forceOpenSignal={autoOpenSignal}
             forceDemoteFullscreenSignal={forceDemoteFullscreenSignal}
+            forceCloseMinimizedSignal={forceCloseMinimizedSignal}
             forceCloseSignal={forceCloseSignal}
             onStateChange={handleDialogStateChange}
             transition={{
