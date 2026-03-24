@@ -160,6 +160,11 @@ async function extractVideoPreview(
 
 const tusServer = new Server({
     path: '/api/uploads',
+    // Reverse proxies may terminate TLS before reaching the app process.
+    // Emit same-origin relative upload URLs to avoid mixed-content redirects
+    // (https page following an http Location header).
+    respectForwardedHeaders: true,
+    generateUrl: (_req, { path, id }) => `${path}/${id}`,
     datastore: new FileStore({ directory: UPLOAD_DIR }),
     async onUploadFinish(req, upload) {
         const tusFilePath = join(UPLOAD_DIR, upload.id);
