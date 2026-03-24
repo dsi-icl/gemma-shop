@@ -1,7 +1,7 @@
 'use client';
 
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState, useMemo, type CSSProperties } from 'react';
+import { useEffect, useState, useMemo, useRef, type CSSProperties } from 'react';
 
 import { MapWrapper } from '~/components/MapWrapper';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
@@ -15,6 +15,8 @@ const SCREEN_W = 1920;
 const SCREEN_H = 1080;
 const COLS = 16;
 const ROWS = 4;
+const HYDRATE_FADE_MS = 1000;
+const HYDRATE_IFRAME_TIMEOUT_MS = 6000;
 
 export const Route = createFileRoute('/wall/')({
     component: WallApp
@@ -25,6 +27,34 @@ function WallApp() {
     const [customRenderUrl, setCustomRenderUrl] = useState<string | undefined>();
     const [customRenderCompat, setCustomRenderCompat] = useState(false);
     const [customRenderProxy, setCustomRenderProxy] = useState(false);
+    const [blackOverlayOpacity, setBlackOverlayOpacity] = useState(1);
+    const [iframeGateCycle, setIframeGateCycle] = useState(0);
+
+    const transitionPhaseRef = useRef<'visible' | 'fadingOut' | 'waitingIframes' | 'fadingIn'>(
+        'visible'
+    );
+    const queuedHydrateRef = useRef<{
+        layers: LayerWithWallComponentState[];
+        customRenderUrl?: string;
+        customRenderCompat: boolean;
+        customRenderProxy: boolean;
+    } | null>(null);
+    const fadeTimerRef = useRef<number | null>(null);
+    const iframeGateRef = useRef<{
+        cycle: number;
+        expected: number;
+        loadedKeys: Set<string>;
+        timeoutId: number | null;
+    } | null>(null);
+    const stageHydrateRef = useRef<
+        | ((next: {
+              layers: LayerWithWallComponentState[];
+              customRenderUrl?: string;
+              customRenderCompat: boolean;
+              customRenderProxy: boolean;
+          }) => void)
+        | null
+    >(null);
     const [frameabilityByUrl, setFrameabilityByUrl] = useState<
         Record<string, { ok: boolean; reason?: string; fallback?: string }>
     >({});
@@ -55,9 +85,117 @@ function WallApp() {
         [wallId, myViewport]
     );
 
+    const clearFadeTimer = () => {
+        if (fadeTimerRef.current !== null) {
+            window.clearTimeout(fadeTimerRef.current);
+            fadeTimerRef.current = null;
+        }
+    };
+
+    const clearIframeGate = () => {
+        const gate = iframeGateRef.current;
+        if (gate && gate.timeoutId !== null) {
+            window.clearTimeout(gate.timeoutId);
+        }
+        iframeGateRef.current = null;
+    };
+
+    const countExpectedIframes = (
+        nextLayers: LayerWithWallComponentState[],
+        nextCustomRenderUrl?: string
+    ) => {
+        if (nextCustomRenderUrl) return 1;
+        return nextLayers.filter((layer) => layer.config.visible && layer.type === 'web').length;
+    };
+
+    const beginFadeIn = () => {
+        clearFadeTimer();
+        clearIframeGate();
+        transitionPhaseRef.current = 'fadingIn';
+        setBlackOverlayOpacity(0);
+        fadeTimerRef.current = window.setTimeout(() => {
+            transitionPhaseRef.current = 'visible';
+            const queued = queuedHydrateRef.current;
+            if (!queued) return;
+            queuedHydrateRef.current = null;
+            transitionPhaseRef.current = 'fadingOut';
+            setBlackOverlayOpacity(1);
+            fadeTimerRef.current = window.setTimeout(() => {
+                engine?.layers.clear();
+                setLayers(queued.layers);
+                setCustomRenderUrl(queued.customRenderUrl);
+                setCustomRenderCompat(queued.customRenderCompat);
+                setCustomRenderProxy(queued.customRenderProxy);
+                const expected = countExpectedIframes(queued.layers, queued.customRenderUrl);
+                if (expected <= 0) {
+                    beginFadeIn();
+                    return;
+                }
+                const cycle = Date.now();
+                setIframeGateCycle(cycle);
+                transitionPhaseRef.current = 'waitingIframes';
+                iframeGateRef.current = {
+                    cycle,
+                    expected,
+                    loadedKeys: new Set(),
+                    timeoutId: window.setTimeout(() => {
+                        beginFadeIn();
+                    }, HYDRATE_IFRAME_TIMEOUT_MS)
+                };
+            }, HYDRATE_FADE_MS);
+        }, HYDRATE_FADE_MS);
+    };
+
+    const stageHydrate = (next: {
+        layers: LayerWithWallComponentState[];
+        customRenderUrl?: string;
+        customRenderCompat: boolean;
+        customRenderProxy: boolean;
+    }) => {
+        if (transitionPhaseRef.current !== 'visible') {
+            queuedHydrateRef.current = next;
+            return;
+        }
+        transitionPhaseRef.current = 'fadingOut';
+        setBlackOverlayOpacity(1);
+        clearFadeTimer();
+        fadeTimerRef.current = window.setTimeout(() => {
+            engine?.layers.clear();
+            setLayers(next.layers);
+            setCustomRenderUrl(next.customRenderUrl);
+            setCustomRenderCompat(next.customRenderCompat);
+            setCustomRenderProxy(next.customRenderProxy);
+            const expected = countExpectedIframes(next.layers, next.customRenderUrl);
+            if (expected <= 0) {
+                beginFadeIn();
+                return;
+            }
+            const cycle = Date.now();
+            setIframeGateCycle(cycle);
+            transitionPhaseRef.current = 'waitingIframes';
+            clearIframeGate();
+            iframeGateRef.current = {
+                cycle,
+                expected,
+                loadedKeys: new Set(),
+                timeoutId: window.setTimeout(() => {
+                    beginFadeIn();
+                }, HYDRATE_IFRAME_TIMEOUT_MS)
+            };
+        }, HYDRATE_FADE_MS);
+    };
+    const markIframeReady = (gateKey: string, cycle: number) => {
+        const gate = iframeGateRef.current;
+        if (!gate || gate.cycle !== cycle) return;
+        gate.loadedKeys.add(gateKey);
+        if (gate.loadedKeys.size >= gate.expected) {
+            beginFadeIn();
+        }
+    };
+
     useEffect(() => {
-        document.body.classList.add('transition-opacity', 'duration-1000');
-    }, []);
+        stageHydrateRef.current = stageHydrate;
+    });
 
     useEffect(() => {
         if (window.__WALL_RELOADING__) {
@@ -71,13 +209,12 @@ function WallApp() {
     useEffect(() => {
         const unsubscribe = engine?.subscribeToLayoutUpdates((data) => {
             if (data.type === 'hydrate') {
-                // Hard reset wall-side cache on scope hydrate to avoid stale layer state
-                // when numericIds are reused across slides.
-                engine.layers.clear();
-                setLayers(data.layers);
-                setCustomRenderUrl(data.customRender?.url);
-                setCustomRenderCompat(Boolean(data.customRender?.compat));
-                setCustomRenderProxy(Boolean(data.customRender?.proxy));
+                stageHydrateRef.current?.({
+                    layers: data.layers,
+                    customRenderUrl: data.customRender?.url,
+                    customRenderCompat: Boolean(data.customRender?.compat),
+                    customRenderProxy: Boolean(data.customRender?.proxy)
+                });
             } else if (data.type === 'upsert_layer') {
                 setLayers((prev) => {
                     const existing = prev.find((l) => l.numericId === data.layer.numericId);
@@ -90,7 +227,7 @@ function WallApp() {
             } else if (data.type === 'delete_layer') {
                 setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
             } else if (data.type === 'reboot') {
-                document.body.classList.add('opacity-0');
+                setBlackOverlayOpacity(1);
                 setTimeout(() => window.location.reload(), Math.random() * 1000 + 2000);
             }
         });
@@ -155,6 +292,13 @@ function WallApp() {
     }, [engine, myViewport]);
 
     useEffect(() => {
+        return () => {
+            clearFadeTimer();
+            clearIframeGate();
+        };
+    }, []);
+
+    useEffect(() => {
         const urlsToCheck = Array.from(
             new Set(
                 layers.flatMap((layer) => {
@@ -213,37 +357,6 @@ function WallApp() {
     }, [layers, frameabilityByUrl]);
 
     if (!engine) return null;
-
-    if (customRenderUrl) {
-        const iframeSrc = new URL(customRenderUrl);
-        if (!customRenderCompat) {
-            iframeSrc.searchParams.set('c', String(myViewport.x / SCREEN_W));
-            iframeSrc.searchParams.set('r', String(myViewport.y / SCREEN_H));
-        }
-        const finalSrc =
-            customRenderProxy && /^https?:\/\//i.test(iframeSrc.toString())
-                ? `/proxy?url=${encodeURIComponent(iframeSrc.toString())}`
-                : iframeSrc.toString();
-        const worldWidth = SCREEN_W * COLS;
-        const worldHeight = SCREEN_H * ROWS;
-        return (
-            <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">
-                <iframe
-                    title="Custom Render Wall"
-                    src={finalSrc}
-                    style={{
-                        position: 'absolute',
-                        top: customRenderCompat ? `${-myViewport.y}px` : 0,
-                        left: customRenderCompat ? `${-myViewport.x}px` : 0,
-                        width: customRenderCompat ? `${worldWidth}px` : `${SCREEN_W}px`,
-                        height: customRenderCompat ? `${worldHeight}px` : `${SCREEN_H}px`,
-                        border: 'none'
-                    }}
-                    allow="autoplay; fullscreen"
-                />
-            </div>
-        );
-    }
 
     const stage = layers
         .filter((layer) => layer.config.visible)
@@ -336,7 +449,11 @@ function WallApp() {
                         src={iframeSrc}
                         title={`Web layer ${layer.numericId}`}
                         sandbox="allow-scripts allow-same-origin"
+                        onLoad={() => {
+                            markIframeReady(`web:${layer.numericId}`, iframeGateCycle);
+                        }}
                         onError={(e) => {
+                            markIframeReady(`web:${layer.numericId}`, iframeGateCycle);
                             const iframe = e.currentTarget;
                             if (
                                 !iframe.src.includes('/web-nonet') &&
@@ -453,6 +570,43 @@ function WallApp() {
             return null;
         });
 
+    const stageContent = (() => {
+        if (!customRenderUrl) return stage;
+        const iframeSrc = new URL(customRenderUrl);
+        if (!customRenderCompat) {
+            iframeSrc.searchParams.set('c', String(myViewport.x / SCREEN_W));
+            iframeSrc.searchParams.set('r', String(myViewport.y / SCREEN_H));
+        }
+        const finalSrc =
+            customRenderProxy && /^https?:\/\//i.test(iframeSrc.toString())
+                ? `/proxy?url=${encodeURIComponent(iframeSrc.toString())}`
+                : iframeSrc.toString();
+        const worldWidth = SCREEN_W * COLS;
+        const worldHeight = SCREEN_H * ROWS;
+        return (
+            <iframe
+                key="custom-render"
+                title="Custom Render Wall"
+                src={finalSrc}
+                style={{
+                    position: 'absolute',
+                    top: customRenderCompat ? `${-myViewport.y}px` : 0,
+                    left: customRenderCompat ? `${-myViewport.x}px` : 0,
+                    width: customRenderCompat ? `${worldWidth}px` : `${SCREEN_W}px`,
+                    height: customRenderCompat ? `${worldHeight}px` : `${SCREEN_H}px`,
+                    border: 'none'
+                }}
+                allow="autoplay; fullscreen"
+                onLoad={() => {
+                    markIframeReady('custom-render', iframeGateCycle);
+                }}
+                onError={() => {
+                    markIframeReady('custom-render', iframeGateCycle);
+                }}
+            />
+        );
+    })();
+
     return (
         <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">
             {/* Visual Debugger: Shows the Screen ID in the corner */}
@@ -464,7 +618,14 @@ function WallApp() {
                     SCREEN&gt; C:{myViewport.x / SCREEN_W} R:{myViewport.y / SCREEN_H}
                 </div>
             ) : null}
-            {stage}
+            {stageContent}
+            <div
+                className="pointer-events-none absolute inset-0 z-1000001 bg-black"
+                style={{
+                    opacity: blackOverlayOpacity,
+                    transition: `opacity ${HYDRATE_FADE_MS}ms linear`
+                }}
+            />
         </div>
     );
 }

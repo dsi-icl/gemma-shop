@@ -95,7 +95,7 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
             <head>
                 <HeadContent />
             </head>
-            <body className="relative block h-full min-h-full min-w-full">
+            <body className="relative block h-full min-h-full min-w-full opacity-100">
                 <ScriptOnce>
                     {/* Apply theme early to avoid FOUC */}
                     {`
