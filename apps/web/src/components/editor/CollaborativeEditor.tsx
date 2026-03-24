@@ -21,6 +21,15 @@ const editorConfig = {
     theme
 };
 
+function getDeterministicCursorColor(seed: string): string {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i += 1) {
+        hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+    const color = hash & 0xffffff;
+    return `#${color.toString(16).padStart(6, '0')}`;
+}
+
 export function CollaborativeEditor({
     layerId,
     onMeasuredHeight
@@ -34,11 +43,8 @@ export function CollaborativeEditor({
     const textEditScope = useEditorStore(
         (s) => `${s.projectId}_${s.commitId}_${s.activeSlideId}_${layerId}`
     );
-    const [userColor] = useState(
-        () =>
-            `#${Math.floor(Math.random() * 0xffffff)
-                .toString(16)
-                .padStart(6, '0')}`
+    const [userColor] = useState(() =>
+        getDeterministicCursorColor(`${user?.email ?? ''}:${layerId}`)
     );
     const latestHeightRef = useRef<number>(layer?.type === 'text' ? layer.config.height : 400);
 

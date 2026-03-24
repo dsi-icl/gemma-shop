@@ -4,26 +4,32 @@ import { useEffect, useState } from 'react';
 import { SlidingNumber } from './sliding-number';
 
 export function Clock() {
-    const [hours, setHours] = useState(new Date().getHours());
-    const [minutes, setMinutes] = useState(new Date().getMinutes());
-    const [seconds, setSeconds] = useState(new Date().getSeconds());
+    const [time, setTime] = useState({ hours: 0, minutes: 0, seconds: 0 });
 
     useEffect(() => {
+        const readNow = () => {
+            const now = new Date();
+            setTime({
+                hours: now.getHours(),
+                minutes: now.getMinutes(),
+                seconds: now.getSeconds()
+            });
+        };
+
         const interval = setInterval(() => {
-            setHours(new Date().getHours());
-            setMinutes(new Date().getMinutes());
-            setSeconds(new Date().getSeconds());
+            readNow();
         }, 1000);
+        readNow();
         return () => clearInterval(interval);
     }, []);
 
     return (
         <div className="flex items-center gap-0.5 font-mono">
-            <SlidingNumber value={hours} padStart={true} />
+            <SlidingNumber value={time.hours} padStart={true} />
             <span className="text-zinc-500">:</span>
-            <SlidingNumber value={minutes} padStart={true} />
+            <SlidingNumber value={time.minutes} padStart={true} />
             <span className="text-zinc-500">:</span>
-            <SlidingNumber value={seconds} padStart={true} />
+            <SlidingNumber value={time.seconds} padStart={true} />
         </div>
     );
 }

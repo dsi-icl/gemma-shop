@@ -42,10 +42,6 @@ function FullscreenToggle() {
         }
     }, []);
 
-    if (typeof document === 'undefined') return null;
-    const canFullscreen = document.fullscreenEnabled;
-    if (!canFullscreen) return null;
-
     return (
         <Button
             variant="outline"
