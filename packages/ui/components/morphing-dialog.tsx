@@ -185,10 +185,12 @@ function MorphingDialogProvider({
         if (Object.is(lastForceOpenSignalRef.current, forceOpenSignal)) return;
         lastForceOpenSignalRef.current = forceOpenSignal;
         // Remote-triggered open:
+        // - if this dialog is already open but not fullscreen, promote it to fullscreen
         // - if another dialog is already open, open this one minimized to avoid stealing focus
         // - otherwise open fullscreen as before
         setState((prev) => {
-            if (prev !== 'closed') return prev;
+            if (prev === 'expanded' || prev === 'minimized') return 'fullscreen';
+            if (prev === 'fullscreen') return prev;
             return hasCompetingOpenDialog(uniqueId) ? 'minimized' : 'fullscreen';
         });
     }, [forceOpenSignal, uniqueId]);
