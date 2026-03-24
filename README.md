@@ -4,6 +4,13 @@ Collaborative, multi-tenant presentation system for large video walls.
 
 Gemma Shop lets multiple users edit decks in real time and publish synchronized output to distributed wall nodes. The platform is optimized for low-latency editing, fast wall playback, and commit-based versioning.
 
+## Architecture Docs
+
+- [Architecture Overview](./docs/ARCHITECTURE_OVERVIEW.md): high-level system structure, ownership boundaries, and onboarding path.
+- [Realtime Protocol](./docs/REALTIME_PROTOCOL.md): `/bus` and `/yjs` transport/message semantics.
+- [Bus Piping](./docs/BUS_PIPING.md): detailed topology for the realtime bus, scope model, YJS co-bus integration, and naming/refactor proposals.
+- [README.md](./README.md): high-level project overview and contributor onboarding.
+
 ## What It Does
 
 - Real-time collaborative editing of slide-based decks
@@ -58,6 +65,8 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
     - `__BROADCAST_EDITORS__` for processing progress
     - `__BROADCAST_ASSET_ADDED__` for newly created assets
 
+For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see [PIPING](./docs/PIPING.md).
+
 ### 2) Editor State (`apps/web/src/lib/editorStore.ts`)
 
 - Zustand store for layers, slides, selection, and tool state
@@ -108,11 +117,11 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
 - Format: `bun run format`
 - Quality checks: `bun run check`
 
-## Main applicatioin entry points
+## Main application entry points
 
 - `/gallery` project listing
-- `/quary` project management
-- `/quary/editor` editor flow
+- `/quarry` project management
+- `/quarry/editor` editor flow
 - `/wall` wall node endpoint (query params `c`, `r`, `w`)
 
 ## Operational Invariants
