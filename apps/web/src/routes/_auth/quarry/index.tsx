@@ -32,6 +32,7 @@ import {
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { toLocalDateString } from '~/lib/safeDate';
 import { $archiveProject, $publishCommit, $restoreProject } from '~/server/projects.fns';
 import { projectsQueryOptions } from '~/server/projects.queries';
 
@@ -151,9 +152,7 @@ function QuarryIndex() {
                 </button>
             ),
             cell: (info) => (
-                <span className="text-muted-foreground">
-                    {new Date(info.getValue()).toLocaleDateString()}
-                </span>
+                <span className="text-muted-foreground">{toLocalDateString(info.getValue())}</span>
             )
         }),
         columnHelper.display({

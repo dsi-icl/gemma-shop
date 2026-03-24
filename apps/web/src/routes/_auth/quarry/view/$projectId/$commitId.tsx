@@ -8,7 +8,14 @@ import {
 import { Separator } from '@repo/ui/components/separator';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { differenceInDays, format, formatDistanceToNow, isBefore, subMonths } from 'date-fns';
+import {
+    differenceInDays,
+    format,
+    formatDistanceToNow,
+    isBefore,
+    isValid,
+    subMonths
+} from 'date-fns';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -166,6 +173,19 @@ function CommitViewer() {
         return formatDistanceToNow(date, { addSuffix: true });
     };
 
+    const formatSafeRelativeDate = (input: unknown): string => {
+        let parsed: Date;
+        if (input instanceof Date) {
+            parsed = input;
+        } else if (typeof input === 'string' || typeof input === 'number') {
+            parsed = new Date(input);
+        } else {
+            return '-';
+        }
+        if (!isValid(parsed)) return '-';
+        return formatRelativeDate(parsed);
+    };
+
     return (
         <div className="container flex h-full max-h-full min-h-0 min-w-full flex-col overflow-hidden pt-18 pb-13">
             <ResizablePanelGroup
@@ -193,8 +213,7 @@ function CommitViewer() {
                                 <div className="flex items-center gap-2">
                                     <h2 className="text-sm font-medium">{commit.message}</h2>
                                     <p className="text-xs text-muted-foreground">
-                                        Read-only view ·{' '}
-                                        {formatRelativeDate(new Date(commit.createdAt))}
+                                        Read-only view · {formatSafeRelativeDate(commit.createdAt)}
                                     </p>
                                 </div>
                             </div>

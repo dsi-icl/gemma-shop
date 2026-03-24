@@ -18,7 +18,14 @@ import {
 } from '@repo/ui/components/table';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { format, formatDistanceToNow, isBefore, subMonths, differenceInDays } from 'date-fns';
+import {
+    differenceInDays,
+    format,
+    formatDistanceToNow,
+    isBefore,
+    isValid,
+    subMonths
+} from 'date-fns';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 
@@ -153,6 +160,17 @@ function CommitsTab() {
         onError: (e) => toast.error(e.message)
     });
 
+    const parseDateInput = (input: unknown): Date | null => {
+        if (input instanceof Date) {
+            return isValid(input) ? input : null;
+        }
+        if (typeof input === 'string' || typeof input === 'number') {
+            const parsed = new Date(input);
+            return isValid(parsed) ? parsed : null;
+        }
+        return null;
+    };
+
     const formatRelativeDate = (date: Date): string => {
         const now = new Date();
         const oneMonthAgo = subMonths(now, 1);
@@ -218,11 +236,9 @@ function CommitsTab() {
                         {sorted.map((commit, idx) => {
                             const isPublished = commit._id === project.publishedCommitId;
                             let displayDate = '-';
-                            try {
-                                const commitDate = new Date(commit.updatedAt ?? commit.createdAt);
+                            const commitDate = parseDateInput(commit.updatedAt ?? commit.createdAt);
+                            if (commitDate) {
                                 displayDate = formatRelativeDate(commitDate);
-                            } catch (e) {
-                                console.error('Invalid date could not be converted', e);
                             }
                             return (
                                 <TableRow key={commit._id}>

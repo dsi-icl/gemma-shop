@@ -2,6 +2,7 @@ import { ClockIcon } from '@phosphor-icons/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 
+import { toLocalDateTimeString } from '~/lib/safeDate';
 import { auditLogsQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId/history')({
@@ -44,7 +45,7 @@ function HistoryTab() {
                             <div className="flex items-center justify-between">
                                 <span className="font-medium">{log.action.replace(/_/g, ' ')}</span>
                                 <span className="text-xs text-muted-foreground">
-                                    {new Date(log.createdAt).toLocaleString()}
+                                    {toLocalDateTimeString(log.createdAt)}
                                 </span>
                             </div>
                             <p className="mt-1 text-xs text-muted-foreground">

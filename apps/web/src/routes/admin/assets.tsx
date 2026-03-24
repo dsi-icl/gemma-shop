@@ -29,6 +29,7 @@ import { ProjectImage } from '~/components/ProjectImage';
 import { UploadDialog } from '~/components/UploadDialog';
 import { PUBLIC_ASSET_PROJECT_ID } from '~/lib/constants';
 import { isFontAsset, sortAssetsFontsLast } from '~/lib/mediaUtils';
+import { toLocalDateTimeString } from '~/lib/safeDate';
 import { $adminDeletePublicAsset, $adminGetUploadToken } from '~/server/admin.fns';
 import { adminPublicAssetsQueryOptions } from '~/server/admin.queries';
 import { $revokeUploadToken } from '~/server/projects.fns';
@@ -224,9 +225,7 @@ function AdminAssetsTab() {
                                     <TableCell className="font-medium">{asset.name}</TableCell>
                                     <TableCell>{isFontAsset(asset) ? 'font' : 'media'}</TableCell>
                                     <TableCell>{(asset.size / 1024).toFixed(2)} KB</TableCell>
-                                    <TableCell>
-                                        {new Date(asset.createdAt).toLocaleString()}
-                                    </TableCell>
+                                    <TableCell>{toLocalDateTimeString(asset.createdAt)}</TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-0.5">
                                             <Button

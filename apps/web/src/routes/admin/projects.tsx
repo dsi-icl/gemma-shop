@@ -1,7 +1,7 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { format } from 'date-fns';
 
+import { formatDateValue } from '~/lib/safeDate';
 import { adminProjectsQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/projects')({
@@ -35,9 +35,7 @@ function AdminProjects() {
                                     {project.createdBy}
                                 </td>
                                 <td className="px-4 py-3 text-muted-foreground">
-                                    {project.createdAt
-                                        ? format(new Date(project.createdAt), 'd MMM yyyy')
-                                        : '—'}
+                                    {formatDateValue(project.createdAt, 'd MMM yyyy')}
                                 </td>
                                 <td className="px-4 py-3">
                                     {project.archived ? (

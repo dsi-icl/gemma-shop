@@ -2,6 +2,8 @@ import { Button } from '@repo/ui/components/button';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 
+import { toLocalDateTimeString } from '~/lib/safeDate';
+
 type ThirdPartyPackage = {
     name: string;
     version: string;
@@ -108,11 +110,8 @@ function LegalNoticesPage() {
             {data ? (
                 <>
                     <div className="mt-6 text-sm text-muted-foreground">
-                        Generated:{' '}
-                        {data.generatedAt
-                            ? new Date(data.generatedAt).toLocaleString()
-                            : 'not generated yet'}{' '}
-                        | Packages: {data.packageCount}
+                        Generated: {toLocalDateTimeString(data.generatedAt, 'not generated yet')} |
+                        Packages: {data.packageCount}
                     </div>
 
                     {data.packageCount === 0 ? (

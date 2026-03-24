@@ -28,6 +28,7 @@ import { FontPlaceholder } from '~/components/FontPlaceholder';
 import { ProjectImage } from '~/components/ProjectImage';
 import { UploadDialog } from '~/components/UploadDialog';
 import { isFontAsset, sortAssetsFontsLast } from '~/lib/mediaUtils';
+import { toLocalDateTimeString } from '~/lib/safeDate';
 import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions } from '~/server/projects.queries';
 
@@ -217,9 +218,7 @@ function AssetsTab() {
                                     <TableCell className="font-medium">{asset.name}</TableCell>
                                     <TableCell>{isFontAsset(asset) ? 'font' : 'media'}</TableCell>
                                     <TableCell>{(asset.size / 1024).toFixed(2)} KB</TableCell>
-                                    <TableCell>
-                                        {new Date(asset.createdAt).toLocaleString()}
-                                    </TableCell>
+                                    <TableCell>{toLocalDateTimeString(asset.createdAt)}</TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-0.5">
                                             <Button

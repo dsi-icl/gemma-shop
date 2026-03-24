@@ -3,9 +3,9 @@ import authClient from '@repo/auth/auth-client';
 import { Button } from '@repo/ui/components/button';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { format } from 'date-fns';
 import { toast } from 'sonner';
 
+import { formatDateValue } from '~/lib/safeDate';
 import { adminUsersQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/users')({
@@ -61,9 +61,7 @@ function AdminUsers() {
                                     </span>
                                 </td>
                                 <td className="px-4 py-3 text-muted-foreground">
-                                    {user.createdAt
-                                        ? format(new Date(user.createdAt), 'd MMM yyyy')
-                                        : '—'}
+                                    {formatDateValue(user.createdAt, 'd MMM yyyy')}
                                 </td>
                                 <td className="px-4 py-3">
                                     {user.banned ? (
