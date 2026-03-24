@@ -16,7 +16,7 @@ const SCREEN_H = 1080;
 const COLS = 16;
 const ROWS = 4;
 const HYDRATE_FADE_MS = 1000;
-const HYDRATE_IFRAME_TIMEOUT_MS = 6000;
+const HYDRATE_IFRAME_TIMEOUT_MS = 2000;
 
 export const Route = createFileRoute('/wall/')({
     component: WallApp
@@ -444,7 +444,7 @@ function WallApp() {
                 };
                 return (
                     <iframe
-                        key={layer.numericId}
+                        key={`${layer.numericId}:${iframeGateCycle}`}
                         {...iframeProps}
                         src={iframeSrc}
                         title={`Web layer ${layer.numericId}`}
@@ -585,7 +585,7 @@ function WallApp() {
         const worldHeight = SCREEN_H * ROWS;
         return (
             <iframe
-                key="custom-render"
+                key={`custom-render:${iframeGateCycle}`}
                 title="Custom Render Wall"
                 src={finalSrc}
                 style={{
