@@ -3,7 +3,8 @@ name: Container Image (OCI)
 on:
     push:
         branches:
-            - main
+            - develop
+            - master
         tags:
             - 'v*'
     workflow_dispatch:
