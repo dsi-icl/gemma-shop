@@ -118,7 +118,14 @@ export function scopeLabel(id: ScopeId): string {
 }
 
 export type PeerMeta =
-    | { specimen: 'editor'; projectId: string; commitId: string; slideId: string; scopeId: ScopeId }
+    | {
+          specimen: 'editor';
+          projectId: string;
+          commitId: string;
+          slideId: string;
+          scopeId: ScopeId;
+          requesterEmail?: string;
+      }
     | { specimen: 'wall'; wallId: string; col: number; row: number }
     | { specimen: 'controller'; wallId: string }
     | { specimen: 'gallery'; wallId?: string }

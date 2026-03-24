@@ -49,6 +49,7 @@ export class EditorEngine {
     private currentProjectId: string | null = null;
     private currentCommitId: string | null = null;
     private currentSlideId: string | null = null;
+    private requesterEmail: string | null = null;
 
     private constructor() {
         this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
@@ -284,7 +285,8 @@ export class EditorEngine {
             specimen: 'editor',
             projectId,
             commitId,
-            slideId
+            slideId,
+            ...(this.requesterEmail ? { requesterEmail: this.requesterEmail } : {})
         });
 
         // Auto-rebind the wall to the new slide when navigating
@@ -362,6 +364,24 @@ export class EditorEngine {
 
     public getLastBindRequestId() {
         return this.lastBindRequestId;
+    }
+
+    public setRequesterEmail(email: string | null | undefined) {
+        const normalized = email?.trim() ? email.trim() : null;
+        if (this.requesterEmail === normalized) return;
+        this.requesterEmail = normalized;
+
+        // Refresh editor identity on the bus while staying in the same scope.
+        if (this.currentProjectId && this.currentCommitId && this.currentSlideId) {
+            this.sendJSON({
+                type: 'hello',
+                specimen: 'editor',
+                projectId: this.currentProjectId,
+                commitId: this.currentCommitId,
+                slideId: this.currentSlideId,
+                ...(this.requesterEmail ? { requesterEmail: this.requesterEmail } : {})
+            });
+        }
     }
 
     /** Current connection status */

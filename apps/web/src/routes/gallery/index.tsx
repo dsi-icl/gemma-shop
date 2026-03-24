@@ -41,8 +41,14 @@ function HomePage() {
         commitId: string;
         slideId: string;
         expiresAt: number;
+        requesterEmail?: string;
     } | null>(null);
     const [overrideClockNow, setOverrideClockNow] = useState<number>(() => Date.now());
+
+    const formatRequesterLabel = (email?: string) => {
+        // TODO Lookup through university LDAP to get names maybe ?
+        return `${email}`;
+    };
 
     const wallId = useMemo(() => {
         const params = new URLSearchParams(searchStr);
@@ -180,7 +186,7 @@ function HomePage() {
             galleryEngine.onBindOverrideRequested((req) => {
                 if (!wallId || req.wallId !== wallId) return;
                 setPendingOverride(req);
-                toast.message('Live override request received');
+                toast.message(`${formatRequesterLabel(req.requesterEmail)} wants to take over.`);
             }),
             galleryEngine.onBindOverrideResult((result) => {
                 if (!pendingOverride || result.requestId !== pendingOverride.requestId) return;
@@ -188,8 +194,8 @@ function HomePage() {
                 if (!result.allow) {
                     toast.message(
                         result.reason === 'timeout'
-                            ? 'Override request timed out'
-                            : 'Override request denied'
+                            ? 'The takeover request expired.'
+                            : 'Takeover request declined.'
                     );
                 }
             })
@@ -255,14 +261,19 @@ function HomePage() {
                     <div className="absolute inset-0 bg-black/85" />
                     <div className="relative z-[81] w-[min(42rem,95vw)] rounded-lg border border-border bg-card p-4 shadow-2xl">
                         <div className="flex flex-col gap-3">
-                            <div className="text-sm font-semibold">Live Override Request</div>
-                            <div className="text-xs text-muted-foreground">
-                                Editor requested wall override for{' '}
-                                <span className="font-mono">{pendingOverride.wallId}</span>. This
-                                will replace the currently bound live content.
+                            <div className="text-sm font-semibold">
+                                Takeover request from{' '}
+                                {formatRequesterLabel(pendingOverride.requesterEmail)}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                                Auto-deny in {overrideSecondsLeft}s
+                                <span className="font-bold">
+                                    {formatRequesterLabel(pendingOverride.requesterEmail)}
+                                </span>{' '}
+                                wants to take over the wall. Approving will switch away from the
+                                current live content.
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                                For safety, this request auto-declines in {overrideSecondsLeft}s.
                             </div>
                             <div className="flex items-center gap-2">
                                 <Button

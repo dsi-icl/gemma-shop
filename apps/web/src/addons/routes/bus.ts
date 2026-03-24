@@ -685,6 +685,7 @@ handlers.set('request_bind_wall', ({ entry, data }) => {
         });
         return;
     }
+    const requesterEmail = entry.meta.requesterEmail;
 
     void (async () => {
         const resolvedSlideId = await resolveBoundSlideId(
@@ -779,7 +780,8 @@ handlers.set('request_bind_wall', ({ entry, data }) => {
             projectId: data.projectId,
             commitId: data.commitId,
             slideId: resolvedSlideId,
-            expiresAt
+            expiresAt,
+            ...(requesterEmail ? { requesterEmail } : {})
         } satisfies GSMessage);
 
         for (const galleryEntry of galleries!) {
@@ -918,7 +920,8 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
             projectId: parsed.projectId,
             commitId: parsed.commitId,
             slideId: parsed.slideId,
-            scopeId
+            scopeId,
+            ...(parsed.requesterEmail ? { requesterEmail: parsed.requesterEmail } : {})
         });
 
         if (scope.layers.size === 0) {

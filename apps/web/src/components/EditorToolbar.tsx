@@ -24,6 +24,7 @@ import {
     TextTIcon,
     WarningCircleIcon
 } from '@phosphor-icons/react';
+import { useAuth } from '@repo/auth/tanstack/hooks';
 import { Button } from '@repo/ui/components/button';
 import { Input } from '@repo/ui/components/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/popover';
@@ -53,6 +54,7 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
+    const { user } = useAuth();
     // Project header — only changes on project load
     const { projectName, parentSaveMessage } = useEditorStore(
         useShallow((s) => ({ projectName: s.projectName, parentSaveMessage: s.parentSaveMessage }))
@@ -299,6 +301,11 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         }
     };
 
+    useEffect(() => {
+        if (!engine) return;
+        engine.setRequesterEmail(user?.email ?? null);
+    }, [engine, user?.email]);
+
     const handleWallUnbind = () => {
         if (!engine) return;
         engine.unbindWall();
@@ -338,7 +345,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 setBindPending(null);
                 setLastBindAttempt((prev) => (prev ? { ...prev, denied: false } : prev));
                 if (result.reason === 'approved') {
-                    toast.success('Wall override approved');
+                    toast.success('Takeover approved. Your deck is now live.');
                 }
                 return;
             }
@@ -346,11 +353,11 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
             setBindPending(null);
             setLastBindAttempt((prev) => (prev ? { ...prev, denied: true } : prev));
             if (result.reason === 'timeout') {
-                toast.error('Wall override request timed out');
+                toast.error('No response in time. The takeover request expired.');
             } else if (result.reason === 'denied') {
-                toast.error('Wall override was denied');
+                toast.error('Takeover request declined.');
             } else {
-                toast.error('Wall bind request failed');
+                toast.error('Could not complete the takeover request.');
             }
         });
     }, [engine, bindPending]);

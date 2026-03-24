@@ -132,7 +132,8 @@ export const HelloSchema = z.discriminatedUnion('specimen', [
         specimen: z.literal('editor'),
         projectId: z.string(),
         commitId: z.string(),
-        slideId: z.string()
+        slideId: z.string(),
+        requesterEmail: z.email().optional()
     }),
     HelloMessageBaseSchema.extend({
         specimen: z.literal('roy')
@@ -164,7 +165,8 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             specimen: z.literal('editor'),
             projectId: z.string(),
             commitId: z.string(),
-            slideId: z.string()
+            slideId: z.string(),
+            requesterEmail: z.email().optional()
         }),
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
@@ -321,7 +323,8 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         projectId: z.string(),
         commitId: z.string(),
         slideId: z.string(),
-        expiresAt: z.number()
+        expiresAt: z.number(),
+        requesterEmail: z.email().optional()
     }),
     z.object({
         type: z.literal('bind_override_decision'),
