@@ -18,13 +18,15 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     editorsByScope: new Map<ScopeId, Set<PeerEntry>>(),
     wallsByWallId: new Map<string, Set<PeerEntry>>(),
     controllersByWallId: new Map<string, Set<PeerEntry>>(),
+    galleriesByWallId: new Map<string, Set<PeerEntry>>(),
+    allGalleries: new Set<PeerEntry>(),
     allEditors: new Set<PeerEntry>(),
     wallBindings: new Map<string, ScopeId>(),
     wallBindingSources: new Map<string, 'live' | 'gallery'>(),
     scopeWatchers: new Map<ScopeId, Set<string>>(),
     wallPeersByScope: new Map<ScopeId, Set<PeerEntry>>(),
     activeVideos: new Map<number, { scopeId: ScopeId; layer: Layer }>(),
-    peerCounts: { editor: 0, wall: 0, controller: 0, roy: 0 },
+    peerCounts: { editor: 0, wall: 0, controller: 0, gallery: 0, roy: 0 },
     lastPingSeen: new Map<string, number>(),
     scopeCleanupTimers: new Map<ScopeId, ReturnType<typeof setTimeout>>(),
     wallUnbindTimers: new Map<string, ReturnType<typeof setTimeout>>(),
@@ -33,8 +35,17 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
 if (!_hmr.controllerTransientByWallId) {
     _hmr.controllerTransientByWallId = new Map<string, Map<number, Layer>>();
 }
+if (!_hmr.galleriesByWallId) {
+    _hmr.galleriesByWallId = new Map<string, Set<PeerEntry>>();
+}
+if (!_hmr.allGalleries) {
+    _hmr.allGalleries = new Set<PeerEntry>();
+}
 if (!_hmr.wallUnbindTimers) {
     _hmr.wallUnbindTimers = new Map<string, ReturnType<typeof setTimeout>>();
+}
+if (typeof _hmr.peerCounts.gallery !== 'number') {
+    _hmr.peerCounts.gallery = 0;
 }
 (process as any).__BUS_HMR__ = _hmr;
 
@@ -110,6 +121,7 @@ export type PeerMeta =
     | { specimen: 'editor'; projectId: string; commitId: string; slideId: string; scopeId: ScopeId }
     | { specimen: 'wall'; wallId: string; col: number; row: number }
     | { specimen: 'controller'; wallId: string }
+    | { specimen: 'gallery'; wallId?: string }
     | { specimen: 'roy' };
 
 export interface PeerEntry {
@@ -128,6 +140,12 @@ export const wallsByWallId: Map<string, Set<PeerEntry>> = _hmr.wallsByWallId;
 
 // Controller index: wallId → Set<PeerEntry>
 export const controllersByWallId: Map<string, Set<PeerEntry>> = _hmr.controllersByWallId;
+
+// Gallery watcher index: wallId → Set<PeerEntry>
+export const galleriesByWallId: Map<string, Set<PeerEntry>> = _hmr.galleriesByWallId;
+
+// Flat set of every gallery entry
+export const allGalleries: Set<PeerEntry> = _hmr.allGalleries;
 
 // Flat set of every editor entry — for the __BROADCAST_EDITORS__ bridge
 export const allEditors: Set<PeerEntry> = _hmr.allEditors;
@@ -156,8 +174,13 @@ export const activeVideos: Map<number, { scopeId: ScopeId; layer: Layer }> = _hm
 // export const layerNodes = new Map<number, Set<PeerEntry>>();
 
 /** Running peer counts — O(1) reads instead of iterating all peers */
-export const peerCounts: { editor: number; wall: number; controller: number; roy: number } =
-    _hmr.peerCounts;
+export const peerCounts: {
+    editor: number;
+    wall: number;
+    controller: number;
+    gallery: number;
+    roy: number;
+} = _hmr.peerCounts;
 
 /** Live wall node count — O(1) read from in-memory index. */
 export function getWallNodeCount(wallId: string): number {
@@ -226,6 +249,10 @@ export function registerPeer(peer: Peer, meta: PeerMeta): PeerEntry {
         case 'controller':
             addToIndex(controllersByWallId, meta.wallId, entry);
             break;
+        case 'gallery':
+            allGalleries.add(entry);
+            if (meta.wallId) addToIndex(galleriesByWallId, meta.wallId, entry);
+            break;
         case 'roy':
             break;
     }
@@ -255,6 +282,10 @@ export function unregisterPeer(peerId: string): PeerMeta | null {
         }
         case 'controller':
             removeFromIndex(controllersByWallId, meta.wallId, entry);
+            break;
+        case 'gallery':
+            allGalleries.delete(entry);
+            if (meta.wallId) removeFromIndex(galleriesByWallId, meta.wallId, entry);
             break;
         case 'roy':
             break;
@@ -1117,7 +1148,7 @@ export function reapStalePeers(): number {
 
 export function logPeerCounts() {
     console.log(
-        `[WS] Peers: ${peerCounts.editor} editors, ${peerCounts.wall} walls, ${peerCounts.controller} controllers, ${peerCounts.roy} roys`
+        `[WS] Peers: ${peerCounts.editor} editors, ${peerCounts.wall} walls, ${peerCounts.controller} controllers, ${peerCounts.gallery} galleries, ${peerCounts.roy} roys`
     );
 }
 

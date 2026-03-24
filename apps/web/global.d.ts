@@ -2,6 +2,7 @@ import type { ControllerEngine } from '~/lib/controllerEngine';
 import type { ControllerStateCreator } from '~/lib/controllerStore';
 import type { EditorEngine } from '~/lib/editorEngine';
 import type { EditorStateCreator } from '~/lib/editorStore';
+import type { GalleryEngine } from '~/lib/galleryEngine';
 import type { GSMessage, Layer, ScopeKey, ScopeState } from '~/lib/types';
 import type { WallEngine } from '~/lib/wallEngine';
 
@@ -12,6 +13,7 @@ declare global {
         __CONTROLLER_ENGINE__?: ControllerEngine;
         __EDITOR_ENGINE__?: EditorEngine;
         __WALL_ENGINE__?: WallEngine;
+        __GALLERY_ENGINE__?: GalleryEngine;
         __CONTROLLER_RELOADING__?: boolean;
         __EDITOR_RELOADING__?: boolean;
         __WALL_RELOADING__?: boolean;

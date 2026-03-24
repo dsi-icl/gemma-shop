@@ -136,6 +136,10 @@ export const HelloSchema = z.discriminatedUnion('specimen', [
     }),
     HelloMessageBaseSchema.extend({
         specimen: z.literal('roy')
+    }),
+    HelloMessageBaseSchema.extend({
+        specimen: z.literal('gallery'),
+        wallId: z.string().optional()
     })
 ]);
 
@@ -165,6 +169,11 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
             specimen: z.literal('roy')
+        }),
+        HelloMessageBaseSchema.extend({
+            type: z.literal('hello'),
+            specimen: z.literal('gallery'),
+            wallId: z.string().optional()
         })
     ]),
     z.object({
@@ -276,6 +285,75 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             createdAt: z.string(),
             createdBy: z.string()
         })
+    }),
+    z.object({
+        type: z.literal('gallery_state'),
+        wallId: z.string().optional(),
+        walls: z.array(
+            z.object({
+                wallId: z.string(),
+                connectedNodes: z.number(),
+                bound: z.boolean(),
+                projectId: z.string().optional(),
+                commitId: z.string().optional(),
+                slideId: z.string().optional()
+            })
+        ),
+        publishedProjects: z.array(
+            z.object({
+                projectId: z.string(),
+                publishedCommitId: z.string().nullable().optional()
+            })
+        )
+    }),
+    z.object({
+        type: z.literal('request_bind_wall'),
+        requestId: z.string(),
+        wallId: z.string(),
+        projectId: z.string(),
+        commitId: z.string(),
+        slideId: z.string()
+    }),
+    z.object({
+        type: z.literal('bind_override_requested'),
+        requestId: z.string(),
+        wallId: z.string(),
+        projectId: z.string(),
+        commitId: z.string(),
+        slideId: z.string(),
+        expiresAt: z.number()
+    }),
+    z.object({
+        type: z.literal('bind_override_decision'),
+        requestId: z.string(),
+        wallId: z.string(),
+        allow: z.boolean()
+    }),
+    z.object({
+        type: z.literal('bind_override_result'),
+        requestId: z.string(),
+        wallId: z.string(),
+        allow: z.boolean(),
+        reason: z.enum(['approved', 'denied', 'timeout', 'not_required', 'invalid']).optional()
+    }),
+    z.object({
+        type: z.literal('wall_binding_changed'),
+        wallId: z.string(),
+        bound: z.boolean(),
+        projectId: z.string().optional(),
+        commitId: z.string().optional(),
+        slideId: z.string().optional(),
+        source: z.enum(['live', 'gallery']).optional()
+    }),
+    z.object({
+        type: z.literal('wall_unbound'),
+        wallId: z.string()
+    }),
+    z.object({
+        type: z.literal('project_publish_changed'),
+        projectId: z.string(),
+        published: z.boolean(),
+        publishedCommitId: z.string().nullable().optional()
     })
 ]);
 

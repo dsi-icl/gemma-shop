@@ -18,6 +18,7 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
     - `editor`: authoring UI
     - `wall`: render node
     - `controller`: wall binding/orchestration
+    - `gallery`: presentation-aware public control/listing surface
     - `roy`: specialized graph/telemetry client
 - Commit graph with mutable head + immutable snapshot history
 - Asset pipeline for image/video upload, processing, and live broadcast to editors
@@ -54,7 +55,7 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
 
 ### 1) WebSocket Bus (`apps/web/src/addons/routes/bus.ts` + `apps/web/src/lib/busState.ts`)
 
-- Tracks peers by role (`editor`, `wall`, `controller`, `roy`)
+- Tracks peers by role (`editor`, `wall`, `controller`, `gallery`, `roy`)
 - Interns `(projectId, commitId, slideId)` into numeric `ScopeId`
 - Maintains in-memory scope layer state for fast relay/hydrate
 - Runs periodic loops:
@@ -66,6 +67,12 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
     - `__BROADCAST_ASSET_ADDED__` for newly created assets
 
 For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see [PIPING](./docs/BUS_PIPING.md).
+
+### Gallery WS Migration (WIP)
+
+- `gallery` socket scaffolding is now available via `apps/web/src/lib/galleryEngine.ts`.
+- Initial `/bus` handshake support for `specimen: 'gallery'` and `gallery_state` snapshots is in place.
+- Some gallery behavior is still query-driven and will be migrated incrementally to socket events in follow-up slices (bind override approval, publish/unpublish live feed, admin unbind propagation).
 
 ### 2) Editor State (`apps/web/src/lib/editorStore.ts`)
 

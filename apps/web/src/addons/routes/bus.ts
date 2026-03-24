@@ -59,6 +59,7 @@ import {
     notifyControllersByCommit,
     broadcastAssetToEditorsByProject,
     getWallNodeCount,
+    allGalleries,
     markIncomingBinary,
     markIncomingJson,
     estimatePlaybackLeadMs,
@@ -225,6 +226,76 @@ function broadcastWallBindingToEditors(wallId: string) {
     for (const entry of allEditors) {
         entry.peer.send(payload);
     }
+}
+
+function broadcastWallBindingToGalleries(wallId: string) {
+    const boundScope = wallBindings.get(wallId);
+    const scope = boundScope !== undefined ? scopedState.get(boundScope) : null;
+    const payload = JSON.stringify({
+        type: 'wall_binding_changed',
+        wallId,
+        bound: boundScope !== undefined,
+        ...(scope
+            ? { projectId: scope.projectId, commitId: scope.commitId, slideId: scope.slideId }
+            : {}),
+        source: wallBindingSources.get(wallId)
+    } satisfies GSMessage);
+    for (const entry of allGalleries) {
+        entry.peer.send(payload);
+    }
+    if (boundScope === undefined) {
+        const unboundPayload = JSON.stringify({ type: 'wall_unbound', wallId } satisfies GSMessage);
+        for (const entry of allGalleries) {
+            entry.peer.send(unboundPayload);
+        }
+    }
+}
+
+async function sendGalleryStateSnapshot(peer: import('crossws').Peer, wallId?: string) {
+    const candidateWallIds = new Set<string>();
+    if (wallId) {
+        candidateWallIds.add(wallId);
+    } else {
+        for (const known of wallsByWallId.keys()) candidateWallIds.add(known);
+        for (const known of wallBindings.keys()) candidateWallIds.add(known);
+    }
+
+    const walls = Array.from(candidateWallIds).map((id) => {
+        const boundScope = wallBindings.get(id);
+        const scope = boundScope !== undefined ? scopedState.get(boundScope) : null;
+        return {
+            wallId: id,
+            connectedNodes: getWallNodeCount(id),
+            bound: boundScope !== undefined,
+            ...(scope
+                ? { projectId: scope.projectId, commitId: scope.commitId, slideId: scope.slideId }
+                : {})
+        };
+    });
+
+    let publishedProjects: Array<{ projectId: string; publishedCommitId: string | null }> = [];
+    try {
+        const docs = await db
+            .collection('projects')
+            .find(
+                { publishedCommitId: { $ne: null }, archived: { $ne: true } },
+                { projection: { _id: 1, publishedCommitId: 1 } }
+            )
+            .toArray();
+        publishedProjects = docs.map((doc: any) => ({
+            projectId: String(doc._id),
+            publishedCommitId: doc.publishedCommitId ? String(doc.publishedCommitId) : null
+        }));
+    } catch (error) {
+        console.warn('[WS] gallery_state: failed to read published projects snapshot', error);
+    }
+
+    sendJSON(peer, {
+        type: 'gallery_state',
+        ...(wallId ? { wallId } : {}),
+        walls,
+        publishedProjects
+    });
 }
 
 handlers.set('rehydrate_please', ({ entry }) => {
@@ -530,6 +601,7 @@ handlers.set('bind_wall', ({ data }) => {
             );
 
             broadcastWallBindingToEditors(data.wallId);
+            broadcastWallBindingToGalleries(data.wallId);
             broadcastWallNodeCountToEditors(data.wallId);
 
             console.log(
@@ -566,6 +638,7 @@ handlers.set('unbind_wall', ({ data }) => {
         }
     );
     broadcastWallBindingToEditors(data.wallId);
+    broadcastWallBindingToGalleries(data.wallId);
     broadcastWallNodeCountToEditors(data.wallId);
     console.log(`[WS] Wall ${data.wallId} unbound`);
 });
@@ -727,6 +800,7 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
         // if (boundScope !== undefined) recomputeAllLayerNodes(boundScope);
         broadcastWallNodeCountToEditors(parsed.wallId);
         broadcastWallBindingToEditors(parsed.wallId);
+        broadcastWallBindingToGalleries(parsed.wallId);
         syncWallNodeCountToDb(parsed.wallId);
 
         console.log(
@@ -757,6 +831,19 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
         );
 
         console.log(`[WS] Controller joined wallId=${parsed.wallId}`);
+        logPeerCounts();
+        return;
+    }
+
+    if (parsed.specimen === 'gallery') {
+        registerPeer(peer, {
+            specimen: 'gallery',
+            ...(parsed.wallId ? { wallId: parsed.wallId } : {})
+        });
+        void sendGalleryStateSnapshot(peer, parsed.wallId);
+        console.log(
+            `[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ' (global)'}`
+        );
         logPeerCounts();
         return;
     }
@@ -861,6 +948,7 @@ export default defineWebSocketHandler({
                         }
                     );
                     broadcastWallBindingToEditors(wallId);
+                    broadcastWallBindingToGalleries(wallId);
                 }
             }
         }
@@ -890,11 +978,13 @@ export default defineWebSocketHandler({
                         }
                     );
                     broadcastWallBindingToEditors(meta.wallId);
+                    broadcastWallBindingToGalleries(meta.wallId);
                     broadcastWallNodeCountToEditors(meta.wallId);
                 });
             }
             broadcastWallNodeCountToEditors(meta.wallId);
             broadcastWallBindingToEditors(meta.wallId);
+            broadcastWallBindingToGalleries(meta.wallId);
             syncWallNodeCountToDb(meta.wallId);
         }
         logPeerCounts();
