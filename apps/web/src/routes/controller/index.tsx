@@ -130,7 +130,7 @@ function Controller() {
         [wallId]
     );
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
-    const [customRenderUrl, setCustomRenderUrl] = useState<string | undefined>();
+    const [customRenderUrl, setCustomRenderUrl] = useState<string | null | undefined>(null);
     const [slides, setSlides] = useState<SlideEntry[]>([]);
     const [loadingSlides, setLoadingSlides] = useState(false);
     const [pendingSlideId, setPendingSlideId] = useState<string | null>(null);
@@ -192,7 +192,7 @@ function Controller() {
     // Check if the bound project uses a custom render URL
     useEffect(() => {
         if (!binding.bound || !binding.projectId) {
-            setCustomRenderUrl(undefined);
+            setCustomRenderUrl(null);
             return;
         }
         let cancelled = false;
@@ -539,6 +539,20 @@ function Controller() {
 
         return () => observer.disconnect();
     }, []);
+
+    if (customRenderUrl === null)
+        return (
+            <div
+                className={cn(
+                    'container flex h-full max-h-full min-h-0 min-w-full flex-col items-center justify-center overflow-hidden bg-background',
+                    showHideHeadAndFoot
+                        ? 'fixed inset-0 top-0 right-0 bottom-0 left-0 z-1000! p-0'
+                        : 'pt-18 pb-13'
+                )}
+            >
+                <CircleNotchIcon className="animate-spin" />
+            </div>
+        );
 
     if (customRenderUrl)
         return (
