@@ -5,7 +5,6 @@ import { Circle, KonvaNodeEvents, Layer, Line, Rect, Stage } from 'react-konva';
 import { PreviewMediaLayer, PreviewTextLayer } from '~/components/PreviewLayers';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
-import type { LayerWithEditorState } from '~/lib/types';
 
 type SlatePreviewProps = {
     stageSlot: RefObject<HTMLDivElement | null>;
@@ -36,8 +35,10 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
         };
     }, [stageSlot]);
 
-    const canvasWidth = stageSlot.current?.clientWidth || window.innerWidth;
-    const canvasHeight = stageSlot.current?.clientHeight || window.innerHeight;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+    const canvasWidth = stageSlot.current?.clientWidth || viewportWidth;
+    const canvasHeight = stageSlot.current?.clientHeight || viewportHeight;
 
     const handleHorizontalDragMove: KonvaNodeEvents['onDragMove'] = (e) => {
         const x = e.target.x();

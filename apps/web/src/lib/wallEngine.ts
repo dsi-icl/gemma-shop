@@ -470,7 +470,7 @@ export class WallEngine {
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        if (window.__WALL_ENGINE__) {
+        if (typeof window !== 'undefined' && window.__WALL_ENGINE__) {
             window.__WALL_ENGINE__.destroy();
             window.__WALL_ENGINE__ = undefined;
         }

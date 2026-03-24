@@ -450,6 +450,8 @@ function WallApp() {
 // --- VITE HMR DEFENSE STRATEGY ---
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        window.__WALL_RELOADING__ = true;
+        if (typeof window !== 'undefined') {
+            window.__WALL_RELOADING__ = true;
+        }
     });
 }

@@ -40,8 +40,10 @@ export function ViewerSlatePreview({
         };
     }, [stageSlot]);
 
-    const canvasWidth = stageSlot.current?.clientWidth || window.innerWidth;
-    const canvasHeight = stageSlot.current?.clientHeight || window.innerHeight;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+    const canvasWidth = stageSlot.current?.clientWidth || viewportWidth;
+    const canvasHeight = stageSlot.current?.clientHeight || viewportHeight;
 
     const handleHorizontalDragMove: KonvaNodeEvents['onDragMove'] = (e) => {
         const x = e.target.x();

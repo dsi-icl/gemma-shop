@@ -33,7 +33,8 @@ export function ConnectionBanner() {
     const connectionStatus = useEditorStore((s) => s.connectionStatus);
     const showRecovered = useSyncExternalStore(
         (cb) => recoveredStore.subscribe(cb),
-        () => recoveredStore.getSnapshot()
+        () => recoveredStore.getSnapshot(),
+        () => false
     );
     const wasDisconnectedRef = useRef(false);
 

@@ -38,6 +38,8 @@ function AssetPreviewOverlayInner({
     sizes,
     onClose
 }: AssetPreviewOverlayProps) {
+    if (typeof document === 'undefined') return null;
+
     const [viewport, setViewport] = useState(() => ({
         width: typeof window !== 'undefined' ? window.innerWidth : 1920,
         height: typeof window !== 'undefined' ? window.innerHeight : 1080
