@@ -6,6 +6,7 @@
 @import 'shadcn/tailwind.css';
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant touch (@media (hover: none));
 
 :root {
     color-scheme: light;
