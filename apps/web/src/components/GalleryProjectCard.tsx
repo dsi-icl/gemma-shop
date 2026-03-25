@@ -1,7 +1,7 @@
 import type { Project } from '@repo/ui/components/project-card';
 import { ProjectCard } from '@repo/ui/components/project-card';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
 import { ControllerEngine } from '~/lib/controllerEngine';
@@ -42,30 +42,33 @@ export function GalleryProjectCard({
         isBound: Boolean(wall.boundProjectId)
     }));
 
-    const handleLoadProject = async (wallId: string) => {
-        if (!project.publishedCommitId) {
-            toast.error('This project has no published commit');
-            return false;
-        }
+    const handleLoadProject = useCallback(
+        async (wallId: string) => {
+            if (!project.publishedCommitId) {
+                toast.error('This project has no published commit');
+                return false;
+            }
 
-        try {
-            await $bindWall({
-                data: {
-                    wallId,
-                    projectId: project._id,
-                    commitId: project.publishedCommitId,
-                    slideId: 'default'
-                }
-            });
-            toast.success('Project loaded on wall');
-            return true;
-        } catch (e: any) {
-            toast.error(e?.message ?? 'Could not load project on wall');
-            return false;
-        }
-    };
+            try {
+                await $bindWall({
+                    data: {
+                        wallId,
+                        projectId: project._id,
+                        commitId: project.publishedCommitId,
+                        slideId: 'default'
+                    }
+                });
+                toast.success('Project loaded on wall');
+                return true;
+            } catch (e: any) {
+                toast.error(e?.message ?? 'Could not load project on wall');
+                return false;
+            }
+        },
+        [project._id, project.publishedCommitId]
+    );
 
-    const handleWallRebootRequest = async (wallId: string) => {
+    const handleWallRebootRequest = useCallback(async (wallId: string) => {
         try {
             const engine = ControllerEngine.getInstance(wallId);
             engine.sendJSON({ type: 'reboot' });
@@ -74,20 +77,23 @@ export function GalleryProjectCard({
             toast.error(e?.message ?? 'Could not refresh wall screens');
             return false;
         }
-    };
+    }, []);
 
-    const handleWallUnbindRequest = async (wallId: string) => {
-        try {
-            const engine = GalleryEngine.getInstance(presetWallId);
-            engine.unbindWall(wallId);
-            return true;
-        } catch (e: any) {
-            toast.error(e?.message ?? 'Could not unbind wall');
-            return false;
-        }
-    };
+    const handleWallUnbindRequest = useCallback(
+        async (wallId: string) => {
+            try {
+                const engine = GalleryEngine.getInstance(presetWallId);
+                engine.unbindWall(wallId);
+                return true;
+            } catch (e: any) {
+                toast.error(e?.message ?? 'Could not unbind wall');
+                return false;
+            }
+        },
+        [presetWallId]
+    );
 
-    const handleControllerTokenRequest = async (wallId: string) => {
+    const handleControllerTokenRequest = useCallback(async (wallId: string) => {
         try {
             const result = await $issueControllerPortalToken({ data: { wallId } });
             return result.token;
@@ -95,7 +101,7 @@ export function GalleryProjectCard({
             toast.error(e?.message ?? 'Could not initialize controller API token');
             return null;
         }
-    };
+    }, []);
 
     return (
         <ProjectCard
