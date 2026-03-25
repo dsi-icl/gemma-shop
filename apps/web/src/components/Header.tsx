@@ -14,6 +14,7 @@ import { Button } from '@repo/ui/components/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useRouter } from '@tanstack/react-router';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 import { KeyboardToggle } from './KeyboardToggle';
 import { ThemeToggle } from './ThemeToggle';
@@ -92,6 +93,15 @@ function HeaderAuthSection() {
                     queryClient.setQueryData(authQueryOptions().queryKey, null);
                     await router.invalidate();
                     navigate({ to: '/' });
+                },
+                onError: async (ctx) => {
+                    const message =
+                        (ctx as any)?.error?.message ||
+                        (ctx as any)?.error?.statusText ||
+                        'Sign out failed';
+                    toast.error(message);
+                    queryClient.setQueryData(authQueryOptions().queryKey, null);
+                    await router.invalidate();
                 }
             }
         });

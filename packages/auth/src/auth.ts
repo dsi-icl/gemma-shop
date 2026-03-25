@@ -14,8 +14,53 @@ import { createSmtpTransport } from './smtp';
 
 const allowedHosts = splitCsv(env.ALLOWED_HOSTS);
 const trustedOrigins = splitCsv(env.TRUSTED_ORIGINS);
-const safeAllowedHosts = allowedHosts.length > 0 ? allowedHosts : [env.VITE_BASE_URL];
-const safeTrustedOrigins = trustedOrigins.length > 0 ? trustedOrigins : [env.VITE_BASE_URL];
+
+function toOrigin(value: string): string | null {
+    try {
+        return new URL(value).origin;
+    } catch {
+        return null;
+    }
+}
+
+function buildAllowedHosts(values: string[], fallbackBaseUrl: string): string[] {
+    const seed = values.length > 0 ? values : [fallbackBaseUrl];
+    const out = new Set<string>();
+    for (const value of seed) {
+        const trimmed = value.trim();
+        if (!trimmed) continue;
+        out.add(trimmed);
+        try {
+            const url = new URL(trimmed);
+            out.add(url.host);
+            out.add(url.hostname);
+        } catch {
+            // Non-URL host strings are valid as-is.
+        }
+    }
+    return Array.from(out);
+}
+
+function buildTrustedOrigins(values: string[], fallbackBaseUrl: string): string[] {
+    const seed = values.length > 0 ? values : [fallbackBaseUrl];
+    const out = new Set<string>();
+    for (const value of seed) {
+        const trimmed = value.trim();
+        if (!trimmed) continue;
+        out.add(trimmed);
+        const origin = toOrigin(trimmed);
+        if (origin) out.add(origin);
+    }
+    // Dev ergonomics: sign-out/sign-in from local ports should not 403 due to origin strictness.
+    out.add('http://localhost:3000');
+    out.add('http://127.0.0.1:3000');
+    out.add('http://localhost:5173');
+    out.add('http://127.0.0.1:5173');
+    return Array.from(out);
+}
+
+const safeAllowedHosts = buildAllowedHosts(allowedHosts, env.VITE_BASE_URL);
+const trustedOriginSeeds = buildTrustedOrigins(trustedOrigins, env.VITE_BASE_URL);
 
 async function sendAuthEmail(input: {
     to: string;
@@ -48,7 +93,19 @@ export const auth = betterAuth({
         allowedHosts: safeAllowedHosts,
         fallback: safeAllowedHosts[0]
     },
-    trustedOrigins: safeTrustedOrigins,
+    trustedOrigins: async (request) => {
+        const dynamic = new Set(trustedOriginSeeds);
+        if (request) {
+            const requestOrigin = toOrigin(request.url);
+            if (requestOrigin) dynamic.add(requestOrigin);
+            const originHeader = request.headers.get('origin');
+            if (originHeader) {
+                const normalized = toOrigin(originHeader) ?? originHeader;
+                if (normalized) dynamic.add(normalized);
+            }
+        }
+        return Array.from(dynamic);
+    },
     secret: env.SERVER_AUTH_SECRET || 'degraded-mode-secret',
     telemetry: {
         enabled: false
