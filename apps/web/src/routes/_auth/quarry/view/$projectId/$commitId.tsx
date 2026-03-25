@@ -1,4 +1,9 @@
-import { ArrowLeftIcon, GitBranchIcon, SlideshowIcon } from '@phosphor-icons/react';
+import {
+    ArrowLeftIcon,
+    CircleNotchIcon,
+    GitBranchIcon,
+    SlideshowIcon
+} from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
 import {
     ResizableHandle,
@@ -230,7 +235,7 @@ function CommitViewer() {
                         {/* Main content */}
                         <div className="flex min-h-0 flex-1 overflow-hidden">
                             {/* Canvas area */}
-                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                                 {/* Stage */}
 
                                 <ViewerSlatePreview
@@ -405,6 +410,16 @@ function CommitViewer() {
                                         </KonvaLayer>
                                     </Stage>
                                 </div>
+                                {!activeSlideId && slides.length > 0 && (
+                                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+                                        <div className="flex items-center gap-3 rounded-lg bg-card px-5 py-3 shadow-lg">
+                                            <CircleNotchIcon className="h-5 w-5 animate-spin text-muted-foreground" />
+                                            <span className="text-sm font-medium text-muted-foreground">
+                                                Loading slide...
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

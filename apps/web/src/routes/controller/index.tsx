@@ -671,7 +671,12 @@ function Controller() {
                         : 'pt-18 pb-13'
                 )}
             >
-                <CircleNotchIcon className="animate-spin" />
+                <div className="flex items-center gap-3 rounded-lg bg-card px-5 py-3 shadow-lg">
+                    <CircleNotchIcon className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="text-sm font-medium text-muted-foreground">
+                        Connecting to wall...
+                    </span>
+                </div>
             </div>
         );
 
@@ -739,7 +744,12 @@ function Controller() {
                         : 'pt-18 pb-13'
                 )}
             >
-                <CircleNotchIcon className="animate-spin" />
+                <div className="flex items-center gap-3 rounded-lg bg-card px-5 py-3 shadow-lg">
+                    <CircleNotchIcon className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="text-sm font-medium text-muted-foreground">
+                        Loading slides...
+                    </span>
+                </div>
             </div>
         );
 
@@ -760,7 +770,7 @@ function Controller() {
                     <div className="flex h-full min-h-0 flex-col overflow-hidden">
                         <div className="flex min-h-0 flex-1 overflow-hidden">
                             {/* Canvas area */}
-                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                                 <ControllerToolbar
                                     isDrawing={isDrawing}
                                     canDraw={canDraw}
@@ -966,6 +976,16 @@ function Controller() {
                                         </KonvaLayer>
                                     </Stage>
                                 </div>
+                                {pendingSlideId && (
+                                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+                                        <div className="flex items-center gap-3 rounded-lg bg-card px-5 py-3 shadow-lg">
+                                            <CircleNotchIcon className="h-5 w-5 animate-spin text-muted-foreground" />
+                                            <span className="text-sm font-medium text-muted-foreground">
+                                                Switching slide...
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
