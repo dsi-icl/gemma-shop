@@ -61,7 +61,6 @@ const LayerSchema = z.discriminatedUnion('type', [
             duration: z.number(),
             rvfcActive: z.boolean(),
             blurhash: z.string().optional(),
-            sizes: OptionalSizesSchema,
             playback: LayerPlaybackStateSchema
         })
         .extend(LayerBaseSchema.shape),
@@ -69,8 +68,7 @@ const LayerSchema = z.discriminatedUnion('type', [
         .object({
             type: z.literal('image'),
             url: z.string(),
-            blurhash: z.string().optional(),
-            sizes: OptionalSizesSchema
+            blurhash: z.string().optional()
         })
         .extend(LayerBaseSchema.shape),
     z.object({ type: z.literal('graph') }).extend(LayerBaseSchema.shape),
@@ -94,8 +92,7 @@ const LayerSchema = z.discriminatedUnion('type', [
             proxy: z.boolean().optional(),
             scale: z.number().default(1),
             stillImage: z.string().optional(),
-            blurhash: z.string().optional(),
-            sizes: OptionalSizesSchema
+            blurhash: z.string().optional()
         })
         .extend(LayerBaseSchema.shape),
     z

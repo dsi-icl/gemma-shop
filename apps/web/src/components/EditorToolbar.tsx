@@ -244,13 +244,12 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 const payload = (await res.json().catch(() => null)) as { error?: string } | null;
                 throw new Error(payload?.error || `Screenshot capture failed (${res.status})`);
             }
-            const { filename, blurhash, sizes } = await res.json();
+            const { filename, blurhash } = await res.json();
 
             const updatedLayer = {
                 ...activeLayer,
                 stillImage: filename,
-                blurhash: blurhash ?? undefined,
-                sizes: sizes?.length ? sizes : undefined
+                blurhash: blurhash ?? undefined
             };
             useEditorStore.getState().upsertLayer(updatedLayer);
             const engine = EditorEngine.getInstance();

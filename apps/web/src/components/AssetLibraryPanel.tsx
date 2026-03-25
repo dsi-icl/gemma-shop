@@ -119,14 +119,12 @@ export function AssetLibraryPanel({
                 duration,
                 loop: true,
                 blurhash: asset.blurhash ?? '',
-                sizes: asset.sizes,
                 ...layerBase
             };
         } else {
             layer = {
                 type: 'image',
                 blurhash: asset.blurhash ?? '',
-                sizes: asset.sizes,
                 ...layerBase
             };
         }

@@ -36,10 +36,9 @@ export function KonvaStaticImage({
         const displayWidth = Math.ceil(layer.config.width * (layer.config.scaleX ?? 1));
         return selectAssetVariantSrc({
             src: layer.url,
-            sizes: layer.sizes,
             targetWidth: displayWidth
         });
-    }, [layer.url, layer.sizes, layer.config.width, layer.config.scaleX, layer.type]);
+    }, [layer.url, layer.config.width, layer.config.scaleX, layer.type]);
 
     useEffect(() => {
         if (layer.type !== 'image')

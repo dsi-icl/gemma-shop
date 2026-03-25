@@ -35,10 +35,9 @@ export function KonvaWebLayer({
         const displayWidth = Math.ceil(layer.config.width * (layer.config.scaleX ?? 1));
         return selectAssetVariantSrc({
             src: layer.stillImage,
-            sizes: layer.sizes,
             targetWidth: displayWidth
         });
-    }, [layer.stillImage, layer.sizes, layer.config.width, layer.config.scaleX]);
+    }, [layer.stillImage, layer.config.width, layer.config.scaleX]);
 
     useEffect(() => {
         if (!variantUrl) {
