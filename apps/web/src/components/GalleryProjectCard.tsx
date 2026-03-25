@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import { ControllerEngine } from '~/lib/controllerEngine';
 import { GalleryEngine } from '~/lib/galleryEngine';
+import { $issueControllerPortalToken } from '~/server/portal.fns';
 import { $bindWall } from '~/server/walls.fns';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
@@ -86,6 +87,16 @@ export function GalleryProjectCard({
         }
     };
 
+    const handleControllerTokenRequest = async (wallId: string) => {
+        try {
+            const result = await $issueControllerPortalToken({ data: { wallId } });
+            return result.token;
+        } catch (e: any) {
+            toast.error(e?.message ?? 'Could not initialize controller API token');
+            return null;
+        }
+    };
+
     return (
         <ProjectCard
             project={project}
@@ -97,6 +108,7 @@ export function GalleryProjectCard({
             onLoadProject={handleLoadProject}
             onWallRebootRequest={handleWallRebootRequest}
             onWallUnbindRequest={handleWallUnbindRequest}
+            onControllerTokenRequest={handleControllerTokenRequest}
             presetWallId={presetWallId}
         />
     );

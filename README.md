@@ -86,6 +86,20 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
       These are intentionally separate because unbind and live-transition flows require different state transitions.
 - Full transition contract is documented in [Gallery State Machine](./docs/GALLERY_STATE_MACHINE.md).
 
+### Portal API (Controller Tokens)
+
+- Gallery now issues short-lived controller API tokens (`gem_ctrl_*`) when opening a controller session.
+- Token is injected into controller URL as `_gem_t=<token>`.
+- Tokens are bound to the current wall + bus scope and are revoked automatically when:
+    - wall is rebound,
+    - wall is unbound,
+    - or scope is garbage-collected.
+- Current proof-of-concept endpoint:
+    - `POST /api/portal/v1/reboot`
+    - Auth via `Authorization: Bearer <token>` (query fallback `_gem_t` is also accepted).
+    - Optional node targeting using `{ c, r }` in JSON body for wall node coordinates.
+- CORS is enabled for `/api/portal/v1/reboot` to support external custom controllers on other domains.
+
 ### 2) Editor State (`apps/web/src/lib/editorStore.ts`)
 
 - Zustand store for layers, slides, selection, and tool state

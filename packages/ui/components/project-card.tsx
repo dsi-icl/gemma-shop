@@ -55,10 +55,15 @@ interface ProjectCardProps {
     onLoadProject?: (wallId: string) => Promise<boolean | void>;
     onWallRebootRequest?: (wallId: string) => Promise<boolean | void> | boolean | void;
     onWallUnbindRequest?: (wallId: string) => Promise<boolean | void> | boolean | void;
+    onControllerTokenRequest?: (wallId: string) => Promise<string | null | void>;
     onActiveWallIdChange?: (wallId: string | null) => void;
 }
 
-function buildControllerUrl(customControlUrl: string | undefined, wallId: string): string {
+function buildControllerUrl(
+    customControlUrl: string | undefined,
+    wallId: string,
+    portalToken?: string | null
+): string {
     const fallback = `/controller/?l=gallery&w=${encodeURIComponent(wallId)}`;
     const raw = customControlUrl?.trim();
     if (!raw) return fallback;
@@ -75,6 +80,9 @@ function buildControllerUrl(customControlUrl: string | undefined, wallId: string
         if (!url.searchParams.has('w')) url.searchParams.set('w', wallId);
 
         if (isAbsolute) return url.toString();
+        if (portalToken && !url.searchParams.has('_gem_t')) {
+            url.searchParams.set('_gem_t', portalToken);
+        }
         return `${url.pathname}${url.search}${url.hash}`;
     } catch {
         return fallback;
@@ -86,6 +94,7 @@ function ProjectCardDialogBody({
     autoOpenSignal,
     onLoadProject,
     onWallRebootRequest,
+    onControllerTokenRequest,
     onActiveWallIdChange,
     availableWalls = [],
     presetWallId
@@ -96,6 +105,7 @@ function ProjectCardDialogBody({
     const [isLoadingWall, setIsLoadingWall] = useState(false);
     const [activeWallId, setActiveWallId] = useState<string | null>(null);
     const [controllerReloadNonce, setControllerReloadNonce] = useState(0);
+    const [controllerPortalToken, setControllerPortalToken] = useState<string | null>(null);
     const [isRefreshingController, setIsRefreshingController] = useState(false);
     const [refreshRebootDone, setRefreshRebootDone] = useState(false);
     const [refreshIframeLoaded, setRefreshIframeLoaded] = useState(false);
@@ -103,6 +113,35 @@ function ProjectCardDialogBody({
 
     const hasController = Boolean(activeWallId);
     const isFullscreen = state === 'fullscreen';
+
+    useEffect(() => {
+        if (!activeWallId) {
+            setControllerPortalToken(null);
+            return;
+        }
+        if (!onControllerTokenRequest) {
+            setControllerPortalToken(null);
+            return;
+        }
+
+        let cancelled = false;
+        setControllerPortalToken(null);
+
+        (async () => {
+            try {
+                const token = await onControllerTokenRequest(activeWallId);
+                if (cancelled) return;
+                setControllerPortalToken(token ?? null);
+            } catch {
+                if (cancelled) return;
+                setControllerPortalToken(null);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeWallId, controllerReloadNonce, onControllerTokenRequest]);
 
     const handleSelectWall = async (wallId: string) => {
         if (!onLoadProject) return;
@@ -165,9 +204,20 @@ function ProjectCardDialogBody({
 
     const controllerUrl = useMemo(() => {
         if (!activeWallId) return '';
-        const baseUrl = buildControllerUrl(project.customControlUrl, activeWallId);
+        if (onControllerTokenRequest && !controllerPortalToken) return '';
+        const baseUrl = buildControllerUrl(
+            project.customControlUrl,
+            activeWallId,
+            controllerPortalToken
+        );
         return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}_r=${controllerReloadNonce}`;
-    }, [activeWallId, project.customControlUrl, controllerReloadNonce]);
+    }, [
+        activeWallId,
+        controllerPortalToken,
+        project.customControlUrl,
+        controllerReloadNonce,
+        onControllerTokenRequest
+    ]);
 
     const handleWallRebootRequest = async () => {
         if (!activeWallId || isRefreshingController) return;
@@ -206,7 +256,7 @@ function ProjectCardDialogBody({
                             : 'pointer-events-none opacity-0'
                     } transition-opacity duration-300`}
                 >
-                    {hasController ? (
+                    {hasController && controllerUrl ? (
                         <iframe
                             title={`Controller for ${project.name}`}
                             src={controllerUrl}
@@ -346,6 +396,7 @@ export function ProjectCard({
     onLoadProject,
     onWallRebootRequest,
     onWallUnbindRequest,
+    onControllerTokenRequest,
     availableWalls,
     presetWallId
 }: ProjectCardProps) {
@@ -425,7 +476,7 @@ export function ProjectCard({
                 style={{
                     borderRadius: '12px'
                 }}
-                className="flex w-full flex-col overflow-hidden border"
+                className="flex w-full flex-col overflow-hidden border bg-card"
             >
                 <MorphingDialogImage
                     src={project.imageUrl}
@@ -467,7 +518,7 @@ export function ProjectCard({
                     style={{
                         borderRadius: '24px'
                     }}
-                    className="pointer-events-auto relative mx-auto flex h-auto w-md flex-col overflow-hidden border"
+                    className="pointer-events-auto relative mx-auto flex h-auto w-md flex-col overflow-hidden border bg-card"
                     minimizedPreviewBlurhash={project.blurhash}
                     minimizedLabel={project.name}
                 >
@@ -477,6 +528,7 @@ export function ProjectCard({
                         availableWalls={availableWalls}
                         onLoadProject={onLoadProject}
                         onWallRebootRequest={onWallRebootRequest}
+                        onControllerTokenRequest={onControllerTokenRequest}
                         onActiveWallIdChange={handleActiveWallIdChange}
                     />
                 </MorphingDialogContent>

@@ -4,6 +4,8 @@ import { ObjectId } from 'mongodb';
 
 import { makeScopeLabel, type GSMessage, type Layer, type ScopeState } from '~/lib/types';
 
+import { revokePortalTokensForScope, revokePortalTokensForWall } from './portalTokens';
+
 // All hot-path maps are keyed by a small integer
 // V8 uses a faster internal representation for integer-keyed Maps.
 export type ScopeId = number;
@@ -490,6 +492,8 @@ export function clearControllerTransientForScope(scopeId: ScopeId) {
 
 export function bindWall(wallId: string, scopeId: ScopeId, source: 'live' | 'gallery' = 'gallery') {
     const oldScopeId = wallBindings.get(wallId);
+    // Never let old controller API credentials survive a wall rebind.
+    revokePortalTokensForWall(wallId);
     clearControllerTransientForWall(wallId);
 
     // Tear down old binding
@@ -535,6 +539,8 @@ export function bindWall(wallId: string, scopeId: ScopeId, source: 'live' | 'gal
 
 export function unbindWall(wallId: string) {
     const oldScopeId = wallBindings.get(wallId);
+    // Wall credentials become invalid immediately when unbound.
+    revokePortalTokensForWall(wallId);
     clearControllerTransientForWall(wallId);
     if (oldScopeId !== undefined) {
         const watchers = scopeWatchers.get(oldScopeId);
@@ -1057,6 +1063,7 @@ async function executeScopeCleanup(scopeId: ScopeId) {
         // Defensive cleanup for orphaned scope IDs (e.g. partial state after HMR).
         clearActiveVideosForScope(scopeId);
         clearControllerTransientForScope(scopeId);
+        revokePortalTokensForScope(scopeId);
 
         editorsByScope.delete(scopeId);
         wallPeersByScope.delete(scopeId);
@@ -1083,6 +1090,7 @@ async function executeScopeCleanup(scopeId: ScopeId) {
     // Purge active videos
     clearActiveVideosForScope(scopeId);
     clearControllerTransientForScope(scopeId);
+    revokePortalTokensForScope(scopeId);
 
     // Purge scope state
     scopedState.delete(scopeId);

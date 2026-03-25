@@ -38,6 +38,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAssetsUriRouteImport } from './routes/api/assets/$uri'
 import { Route as AuthQuarryProjectsRouteRouteImport } from './routes/_auth/quarry/projects/route'
 import { Route as AuthQuarryEditorRouteRouteImport } from './routes/_auth/quarry/editor/route'
+import { Route as ApiPortalV1RebootRouteImport } from './routes/api/portal/v1/reboot'
 import { Route as AuthQuarryProjectsNewRouteImport } from './routes/_auth/quarry/projects/new'
 import { Route as AuthQuarryProjectsProjectIdRouteRouteImport } from './routes/_auth/quarry/projects/$projectId/route'
 import { Route as AuthQuarryProjectsProjectIdIndexRouteImport } from './routes/_auth/quarry/projects/$projectId/index'
@@ -193,6 +194,11 @@ const AuthQuarryEditorRouteRoute = AuthQuarryEditorRouteRouteImport.update({
   path: '/quarry/editor',
   getParentRoute: () => AuthRouteRoute,
 } as any)
+const ApiPortalV1RebootRoute = ApiPortalV1RebootRouteImport.update({
+  id: '/api/portal/v1/reboot',
+  path: '/api/portal/v1/reboot',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthQuarryProjectsNewRoute = AuthQuarryProjectsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -289,6 +295,7 @@ export interface FileRoutesByFullPath {
   '/quarry/': typeof AuthQuarryIndexRoute
   '/quarry/projects/$projectId': typeof AuthQuarryProjectsProjectIdRouteRouteWithChildren
   '/quarry/projects/new': typeof AuthQuarryProjectsNewRoute
+  '/api/portal/v1/reboot': typeof ApiPortalV1RebootRoute
   '/quarry/editor/$projectId/$slideId': typeof AuthQuarryEditorProjectIdSlideIdRoute
   '/quarry/projects/$projectId/assets': typeof AuthQuarryProjectsProjectIdAssetsRoute
   '/quarry/projects/$projectId/commits': typeof AuthQuarryProjectsProjectIdCommitsRoute
@@ -327,6 +334,7 @@ export interface FileRoutesByTo {
   '/api/uploads/$': typeof ApiUploadsSplatRoute
   '/quarry': typeof AuthQuarryIndexRoute
   '/quarry/projects/new': typeof AuthQuarryProjectsNewRoute
+  '/api/portal/v1/reboot': typeof ApiPortalV1RebootRoute
   '/quarry/editor/$projectId/$slideId': typeof AuthQuarryEditorProjectIdSlideIdRoute
   '/quarry/projects/$projectId/assets': typeof AuthQuarryProjectsProjectIdAssetsRoute
   '/quarry/projects/$projectId/commits': typeof AuthQuarryProjectsProjectIdCommitsRoute
@@ -370,6 +378,7 @@ export interface FileRoutesById {
   '/_auth/quarry/': typeof AuthQuarryIndexRoute
   '/_auth/quarry/projects/$projectId': typeof AuthQuarryProjectsProjectIdRouteRouteWithChildren
   '/_auth/quarry/projects/new': typeof AuthQuarryProjectsNewRoute
+  '/api/portal/v1/reboot': typeof ApiPortalV1RebootRoute
   '/_auth/quarry/editor/$projectId/$slideId': typeof AuthQuarryEditorProjectIdSlideIdRoute
   '/_auth/quarry/projects/$projectId/assets': typeof AuthQuarryProjectsProjectIdAssetsRoute
   '/_auth/quarry/projects/$projectId/commits': typeof AuthQuarryProjectsProjectIdCommitsRoute
@@ -412,6 +421,7 @@ export interface FileRouteTypes {
     | '/quarry/'
     | '/quarry/projects/$projectId'
     | '/quarry/projects/new'
+    | '/api/portal/v1/reboot'
     | '/quarry/editor/$projectId/$slideId'
     | '/quarry/projects/$projectId/assets'
     | '/quarry/projects/$projectId/commits'
@@ -450,6 +460,7 @@ export interface FileRouteTypes {
     | '/api/uploads/$'
     | '/quarry'
     | '/quarry/projects/new'
+    | '/api/portal/v1/reboot'
     | '/quarry/editor/$projectId/$slideId'
     | '/quarry/projects/$projectId/assets'
     | '/quarry/projects/$projectId/commits'
@@ -492,6 +503,7 @@ export interface FileRouteTypes {
     | '/_auth/quarry/'
     | '/_auth/quarry/projects/$projectId'
     | '/_auth/quarry/projects/new'
+    | '/api/portal/v1/reboot'
     | '/_auth/quarry/editor/$projectId/$slideId'
     | '/_auth/quarry/projects/$projectId/assets'
     | '/_auth/quarry/projects/$projectId/commits'
@@ -521,6 +533,7 @@ export interface RootRouteChildren {
   ApiAssetsUriRoute: typeof ApiAssetsUriRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiUploadsSplatRoute: typeof ApiUploadsSplatRoute
+  ApiPortalV1RebootRoute: typeof ApiPortalV1RebootRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -727,6 +740,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/quarry/editor'
       preLoaderRoute: typeof AuthQuarryEditorRouteRouteImport
       parentRoute: typeof AuthRouteRoute
+    }
+    '/api/portal/v1/reboot': {
+      id: '/api/portal/v1/reboot'
+      path: '/api/portal/v1/reboot'
+      fullPath: '/api/portal/v1/reboot'
+      preLoaderRoute: typeof ApiPortalV1RebootRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_auth/quarry/projects/new': {
       id: '/_auth/quarry/projects/new'
@@ -944,6 +964,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAssetsUriRoute: ApiAssetsUriRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiUploadsSplatRoute: ApiUploadsSplatRoute,
+  ApiPortalV1RebootRoute: ApiPortalV1RebootRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
