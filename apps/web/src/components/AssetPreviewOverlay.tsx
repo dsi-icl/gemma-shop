@@ -1,3 +1,4 @@
+import { normalizeAssetSrc, selectAssetVariantSrc } from '@repo/ui/lib/assetVariants';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { Blurhash } from 'react-blurhash';
@@ -10,26 +11,6 @@ interface AssetPreviewOverlayProps {
     blurhash?: string;
     sizes?: number[];
     onClose: () => void;
-}
-
-function selectPreviewImageSrc(
-    src: string,
-    sizes: number[] | undefined,
-    viewportWidth: number,
-    viewportHeight: number
-): string {
-    const prefixed = src.startsWith('/api/assets/') ? src : `/api/assets/${src}`;
-    if (!sizes?.length) return prefixed;
-
-    const filename = prefixed.split('/').pop() ?? '';
-    const ext = filename.split('.').pop()?.toLowerCase();
-    if (ext === 'svg') return prefixed;
-    const baseId = filename.replace(/\.[^.]+$/, '').replace(/_\d+$/, '');
-    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio ?? 1) : 1;
-    const targetPx = Math.ceil(Math.min(viewportWidth, viewportHeight) * dpr);
-    const sorted = [...sizes].sort((a, b) => a - b);
-    const match = sorted.find((s) => s >= targetPx) ?? sorted[sorted.length - 1];
-    return `/api/assets/${baseId}_${match}.webp`;
 }
 
 function AssetPreviewOverlayInner({
@@ -73,14 +54,21 @@ function AssetPreviewOverlayInner({
 
     const selectedImageSrc = useMemo(() => {
         if (isVideo) return src;
-        return selectPreviewImageSrc(src, sizes, viewport.width * 0.92, viewport.height * 0.92);
+        const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio ?? 1) : 1;
+        const targetPx = Math.ceil(Math.min(viewport.width * 0.92, viewport.height * 0.92) * dpr);
+        return selectAssetVariantSrc({
+            src,
+            sizes,
+            targetWidth: targetPx,
+            stripVariantSuffix: true
+        });
     }, [isVideo, src, sizes, viewport.height, viewport.width]);
 
     useEffect(() => {
         setImageSrc(selectedImageSrc);
     }, [selectedImageSrc]);
 
-    const fallbackSrc = src.startsWith('/api/assets/') ? src : `/api/assets/${src}`;
+    const fallbackSrc = normalizeAssetSrc(src);
     const frameStyle = {
         width: Math.max(320, Math.floor(viewport.width * 0.92)),
         height: Math.max(180, Math.floor(viewport.height * 0.92))

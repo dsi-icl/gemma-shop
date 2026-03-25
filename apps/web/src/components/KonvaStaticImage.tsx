@@ -1,5 +1,6 @@
 'use client';
 
+import { selectAssetVariantSrc } from '@repo/ui/lib/assetVariants';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -7,19 +8,6 @@ import { Image } from 'react-konva';
 
 import { applyKonvaFilters } from '~/lib/konvaFilters';
 import type { LayerWithEditorState } from '~/lib/types';
-
-/** Pick the best variant URL for the given display width */
-function selectVariantUrl(url: string, sizes: number[] | undefined, displayWidth: number): string {
-    if (!sizes?.length || !url.startsWith('/api/assets/')) return url;
-
-    const filename = url.split('/').pop()!;
-    const ext = filename.split('.').pop()?.toLowerCase();
-    if (ext === 'svg') return url;
-    const baseId = filename.replace(/\.[^.]+$/, '');
-    const sorted = [...sizes].sort((a, b) => a - b);
-    const match = sorted.find((s) => s >= displayWidth) ?? sorted[sorted.length - 1];
-    return `/api/assets/${baseId}_${match}.webp`;
-}
 
 export function KonvaStaticImage({
     layer,
@@ -44,8 +32,13 @@ export function KonvaStaticImage({
     // Pick variant based on the layer's display width (scaled)
     const variantUrl = useMemo(() => {
         if (layer.type !== 'image') return layer.url;
+        if (!layer.url.startsWith('/api/assets/')) return layer.url;
         const displayWidth = Math.ceil(layer.config.width * (layer.config.scaleX ?? 1));
-        return selectVariantUrl(layer.url, layer.sizes, displayWidth);
+        return selectAssetVariantSrc({
+            src: layer.url,
+            sizes: layer.sizes,
+            targetWidth: displayWidth
+        });
     }, [layer.url, layer.sizes, layer.config.width, layer.config.scaleX, layer.type]);
 
     useEffect(() => {

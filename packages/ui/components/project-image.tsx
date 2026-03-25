@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Blurhash } from 'react-blurhash';
 
+import { selectAssetVariantSrc } from '../lib/assetVariants';
 import { cn } from '../lib/utils';
 
 interface ProjectImageProps {
@@ -12,26 +13,6 @@ interface ProjectImageProps {
     imgClassName?: string;
     forceOriginal?: boolean;
     onClick?: (e: React.MouseEvent) => void;
-}
-
-function selectSrc(
-    src: string,
-    sizes: number[] | undefined,
-    physicalWidth: number,
-    forceOriginal?: boolean
-): string {
-    const prefixed = src.startsWith('/api/assets/') ? src : `/api/assets/${src}`;
-
-    if (forceOriginal || !sizes?.length) return prefixed;
-
-    const filename = prefixed.split('/').pop()!;
-    const ext = filename.split('.').pop()?.toLowerCase();
-    if (ext === 'svg') return prefixed;
-    const baseId = filename.replace(/\.[^.]+$/, '');
-
-    const sorted = [...sizes].sort((a, b) => a - b);
-    const match = sorted.find((s) => s >= physicalWidth) ?? sorted[sorted.length - 1];
-    return `/api/assets/${baseId}_${match}.webp`;
 }
 
 export function ProjectImage({
@@ -72,7 +53,12 @@ export function ProjectImage({
         return () => observer.disconnect();
     }, []);
 
-    const selectedSrc = selectSrc(src, sizes, measuredWidth, forceOriginal);
+    const selectedSrc = selectAssetVariantSrc({
+        src,
+        sizes,
+        targetWidth: measuredWidth,
+        forceOriginal
+    });
     const loaded = loadedSrc === selectedSrc;
 
     const handleLoad = useCallback(() => setLoadedSrc(selectedSrc), [selectedSrc]);
