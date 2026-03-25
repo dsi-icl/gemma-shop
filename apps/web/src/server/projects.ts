@@ -56,6 +56,18 @@ function scalarToString(value: unknown): string {
     return JSON.stringify(value);
 }
 
+function normalizeAssetFilename(value: unknown): string | null {
+    if (typeof value !== 'string' || value.length === 0) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const noQuery = trimmed.split('?')[0]?.split('#')[0] ?? trimmed;
+    if (noQuery.startsWith('/api/assets/')) {
+        const filename = noQuery.slice('/api/assets/'.length);
+        return filename || null;
+    }
+    return noQuery;
+}
+
 export async function listProjects(userEmail: string, includeArchived = false) {
     const filter: Record<string, unknown> = {
         $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }]
@@ -72,7 +84,51 @@ export async function listPublishedProjects() {
         .find({ publishedCommitId: { $ne: null }, archived: { $ne: true } })
         .sort({ updatedAt: -1 })
         .toArray();
-    return docs.map(serializeProject);
+
+    const serialized = docs.map(serializeProject);
+    const heroFilenames = Array.from(
+        new Set(
+            serialized
+                .map((project) => normalizeAssetFilename(project.heroImages?.[0]))
+                .filter((value): value is string => Boolean(value))
+        )
+    );
+
+    if (heroFilenames.length === 0) return serialized;
+
+    const heroAssets = await assets
+        .find({ url: { $in: heroFilenames } })
+        .project({ url: 1, blurhash: 1, sizes: 1 })
+        .toArray();
+
+    const heroMetaByFilename = new Map<
+        string,
+        {
+            blurhash?: string;
+            sizes?: number[];
+        }
+    >();
+
+    for (const asset of heroAssets) {
+        const filename = normalizeAssetFilename(asset.url);
+        if (!filename) continue;
+        heroMetaByFilename.set(filename, {
+            blurhash: typeof asset.blurhash === 'string' ? asset.blurhash : undefined,
+            sizes: Array.isArray(asset.sizes)
+                ? asset.sizes.filter((size): size is number => typeof size === 'number')
+                : undefined
+        });
+    }
+
+    return serialized.map((project) => {
+        const heroFilename = normalizeAssetFilename(project.heroImages?.[0]);
+        const heroMeta = heroFilename ? heroMetaByFilename.get(heroFilename) : undefined;
+        return {
+            ...project,
+            heroImageBlurhash: heroMeta?.blurhash,
+            heroImageSizes: heroMeta?.sizes
+        };
+    });
 }
 
 export async function listKnownTags(userEmail: string): Promise<string[]> {

@@ -29,6 +29,8 @@ export interface Project {
     description: string;
     tags: string[];
     imageUrl?: string;
+    blurhash?: string;
+    sizes?: number[];
     customControlUrl?: string;
 }
 
@@ -216,6 +218,8 @@ function ProjectCardDialogBody({
                 <div className="min-w-0">
                     <MorphingDialogImage
                         src={project.imageUrl}
+                        blurhash={project.blurhash}
+                        sizes={project.sizes}
                         alt={project.name}
                         state={'opened'}
                         className="h-52 w-full object-cover"
@@ -419,6 +423,8 @@ export function ProjectCard({
             >
                 <MorphingDialogImage
                     src={project.imageUrl}
+                    blurhash={project.blurhash}
+                    sizes={project.sizes}
                     alt={project.name}
                     state={'closed'}
                     className="h-48 w-full object-cover"
@@ -456,6 +462,8 @@ export function ProjectCard({
                     }}
                     className="pointer-events-auto relative mx-auto flex h-auto w-md flex-col overflow-hidden border"
                     minimizedPreviewSrc={project.imageUrl}
+                    minimizedPreviewBlurhash={project.blurhash}
+                    minimizedPreviewSizes={project.sizes}
                     minimizedLabel={project.name}
                 >
                     <ProjectCardDialogBody

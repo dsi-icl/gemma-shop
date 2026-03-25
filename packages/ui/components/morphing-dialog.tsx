@@ -5,9 +5,11 @@ import useClickOutside from '@repo/ui/hooks/use-click-outside';
 import { cn } from '@repo/ui/lib/utils';
 import { motion, AnimatePresence, MotionConfig, Transition, Variant } from 'motion/react';
 import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Blurhash } from 'react-blurhash';
 import { createPortal } from 'react-dom';
 
 import AnimatedBlurPattern from './blur-pattern';
+import { ProjectImage } from './project-image';
 
 export type MorphingDialogState = 'closed' | 'expanded' | 'fullscreen' | 'minimized';
 
@@ -329,6 +331,8 @@ export type MorphingDialogContentProps = {
     className?: string;
     style?: React.CSSProperties;
     minimizedPreviewSrc?: string;
+    minimizedPreviewBlurhash?: string;
+    minimizedPreviewSizes?: number[];
     minimizedLabel?: string;
 };
 
@@ -337,6 +341,8 @@ function MorphingDialogContent({
     className,
     style,
     minimizedPreviewSrc,
+    minimizedPreviewBlurhash,
+    minimizedPreviewSizes,
     minimizedLabel
 }: MorphingDialogContentProps) {
     const { state, close, fullscreen, isOpen, uniqueId, triggerRef } = useMorphingDialog();
@@ -453,7 +459,7 @@ function MorphingDialogContent({
                 >
                     <svg
                         viewBox="0 0 140 140"
-                        className="pointer-events-none absolute inset-0 h-full w-full animate-spin [animation-duration:18s]"
+                        className="pointer-events-none absolute inset-0 z-[1] h-full w-full animate-spin [animation-duration:18s]"
                         aria-hidden="true"
                     >
                         <defs>
@@ -468,18 +474,29 @@ function MorphingDialogContent({
                             </textPath>
                         </text>
                     </svg>
-                    <div className="relative h-24 w-24 overflow-hidden rounded-full">
-                        {minimizedPreviewSrc ? (
-                            <img
-                                src={minimizedPreviewSrc}
-                                alt={minimizedLabel ?? 'Project preview'}
-                                className="absolute inset-0 h-full w-full object-cover"
-                            />
-                        ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-zinc-900/70">
-                                <ArrowsOutSimpleIcon size={22} />
+                    <div className="relative z-[2] h-24 w-24 overflow-hidden rounded-full">
+                        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+                            {minimizedPreviewBlurhash ? (
+                                <Blurhash
+                                    hash={minimizedPreviewBlurhash}
+                                    width={256}
+                                    height={256}
+                                    className="h-full! w-full!"
+                                />
+                            ) : (
+                                <AnimatedBlurPattern
+                                    seed={minimizedLabel ?? 'project'}
+                                    animate={true}
+                                    className="h-full w-full"
+                                />
+                            )}
+                            <div className="absolute inset-0 bg-black/25" />
+                        </div>
+                        <div className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center">
+                            <div className="rounded-full bg-black/35 p-2 text-white backdrop-blur-sm">
+                                <ArrowsOutSimpleIcon size={18} />
                             </div>
-                        )}
+                        </div>
                     </div>
                 </button>
             ) : null}
@@ -614,6 +631,8 @@ function MorphingDialogDescription({
 
 export type MorphingDialogImageProps = {
     src?: string;
+    blurhash?: string;
+    sizes?: number[];
     alt: string;
     className?: string;
     state?: 'opened' | 'closed';
@@ -622,6 +641,8 @@ export type MorphingDialogImageProps = {
 
 function MorphingDialogImage({
     src,
+    blurhash,
+    sizes,
     alt,
     className,
     style,
@@ -641,13 +662,15 @@ function MorphingDialogImage({
             />
         );
     return (
-        <motion.img
-            src={`/api/assets/${src}`}
-            alt={alt}
-            className={cn(className)}
-            layoutId={`dialog-img-${uniqueId}`}
-            style={style}
-        />
+        <motion.div className={cn(className)} layoutId={`dialog-img-${uniqueId}`} style={style}>
+            <ProjectImage
+                src={src}
+                blurhash={blurhash}
+                sizes={sizes}
+                alt={alt}
+                className="h-full w-full"
+            />
+        </motion.div>
     );
 }
 
@@ -673,7 +696,7 @@ function MorphingDialogClose({ className, variants }: MorphingDialogCloseProps) 
             type="button"
             aria-label="Close dialog"
             key={`dialog-close-${uniqueId}`}
-            className={cn('absolute top-6 right-6', className)}
+            className={cn('absolute top-6 right-6 z-30', className)}
             initial="initial"
             animate="animate"
             exit="exit"
@@ -693,7 +716,7 @@ function MorphingDialogMinimize({ className, variants }: MorphingDialogCloseProp
             onClick={minimize}
             type="button"
             aria-label="Minimize dialog"
-            className={cn('absolute top-6 right-16 z-10', className)}
+            className={cn('absolute top-6 right-16 z-30', className)}
             initial="initial"
             animate="animate"
             exit="exit"
