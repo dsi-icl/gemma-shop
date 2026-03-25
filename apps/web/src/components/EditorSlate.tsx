@@ -836,17 +836,20 @@ export function EditorSlate() {
 
     const handleStageInteractionStart = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
+        const isTwoFingerTouch = e.evt instanceof TouchEvent && e.evt.touches?.length === 2;
+        if (isDrawing && isTwoFingerTouch) {
+            setCurrentLine([]);
+        }
         if (
-            ((e.evt instanceof TouchEvent && e.evt.touches?.length === 1) ||
-                e.type === 'mousedown') &&
-            !isDrawing
+            (e.evt instanceof TouchEvent && e.evt.touches?.length === 1) ||
+            e.type === 'mousedown'
         ) {
             const clickedOnEmpty = e.target === e.target.getStage();
             if (clickedOnEmpty && currentSelectedIds.length) {
                 flushNodeState(currentSelectedIds[0]);
                 deselectAllLayers();
             }
-            return;
+            if (!isDrawing) return;
         }
         if (
             e.evt instanceof TouchEvent &&
@@ -878,7 +881,8 @@ export function EditorSlate() {
     const handleTouchMove = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
         e.evt.preventDefault();
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
-        if (isDrawing) {
+        const isTwoFingerTouch = e.evt instanceof TouchEvent && e.evt.touches.length >= 2;
+        if (isDrawing && !isTwoFingerTouch) {
             if (e.evt instanceof MouseEvent && e.evt.buttons !== 1) return;
             const stage = e.target.getStage();
             const point = stage?.getPointerPosition();

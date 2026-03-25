@@ -543,6 +543,7 @@ function Controller() {
     const handleDrawStart = useCallback(
         (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
             if (!canDraw || !isDrawing) return;
+            if (e.evt instanceof TouchEvent && e.evt.touches.length >= 2) return;
             const point = getStagePoint(e);
             if (!point) return;
             startLine(point.x, point.y);
@@ -553,6 +554,7 @@ function Controller() {
     const handleDrawMove = useCallback(
         (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
             if (!canDraw || !isDrawing || currentLine.length < 2) return;
+            if (e.evt instanceof TouchEvent && e.evt.touches.length >= 2) return;
             const point = getStagePoint(e);
             if (!point) return;
             appendLinePoint(point.x, point.y);
@@ -567,6 +569,48 @@ function Controller() {
             addLineLayer(line);
         }
     }, [canDraw, isDrawing, consumeCurrentLine, addLineLayer]);
+
+    const touchScrollStartX = useRef(0);
+    const touchScrollStartLeft = useRef(0);
+
+    const handleTouchStart = useCallback(
+        (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+            if (e.evt instanceof TouchEvent && e.evt.touches.length >= 2) {
+                const slot = stageSlot.current;
+                if (slot) {
+                    touchScrollStartX.current = e.evt.touches[0].clientX;
+                    touchScrollStartLeft.current = slot.scrollLeft;
+                }
+                return;
+            }
+            handleDrawStart(e);
+        },
+        [handleDrawStart]
+    );
+
+    const handleTouchMove = useCallback(
+        (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+            if (e.evt instanceof TouchEvent && e.evt.touches.length >= 2) {
+                e.evt.preventDefault();
+                const slot = stageSlot.current;
+                if (slot) {
+                    const deltaX = e.evt.touches[0].clientX - touchScrollStartX.current;
+                    slot.scrollLeft = touchScrollStartLeft.current - deltaX;
+                }
+                return;
+            }
+            handleDrawMove(e);
+        },
+        [handleDrawMove]
+    );
+
+    const handleTouchEnd = useCallback(
+        (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+            if (e.evt instanceof TouchEvent && e.evt.touches.length >= 1) return;
+            handleDrawEnd();
+        },
+        [handleDrawEnd]
+    );
 
     const handleStageWheel = useCallback((e: KonvaEventObject<WheelEvent>) => {
         const slot = stageSlot.current;
@@ -749,9 +793,9 @@ function Controller() {
                                         onMouseMove={handleDrawMove}
                                         onMouseUp={handleDrawEnd}
                                         onWheel={handleStageWheel}
-                                        onTouchStart={handleDrawStart}
-                                        onTouchMove={handleDrawMove}
-                                        onTouchEnd={handleDrawEnd}
+                                        onTouchStart={handleTouchStart}
+                                        onTouchMove={handleTouchMove}
+                                        onTouchEnd={handleTouchEnd}
                                         scaleX={stageScaleFactor}
                                         scaleY={stageScaleFactor}
                                     >
