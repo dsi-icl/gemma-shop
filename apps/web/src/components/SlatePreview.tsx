@@ -61,11 +61,16 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                 scaleY={PREVIEW_SCALE}
                 onClick={(e) => {
                     let x =
-                        (e.target.getStage()?.getPointerPosition()?.x ?? 0) * PREVIEW_SCALE -
+                        (e.target.getStage()?.getPointerPosition()?.x ?? 0) / PREVIEW_SCALE -
                         canvasWidth / 2;
                     if (x < 0) x = 0;
                     if (x > stageWidth - canvasWidth) x = stageWidth - canvasWidth;
                     setScrollLeft(x);
+                    const slot = stageSlot.current;
+                    if (slot) {
+                        // oxlint-disable-next-line react-hooks-js/immutability
+                        slot.scrollLeft = x;
+                    }
                 }}
                 className="m-auto block w-fit cursor-pointer bg-[#222]"
             >
