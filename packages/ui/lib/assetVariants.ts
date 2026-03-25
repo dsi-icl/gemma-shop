@@ -2,6 +2,12 @@ export function normalizeAssetSrc(src: string): string {
     return src.startsWith('/api/assets/') ? src : `/api/assets/${src}`;
 }
 
+export function isSvgAssetSrc(src: string): boolean {
+    const normalized = normalizeAssetSrc(src);
+    const withoutQuery = normalized.split('?')[0]?.split('#')[0] ?? normalized;
+    return withoutQuery.toLowerCase().endsWith('.svg');
+}
+
 export function hasAssetVariants(sizes: number[] | undefined): sizes is number[] {
     return Array.isArray(sizes) && sizes.length > 0;
 }

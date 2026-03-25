@@ -43,6 +43,10 @@ function isWoff2File(file: File): boolean {
     );
 }
 
+function isSvgFile(file: File): boolean {
+    return file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+}
+
 export function UploadDialog({
     projectId,
     trigger,
@@ -134,7 +138,7 @@ export function UploadDialog({
             const uppy =
                 uppyRef.current ??
                 new Uppy({
-                    restrictions: { allowedFileTypes: ['image/*', 'video/*', '.woff2'] }
+                    restrictions: { allowedFileTypes: ['image/*', '.svg', 'video/*', '.woff2'] }
                 }).use(Tus, {
                     endpoint: '/api/uploads/',
                     chunkSize: 5 * 1024 * 1024,
@@ -202,7 +206,11 @@ export function UploadDialog({
             e.preventDefault();
             setDragOver(false);
             const droppedFiles = Array.from(e.dataTransfer.files).filter(
-                (f) => f.type.startsWith('image/') || f.type.startsWith('video/') || isWoff2File(f)
+                (f) =>
+                    f.type.startsWith('image/') ||
+                    isSvgFile(f) ||
+                    f.type.startsWith('video/') ||
+                    isWoff2File(f)
             );
             uploadFiles(droppedFiles);
         },
@@ -293,7 +301,7 @@ export function UploadDialog({
                             ref={fileInputRef}
                             type="file"
                             multiple
-                            accept="image/*,video/*,.woff2"
+                            accept="image/*,.svg,video/*,.woff2"
                             className="hidden"
                             onChange={handleFileInput}
                         />

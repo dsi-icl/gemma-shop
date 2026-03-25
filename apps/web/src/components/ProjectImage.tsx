@@ -1,4 +1,4 @@
-import { selectAssetVariantSrc } from '@repo/ui/lib/assetVariants';
+import { isSvgAssetSrc, selectAssetVariantSrc } from '@repo/ui/lib/assetVariants';
 import { cn } from '@repo/ui/lib/utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Blurhash } from 'react-blurhash';
@@ -64,6 +64,7 @@ export function ProjectImage({
         targetWidth: measuredWidth,
         forceOriginal
     });
+    const isSvg = isSvgAssetSrc(selectedSrc);
     const loaded = loadedSrc === selectedSrc;
 
     const handleLoad = useCallback(() => setLoadedSrc(selectedSrc), [selectedSrc]);
@@ -117,6 +118,7 @@ export function ProjectImage({
                     loaded ? 'opacity-100' : 'opacity-0',
                     imgClassName
                 )}
+                style={isSvg ? { objectFit: 'contain' } : undefined}
                 onLoad={handleLoad}
                 onClick={onClick}
                 onKeyDown={handleKeyDown}

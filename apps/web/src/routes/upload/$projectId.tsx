@@ -65,7 +65,7 @@ function MobileUpload() {
             const uppy =
                 uppyRef.current ??
                 new Uppy({
-                    restrictions: { allowedFileTypes: ['image/*', 'video/*'] }
+                    restrictions: { allowedFileTypes: ['image/*', '.svg', 'video/*'] }
                 }).use(Tus, {
                     endpoint: '/api/uploads/',
                     chunkSize: 5 * 1024 * 1024,
@@ -180,7 +180,7 @@ function MobileUpload() {
                         ref={fileInputRef}
                         type="file"
                         multiple
-                        accept="image/*,video/*"
+                        accept="image/*,.svg,video/*"
                         className="hidden"
                         onChange={handleFileInput}
                     />
