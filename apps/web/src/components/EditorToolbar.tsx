@@ -22,10 +22,18 @@ import {
     RectangleIcon,
     ShapesIcon,
     TextTIcon,
-    WarningCircleIcon
+    WarningCircleIcon,
+    XIcon
 } from '@phosphor-icons/react';
 import { useAuth } from '@repo/auth/tanstack/hooks';
 import { Button } from '@repo/ui/components/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogTitle
+} from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components/popover';
 import { Separator } from '@repo/ui/components/separator';
@@ -33,6 +41,7 @@ import { Slider } from '@repo/ui/components/slider';
 import { TipButton } from '@repo/ui/components/tip-button';
 import { TooltipProvider } from '@repo/ui/components/tooltip';
 import { throttle } from '@tanstack/pacer';
+import { Link } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
@@ -56,8 +65,12 @@ interface EditorToolbarProps {
 export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     const { user } = useAuth();
     // Project header — only changes on project load
-    const { projectName, parentSaveMessage } = useEditorStore(
-        useShallow((s) => ({ projectName: s.projectName, parentSaveMessage: s.parentSaveMessage }))
+    const { projectId, projectName, parentSaveMessage } = useEditorStore(
+        useShallow((s) => ({
+            projectId: s.projectId,
+            projectName: s.projectName,
+            parentSaveMessage: s.parentSaveMessage
+        }))
     );
 
     // Save / connection state — infrequent, independent
@@ -144,6 +157,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     const [commitMessage, setCommitMessage] = useState('');
     const [savePopoverOpen, setSavePopoverOpen] = useState(false);
     const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
+    const [clearStageDialogOpen, setClearStageDialogOpen] = useState(false);
     const commitInputRef = useRef<HTMLInputElement>(null);
     const [bindPending, setBindPending] = useState<{ requestId: string; wallId: string } | null>(
         null
@@ -383,6 +397,21 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                     className="hidden"
                 />
 
+                {/* ── Close ── */}
+                {projectId && (
+                    <>
+                        <TipButton
+                            tip="Back to project"
+                            render={
+                                <Link to="/quarry/projects/$projectId" params={{ projectId }} />
+                            }
+                        >
+                            <XIcon />
+                        </TipButton>
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
+                    </>
+                )}
+
                 {/* ── Add Content ── */}
                 <div className="flex items-center gap-0.5">
                     <TipButton tip="Upload assets" onClick={() => fileInputRef.current?.click()}>
@@ -564,7 +593,11 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                     <TipButton tip="Refresh all screens" variant="ghost" onClick={reboot}>
                         <ArrowsClockwiseIcon />
                     </TipButton>
-                    <TipButton tip="Clear all layers" variant="destructive" onClick={clearStage}>
+                    <TipButton
+                        tip="Clear all layers"
+                        variant="destructive"
+                        onClick={() => setClearStageDialogOpen(true)}
+                    >
                         <EraserIcon />
                     </TipButton>
                 </div>
@@ -857,6 +890,31 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 )}
             </div>
             <SlidesJsonDialog open={jsonDialogOpen} onOpenChange={setJsonDialogOpen} />
+            <Dialog open={clearStageDialogOpen} onOpenChange={setClearStageDialogOpen}>
+                <DialogContent className="w-80 p-5">
+                    <DialogTitle>Clear all layers</DialogTitle>
+                    <DialogDescription className="mt-1">
+                        Are you sure you want to remove all layers from this slide?
+                    </DialogDescription>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <DialogClose>
+                            <Button variant="outline" size="sm">
+                                Cancel
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                                clearStage();
+                                setClearStageDialogOpen(false);
+                            }}
+                        >
+                            Clear all
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </TooltipProvider>
     );
 }
