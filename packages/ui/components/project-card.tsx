@@ -65,8 +65,22 @@ function buildControllerUrl(
     portalToken?: string | null
 ): string {
     const fallback = `/controller/?l=gallery&w=${encodeURIComponent(wallId)}`;
+    const withPortalToken = (input: string) => {
+        if (!portalToken) return input;
+        try {
+            const isAbsolute = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(input);
+            const url = new URL(input, 'http://local');
+            if (!url.searchParams.has('_gem_t')) {
+                url.searchParams.set('_gem_t', portalToken);
+            }
+            if (isAbsolute) return url.toString();
+            return `${url.pathname}${url.search}${url.hash}`;
+        } catch {
+            return input;
+        }
+    };
     const raw = customControlUrl?.trim();
-    if (!raw) return fallback;
+    if (!raw) return withPortalToken(fallback);
 
     const withTokens = raw
         .replaceAll('{wallId}', encodeURIComponent(wallId))
@@ -80,12 +94,9 @@ function buildControllerUrl(
         if (!url.searchParams.has('w')) url.searchParams.set('w', wallId);
 
         if (isAbsolute) return url.toString();
-        if (portalToken && !url.searchParams.has('_gem_t')) {
-            url.searchParams.set('_gem_t', portalToken);
-        }
         return `${url.pathname}${url.search}${url.hash}`;
     } catch {
-        return fallback;
+        return withPortalToken(fallback);
     }
 }
 
@@ -476,7 +487,7 @@ export function ProjectCard({
                 style={{
                     borderRadius: '12px'
                 }}
-                className="flex w-full flex-col overflow-hidden border bg-card"
+                className="relative isolate flex w-full flex-col overflow-hidden border bg-card"
             >
                 <MorphingDialogImage
                     src={project.imageUrl}
@@ -518,7 +529,7 @@ export function ProjectCard({
                     style={{
                         borderRadius: '24px'
                     }}
-                    className="pointer-events-auto relative mx-auto flex h-auto w-md flex-col overflow-hidden border bg-card"
+                    className="pointer-events-auto relative isolate mx-auto flex h-auto w-md flex-col overflow-hidden border bg-card"
                     minimizedPreviewBlurhash={project.blurhash}
                     minimizedLabel={project.name}
                 >

@@ -695,7 +695,7 @@ function RotatingProjectImages({
     }, [images, buildRandomOrder]);
 
     return (
-        <div className="relative h-full w-full overflow-hidden">
+        <div className="relative isolate z-0 h-full w-full overflow-hidden">
             {images.map((image, index) => (
                 <div
                     key={`${image.src}:${index}`}
@@ -748,7 +748,11 @@ function MorphingDialogImage({
             />
         );
     return (
-        <motion.div className={cn(className)} layoutId={`dialog-img-${uniqueId}`} style={style}>
+        <motion.div
+            className={cn('relative isolate z-0 overflow-hidden', className)}
+            layoutId={`dialog-img-${uniqueId}`}
+            style={style}
+        >
             <RotatingProjectImages images={normalizedImages} alt={alt} />
         </motion.div>
     );
