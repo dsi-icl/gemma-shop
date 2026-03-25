@@ -13,6 +13,8 @@ export const AssetSchema = z.object({
     previewUrl: z.string().optional(),
     sizes: z.array(z.number()).optional(),
     public: z.boolean().optional().default(false),
+    deletedAt: z.iso.datetime().optional(),
+    deletedBy: z.string().optional(),
     createdAt: z.iso.datetime(),
     createdBy: z.string()
 });

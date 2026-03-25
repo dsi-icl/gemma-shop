@@ -11,7 +11,6 @@ import {
     peerCounts,
     unbindWall
 } from '~/lib/busState';
-import { ASSET_DIR } from '~/lib/serverVariables';
 
 let prevCpuUsage = process.cpuUsage();
 let prevCpuAt = process.hrtime.bigint();
@@ -90,7 +89,7 @@ export async function adminGetStats() {
         db.collection('user').countDocuments(),
         db.collection('projects').countDocuments(),
         db.collection('commits').countDocuments(),
-        db.collection('assets').countDocuments()
+        db.collection('assets').countDocuments({ deletedAt: { $exists: false } })
     ]);
     const wallDocs = await db
         .collection('walls')
@@ -222,30 +221,30 @@ export async function adminUnbindWall(wallId: string) {
 export async function adminListPublicAssets() {
     const docs = await db
         .collection('assets')
-        .find({ public: true })
+        .find({ public: true, deletedAt: { $exists: false } })
         .sort({ createdAt: -1 })
         .toArray();
     return docs.map(serializeAsset);
 }
 
-export async function adminDeletePublicAsset(assetId: string) {
+export async function adminDeletePublicAsset(assetId: string, userEmail: string) {
     const assets = db.collection('assets');
-    const asset = await assets.findOne({ _id: new ObjectId(assetId), public: true });
+    const asset = await assets.findOne({
+        _id: new ObjectId(assetId),
+        public: true,
+        deletedAt: { $exists: false }
+    });
     if (!asset) throw new Error('Public asset not found');
 
-    await assets.deleteOne({ _id: new ObjectId(assetId) });
-
-    if (asset.url && typeof asset.url === 'string') {
-        const { unlink } = await import('node:fs/promises');
-        const { join } = await import('node:path');
-        const baseId = asset.url.replace(/\.[^.]+$/, '');
-        const filesToDelete = [asset.url];
-        if (asset.previewUrl) filesToDelete.push(asset.previewUrl as string);
-        if (Array.isArray(asset.sizes)) {
-            for (const size of asset.sizes) filesToDelete.push(`${baseId}_${size}.webp`);
+    await assets.updateOne(
+        { _id: new ObjectId(assetId) },
+        {
+            $set: {
+                deletedAt: new Date().toISOString(),
+                deletedBy: userEmail
+            }
         }
-        await Promise.allSettled(filesToDelete.map((f) => unlink(join(ASSET_DIR, f))));
-    }
+    );
 }
 
 type ConfigField = {

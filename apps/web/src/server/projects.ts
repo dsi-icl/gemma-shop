@@ -1,7 +1,4 @@
 import '@tanstack/react-start/server-only';
-import { unlink } from 'node:fs/promises';
-import { join } from 'node:path';
-
 import { db } from '@repo/db';
 import type {
     Asset,
@@ -13,7 +10,6 @@ import type {
 import { ObjectId } from 'mongodb';
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
-import { ASSET_DIR } from '~/lib/serverVariables';
 
 const projects = db.collection('projects');
 const auditLogs = db.collection('audit_logs');
@@ -97,7 +93,7 @@ export async function listPublishedProjects() {
     if (heroFilenames.length === 0) return serialized;
 
     const heroAssets = await assets
-        .find({ url: { $in: heroFilenames } })
+        .find({ url: { $in: heroFilenames }, deletedAt: { $exists: false } })
         .project({ url: 1, blurhash: 1, sizes: 1 })
         .toArray();
 
@@ -174,10 +170,13 @@ export async function listAssets(projectId: string, userEmail: string) {
 
     const [projectDocs, publicDocs] = await Promise.all([
         assets
-            .find({ projectId: new ObjectId(projectId) })
+            .find({ projectId: new ObjectId(projectId), deletedAt: { $exists: false } })
             .sort({ createdAt: -1 })
             .toArray(),
-        assets.find({ public: true }).sort({ createdAt: -1 }).toArray()
+        assets
+            .find({ public: true, deletedAt: { $exists: false } })
+            .sort({ createdAt: -1 })
+            .toArray()
     ]);
 
     const projectAssets = projectDocs.map(serializeAsset);
@@ -190,25 +189,30 @@ export async function listAssets(projectId: string, userEmail: string) {
 }
 
 export async function listPublicAssets() {
-    const docs = await assets.find({ public: true }).sort({ createdAt: -1 }).toArray();
+    const docs = await assets
+        .find({ public: true, deletedAt: { $exists: false } })
+        .sort({ createdAt: -1 })
+        .toArray();
     return docs.map(serializeAsset);
 }
 
-export async function deletePublicAsset(assetId: string) {
-    const asset = await assets.findOne({ _id: new ObjectId(assetId), public: true });
+export async function deletePublicAsset(assetId: string, userEmail: string) {
+    const asset = await assets.findOne({
+        _id: new ObjectId(assetId),
+        public: true,
+        deletedAt: { $exists: false }
+    });
     if (!asset) throw new Error('Public asset not found');
 
-    await assets.deleteOne({ _id: new ObjectId(assetId) });
-
-    if (asset.url && typeof asset.url === 'string') {
-        const baseId = asset.url.replace(/\.[^.]+$/, '');
-        const filesToDelete = [asset.url];
-        if (asset.previewUrl) filesToDelete.push(asset.previewUrl as string);
-        if (Array.isArray(asset.sizes)) {
-            for (const size of asset.sizes) filesToDelete.push(`${baseId}_${size}.webp`);
+    await assets.updateOne(
+        { _id: new ObjectId(assetId) },
+        {
+            $set: {
+                deletedAt: new Date().toISOString(),
+                deletedBy: userEmail
+            }
         }
-        await Promise.allSettled(filesToDelete.map((f) => unlink(join(ASSET_DIR, f))));
-    }
+    );
 }
 
 export async function getProject(id: string) {
@@ -326,7 +330,10 @@ export async function archiveProject(id: string, userEmail: string) {
 }
 
 export async function deleteAsset(assetId: string, userEmail: string) {
-    const asset = await assets.findOne({ _id: new ObjectId(assetId) });
+    const asset = await assets.findOne({
+        _id: new ObjectId(assetId),
+        deletedAt: { $exists: false }
+    });
     if (!asset) throw new Error('Asset not found');
 
     const project = await getProject(asset.projectId.toString());
@@ -334,18 +341,15 @@ export async function deleteAsset(assetId: string, userEmail: string) {
 
     assertCanEdit(project, userEmail);
 
-    await assets.deleteOne({ _id: new ObjectId(assetId) });
-
-    // Clean up files from disk (original + preview + all generated variants)
-    if (asset.url && typeof asset.url === 'string') {
-        const baseId = asset.url.replace(/\.[^.]+$/, '');
-        const filesToDelete = [asset.url];
-        if (asset.previewUrl) filesToDelete.push(asset.previewUrl as string);
-        if (Array.isArray(asset.sizes)) {
-            for (const size of asset.sizes) filesToDelete.push(`${baseId}_${size}.webp`);
+    await assets.updateOne(
+        { _id: new ObjectId(assetId) },
+        {
+            $set: {
+                deletedAt: new Date().toISOString(),
+                deletedBy: userEmail
+            }
         }
-        await Promise.allSettled(filesToDelete.map((f) => unlink(join(ASSET_DIR, f))));
-    }
+    );
 }
 
 export async function restoreProject(id: string, userEmail: string) {

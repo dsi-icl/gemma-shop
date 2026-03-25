@@ -39,7 +39,7 @@ export const $adminListPublicAssets = createServerFn({ method: 'GET' })
 export const $adminDeletePublicAsset = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
     .inputValidator(z.object({ id: z.string() }))
-    .handler(async ({ data }) => adminDeletePublicAsset(data.id));
+    .handler(async ({ data, context }) => adminDeletePublicAsset(data.id, context.user.email));
 
 export const $adminUnbindWall = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
