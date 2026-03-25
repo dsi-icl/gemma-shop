@@ -95,7 +95,7 @@ function QuarryIndex() {
             cell: (info) => (
                 <div className="flex items-center gap-2 font-medium">
                     {info.getValue()}
-                    {info.row.original.archived && (
+                    {info.row.original.deletedAt && (
                         <Badge variant="secondary" className="text-xs">
                             Archived
                         </Badge>
@@ -183,7 +183,7 @@ function QuarryIndex() {
                                 </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
-                            {project.archived ? (
+                            {project.deletedAt ? (
                                 <DropdownMenuItem
                                     onClick={(e) => {
                                         e.stopPropagation();

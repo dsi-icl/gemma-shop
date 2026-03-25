@@ -38,7 +38,7 @@ function AdminProjects() {
                                     {formatDateValue(project.createdAt, 'd MMM yyyy')}
                                 </td>
                                 <td className="px-4 py-3">
-                                    {project.archived ? (
+                                    {project.deletedAt ? (
                                         <span className="text-xs text-muted-foreground">
                                             Archived
                                         </span>

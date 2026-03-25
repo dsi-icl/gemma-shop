@@ -496,7 +496,7 @@ async function sendGalleryStateSnapshot(peer: import('crossws').Peer, wallId?: s
         const docs = await db
             .collection('projects')
             .find(
-                { publishedCommitId: { $ne: null }, archived: { $ne: true } },
+                { publishedCommitId: { $ne: null }, deletedAt: { $exists: false } },
                 { projection: { _id: 1, publishedCommitId: 1 } }
             )
             .toArray();

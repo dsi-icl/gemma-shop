@@ -31,7 +31,8 @@ export const ProjectSchema = z.object({
     headCommitId: oid.nullable().default(null),
     // When set, the project is publicly visible using this specific commit
     publishedCommitId: oid.nullable().default(null),
-    archived: z.boolean().default(false),
+    deletedAt: z.iso.datetime().optional(),
+    deletedBy: z.string().optional(),
     createdBy: z.string(),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime()

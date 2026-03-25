@@ -69,7 +69,7 @@ export async function listProjects(userEmail: string, includeArchived = false) {
         $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }]
     };
     if (!includeArchived) {
-        filter.archived = { $ne: true };
+        filter.deletedAt = { $exists: false };
     }
     const docs = await projects.find(filter).sort({ updatedAt: -1 }).toArray();
     return docs.map(serializeProject);
@@ -77,7 +77,10 @@ export async function listProjects(userEmail: string, includeArchived = false) {
 
 export async function listPublishedProjects() {
     const docs = await projects
-        .find({ publishedCommitId: { $ne: null }, archived: { $ne: true } })
+        .find({
+            publishedCommitId: { $ne: null },
+            deletedAt: { $exists: false }
+        })
         .sort({ updatedAt: -1 })
         .toArray();
 
@@ -234,7 +237,6 @@ export async function createProject(input: CreateProjectInput, userEmail: string
         collaborators: [{ email: userEmail, role: 'owner' as const }, ...input.collaborators],
         headCommitId: null,
         publishedCommitId: null,
-        archived: false,
         createdBy: userEmail,
         createdAt: now,
         updatedAt: now
@@ -317,14 +319,20 @@ export async function archiveProject(id: string, userEmail: string) {
 
     await projects.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { archived: true, updatedAt: new Date().toISOString() } }
+        {
+            $set: {
+                deletedAt: new Date().toISOString(),
+                deletedBy: userEmail,
+                updatedAt: new Date().toISOString()
+            }
+        }
     );
 
     await auditLogs.insertOne({
         projectId: new ObjectId(id),
         actorId: userEmail,
         action: 'PROJECT_UPDATED',
-        changes: { archived: true },
+        changes: { deletedAt: true },
         createdAt: new Date()
     });
 }
@@ -359,14 +367,17 @@ export async function restoreProject(id: string, userEmail: string) {
 
     await projects.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { archived: false, updatedAt: new Date().toISOString() } }
+        {
+            $set: { updatedAt: new Date().toISOString() },
+            $unset: { deletedAt: '', deletedBy: '' }
+        }
     );
 
     await auditLogs.insertOne({
         projectId: new ObjectId(id),
         actorId: userEmail,
         action: 'PROJECT_UPDATED',
-        changes: { archived: false },
+        changes: { deletedAt: false },
         createdAt: new Date()
     });
 }
