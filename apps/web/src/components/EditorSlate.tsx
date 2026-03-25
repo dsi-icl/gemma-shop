@@ -14,7 +14,7 @@ import { RoyStaticRenderer } from '~/components/roygraph/RoyStaticRenderer';
 import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
-import { fitSizeToViewport } from '~/lib/fitSizeToViewport';
+import { fitSizeToViewport, MIN_LAYER_DIMENSION } from '~/lib/fitSizeToViewport';
 import { scrubInsecureTusResumeEntries } from '~/lib/tusClient';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
@@ -574,11 +574,17 @@ export function EditorSlate() {
 
                 if (isHorizontalEdge) {
                     const effectiveScaleX = node.scaleX();
-                    nextWidth = Math.max(20, (node.width() * effectiveScaleX) / oldScaleX);
+                    nextWidth = Math.max(
+                        MIN_LAYER_DIMENSION,
+                        (node.width() * effectiveScaleX) / oldScaleX
+                    );
                 }
                 if (isVerticalEdge) {
                     const effectiveScaleY = node.scaleY();
-                    nextHeight = Math.max(20, (node.height() * effectiveScaleY) / oldScaleY);
+                    nextHeight = Math.max(
+                        MIN_LAYER_DIMENSION,
+                        (node.height() * effectiveScaleY) / oldScaleY
+                    );
                 }
 
                 node.width(nextWidth);
@@ -608,8 +614,8 @@ export function EditorSlate() {
                     ...layer.config,
                     cx: Math.round(node.x()),
                     cy: Math.round(node.y()),
-                    width: Math.max(20, Math.round(node.width())),
-                    height: Math.max(20, Math.round(node.height())),
+                    width: Math.max(MIN_LAYER_DIMENSION, Math.round(node.width())),
+                    height: Math.max(MIN_LAYER_DIMENSION, Math.round(node.height())),
                     scaleX: oldScaleX,
                     scaleY: oldScaleY,
                     rotation: Math.round(node.rotation())
@@ -743,8 +749,8 @@ export function EditorSlate() {
                         nextBottom += deltaY;
                     }
 
-                    const nextWidth = Math.max(20, nextRight - nextLeft);
-                    const nextHeight = Math.max(20, nextBottom - nextTop);
+                    const nextWidth = Math.max(MIN_LAYER_DIMENSION, nextRight - nextLeft);
+                    const nextHeight = Math.max(MIN_LAYER_DIMENSION, nextBottom - nextTop);
 
                     node.width(nextWidth);
                     node.height(nextHeight);

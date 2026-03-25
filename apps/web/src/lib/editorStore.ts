@@ -9,7 +9,7 @@ import {
 } from '../server/projects.fns';
 import { projectAssetsQueryOptions } from '../server/projects.queries';
 import { EditorEngine } from './editorEngine';
-import { fitSizeToViewport } from './fitSizeToViewport';
+import { fitSizeToViewport, MIN_LAYER_DIMENSION } from './fitSizeToViewport';
 import type { ConnectionStatus } from './reconnectingWs';
 import type { Layer, LayerWithEditorState, Slide } from './types';
 
@@ -827,8 +827,8 @@ export const useEditorStore =
                           return null;
                       const rawWidth = maxX - minX;
                       const rawHeight = maxY - minY;
-                      const width = Math.max(20, Math.round(rawWidth));
-                      const height = Math.max(20, Math.round(rawHeight));
+                      const width = Math.max(MIN_LAYER_DIMENSION, Math.round(rawWidth));
+                      const height = Math.max(MIN_LAYER_DIMENSION, Math.round(rawHeight));
                       const cx = Math.round(minX + rawWidth / 2);
                       const cy = Math.round(minY + rawHeight / 2);
 
