@@ -60,6 +60,7 @@ export interface EditorState {
     commitId: string | null;
 
     // ── Save pipeline state ──
+    loading: boolean;
     saveStatus: SaveStatus;
     headCommitId: string | null;
     insertionCenter: { x: number; y: number };
@@ -183,6 +184,7 @@ export const useEditorStore =
                   commitId: null,
 
                   // ── Save pipeline state ──
+                  loading: true,
                   saveStatus: 'idle',
                   headCommitId: null,
                   insertionCenter: { x: 1920 / 2, y: 1080 / 2 },
@@ -191,6 +193,7 @@ export const useEditorStore =
                   // ── Pure state mutations ──────────────────────────────────────────────
                   loadProject: async (projectId, commitId, slideId) => {
                       set({
+                          loading: true,
                           projectId,
                           commitId,
                           layers: new Map(),
@@ -259,6 +262,7 @@ export const useEditorStore =
                               });
                           }
                       }
+                      set({ loading: false });
                   },
 
                   switchSlide: async (slideId) => {
@@ -268,7 +272,7 @@ export const useEditorStore =
                       const engine = EditorEngine.getInstance();
 
                       // Clear layers and set new active slide
-                      set({ layers: new Map(), activeSlideId: slideId });
+                      set({ loading: true, layers: new Map(), activeSlideId: slideId });
 
                       // Re-join scope for the new slide
                       engine.clearBufferedHydration();
@@ -293,6 +297,7 @@ export const useEditorStore =
                               });
                           }
                       }
+                      set({ loading: false });
                   },
 
                   hydrate: (layers) => {
