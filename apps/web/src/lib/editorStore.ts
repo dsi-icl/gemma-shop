@@ -827,8 +827,8 @@ export const useEditorStore =
                           return null;
                       const rawWidth = maxX - minX;
                       const rawHeight = maxY - minY;
-                      const width = Math.max(1, Math.round(rawWidth));
-                      const height = Math.max(1, Math.round(rawHeight));
+                      const width = Math.max(20, Math.round(rawWidth));
+                      const height = Math.max(20, Math.round(rawHeight));
                       const cx = Math.round(minX + rawWidth / 2);
                       const cy = Math.round(minY + rawHeight / 2);
 
