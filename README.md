@@ -120,6 +120,25 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
     - Blurhash + variant generation from preview
 - Inserts asset metadata and broadcasts to active editors
 
+### Media Processing Isolation Plan (Staged)
+
+- Goal: isolate CPU-heavy media work (`sharp`, `ffmpeg`) from web request handlers, while preserving current UX and protocol behavior.
+- Phase 1 contract: `STRICT_BLOCKING=true` by default.
+    - Meaning: upload response still waits for processing completion (same behavior as today).
+    - Reason: avoids changing editor assumptions about immediate asset readiness during initial isolation rollout.
+    - Future direction: optional async mode (`202 Accepted`) once editor/runtime supports pending assets and progressive metadata hydration.
+- Job state model: hybrid persistence + signaling.
+    - Persistent truth in DB (job lifecycle, retries, recovery after restarts).
+    - Pub-sub for low-latency progress/completion events between processes.
+    - Rationale: pub-sub alone is fast but not durable; DB alone is durable but noisier for live signaling.
+- Timeout policy for long video processing:
+    - Use inactivity timeout based on last progress heartbeat, not absolute wall-clock job duration.
+    - Long-running transcodes are valid; only fail when no progress has been observed for the configured stale interval.
+- Architectural note for async pipeline adoption:
+    - Fully asynchronous media processing implies layers may exist before complete asset metadata is ready.
+    - We likely need a cleaner separation between layer content and asset metadata/progress state.
+    - Potential outcome: keep commit `content.slides[*].layers` lean and fetch/enrich asset metadata via dedicated asset state paths.
+
 ### 4) Persistence and Versioning
 
 - Projects, commits, assets in MongoDB

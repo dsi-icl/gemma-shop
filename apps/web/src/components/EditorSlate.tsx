@@ -4,6 +4,7 @@ import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'react-konva';
+import { toast } from 'sonner';
 
 import { EditorToolbar } from '~/components/EditorToolbar';
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
@@ -533,6 +534,7 @@ export function EditorSlate() {
         uppy.on('error', (err) => {
             console.error('Upload failure', err);
             useEditorStore.getState().removeLayer(numericId);
+            toast.error(err instanceof Error ? err.message : 'Upload failed');
             uppy.destroy();
         });
 

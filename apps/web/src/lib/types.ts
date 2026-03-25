@@ -43,6 +43,14 @@ const LayerPlaybackStateSchema = z.object({
 
 const LayerBaseSchema = z.object({ numericId: z.number(), config: LayerConfigStateSchema });
 
+// Legacy commits may store variant metadata in inconsistent shapes.
+// Normalize any non-array or non-numeric values to undefined.
+const OptionalSizesSchema = z.preprocess((value) => {
+    if (!Array.isArray(value)) return undefined;
+    const numericSizes = value.filter((size): size is number => typeof size === 'number');
+    return numericSizes.length > 0 ? numericSizes : undefined;
+}, z.array(z.number()).optional());
+
 const LayerSchema = z.discriminatedUnion('type', [
     z
         .object({
@@ -53,7 +61,7 @@ const LayerSchema = z.discriminatedUnion('type', [
             duration: z.number(),
             rvfcActive: z.boolean(),
             blurhash: z.string().optional(),
-            sizes: z.array(z.number()).optional(),
+            sizes: OptionalSizesSchema,
             playback: LayerPlaybackStateSchema
         })
         .extend(LayerBaseSchema.shape),
@@ -62,7 +70,7 @@ const LayerSchema = z.discriminatedUnion('type', [
             type: z.literal('image'),
             url: z.string(),
             blurhash: z.string().optional(),
-            sizes: z.array(z.number()).optional()
+            sizes: OptionalSizesSchema
         })
         .extend(LayerBaseSchema.shape),
     z.object({ type: z.literal('graph') }).extend(LayerBaseSchema.shape),
@@ -87,7 +95,7 @@ const LayerSchema = z.discriminatedUnion('type', [
             scale: z.number().default(1),
             stillImage: z.string().optional(),
             blurhash: z.string().optional(),
-            sizes: z.array(z.number()).optional()
+            sizes: OptionalSizesSchema
         })
         .extend(LayerBaseSchema.shape),
     z
@@ -285,7 +293,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             mimeType: z.string().optional(),
             blurhash: z.string().optional(),
             previewUrl: z.string().optional(),
-            sizes: z.array(z.number()).optional(),
+            sizes: OptionalSizesSchema,
             createdAt: z.string(),
             createdBy: z.string()
         })

@@ -1,0 +1,53 @@
+import type { ObjectId } from 'mongodb';
+
+export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'stalled';
+export type JobType = 'process_image_asset' | 'process_video_asset';
+
+export interface ProcessImageAssetPayload {
+    uploadId: string;
+    sourceExt: string;
+    sourceFilename: string;
+}
+
+export interface ProcessVideoAssetPayload {
+    uploadId: string;
+    sourceFilename: string;
+    sourceExt: string;
+    duration: number;
+    numericId: number;
+}
+
+export interface ProcessImageAssetResult {
+    blurhash?: string;
+    sizes?: number[];
+}
+
+export interface ProcessVideoAssetResult {
+    blurhash?: string;
+    sizes?: number[];
+    previewFilename?: string;
+}
+
+export type JobPayload = ProcessImageAssetPayload | ProcessVideoAssetPayload;
+export type JobResult = ProcessImageAssetResult | ProcessVideoAssetResult;
+
+export interface JobDocument {
+    _id: ObjectId;
+    nodeId: string;
+    type: JobType;
+    status: JobStatus;
+    payload: JobPayload;
+    result?: JobResult;
+    error?: string;
+    attempts: number;
+    maxAttempts: number;
+    runAfter: Date;
+    leaseOwner?: string;
+    leaseUntil?: Date;
+    startedAt?: Date;
+    completedAt?: Date;
+    lastHeartbeatAt?: Date;
+    lastProgressAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}

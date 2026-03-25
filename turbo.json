@@ -10,7 +10,9 @@
         "PROXY_ALLOWED_REFERRERS",
         "PROXY_ALLOW_MISSING_REFERRER",
         "PROXY_FETCH_TIMEOUT_MS",
-        "PROXY_MAX_BYTES"
+        "PROXY_MAX_BYTES",
+        "FFMPEG_PATH",
+        "STRICT_BLOCKING"
     ],
     "tasks": {
         "build": {

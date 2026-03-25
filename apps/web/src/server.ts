@@ -6,6 +6,7 @@ import { env, bootHealth } from '@repo/env';
 import handler, { createServerEntry } from '@tanstack/react-start/server-entry';
 import { MongoClient } from 'mongodb';
 
+import { startMediaWorker } from '~/lib/jobs/mediaWorker';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { getBootstrapStatus } from '~/server/bootstrap';
 
@@ -169,6 +170,7 @@ async function runStartupChecksOnce(): Promise<void> {
             await verifyOutboundConnectivity();
             if (bootIssues.length > 0) return;
             await getBootstrapStatus();
+            await startMediaWorker();
         })();
     }
     await startupChecksPromise;

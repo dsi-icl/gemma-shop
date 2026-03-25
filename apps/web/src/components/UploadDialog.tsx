@@ -184,16 +184,28 @@ export function UploadDialog({
                 );
             });
 
-            uppy.on('upload-error', (file) => {
+            uppy.on('upload-error', (file, error) => {
                 if (!file) return;
                 setFiles((prev) =>
                     prev.map((f) => (f.name === file.name ? { ...f, status: 'error' } : f))
                 );
+                const message = error instanceof Error ? error.message : 'Upload failed';
+                toast.error(`${file.name}: ${message}`);
             });
 
-            uppy.on('complete', () => {
-                toast.success(`Upload complete`);
-                onUploadComplete?.();
+            uppy.on('complete', (result) => {
+                const failed = result.failed?.length ?? 0;
+                const successful = result.successful?.length ?? 0;
+                if (failed > 0) {
+                    toast.error(
+                        successful > 0
+                            ? `${successful} uploaded, ${failed} failed`
+                            : `Upload failed (${failed} file${failed === 1 ? '' : 's'})`
+                    );
+                    return;
+                }
+                toast.success('Upload complete');
+                if (successful > 0) onUploadComplete?.();
             });
 
             uppy.upload();

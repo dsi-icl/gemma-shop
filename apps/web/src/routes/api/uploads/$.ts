@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
 import { copyFile, open, stat, unlink } from 'node:fs/promises';
+import { hostname } from 'node:os';
 import { extname, join } from 'node:path';
 
 import { db } from '@repo/db';
@@ -15,11 +15,15 @@ import {
     SUPPORTED_VIDEO_EXTS
 } from '~/lib/assetMime';
 import { PUBLIC_ASSET_PROJECT_ID } from '~/lib/constants';
-import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
+import { enqueueJob } from '~/lib/jobs/repo';
+import { jobSignalBus } from '~/lib/jobs/signalBus';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
 
-const FFMPEG_COMMAND = process.env.FFMPEG_PATH || 'ffmpeg';
+const STRICT_BLOCKING = !['0', 'false', 'off', 'no'].includes(
+    (process.env.STRICT_BLOCKING || 'true').toLowerCase()
+);
+const LOCAL_NODE_ID = hostname();
 
 type DetectedType = 'image' | 'video' | 'woff2' | null;
 
@@ -95,72 +99,6 @@ async function readHeaderBytes(filePath: string, size = 12): Promise<Uint8Array>
     }
 }
 
-function runFFmpeg(
-    args: string[],
-    numericId: number,
-    duration: number
-): Promise<{ code: number; stderr: string }> {
-    return new Promise((resolve) => {
-        const proc = spawn(FFMPEG_COMMAND, args);
-        let stderr = '';
-        proc.stderr.on('data', (d) => {
-            const text = d.toString();
-            stderr += text;
-
-            const match = text.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
-            if (match && process.__BROADCAST_EDITORS__) {
-                const h = parseInt(match[1], 10);
-                const m = parseInt(match[2], 10);
-                const s = parseFloat(match[3]);
-                const timeInSeconds = h * 3600 + m * 60 + s;
-
-                const progress =
-                    duration > 0
-                        ? Math.min(99, Math.round((timeInSeconds / duration) * 100))
-                        : Math.min(99, Math.round(timeInSeconds));
-
-                process.__BROADCAST_EDITORS__({
-                    type: 'processing_progress',
-                    numericId,
-                    progress
-                });
-            }
-        });
-        proc.on('error', (err) =>
-            resolve({
-                code: 127,
-                stderr: `[Tus] FFmpeg unavailable at ${FFMPEG_COMMAND}: ${String(err?.message || err)}`
-            })
-        );
-        proc.on('close', (code) => resolve({ code: code ?? 0, stderr }));
-    });
-}
-
-/** Extract a preview frame from a video using FFmpeg */
-async function extractVideoPreview(
-    videoPath: string,
-    outputPath: string,
-    duration: number
-): Promise<boolean> {
-    const seekTo = Math.min(0.5, duration / 2);
-    return new Promise((resolve) => {
-        const proc = spawn(FFMPEG_COMMAND, [
-            '-y', // Overwrite output files without asking
-            '-ss',
-            seekTo.toString(), // Seek to timestamp
-            '-i',
-            videoPath,
-            '-frames:v',
-            '1', // Output one video frame
-            '-q:v',
-            '2', // Quality level for image encoding
-            outputPath
-        ]);
-        proc.on('error', () => resolve(false));
-        proc.on('close', (code) => resolve(code === 0));
-    });
-}
-
 const tusServer = new Server({
     path: '/api/uploads',
     // Reverse proxies may terminate TLS before reaching the app process.
@@ -186,8 +124,7 @@ const tusServer = new Server({
                 const tokenData = validateUploadToken(uploadToken);
                 if (!tokenData) {
                     console.warn('[Tus] Upload rejected: invalid or expired token');
-                    await unlink(tusFilePath).catch(() => {});
-                    return {};
+                    throw new Error('Invalid or expired upload token');
                 }
                 projectId = tokenData.projectId;
                 userEmail = tokenData.userEmail;
@@ -226,59 +163,56 @@ const tusServer = new Server({
                 await copyFile(tusFilePath, finalPath);
 
                 mimeType = ASSET_MIME_TYPES[ext] ?? `image/${ext.slice(1)}`;
-                blurhash = await computeBlurhash(finalPath);
-                if (ext !== '.svg') {
-                    sizes = await generateVariants(finalPath, upload.id);
+                const imageJobId = await enqueueJob({
+                    nodeId: LOCAL_NODE_ID,
+                    type: 'process_image_asset',
+                    payload: {
+                        uploadId: upload.id,
+                        sourceExt: ext,
+                        sourceFilename: assetFilename
+                    }
+                });
+                if (STRICT_BLOCKING) {
+                    const imageJob = await jobSignalBus.waitForTerminal(imageJobId);
+                    if (imageJob.status !== 'completed') {
+                        throw new Error(imageJob.error || 'Image processing job failed');
+                    }
+                    const result = imageJob.result as
+                        | { blurhash?: string; sizes?: number[] }
+                        | undefined;
+                    blurhash = result?.blurhash ?? null;
+                    sizes = result?.sizes ?? [];
                 }
             } else if (isVideo) {
                 // ── Video: transcode + generate preview ──
                 assetFilename = `${upload.id}.mp4`;
-                previewFilename = `${upload.id}.jpg`;
                 const rawPath = join(TMP_DIR, `${upload.id}_raw${ext}`);
-                const finalPath = join(ASSET_DIR, assetFilename);
-                const previewPath = join(ASSET_DIR, previewFilename);
+                previewFilename = `${upload.id}.jpg`;
 
                 await copyFile(tusFilePath, rawPath);
 
-                const result = await runFFmpeg(
-                    [
-                        '-y', // Overwrite output files without asking
-                        '-i',
-                        rawPath,
-                        '-c:v',
-                        'libx264', // Hardware-friendly H.264 codec
-                        '-preset',
-                        'fast', // Balance between encoding speed and compression
-                        '-crf',
-                        '22', // High visual quality
-                        '-r',
-                        '60', // Force strict 60.00 fps CFR
-                        '-g',
-                        '60', // I-frame exactly every 60 frames (1 second)
-                        '-keyint_min',
-                        '60', // Minimum I-frame interval
-                        '-sc_threshold',
-                        '0', // Disable random scene-cut keyframes
-                        '-an', // Strip audio completely to kill the audio clock
-                        '-movflags',
-                        '+faststart', // Move MOOV atom to front for instant Blob caching
-                        finalPath
-                    ],
-                    numericId,
-                    duration
-                );
-
-                await unlink(rawPath).catch(() => {});
-
-                if (result.code !== 0) {
-                    console.error('[Tus] FFmpeg transcode failed:', result.stderr);
-                } else {
-                    // Extract preview frame, compute blurhash, and generate variants from it
-                    const previewOk = await extractVideoPreview(finalPath, previewPath, duration);
-                    if (previewOk) {
-                        blurhash = await computeBlurhash(previewPath);
-                        sizes = await generateVariants(previewPath, upload.id);
+                const videoJobId = await enqueueJob({
+                    nodeId: LOCAL_NODE_ID,
+                    type: 'process_video_asset',
+                    payload: {
+                        uploadId: upload.id,
+                        sourceFilename: `${upload.id}_raw${ext}`,
+                        sourceExt: ext,
+                        duration,
+                        numericId
                     }
+                });
+                if (STRICT_BLOCKING) {
+                    const videoJob = await jobSignalBus.waitForTerminal(videoJobId);
+                    if (videoJob.status !== 'completed') {
+                        throw new Error(videoJob.error || 'Video processing job failed');
+                    }
+                    const result = videoJob.result as
+                        | { blurhash?: string; sizes?: number[]; previewFilename?: string }
+                        | undefined;
+                    blurhash = result?.blurhash ?? null;
+                    sizes = result?.sizes ?? [];
+                    previewFilename = result?.previewFilename ?? previewFilename;
                 }
 
                 mimeType = ASSET_MIME_TYPES['.mp4'];
@@ -288,13 +222,10 @@ const tusServer = new Server({
                 await copyFile(tusFilePath, finalPath);
                 mimeType = ASSET_MIME_TYPES['.woff2'];
             } else {
-                console.warn(
-                    `[Tus] Unsupported upload type rejected: name=${originalName}, ext=${ext}, uploadId=${upload.id}`
+                throw new Error(
+                    `Unsupported upload type: name=${originalName}, ext=${ext}, uploadId=${upload.id}`
                 );
             }
-
-            // Clean up the raw tus upload (keep .json metadata for reference)
-            await unlink(tusFilePath).catch(() => {});
 
             // ── Create asset record in DB ──
             if (assetFilename && projectId) {
@@ -340,11 +271,15 @@ const tusServer = new Server({
                     `[Tus] Asset created: ${assetFilename} (blurhash: ${blurhash ? 'yes' : 'no'}, sizes: [${sizes.join(', ')}])`
                 );
             }
+
+            return {};
         } catch (err) {
             console.error('[Tus] onUploadFinish error:', err);
+            throw err instanceof Error ? err : new Error(String(err));
+        } finally {
+            // Clean up the raw tus upload (keep .json metadata for reference)
+            await unlink(tusFilePath).catch(() => {});
         }
-
-        return {};
     }
 });
 
