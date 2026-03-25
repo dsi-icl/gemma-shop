@@ -18,7 +18,6 @@ function AssetPreviewOverlayInner({
     name,
     isVideo,
     blurhash,
-    sizes,
     onClose
 }: AssetPreviewOverlayProps) {
     if (typeof document === 'undefined') return null;
@@ -58,11 +57,10 @@ function AssetPreviewOverlayInner({
         const targetPx = Math.ceil(Math.min(viewport.width * 0.92, viewport.height * 0.92) * dpr);
         return selectAssetVariantSrc({
             src,
-            sizes,
             targetWidth: targetPx,
             stripVariantSuffix: true
         });
-    }, [isVideo, src, sizes, viewport.height, viewport.width]);
+    }, [isVideo, src, viewport.height, viewport.width]);
 
     useEffect(() => {
         setImageSrc(selectedImageSrc);
@@ -177,7 +175,6 @@ export function AssetPreviewPortal({
                     name={preview.name}
                     isVideo={preview.isVideo}
                     blurhash={preview.blurhash}
-                    sizes={preview.sizes}
                     onClose={onClose}
                 />
             )}

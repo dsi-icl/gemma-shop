@@ -20,7 +20,6 @@ interface ProjectImageProps {
 export function ProjectImage({
     src,
     blurhash,
-    sizes,
     alt,
     className,
     imgClassName,
@@ -60,7 +59,6 @@ export function ProjectImage({
 
     const selectedSrc = selectAssetVariantSrc({
         src,
-        sizes,
         targetWidth: measuredWidth,
         forceOriginal
     });
