@@ -784,10 +784,12 @@ export function notifyControllers(
     projectId?: string,
     commitId?: string,
     slideId?: string,
-    customRenderUrl?: string
+    customRenderUrl?: string,
+    boundSource?: 'live' | 'gallery'
 ) {
     const entries = controllersByWallId.get(wallId);
     if (!entries) return;
+    const resolvedSource = boundSource ?? wallBindingSources.get(wallId);
 
     const payload = JSON.stringify({
         type: 'wall_binding_status',
@@ -796,7 +798,8 @@ export function notifyControllers(
         ...(projectId ? { projectId } : {}),
         ...(commitId ? { commitId } : {}),
         ...(slideId ? { slideId } : {}),
-        ...(customRenderUrl ? { customRenderUrl } : {})
+        ...(customRenderUrl ? { customRenderUrl } : {}),
+        ...(resolvedSource ? { boundSource: resolvedSource } : {})
     } satisfies GSMessage);
 
     for (const entry of entries) entry.peer.send(payload);

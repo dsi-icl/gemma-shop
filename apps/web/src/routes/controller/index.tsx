@@ -8,14 +8,7 @@ import { cn } from '@repo/ui/lib/utils';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import {
-    useCallback,
-    useEffect,
-    useLayoutEffect,
-    useMemo,
-    useRef,
-    useState
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer as KonvaLayer, Rect, Circle, Line } from 'react-konva';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -33,6 +26,7 @@ const COLS = 16;
 const ROWS = 4;
 const BINDING_SIGNAL_TIMEOUT_MS = 1500;
 const HYDRATE_TIMEOUT_MS = 2000;
+const TEMP_BOUND_SLIDE_ID = '__bound-current__';
 
 export const Route = createFileRoute('/controller/')({
     component: Controller
@@ -150,6 +144,7 @@ function Controller() {
     const slidesRef = useRef<SlideEntry[]>([]);
     const lastRequestedBindRef = useRef<string | null>(null);
     const lastBoundScopeRef = useRef<string | null>(null);
+    const boundSlideIdRef = useRef<string | null>(null);
     const pendingSlideIdRef = useRef<string | null>(null);
     const pendingSlideTimeoutRef = useRef<number | null>(null);
     const {
@@ -186,28 +181,36 @@ function Controller() {
         }))
     );
 
-    // Listen for binding status from bus
     useEffect(() => {
         if (!engine) return;
         setHasBindingSignal(false);
-        return engine.onBindingStatus((status) => {
+        return engine.onSnapshot((snapshot) => {
             setHasBindingSignal(true);
-            if (status.bound && status.customRenderUrl) {
-                setRenderState({ hydrationReady: true, customRenderUrl: status.customRenderUrl });
-            }
+            boundSlideIdRef.current = snapshot.binding.slideId ?? null;
             setBinding((prev) => {
                 if (
-                    prev.bound === status.bound &&
-                    prev.projectId === status.projectId &&
-                    prev.commitId === status.commitId &&
-                    prev.slideId === status.slideId &&
-                    prev.customRenderUrl === status.customRenderUrl &&
-                    prev.boundSource === status.boundSource
+                    prev.bound === snapshot.binding.bound &&
+                    prev.projectId === snapshot.binding.projectId &&
+                    prev.commitId === snapshot.binding.commitId &&
+                    prev.slideId === snapshot.binding.slideId &&
+                    prev.customRenderUrl === snapshot.binding.customRenderUrl &&
+                    prev.boundSource === snapshot.binding.boundSource
                 ) {
                     return prev;
                 }
-                return status;
+                return snapshot.binding;
             });
+            setSlides(snapshot.slides as SlideEntry[]);
+            if (snapshot.binding.bound && snapshot.binding.customRenderUrl) {
+                setRenderState({
+                    hydrationReady: true,
+                    customRenderUrl: snapshot.binding.customRenderUrl
+                });
+            } else if (!snapshot.binding.bound) {
+                setRenderState({ hydrationReady: true, customRenderUrl: undefined });
+            } else if (snapshot.hasHydration) {
+                setRenderState({ hydrationReady: true, customRenderUrl: undefined });
+            }
         });
     }, [engine]);
 
@@ -352,155 +355,6 @@ function Controller() {
         );
     }, []);
 
-    const deleteLayerOnSlide = useCallback((slideId: string, numericId: number) => {
-        setSlides((prev) =>
-            prev.map((slide) => {
-                if (slide.id !== slideId) return slide;
-                const nextLayers = slide.layers.filter((l) => l.numericId !== numericId);
-                if (nextLayers.length === slide.layers.length) return slide;
-                return {
-                    ...slide,
-                    layers: nextLayers,
-                    layerCount: nextLayers.length
-                };
-            })
-        );
-    }, []);
-
-    const replaceSlideLayers = useCallback(
-        (slideId: string, nextLayers: LayerWithEditorState[]) => {
-            setSlides((prev) => {
-                let found = false;
-                const next = prev.map((slide) => {
-                    if (slide.id !== slideId) return slide;
-                    found = true;
-                    return {
-                        ...slide,
-                        layers: nextLayers,
-                        layerCount: nextLayers.length
-                    };
-                });
-                if (found) return next;
-                return [
-                    ...next,
-                    {
-                        id: slideId,
-                        name: 'Bound slide',
-                        order: next.length,
-                        layers: nextLayers,
-                        layerCount: nextLayers.length
-                    }
-                ];
-            });
-        },
-        []
-    );
-
-    useEffect(() => {
-        if (!engine) return;
-        return engine.onMessage((data) => {
-            if (data.type === 'hydrate') {
-                setRenderState({
-                    hydrationReady: true,
-                    customRenderUrl: data.customRender?.url ?? undefined
-                });
-                setBinding((prev) =>
-                    prev.boundSource === data.boundSource
-                        ? prev
-                        : { ...prev, boundSource: data.boundSource }
-                );
-
-                let targetSlideId =
-                    pendingSlideIdRef.current ??
-                    requestedSlideId ??
-                    binding.slideId ??
-                    activeSlideId ??
-                    slidesRef.current[0]?.id ??
-                    null;
-
-                if (!targetSlideId) {
-                    // Fallback safety: accept hydrate even when slide metadata failed/raced.
-                    targetSlideId =
-                        binding.slideId ??
-                        `bound-slide-${binding.commitId ?? wallId ?? 'unknown'}`;
-                    setSlides((prev) => {
-                        const exists = prev.some((slide) => slide.id === targetSlideId);
-                        if (exists) return prev;
-                        return [
-                            ...prev,
-                            {
-                                id: targetSlideId,
-                                name: 'Bound slide',
-                                order: prev.length,
-                                layers: [],
-                                layerCount: 0
-                            }
-                        ];
-                    });
-                    setActiveSlideId(targetSlideId);
-                    setRequestedSlideId(targetSlideId);
-                }
-
-                replaceSlideLayers(targetSlideId, data.layers as LayerWithEditorState[]);
-                const pendingId = pendingSlideIdRef.current;
-                if (pendingId && pendingId === targetSlideId) {
-                    setPendingSlideId(null);
-                }
-                return;
-            }
-
-            const targetSlideId = binding.slideId ?? requestedSlideId ?? activeSlideId;
-            if (!targetSlideId) return;
-            if (data.type === 'upsert_layer') {
-                upsertLayerOnSlide(targetSlideId, data.layer as LayerWithEditorState);
-                return;
-            }
-            if (data.type === 'delete_layer') {
-                deleteLayerOnSlide(targetSlideId, data.numericId);
-            }
-        });
-    }, [
-        engine,
-        binding.slideId,
-        binding.commitId,
-        requestedSlideId,
-        activeSlideId,
-        wallId,
-        replaceSlideLayers,
-        upsertLayerOnSlide,
-        deleteLayerOnSlide
-    ]);
-
-    // Listen for live slide list updates from other editors
-    useEffect(() => {
-        if (!engine) return;
-        return engine.onSlidesUpdated(({ commitId, slides: updatedSlides }) => {
-            if (binding.commitId && commitId !== binding.commitId) return;
-            if (updatedSlides.length === 0) return;
-            setSlides((prev) => {
-                const byId = new Map(prev.map((slide) => [slide.id, slide]));
-                return updatedSlides.map((updated) => {
-                    const existing = byId.get(updated.id);
-                    if (!existing) {
-                        // Safety fallback if local state drifted between event and state update.
-                        return {
-                            id: updated.id,
-                            name: updated.name,
-                            order: updated.order,
-                            layers: [],
-                            layerCount: 0
-                        };
-                    }
-                    return {
-                        ...existing,
-                        name: updated.name,
-                        order: updated.order
-                    };
-                });
-            });
-        });
-    }, [engine, binding.commitId]);
-
     // HMR rehydrate
     useEffect(() => {
         if (window.__CONTROLLER_RELOADING__) {
@@ -518,6 +372,27 @@ function Controller() {
             setRequestedSlideId(slides[0].id);
         }
     }, [activeSlideId, slides]);
+
+    useEffect(() => {
+        const authoritativeSlideId = binding.slideId;
+        if (!authoritativeSlideId) return;
+
+        setSlides((prev) => {
+            const tempIndex = prev.findIndex((slide) => slide.id === TEMP_BOUND_SLIDE_ID);
+            if (tempIndex < 0) return prev;
+            if (prev.some((slide) => slide.id === authoritativeSlideId)) {
+                // Real slide entry already exists; drop temporary shell.
+                return prev.filter((slide) => slide.id !== TEMP_BOUND_SLIDE_ID);
+            }
+
+            const next = [...prev];
+            next[tempIndex] = { ...next[tempIndex], id: authoritativeSlideId };
+            return next;
+        });
+
+        setActiveSlideId((prev) => (prev === TEMP_BOUND_SLIDE_ID ? authoritativeSlideId : prev));
+        setRequestedSlideId((prev) => (prev === TEMP_BOUND_SLIDE_ID ? authoritativeSlideId : prev));
+    }, [binding.slideId]);
 
     useEffect(() => {
         if (!activeSlideId) return;
@@ -552,9 +427,7 @@ function Controller() {
 
     useEffect(() => {
         if (!pendingSlideId) return;
-        if (!binding.slideId) return;
-        // Any server-authoritative slide bind (ours or another controller's)
-        // resolves pending local intent to avoid stuck spinners in concurrent control.
+        if (binding.slideId !== pendingSlideId) return;
         setPendingSlideId(null);
     }, [binding.slideId, pendingSlideId]);
 
@@ -755,6 +628,24 @@ function Controller() {
                 )}
             >
                 <CircleNotchIcon className="animate-spin" />
+            </div>
+        );
+
+    if (!binding.bound)
+        return (
+            <div
+                className={cn(
+                    'container flex h-full max-h-full min-h-0 min-w-full flex-col items-center justify-center gap-4 overflow-hidden bg-background px-4 text-center',
+                    showHideHeadAndFoot
+                        ? 'fixed inset-0 top-0 right-0 bottom-0 left-0 z-1000! p-0'
+                        : 'pt-18 pb-13'
+                )}
+            >
+                <h2 className="text-xl font-semibold">Nothing to control just yet</h2>
+                <p className="max-w-md text-muted-foreground">
+                    This wall is currently idle. Start a project from the gallery and this
+                    controller will spring to life automatically.
+                </p>
             </div>
         );
 
