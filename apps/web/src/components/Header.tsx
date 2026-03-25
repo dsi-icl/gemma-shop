@@ -1,4 +1,5 @@
 import {
+    ArrowClockwiseIcon,
     ArrowsInIcon,
     ArrowsOutSimpleIcon,
     CastleTurretIcon,
@@ -55,6 +56,25 @@ function FullscreenToggle() {
             ) : (
                 <ArrowsOutSimpleIcon className="h-[1.2rem] w-[1.2rem]" />
             )}
+        </Button>
+    );
+}
+
+function RefreshPageButton() {
+    const reloadPage = useCallback(() => {
+        if (typeof window === 'undefined') return;
+        window.location.reload();
+    }, []);
+
+    return (
+        <Button
+            variant="outline"
+            size="icon"
+            onClick={reloadPage}
+            title="Refresh page"
+            aria-label="Refresh page"
+        >
+            <ArrowClockwiseIcon className="h-[1.2rem] w-[1.2rem]" />
         </Button>
     );
 }
@@ -122,6 +142,7 @@ export function Header() {
                 Gemma Shop
             </Link>
             <KeyboardToggle />
+            <RefreshPageButton />
             <FullscreenToggle />
             <ThemeToggle />
             <Suspense
