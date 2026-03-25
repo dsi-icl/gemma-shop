@@ -671,7 +671,7 @@ export function EditorSlate() {
             }
         }
 
-        engine.broadcastBinaryMove(
+        engine?.broadcastBinaryMove(
             numericId,
             Math.round(node.x()),
             Math.round(node.y()),
@@ -931,7 +931,7 @@ export function EditorSlate() {
             }
             node.rotation(node.rotation() + angleDelta);
             trRef.current.getLayer()?.batchDraw();
-            engine.broadcastBinaryMove(
+            engine?.broadcastBinaryMove(
                 parseInt(currentSelectedIds[0]),
                 Math.round(node.x()),
                 Math.round(node.y()),
