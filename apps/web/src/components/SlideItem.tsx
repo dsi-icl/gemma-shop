@@ -1,4 +1,5 @@
 import { CopyIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react';
+import { TipButton } from '@repo/ui/components/tip-button';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Slide } from '~/lib/types';
@@ -43,7 +44,7 @@ export function SlideItem({
 
     return (
         <div
-            className={`group flex items-center rounded-md border p-2 transition-colors ${
+            className={`group flex items-center rounded-md border px-2 py-1 transition-colors ${
                 isSelected
                     ? 'border-ring bg-accent text-accent-foreground'
                     : isActive
@@ -78,42 +79,49 @@ export function SlideItem({
                     {slide.name}
                 </div>
             )}
-            {!editing && onRenameSlide && (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        setEditValue(slide.name);
-                        setEditing(true);
-                    }}
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground touch:opacity-100"
-                    title="Rename Slide"
-                >
-                    <PencilSimpleIcon size={16} weight="bold" />
-                </button>
-            )}
-            {!editing && onCopySlide && (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onCopySlide(slide);
-                    }}
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground touch:opacity-100"
-                    title="Copy Slide"
-                >
-                    <CopyIcon size={16} weight="bold" />
-                </button>
-            )}
-            {!editing && onDeleteSlide && canDelete && (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteSlide(slide.id);
-                    }}
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive touch:opacity-100"
-                    title="Delete Slide"
-                >
-                    <TrashIcon size={16} weight="bold" />
-                </button>
+            {!editing && (
+                <div className="flex items-center gap-1">
+                    {onRenameSlide && (
+                        <TipButton
+                            tip="Rename slide"
+                            variant="ghost"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setEditValue(slide.name);
+                                setEditing(true);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 touch:opacity-100"
+                        >
+                            <PencilSimpleIcon size={16} />
+                        </TipButton>
+                    )}
+                    {onCopySlide && (
+                        <TipButton
+                            tip="Copy slide"
+                            variant="ghost"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onCopySlide(slide);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 touch:opacity-100"
+                        >
+                            <CopyIcon size={16} />
+                        </TipButton>
+                    )}
+                    {onDeleteSlide && canDelete && (
+                        <TipButton
+                            tip="Delete slide"
+                            variant="destructive"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteSlide(slide.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 touch:opacity-100"
+                        >
+                            <TrashIcon size={16} />
+                        </TipButton>
+                    )}
+                </div>
             )}
         </div>
     );

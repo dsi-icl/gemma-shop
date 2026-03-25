@@ -33,31 +33,31 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
     const getLayerIcon = (type: LayerWithEditorState['type']): React.ReactNode => {
         switch (type) {
             case 'text':
-                return <TextTIcon size={20} weight="bold" />;
+                return <TextTIcon size={16} weight="bold" />;
             case 'image':
-                return <ImageIcon size={20} weight="bold" />;
+                return <ImageIcon size={16} weight="bold" />;
             case 'video':
-                return <FilmSlateIcon size={20} weight="bold" />;
+                return <FilmSlateIcon size={16} weight="bold" />;
             case 'graph':
-                return <GraphIcon size={20} weight="bold" />;
+                return <GraphIcon size={16} weight="bold" />;
             case 'map':
-                return <MapTrifoldIcon size={20} weight="bold" />;
+                return <MapTrifoldIcon size={16} weight="bold" />;
             case 'web':
-                return <GlobeIcon size={20} weight="bold" />;
+                return <GlobeIcon size={16} weight="bold" />;
             case 'shape': {
                 switch ((layer as Extract<LayerWithEditorState, { type: 'shape' }>).shape) {
                     case 'circle':
-                        return <CircleIcon size={20} weight="bold" />;
+                        return <CircleIcon size={16} weight="bold" />;
                     case 'rectangle':
-                        return <RectangleIcon size={20} weight="bold" />;
+                        return <RectangleIcon size={16} weight="bold" />;
                     default:
-                        return <ShapesIcon size={20} weight="bold" />;
+                        return <ShapesIcon size={16} weight="bold" />;
                 }
             }
             case 'line':
-                return <ScribbleIcon size={20} weight="bold" />;
+                return <ScribbleIcon size={16} weight="bold" />;
             default:
-                return <BugBeetleIcon size={20} weight="bold" />;
+                return <BugBeetleIcon size={16} weight="bold" />;
         }
     };
 
@@ -94,16 +94,14 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
 
     return (
         <div
-            className={`group flex items-center rounded-md border p-2 shadow-sm transition-colors ${
+            className={`group flex items-center rounded-md border px-2 py-1 transition-colors ${
                 isSelected
                     ? 'border-ring bg-accent text-accent-foreground'
-                    : 'border-border bg-card hover:border-primary'
+                    : 'border-transparent bg-card hover:border-border hover:bg-muted'
             } ${isHidden ? 'opacity-50' : ''}`}
         >
-            <div className="mr-2 rounded bg-muted p-1.5 text-muted-foreground">
-                {getLayerIcon(layer.type)}
-            </div>
-            <div className="flex-1 flex-col truncate text-sm text-foreground">
+            <div className="mr-1.5 text-muted-foreground">{getLayerIcon(layer.type)}</div>
+            <div className="flex-1 truncate text-sm font-medium">
                 <span>{getLayerName(layer)}</span>
             </div>
             <div className="flex items-center gap-1">
