@@ -9,6 +9,10 @@ import { MongoClient } from 'mongodb';
 import { startMediaWorker } from '~/lib/jobs/mediaWorker';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { getBootstrapStatus } from '~/server/bootstrap';
+import {
+    STARTUP_MIGRATION_PUBLIC_ISSUE,
+    runBlockingSchemaMigrations
+} from '~/server/migrations/runner';
 
 const bootIssues: string[] = [...bootHealth.issues];
 let startupChecksPromise: Promise<void> | null = null;
@@ -59,9 +63,9 @@ function renderBootErrorPage(issues: string[]): string {
             <body>
                 <main class="card">
                     <h1>Service temporarily unavailable</h1>
-                    <p>Gemma Shop started in degraded mode due to missing or invalid startup configuration.</p>
+                    <p>Gemma Shop could not complete required startup checks.</p>
                     <ul>${items}</ul>
-                    <p class="hint">Update environment configuration and restart the service.</p>
+                    <p class="hint">Please contact support if this issue persists.</p>
                 </main>
             </body>
     </html>`;
@@ -166,6 +170,14 @@ async function runStartupChecksOnce(): Promise<void> {
         startupChecksPromise = (async () => {
             if (bootIssues.length > 0) return;
             await verifyMongoReplicaSet();
+            if (bootIssues.length > 0) return;
+            try {
+                await runBlockingSchemaMigrations();
+            } catch (err) {
+                console.error('[startup] schema migration failed:', err);
+                bootIssues.push(STARTUP_MIGRATION_PUBLIC_ISSUE);
+                return;
+            }
             if (bootIssues.length > 0) return;
             await verifyOutboundConnectivity();
             if (bootIssues.length > 0) return;

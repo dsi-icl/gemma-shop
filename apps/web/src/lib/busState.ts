@@ -3,6 +3,7 @@ import type { Peer } from 'crossws';
 import { ObjectId } from 'mongodb';
 
 import { makeScopeLabel, type GSMessage, type Layer, type ScopeState } from '~/lib/types';
+import { withSchemaVersion } from '~/server/schemaVersions';
 
 import { revokePortalTokensForScope, revokePortalTokensForWall } from './portalTokens';
 
@@ -1284,7 +1285,7 @@ export async function saveScope(
         }
 
         // Manual save: create immutable snapshot, then pointer-swap HEAD's parentId
-        const snapshot = {
+        const snapshot = withSchemaVersion('commits', {
             projectId,
             parentId: null as ObjectId | null,
             authorId: new ObjectId(), // TODO: session user
@@ -1293,7 +1294,7 @@ export async function saveScope(
             isAutoSave: false,
             isMutableHead: false,
             createdAt: new Date()
-        };
+        });
 
         // Preserve HEAD's current parentId chain on the snapshot
         const currentHead = await db.collection('commits').findOne({ _id: headId });

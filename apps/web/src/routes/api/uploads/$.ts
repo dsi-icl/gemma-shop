@@ -19,6 +19,7 @@ import { enqueueJob } from '~/lib/jobs/repo';
 import { jobSignalBus } from '~/lib/jobs/signalBus';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
+import { withSchemaVersion } from '~/server/schemaVersions';
 
 const STRICT_BLOCKING = !['0', 'false', 'off', 'no'].includes(
     (process.env.STRICT_BLOCKING || 'true').toLowerCase()
@@ -234,19 +235,21 @@ const tusServer = new Server({
                     upload.size;
 
                 const isPublicAsset = projectId === PUBLIC_ASSET_PROJECT_ID;
-                const insertResult = await db.collection('assets').insertOne({
-                    projectId: new ObjectId(projectId),
-                    name: originalName,
-                    url: assetFilename,
-                    size: fileSize,
-                    mimeType,
-                    blurhash,
-                    previewUrl: previewFilename ?? undefined,
-                    sizes: sizes.length > 0 ? sizes : undefined,
-                    public: isPublicAsset,
-                    createdBy: userEmail,
-                    createdAt: new Date().toISOString()
-                });
+                const insertResult = await db.collection('assets').insertOne(
+                    withSchemaVersion('assets', {
+                        projectId: new ObjectId(projectId),
+                        name: originalName,
+                        url: assetFilename,
+                        size: fileSize,
+                        mimeType,
+                        blurhash,
+                        previewUrl: previewFilename ?? undefined,
+                        sizes: sizes.length > 0 ? sizes : undefined,
+                        public: isPublicAsset,
+                        createdBy: userEmail,
+                        createdAt: new Date().toISOString()
+                    })
+                );
 
                 // Broadcast to all editors on this project via bus bridge
                 console.log(

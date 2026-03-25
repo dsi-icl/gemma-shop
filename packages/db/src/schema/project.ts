@@ -17,6 +17,7 @@ export type Collaborator = z.infer<typeof Collaborator>;
 
 export const ProjectSchema = z.object({
     _id: oid,
+    _schemaVersion: z.number().int().nonnegative().optional(),
     name: z.string().min(1, 'Name is required'),
     authorOrganisation: z.string().min(1, 'Author/Organisation is required'),
     description: z.string().default(''),

@@ -6,6 +6,7 @@ const oid = z.union([z.string(), z.instanceof(ObjectId)]).transform((v) => new O
 // const oid = z.string()
 export const AuditLogSchema = z.object({
     _id: oid.optional(),
+    _schemaVersion: z.number().int().nonnegative().optional(),
     projectId: oid,
     actorId: oid,
     action: z.enum(['PROJECT_UPDATED', 'PERMISSION_GRANTED', 'PERMISSION_REVOKED']),
