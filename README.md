@@ -150,20 +150,6 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
 - Mutable HEAD commit used for active editing/autosave
 - Manual save creates immutable snapshot and advances chain pointer
 - Slide metadata updates persist independently from layer payloads
-- Startup schema migrations run automatically before serving traffic.
-- If migrations fail, boot is blocked and the app serves a generic maintenance page (no sensitive diagnostics).
-- Versioned collections currently include: `projects`, `assets`, `walls`, `commits`, `audit_logs`, `jobs`.
-
-### Schema Migration Guardrails
-
-- Every versioned document stores `_schemaVersion`.
-- Migration steps live under `apps/web/src/server/migrations/steps/` and are registered in `apps/web/src/server/migrations/manifest.ts`.
-- Collection target versions are declared in `apps/web/src/server/schemaVersions.ts`.
-- `bun run check:migrations` enforces that schema changes include:
-    - schema version map updates,
-    - manifest updates,
-    - at least one collection-specific migration step file.
-- The same check runs on `pre-push` and as part of `bun run check`.
 
 ## Data Model Notes
 

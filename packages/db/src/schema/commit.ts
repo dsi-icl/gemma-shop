@@ -6,7 +6,6 @@ const oid = z.union([z.string(), z.instanceof(ObjectId)]).transform((v) => new O
 // const oid = z.string()
 export const CommitSchema = z.object({
     _id: oid.optional(),
-    _schemaVersion: z.number().int().nonnegative().optional(),
     projectId: oid,
     parentId: oid.nullable(),
     authorId: oid,

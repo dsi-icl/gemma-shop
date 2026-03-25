@@ -4,8 +4,6 @@ import { createServerFn } from '@tanstack/react-start';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 
-import { withSchemaVersion } from '~/server/schemaVersions';
-
 function serializeForClient<T>(value: T): T {
     if (value instanceof ObjectId) {
         return value.toHexString() as T;
@@ -60,9 +58,7 @@ export const revertToVersion = createServerFn({ method: 'POST' })
             createdAt: new Date()
         });
 
-        const commitResult = await db
-            .collection('commits')
-            .insertOne(withSchemaVersion('commits', revertCommit as Record<string, unknown>));
+        const commitResult = await db.collection('commits').insertOne(revertCommit);
 
         // 4. Update the Project Pointer to the new Revert Commit
         await db.collection('projects').updateOne(
@@ -92,7 +88,7 @@ export const saveNamedVersion = createServerFn({ method: 'POST' })
         if (!project) throw new Error('Project not found');
 
         // 1. Create a brand new commit node
-        const newCommit = withSchemaVersion('commits', {
+        const newCommit = {
             projectId,
             parentId: project.headCommitId, // Point back to the last known state
             authorId: new ObjectId(), // Replace with Better-Auth session user ID
@@ -100,7 +96,7 @@ export const saveNamedVersion = createServerFn({ method: 'POST' })
             content: data.content,
             isAutoSave: data.isAutoSave,
             createdAt: new Date()
-        });
+        };
 
         const result = await db.collection('commits').insertOne(newCommit);
 

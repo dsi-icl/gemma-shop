@@ -2,8 +2,6 @@ import { db } from '@repo/db';
 import { ObjectId } from 'mongodb';
 import type { OptionalId } from 'mongodb';
 
-import { withSchemaVersion } from '~/server/schemaVersions';
-
 import type { JobDocument, JobPayload, JobResult, JobType } from './types';
 
 const JOB_COLLECTION = 'jobs';
@@ -41,7 +39,7 @@ export async function enqueueJob({
     maxAttempts?: number;
 }) {
     const now = new Date();
-    const doc: OptionalId<JobDocument> = withSchemaVersion('jobs', {
+    const doc: OptionalId<JobDocument> = {
         nodeId,
         type,
         status: 'queued' as const,
@@ -51,7 +49,7 @@ export async function enqueueJob({
         runAfter: now,
         createdAt: now,
         updatedAt: now
-    });
+    };
     const inserted = await jobs().insertOne(doc as any);
     return inserted.insertedId;
 }

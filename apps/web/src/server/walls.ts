@@ -14,7 +14,6 @@ import {
     notifyControllers,
     seedScopeFromDb
 } from '~/lib/busState';
-import { schemaVersionOnInsert } from '~/server/schemaVersions';
 
 const walls = db.collection('walls');
 const commits = db.collection('commits');
@@ -108,8 +107,7 @@ export async function bindWallToScope(
                 boundSlideId: resolvedSlideId,
                 boundSource: 'gallery',
                 updatedAt: new Date().toISOString()
-            },
-            $setOnInsert: schemaVersionOnInsert('walls')
+            }
         },
         { upsert: true }
     );

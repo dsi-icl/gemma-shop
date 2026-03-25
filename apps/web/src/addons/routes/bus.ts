@@ -76,7 +76,6 @@ import {
     type GSMessage,
     type Layer
 } from '~/lib/types';
-import { schemaVersionOnInsert } from '~/server/schemaVersions';
 
 // ── Binary opcodes ──────────────────────────────────────────────────────────
 
@@ -242,8 +241,7 @@ async function performLiveBind(
                 $setOnInsert: {
                     wallId,
                     name: wallId,
-                    createdAt: new Date().toISOString(),
-                    ...schemaVersionOnInsert('walls')
+                    createdAt: new Date().toISOString()
                 }
             },
             { upsert: true }
@@ -326,8 +324,7 @@ function syncWallNodeCountToDb(wallId: string) {
             $setOnInsert: {
                 wallId,
                 name: wallId,
-                createdAt: new Date().toISOString(),
-                ...schemaVersionOnInsert('walls')
+                createdAt: new Date().toISOString()
             }
         },
         { upsert: true }

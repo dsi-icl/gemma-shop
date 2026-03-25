@@ -4,7 +4,6 @@ const oid = z.string();
 
 export const WallSchema = z.object({
     _id: oid,
-    _schemaVersion: z.number().int().nonnegative().optional(),
     wallId: z.string(),
     name: z.string(),
     connectedNodes: z.number().default(0),

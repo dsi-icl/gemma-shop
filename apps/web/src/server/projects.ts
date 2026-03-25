@@ -10,7 +10,6 @@ import type {
 import { ObjectId } from 'mongodb';
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
-import { withSchemaVersion } from '~/server/schemaVersions';
 
 const projects = db.collection('projects');
 const auditLogs = db.collection('audit_logs');
@@ -233,7 +232,7 @@ export async function getCommit(id: string) {
 
 export async function createProject(input: CreateProjectInput, userEmail: string) {
     const now = new Date().toISOString();
-    const doc = withSchemaVersion('projects', {
+    const doc = {
         ...input,
         collaborators: [{ email: userEmail, role: 'owner' as const }, ...input.collaborators],
         headCommitId: null,
@@ -241,18 +240,16 @@ export async function createProject(input: CreateProjectInput, userEmail: string
         createdBy: userEmail,
         createdAt: now,
         updatedAt: now
-    });
+    };
     const result = await projects.insertOne(doc);
 
-    await auditLogs.insertOne(
-        withSchemaVersion('audit_logs', {
-            projectId: result.insertedId,
-            actorId: userEmail,
-            action: 'PROJECT_CREATED',
-            changes: { name: input.name },
-            createdAt: new Date()
-        })
-    );
+    await auditLogs.insertOne({
+        projectId: result.insertedId,
+        actorId: userEmail,
+        action: 'PROJECT_CREATED',
+        changes: { name: input.name },
+        createdAt: new Date()
+    });
 
     return serializeProject({ ...doc, _id: result.insertedId });
 }
@@ -264,12 +261,12 @@ export async function createAsset(input: CreateAssetInput, userEmail: string) {
     assertCanEdit(project, userEmail);
 
     const now = new Date().toISOString();
-    const doc = withSchemaVersion('assets', {
+    const doc = {
         ...input,
         projectId: new ObjectId(input.projectId),
         createdBy: userEmail,
         createdAt: now
-    });
+    };
 
     const result = await assets.insertOne(doc);
 
@@ -290,15 +287,13 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
     );
     if (!result) throw new Error('Update failed');
 
-    await auditLogs.insertOne(
-        withSchemaVersion('audit_logs', {
-            projectId: new ObjectId(_id),
-            actorId: userEmail,
-            action: 'PROJECT_UPDATED',
-            changes: updates,
-            createdAt: new Date()
-        })
-    );
+    await auditLogs.insertOne({
+        projectId: new ObjectId(_id),
+        actorId: userEmail,
+        action: 'PROJECT_UPDATED',
+        changes: updates,
+        createdAt: new Date()
+    });
 
     // Live-push custom render settings changes to any bound walls
     if (
@@ -333,15 +328,13 @@ export async function archiveProject(id: string, userEmail: string) {
         }
     );
 
-    await auditLogs.insertOne(
-        withSchemaVersion('audit_logs', {
-            projectId: new ObjectId(id),
-            actorId: userEmail,
-            action: 'PROJECT_UPDATED',
-            changes: { deletedAt: true },
-            createdAt: new Date()
-        })
-    );
+    await auditLogs.insertOne({
+        projectId: new ObjectId(id),
+        actorId: userEmail,
+        action: 'PROJECT_UPDATED',
+        changes: { deletedAt: true },
+        createdAt: new Date()
+    });
 }
 
 export async function deleteAsset(assetId: string, userEmail: string) {
@@ -380,15 +373,13 @@ export async function restoreProject(id: string, userEmail: string) {
         }
     );
 
-    await auditLogs.insertOne(
-        withSchemaVersion('audit_logs', {
-            projectId: new ObjectId(id),
-            actorId: userEmail,
-            action: 'PROJECT_UPDATED',
-            changes: { deletedAt: false },
-            createdAt: new Date()
-        })
-    );
+    await auditLogs.insertOne({
+        projectId: new ObjectId(id),
+        actorId: userEmail,
+        action: 'PROJECT_UPDATED',
+        changes: { deletedAt: false },
+        createdAt: new Date()
+    });
 }
 
 export async function publishCommit(projectId: string, commitId: string | null, userEmail: string) {
@@ -416,15 +407,13 @@ export async function publishCommit(projectId: string, commitId: string | null, 
         }
     );
 
-    await auditLogs.insertOne(
-        withSchemaVersion('audit_logs', {
-            projectId: new ObjectId(projectId),
-            actorId: userEmail,
-            action: 'PROJECT_UPDATED',
-            changes: { publishedCommitId: commitId },
-            createdAt: new Date()
-        })
-    );
+    await auditLogs.insertOne({
+        projectId: new ObjectId(projectId),
+        actorId: userEmail,
+        action: 'PROJECT_UPDATED',
+        changes: { publishedCommitId: commitId },
+        createdAt: new Date()
+    });
 
     process.__BROADCAST_PROJECT_PUBLISH_CHANGED__?.(projectId, commitId);
 
@@ -445,7 +434,7 @@ export async function publishCustomRenderProject(projectId: string, userEmail: s
     if (existing.publishedCommitId) return true;
 
     const sentinelSlideId = new ObjectId().toHexString();
-    const sentinel = withSchemaVersion('commits', {
+    const sentinel = {
         projectId: new ObjectId(projectId),
         parentId: null,
         authorId: new ObjectId(),
@@ -454,7 +443,7 @@ export async function publishCustomRenderProject(projectId: string, userEmail: s
         isAutoSave: false,
         isMutableHead: false,
         createdAt: new Date()
-    });
+    };
     const result = await commits.insertOne(sentinel);
     const sentinelId = result.insertedId.toHexString();
 
@@ -478,7 +467,7 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
         }
 
         // Case 2: HEAD exists but is immutable (legacy) — create mutable HEAD on top
-        const newHead = withSchemaVersion('commits', {
+        const newHead = {
             projectId: new ObjectId(projectId),
             parentId: new ObjectId(project.headCommitId),
             authorId: new ObjectId(),
@@ -487,7 +476,7 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
             isAutoSave: false,
             isMutableHead: true,
             createdAt: new Date()
-        });
+        };
         const result = await commits.insertOne(newHead);
         await projects.updateOne(
             { _id: new ObjectId(projectId) },
@@ -498,7 +487,7 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
 
     // Case 3: No HEAD at all — create fresh mutable HEAD with a default slide
     const defaultSlideId = new ObjectId().toHexString();
-    const newHead = withSchemaVersion('commits', {
+    const newHead = {
         projectId: new ObjectId(projectId),
         parentId: null,
         authorId: new ObjectId(),
@@ -507,7 +496,7 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
         isAutoSave: false,
         isMutableHead: true,
         createdAt: new Date()
-    });
+    };
     const result = await commits.insertOne(newHead);
     await projects.updateOne(
         { _id: new ObjectId(projectId) },
@@ -535,7 +524,7 @@ export async function createBranchHead(
     if (source.projectId.toString() !== projectId)
         throw new Error('Commit does not belong to project');
 
-    const branchHead = withSchemaVersion('commits', {
+    const branchHead = {
         projectId: new ObjectId(projectId),
         parentId: new ObjectId(sourceCommitId),
         authorId: new ObjectId(),
@@ -544,7 +533,7 @@ export async function createBranchHead(
         isAutoSave: false,
         isMutableHead: true,
         createdAt: new Date()
-    });
+    };
     const result = await commits.insertOne(branchHead);
     return result.insertedId.toHexString();
 }
@@ -578,15 +567,13 @@ export async function promoteBranchHead(
         }
     );
 
-    await auditLogs.insertOne(
-        withSchemaVersion('audit_logs', {
-            projectId: new ObjectId(projectId),
-            actorId: userEmail,
-            action: 'BRANCH_PROMOTED',
-            changes: { headCommitId: branchCommitId },
-            createdAt: new Date()
-        })
-    );
+    await auditLogs.insertOne({
+        projectId: new ObjectId(projectId),
+        actorId: userEmail,
+        action: 'BRANCH_PROMOTED',
+        changes: { headCommitId: branchCommitId },
+        createdAt: new Date()
+    });
 }
 
 export interface SerializedAuditLog {

@@ -117,8 +117,7 @@
     },
     "scripts": {
         "build": "turbo run build",
-        "check": "bun run check:migrations && turbo run quality",
-        "check:migrations": "node tooling/scripts/check-migrations.mjs",
+        "check": "turbo run quality",
         "docker:build": "node tooling/scripts/docker-build.mjs",
         "docker:test:down": "docker compose -f docker-compose.test.yml down --remove-orphans",
         "docker:test:logs": "docker compose -f docker-compose.test.yml logs -f --tail=200",

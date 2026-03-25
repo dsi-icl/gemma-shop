@@ -33,7 +33,6 @@ export type JobResult = ProcessImageAssetResult | ProcessVideoAssetResult;
 
 export interface JobDocument {
     _id: ObjectId;
-    _schemaVersion: number;
     nodeId: string;
     type: JobType;
     status: JobStatus;

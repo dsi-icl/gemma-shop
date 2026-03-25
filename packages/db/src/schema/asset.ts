@@ -4,7 +4,6 @@ const oid = z.string();
 
 export const AssetSchema = z.object({
     _id: oid,
-    _schemaVersion: z.number().int().nonnegative().optional(),
     projectId: oid,
     name: z.string(),
     url: z.string(),
