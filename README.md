@@ -138,6 +138,11 @@ For full flow maps (bind/unbind, hydrate, scope internals, YJS bridge path), see
     - Fully asynchronous media processing implies layers may exist before complete asset metadata is ready.
     - We likely need a cleaner separation between layer content and asset metadata/progress state.
     - Potential outcome: keep commit `content.slides[*].layers` lean and fetch/enrich asset metadata via dedicated asset state paths.
+- Hardening next steps:
+    - Add maintenance controls for `jobs` retention (TTL or scheduled prune) so completed/failed rows do not grow unbounded.
+    - Harden retry classification and stale-job recovery policy (transient vs permanent failures, deterministic multi-instance behavior, clearer user-facing errors).
+    - Replace direct `url` fields in image/video/web layers with stable asset pointers (for example `assetId`).
+    - This prevents metadata duplication across layers (including variant sizing and blurhash concerns), improves file lifecycle management, and keeps commit payloads lean.
 
 ### 4) Persistence and Versioning
 
