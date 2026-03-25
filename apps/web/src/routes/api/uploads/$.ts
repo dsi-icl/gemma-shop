@@ -8,34 +8,18 @@ import { FileStore } from '@tus/file-store';
 import { Server } from '@tus/server';
 import { ObjectId } from 'mongodb';
 
+import {
+    ASSET_MIME_TYPES,
+    SUPPORTED_FONT_EXTS,
+    SUPPORTED_IMAGE_EXTS,
+    SUPPORTED_VIDEO_EXTS
+} from '~/lib/assetMime';
 import { PUBLIC_ASSET_PROJECT_ID } from '~/lib/constants';
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
 
-const ALLOWED_IMAGE_EXTS = new Set([
-    '.jpg',
-    '.jpeg',
-    '.png',
-    '.gif',
-    '.webp',
-    '.bmp',
-    '.tiff',
-    '.svg'
-]);
-const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv']);
-const ALLOWED_FONT_EXTS = new Set(['.woff2']);
 const FFMPEG_COMMAND = process.env.FFMPEG_PATH || 'ffmpeg';
-const IMAGE_MIME_BY_EXT: Record<string, string> = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.bmp': 'image/bmp',
-    '.tiff': 'image/tiff',
-    '.svg': 'image/svg+xml'
-};
 
 type DetectedType = 'image' | 'video' | 'woff2' | null;
 
@@ -219,15 +203,15 @@ const tusServer = new Server({
             const isImage =
                 detectedType === 'image' ||
                 (detectedType === null &&
-                    ALLOWED_IMAGE_EXTS.has(ext) &&
-                    !ALLOWED_VIDEO_EXTS.has(ext));
+                    SUPPORTED_IMAGE_EXTS.has(ext) &&
+                    !SUPPORTED_VIDEO_EXTS.has(ext));
             const isVideo =
                 detectedType === 'video' ||
                 (detectedType === null &&
-                    ALLOWED_VIDEO_EXTS.has(ext) &&
-                    !ALLOWED_IMAGE_EXTS.has(ext));
+                    SUPPORTED_VIDEO_EXTS.has(ext) &&
+                    !SUPPORTED_IMAGE_EXTS.has(ext));
             const isFontWoff2 =
-                detectedType === 'woff2' || (detectedType === null && ALLOWED_FONT_EXTS.has(ext));
+                detectedType === 'woff2' || (detectedType === null && SUPPORTED_FONT_EXTS.has(ext));
 
             let assetFilename: string | null = null;
             let previewFilename: string | null = null;
@@ -241,7 +225,7 @@ const tusServer = new Server({
                 const finalPath = join(ASSET_DIR, assetFilename);
                 await copyFile(tusFilePath, finalPath);
 
-                mimeType = IMAGE_MIME_BY_EXT[ext] ?? `image/${ext.slice(1)}`;
+                mimeType = ASSET_MIME_TYPES[ext] ?? `image/${ext.slice(1)}`;
                 blurhash = await computeBlurhash(finalPath);
                 if (ext !== '.svg') {
                     sizes = await generateVariants(finalPath, upload.id);
@@ -297,12 +281,12 @@ const tusServer = new Server({
                     }
                 }
 
-                mimeType = 'video/mp4';
+                mimeType = ASSET_MIME_TYPES['.mp4'];
             } else if (isFontWoff2) {
                 assetFilename = `${upload.id}.woff2`;
                 const finalPath = join(ASSET_DIR, assetFilename);
                 await copyFile(tusFilePath, finalPath);
-                mimeType = 'font/woff2';
+                mimeType = ASSET_MIME_TYPES['.woff2'];
             } else {
                 console.warn(
                     `[Tus] Unsupported upload type rejected: name=${originalName}, ext=${ext}, uploadId=${upload.id}`

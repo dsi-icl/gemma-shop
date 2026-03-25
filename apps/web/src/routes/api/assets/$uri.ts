@@ -6,19 +6,8 @@ import { basename, join, extname } from 'path';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerOnlyFn } from '@tanstack/react-start';
 
+import { ASSET_MIME_TYPES } from '~/lib/assetMime';
 import { ASSET_DIR } from '~/lib/serverVariables';
-
-const MIME_TYPES: Record<string, string> = {
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.mov': 'video/quicktime',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml'
-};
 
 const getResponse = createServerOnlyFn(
     async ({
@@ -62,7 +51,7 @@ const getResponse = createServerOnlyFn(
 
         const fileSize = stats.size;
         const ext = extname(asset).toLowerCase();
-        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+        const contentType = ASSET_MIME_TYPES[ext] || 'application/octet-stream';
 
         // Set long life for downloaded assets here
         const baseHeaders = {
