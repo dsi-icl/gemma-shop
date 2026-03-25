@@ -220,6 +220,7 @@ async function performLiveBind(
         try {
             hydrateWallNodes(wallId);
             broadcastToControllersByWallRaw(wallId, getWallHydratePayload(scopeId, wallId));
+            void broadcastSlidesSnapshotToControllersByWall(wallId, commitId);
         } catch (err) {
             console.error(
                 `[WS] bind_wall hydrate failed for ${wallId} (${makeScopeLabel(projectId, commitId, resolvedSlideId)}):`,
@@ -352,6 +353,59 @@ async function resolveBoundSlideId(
     return slides[0]?.id ?? null;
 }
 
+async function getSlidesMetadata(
+    commitId: string
+): Promise<Array<{ id: string; order: number; name: string }>> {
+    try {
+        const commit = await db
+            .collection('commits')
+            .findOne({ _id: new ObjectId(commitId) }, { projection: { 'content.slides': 1 } });
+        const slides =
+            (commit?.content?.slides as Array<{
+                id?: string;
+                order?: number;
+                name?: string;
+            }>) ?? [];
+        return slides
+            .filter(
+                (slide): slide is { id: string; order?: number; name?: string } =>
+                    typeof slide?.id === 'string'
+            )
+            .map((slide, index) => ({
+                id: slide.id,
+                order: typeof slide.order === 'number' ? slide.order : index,
+                name:
+                    typeof slide.name === 'string' && slide.name.length > 0
+                        ? slide.name
+                        : String(index + 1)
+            }));
+    } catch (error) {
+        console.warn(`[WS] Failed to read slides metadata for commit ${commitId}:`, error);
+        return [];
+    }
+}
+
+async function sendSlidesSnapshotToControllerPeer(peer: import('crossws').Peer, commitId: string) {
+    const slides = await getSlidesMetadata(commitId);
+    sendJSON(peer, {
+        type: 'slides_updated',
+        commitId,
+        slides
+    });
+}
+
+async function broadcastSlidesSnapshotToControllersByWall(wallId: string, commitId: string) {
+    const slides = await getSlidesMetadata(commitId);
+    broadcastToControllersByWallRaw(
+        wallId,
+        JSON.stringify({
+            type: 'slides_updated',
+            commitId,
+            slides
+        } satisfies GSMessage)
+    );
+}
+
 function broadcastWallBindingToEditors(wallId: string) {
     const boundScope = wallBindings.get(wallId);
     const scope = boundScope !== undefined ? scopedState.get(boundScope) : null;
@@ -481,6 +535,12 @@ handlers.set('rehydrate_please', ({ entry }) => {
                 ? getWallHydratePayload(boundScope, meta.wallId)
                 : EMPTY_HYDRATE
         );
+        if (boundScope !== undefined) {
+            const scope = scopedState.get(boundScope);
+            if (scope?.commitId) {
+                void sendSlidesSnapshotToControllerPeer(entry.peer, scope.commitId);
+            }
+        }
     }
 });
 
@@ -1072,6 +1132,9 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
                 ? getWallHydratePayload(boundScope, parsed.wallId)
                 : EMPTY_HYDRATE
         );
+        if (scope?.commitId) {
+            void sendSlidesSnapshotToControllerPeer(peer, scope.commitId);
+        }
 
         console.log(`[WS] Controller joined wallId=${parsed.wallId}`);
         logPeerCounts();

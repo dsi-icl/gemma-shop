@@ -20,11 +20,14 @@ type BindingStatus = {
 type BindingCallback = (status: BindingStatus) => void;
 type HydrateCallback = (layers: Extract<GSMessage, { type: 'hydrate' }>['layers']) => void;
 type SlidesUpdatedCallback = (
-    slides: Array<{
-        id: string;
-        order: number;
-        name: string;
-    }>
+    payload: {
+        commitId: string;
+        slides: Array<{
+            id: string;
+            order: number;
+            name: string;
+        }>;
+    }
 ) => void;
 type ServerMessageCallback = (data: GSMessage) => void;
 
@@ -75,7 +78,9 @@ export class ControllerEngine {
                 }
 
                 if (data.type === 'slides_updated') {
-                    this.slidesUpdatedCallbacks.forEach((cb) => cb(data.slides));
+                    this.slidesUpdatedCallbacks.forEach((cb) =>
+                        cb({ commitId: data.commitId, slides: data.slides })
+                    );
                 }
             }
         });
