@@ -280,7 +280,7 @@ function AssetsTab() {
                                         imgClassName="cursor-pointer object-cover"
                                         onClick={() => openPreview(asset)}
                                     />
-                                    <div className="absolute top-0.5 right-0.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                    <div className="absolute top-0.5 right-0.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100">
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -379,12 +379,12 @@ function AssetsTab() {
                             )}
                             {!isFontAsset(asset) ? (
                                 <>
-                                    <div className="absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                    <div className="absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100">
                                         <span className="block truncate text-[10px] text-white">
                                             {asset.name}
                                         </span>
                                     </div>
-                                    <div className="absolute top-0.5 right-0.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                    <div className="absolute top-0.5 right-0.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100">
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();

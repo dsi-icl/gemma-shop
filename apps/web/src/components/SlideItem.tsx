@@ -85,7 +85,7 @@ export function SlideItem({
                         setEditValue(slide.name);
                         setEditing(true);
                     }}
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground"
+                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground touch:opacity-100"
                     title="Rename Slide"
                 >
                     <PencilSimpleIcon size={16} weight="bold" />
@@ -97,7 +97,7 @@ export function SlideItem({
                         e.stopPropagation();
                         onCopySlide(slide);
                     }}
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground"
+                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground touch:opacity-100"
                     title="Copy Slide"
                 >
                     <CopyIcon size={16} weight="bold" />
@@ -109,7 +109,7 @@ export function SlideItem({
                         e.stopPropagation();
                         onDeleteSlide(slide.id);
                     }}
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive touch:opacity-100"
                     title="Delete Slide"
                 >
                     <TrashIcon size={16} weight="bold" />
