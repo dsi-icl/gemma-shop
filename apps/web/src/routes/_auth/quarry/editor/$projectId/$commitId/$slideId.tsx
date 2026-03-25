@@ -71,10 +71,11 @@ function SlideEditorInner({
     const [mediaCollapsed, setMediaCollapsed] = useState(false);
     const titleBarSize = 42;
 
-    // Load project from commit DAG on mount
+    // Load project from commit DAG on mount (slideId only used for initial load)
     useEffect(() => {
         loadProject(projectId, commitId, slideId);
-    }, [projectId, commitId, slideId, loadProject]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectId, commitId, loadProject]);
 
     // Ctrl+S keyboard shortcut for manual save
     const handleKeyboardSave = useCallback((e: KeyboardEvent) => {

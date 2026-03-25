@@ -20,6 +20,7 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
     const reorderSlides = useEditorStore((s) => s.reorderSlides);
     const toggleSlideSelection = useEditorStore((s) => s.toggleSlideSelection);
     const setActiveSlideId = useEditorStore((s) => s.setActiveSlideId);
+    const switchSlide = useEditorStore((s) => s.switchSlide);
     const copySlide = useEditorStore((s) => s.copySlide);
     const deleteSlide = useEditorStore((s) => s.deleteSlide);
     const renameSlide = useEditorStore((s) => s.renameSlide);
@@ -33,10 +34,11 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
             const { slides: updatedSlides, commitId } = useEditorStore.getState();
             const next = updatedSlides[0];
             if (next && projectId && commitId) {
-                setActiveSlideId(next.id);
+                switchSlide(next.id);
                 navigate({
                     to: '/quarry/editor/$projectId/$commitId/$slideId',
-                    params: { projectId, commitId, slideId: next.id }
+                    params: { projectId, commitId, slideId: next.id },
+                    replace: true
                 });
             }
         }
@@ -45,12 +47,13 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
     const handleSelect = (id: string, shiftKey: boolean, ctrlKey: boolean) => {
         toggleSlideSelection(id, shiftKey, ctrlKey);
         if (!shiftKey && !ctrlKey) {
-            setActiveSlideId(id);
+            switchSlide(id);
             const { commitId } = useEditorStore.getState();
             if (projectId && commitId) {
                 navigate({
                     to: '/quarry/editor/$projectId/$commitId/$slideId',
-                    params: { projectId, commitId, slideId: id }
+                    params: { projectId, commitId, slideId: id },
+                    replace: true
                 });
             }
         }

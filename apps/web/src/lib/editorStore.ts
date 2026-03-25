@@ -67,6 +67,7 @@ export interface EditorState {
 
     // ── Pure state mutations ──
     loadProject: (projectId: string, commitId: string, slideId: string) => Promise<void>;
+    switchSlide: (slideId: string) => Promise<void>;
     hydrate: (layers: LayerWithEditorState[]) => void;
     upsertLayer: (layer: LayerWithEditorState) => void;
     removeLayer: (numericId: number) => void;
@@ -252,6 +253,40 @@ export const useEditorStore =
                           if (activeSlide) {
                               get().hydrate(activeSlide.layers as LayerWithEditorState[]);
                               set({ activeSlideId: slideId });
+                              engine.sendJSON({
+                                  type: 'seed_scope',
+                                  layers: activeSlide.layers as LayerWithEditorState[]
+                              });
+                          }
+                      }
+                  },
+
+                  switchSlide: async (slideId) => {
+                      const { projectId, commitId, activeSlideId } = get();
+                      if (!projectId || !commitId || slideId === activeSlideId) return;
+
+                      const engine = EditorEngine.getInstance();
+
+                      // Clear layers and set new active slide
+                      set({ layers: new Map(), activeSlideId: slideId });
+
+                      // Re-join scope for the new slide
+                      engine.clearBufferedHydration();
+                      engine.joinScope(projectId, commitId, slideId);
+                      const hydrate = await engine.waitForHydrate();
+
+                      if (hydrate.layers.length > 0) {
+                          // Bus already has state for this slide
+                          get().hydrate(hydrate.layers as LayerWithEditorState[]);
+                      } else {
+                          // Fresh scope — seed from commit data
+                          const commit = await $getCommit({ data: { id: commitId } });
+                          const commitSlides = commit?.content?.slides as
+                              | Array<{ id: string; order: number; layers: LayerWithEditorState[] }>
+                              | undefined;
+                          const activeSlide = commitSlides?.find((s) => s.id === slideId);
+                          if (activeSlide) {
+                              get().hydrate(activeSlide.layers as LayerWithEditorState[]);
                               engine.sendJSON({
                                   type: 'seed_scope',
                                   layers: activeSlide.layers as LayerWithEditorState[]
