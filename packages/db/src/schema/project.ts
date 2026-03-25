@@ -22,8 +22,8 @@ export const ProjectSchema = z.object({
     description: z.string().default(''),
     tags: z.array(z.string()).default([]),
     heroImages: z.array(z.string()).default([]),
-    customControlUrl: z.string().optional(),
-    customRenderUrl: z.string().optional(),
+    customControlUrl: z.string().nullish(),
+    customRenderUrl: z.string().nullish(),
     customRenderCompat: z.boolean().default(false),
     customRenderProxy: z.boolean().default(false),
     collaborators: z.array(Collaborator).default([]),
@@ -31,8 +31,8 @@ export const ProjectSchema = z.object({
     headCommitId: oid.nullable().default(null),
     // When set, the project is publicly visible using this specific commit
     publishedCommitId: oid.nullable().default(null),
-    deletedAt: z.iso.datetime().optional(),
-    deletedBy: z.string().optional(),
+    deletedAt: z.iso.datetime().nullish(),
+    deletedBy: z.string().nullish(),
     createdBy: z.string(),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime()

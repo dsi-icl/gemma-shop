@@ -8,8 +8,8 @@ export const WallSchema = z.object({
     name: z.string(),
     connectedNodes: z.number().default(0),
     lastSeen: z.iso.datetime(),
-    boundProjectId: oid.optional(),
-    boundSlideId: z.string().optional(),
+    boundProjectId: oid.nullish(),
+    boundSlideId: z.string().nullish(),
     createdAt: z.iso.datetime()
 });
 
