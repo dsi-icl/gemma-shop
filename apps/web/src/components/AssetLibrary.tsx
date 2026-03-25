@@ -162,7 +162,7 @@ export function AssetLibrary({
                                     onUploadComplete={handleUploadComplete}
                                 />
                             ) : null}
-                            {sortedAssets.map((asset) => {
+                            {sortedAssets.map((asset, idx) => {
                                 const isVideo =
                                     asset.mimeType?.startsWith('video/') ||
                                     /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name);
@@ -269,6 +269,7 @@ export function AssetLibrary({
                                             key={asset._id}
                                             className="bg-checkerboard group relative max-w-25 cursor-default overflow-hidden rounded-md border border-border bg-background opacity-90"
                                             title={asset.name}
+                                            tabIndex={idx}
                                         >
                                             {cardContent}
                                         </div>
@@ -276,10 +277,16 @@ export function AssetLibrary({
                                 }
 
                                 return (
-                                    <button
+                                    <div
                                         key={asset._id}
                                         onClick={() => {
                                             onSelectAsset?.(asset);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                onSelectAsset?.(asset);
+                                            }
                                         }}
                                         className={`bg-checkerboard group relative max-w-25 cursor-pointer overflow-hidden rounded-md border bg-background transition-colors hover:border-primary ${
                                             isSelected
@@ -287,9 +294,12 @@ export function AssetLibrary({
                                                 : 'border-border'
                                         }`}
                                         title={asset.name}
+                                        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+                                        role="button"
+                                        tabIndex={idx}
                                     >
                                         {cardContent}
-                                    </button>
+                                    </div>
                                 );
                             })}
                         </div>
