@@ -92,6 +92,9 @@ function buildControllerUrl(
 
         if (!url.searchParams.has('l')) url.searchParams.set('l', 'gallery');
         if (!url.searchParams.has('w')) url.searchParams.set('w', wallId);
+        if (portalToken && !url.searchParams.has('_gem_t')) {
+            url.searchParams.set('_gem_t', portalToken);
+        }
 
         if (isAbsolute) return url.toString();
         return `${url.pathname}${url.search}${url.hash}`;

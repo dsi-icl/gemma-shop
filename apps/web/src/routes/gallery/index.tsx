@@ -363,6 +363,7 @@ function HomePage() {
                 description: p.description,
                 tags: p.tags.filter((t) => t !== 'public'),
                 publishedCommitId: p.publishedCommitId,
+                customControlUrl: (p as { customControlUrl?: string }).customControlUrl,
                 imageUrl: p.heroImages[0] ?? '',
                 blurhash: (p as { heroImageBlurhash?: string }).heroImageBlurhash,
                 sizes: (p as { heroImageSizes?: number[] }).heroImageSizes,
