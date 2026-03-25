@@ -462,9 +462,9 @@ function HomePage() {
     return (
         <div className="container mx-auto p-4 pt-24">
             {pendingOverride ? (
-                <div className="fixed inset-0 z-[80] flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/85" />
-                    <div className="relative z-[81] w-[min(42rem,95vw)] rounded-lg border border-border bg-card p-4 shadow-2xl">
+                <div className="fixed inset-0 z-80 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-background/90" />
+                    <div className="relative z-81 w-[min(42rem,95vw)] rounded-lg border border-border bg-background p-4 shadow-2xl">
                         <div className="flex flex-col gap-3">
                             <div className="text-sm font-semibold">
                                 Takeover request from{' '}
