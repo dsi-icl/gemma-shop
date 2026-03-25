@@ -25,6 +25,8 @@ function selectSrc(
     if (forceOriginal || !sizes?.length) return prefixed;
 
     const filename = prefixed.split('/').pop()!;
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext === 'svg') return prefixed;
     const baseId = filename.replace(/\.[^.]+$/, '');
 
     const sorted = [...sizes].sort((a, b) => a - b);

@@ -29,6 +29,8 @@ function selectSrc(
 
     // Extract base ID: strip /api/assets/ prefix and file extension
     const filename = prefixed.split('/').pop()!;
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext === 'svg') return prefixed;
     const baseId = filename.replace(/\.[^.]+$/, '');
 
     // Pick the smallest variant >= physicalWidth, else the largest available

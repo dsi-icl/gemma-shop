@@ -13,6 +13,8 @@ function selectVariantUrl(url: string, sizes: number[] | undefined, displayWidth
     if (!sizes?.length || !url.startsWith('/api/assets/')) return url;
 
     const filename = url.split('/').pop()!;
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext === 'svg') return url;
     const baseId = filename.replace(/\.[^.]+$/, '');
     const sorted = [...sizes].sort((a, b) => a - b);
     const match = sorted.find((s) => s >= displayWidth) ?? sorted[sorted.length - 1];

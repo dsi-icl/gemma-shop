@@ -13,10 +13,29 @@ import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
 
-const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff']);
+const ALLOWED_IMAGE_EXTS = new Set([
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.gif',
+    '.webp',
+    '.bmp',
+    '.tiff',
+    '.svg'
+]);
 const ALLOWED_VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv']);
 const ALLOWED_FONT_EXTS = new Set(['.woff2']);
 const FFMPEG_COMMAND = process.env.FFMPEG_PATH || 'ffmpeg';
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+    '.tiff': 'image/tiff',
+    '.svg': 'image/svg+xml'
+};
 
 type DetectedType = 'image' | 'video' | 'woff2' | null;
 
@@ -222,9 +241,11 @@ const tusServer = new Server({
                 const finalPath = join(ASSET_DIR, assetFilename);
                 await copyFile(tusFilePath, finalPath);
 
-                mimeType = `image/${ext.slice(1)}`;
+                mimeType = IMAGE_MIME_BY_EXT[ext] ?? `image/${ext.slice(1)}`;
                 blurhash = await computeBlurhash(finalPath);
-                sizes = await generateVariants(finalPath, upload.id);
+                if (ext !== '.svg') {
+                    sizes = await generateVariants(finalPath, upload.id);
+                }
             } else if (isVideo) {
                 // ── Video: transcode + generate preview ──
                 assetFilename = `${upload.id}.mp4`;

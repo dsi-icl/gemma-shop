@@ -22,6 +22,8 @@ function selectPreviewImageSrc(
     if (!sizes?.length) return prefixed;
 
     const filename = prefixed.split('/').pop() ?? '';
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext === 'svg') return prefixed;
     const baseId = filename.replace(/\.[^.]+$/, '').replace(/_\d+$/, '');
     const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio ?? 1) : 1;
     const targetPx = Math.ceil(Math.min(viewportWidth, viewportHeight) * dpr);

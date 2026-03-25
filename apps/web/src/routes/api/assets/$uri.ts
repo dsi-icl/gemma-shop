@@ -16,7 +16,8 @@ const MIME_TYPES: Record<string, string> = {
     '.jpeg': 'image/jpeg',
     '.png': 'image/png',
     '.gif': 'image/gif',
-    '.webp': 'image/webp'
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml'
 };
 
 const getResponse = createServerOnlyFn(
