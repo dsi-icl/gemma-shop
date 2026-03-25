@@ -121,12 +121,23 @@ export async function listPublishedProjects() {
     }
 
     return serialized.map((project) => {
-        const heroFilename = normalizeAssetFilename(project.heroImages?.[0]);
-        const heroMeta = heroFilename ? heroMetaByFilename.get(heroFilename) : undefined;
+        const heroImageMeta = (Array.isArray(project.heroImages) ? project.heroImages : [])
+            .map((src) => {
+                const filename = normalizeAssetFilename(src);
+                const meta = filename ? heroMetaByFilename.get(filename) : undefined;
+                return {
+                    src,
+                    blurhash: meta?.blurhash,
+                    sizes: meta?.sizes
+                };
+            })
+            .filter((entry) => Boolean(entry.src));
+        const firstHeroMeta = heroImageMeta[0];
         return {
             ...project,
-            heroImageBlurhash: heroMeta?.blurhash,
-            heroImageSizes: heroMeta?.sizes
+            heroImageBlurhash: firstHeroMeta?.blurhash,
+            heroImageSizes: firstHeroMeta?.sizes,
+            heroImageMeta
         };
     });
 }

@@ -365,7 +365,32 @@ function HomePage() {
                 publishedCommitId: p.publishedCommitId,
                 imageUrl: p.heroImages[0] ?? '',
                 blurhash: (p as { heroImageBlurhash?: string }).heroImageBlurhash,
-                sizes: (p as { heroImageSizes?: number[] }).heroImageSizes
+                sizes: (p as { heroImageSizes?: number[] }).heroImageSizes,
+                images: (() => {
+                    const heroImages = Array.isArray(p.heroImages) ? p.heroImages : [];
+                    const metaBySrc = new Map(
+                        (
+                            (
+                                p as {
+                                    heroImageMeta?: Array<{
+                                        src: string;
+                                        blurhash?: string;
+                                        sizes?: number[];
+                                    }>;
+                                }
+                            ).heroImageMeta ?? []
+                        ).map((entry) => [entry.src, entry])
+                    );
+
+                    return heroImages.map((src) => {
+                        const meta = metaBySrc.get(src);
+                        return {
+                            src,
+                            blurhash: meta?.blurhash,
+                            sizes: meta?.sizes
+                        };
+                    });
+                })()
             })),
         [publishedProjects]
     );

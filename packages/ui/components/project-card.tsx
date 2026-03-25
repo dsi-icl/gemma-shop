@@ -31,6 +31,11 @@ export interface Project {
     imageUrl?: string;
     blurhash?: string;
     sizes?: number[];
+    images?: Array<{
+        src: string;
+        blurhash?: string;
+        sizes?: number[];
+    }>;
     customControlUrl?: string;
 }
 
@@ -220,6 +225,7 @@ function ProjectCardDialogBody({
                         src={project.imageUrl}
                         blurhash={project.blurhash}
                         sizes={project.sizes}
+                        images={project.images}
                         alt={project.name}
                         state={'opened'}
                         className="h-52 w-full object-cover"
@@ -425,6 +431,7 @@ export function ProjectCard({
                     src={project.imageUrl}
                     blurhash={project.blurhash}
                     sizes={project.sizes}
+                    images={project.images}
                     alt={project.name}
                     state={'closed'}
                     className="h-48 w-full object-cover"
@@ -461,9 +468,7 @@ export function ProjectCard({
                         borderRadius: '24px'
                     }}
                     className="pointer-events-auto relative mx-auto flex h-auto w-md flex-col overflow-hidden border"
-                    minimizedPreviewSrc={project.imageUrl}
                     minimizedPreviewBlurhash={project.blurhash}
-                    minimizedPreviewSizes={project.sizes}
                     minimizedLabel={project.name}
                 >
                     <ProjectCardDialogBody

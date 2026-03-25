@@ -330,9 +330,7 @@ export type MorphingDialogContentProps = {
     children: React.ReactNode;
     className?: string;
     style?: React.CSSProperties;
-    minimizedPreviewSrc?: string;
     minimizedPreviewBlurhash?: string;
-    minimizedPreviewSizes?: number[];
     minimizedLabel?: string;
 };
 
@@ -340,9 +338,7 @@ function MorphingDialogContent({
     children,
     className,
     style,
-    minimizedPreviewSrc,
     minimizedPreviewBlurhash,
-    minimizedPreviewSizes,
     minimizedLabel
 }: MorphingDialogContentProps) {
     const { state, close, fullscreen, isOpen, uniqueId, triggerRef } = useMorphingDialog();
@@ -633,16 +629,99 @@ export type MorphingDialogImageProps = {
     src?: string;
     blurhash?: string;
     sizes?: number[];
+    images?: Array<{
+        src: string;
+        blurhash?: string;
+        sizes?: number[];
+    }>;
     alt: string;
     className?: string;
     state?: 'opened' | 'closed';
     style?: React.CSSProperties;
 };
 
+function RotatingProjectImages({
+    images,
+    alt
+}: {
+    images: Array<{
+        src: string;
+        blurhash?: string;
+        sizes?: number[];
+    }>;
+    alt: string;
+}) {
+    const [activeIndex, setActiveIndex] = useState(0);
+
+    const buildRandomOrder = useCallback((length: number) => {
+        const order = Array.from({ length }, (_, i) => i);
+        for (let i = order.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [order[i], order[j]] = [order[j], order[i]];
+        }
+        return order;
+    }, []);
+
+    useEffect(() => {
+        if (images.length <= 1) return;
+
+        let timeoutId: number | null = null;
+        let cancelled = false;
+        let order = buildRandomOrder(images.length);
+        let cursor = 0;
+
+        setActiveIndex(order[0] ?? 0);
+
+        const scheduleNext = () => {
+            const delayMs = 5000 + Math.floor(Math.random() * 5001);
+            timeoutId = window.setTimeout(() => {
+                if (cancelled) return;
+                cursor += 1;
+                if (cursor >= order.length) {
+                    order = buildRandomOrder(images.length);
+                    cursor = 0;
+                }
+                setActiveIndex(order[cursor] ?? 0);
+                scheduleNext();
+            }, delayMs);
+        };
+
+        scheduleNext();
+
+        return () => {
+            cancelled = true;
+            if (timeoutId !== null) window.clearTimeout(timeoutId);
+        };
+    }, [images, buildRandomOrder]);
+
+    return (
+        <div className="relative h-full w-full overflow-hidden">
+            {images.map((image, index) => (
+                <div
+                    key={`${image.src}:${index}`}
+                    className={cn(
+                        'absolute inset-0 transition-opacity duration-700',
+                        index === activeIndex ? 'opacity-100' : 'pointer-events-none opacity-0'
+                    )}
+                >
+                    <ProjectImage
+                        src={image.src}
+                        blurhash={image.blurhash}
+                        sizes={image.sizes}
+                        alt={alt}
+                        className="h-full w-full"
+                    />
+                </div>
+            ))}
+        </div>
+    );
+}
+
 function MorphingDialogImage({
     src,
     blurhash,
     sizes,
+    images,
     alt,
     className,
     style,
@@ -650,7 +729,14 @@ function MorphingDialogImage({
 }: MorphingDialogImageProps) {
     const { uniqueId } = useMorphingDialog();
 
-    if (!src)
+    const normalizedImages =
+        images && images.length > 0
+            ? images.filter((image) => Boolean(image.src))
+            : src
+              ? [{ src, blurhash, sizes }]
+              : [];
+
+    if (normalizedImages.length === 0)
         return (
             <AnimatedBlurPattern
                 key={src}
@@ -663,13 +749,7 @@ function MorphingDialogImage({
         );
     return (
         <motion.div className={cn(className)} layoutId={`dialog-img-${uniqueId}`} style={style}>
-            <ProjectImage
-                src={src}
-                blurhash={blurhash}
-                sizes={sizes}
-                alt={alt}
-                className="h-full w-full"
-            />
+            <RotatingProjectImages images={normalizedImages} alt={alt} />
         </motion.div>
     );
 }
