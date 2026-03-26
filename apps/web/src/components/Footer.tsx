@@ -27,7 +27,7 @@ export function Footer() {
                 >
                     <HeartIcon weight="bold" className="mb-0.5 inline align-middle" />
                 </a>
-                {' · '}All rights reserved.
+                {' · '}All rights reserved{' · '}
                 <Link className="underline" to="/legal/notices">
                     Third-party notices
                 </Link>
