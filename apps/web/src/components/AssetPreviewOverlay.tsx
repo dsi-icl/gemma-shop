@@ -93,15 +93,15 @@ function AssetPreviewOverlayInner({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
             >
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="absolute -top-3 -right-3 z-30 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition-colors hover:bg-black/90"
-                    aria-label="Close preview"
-                >
-                    <XIcon size={16} />
-                </button>
                 <div className="relative overflow-hidden rounded-lg" style={frameStyle}>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="absolute top-5 right-5 z-30 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition-colors hover:bg-black/90"
+                        aria-label="Close preview"
+                    >
+                        <XIcon size={16} />
+                    </button>
                     {blurhash ? (
                         <Blurhash
                             hash={blurhash}
