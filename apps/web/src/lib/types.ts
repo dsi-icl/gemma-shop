@@ -260,7 +260,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         projectId: z.string().optional(),
         commitId: z.string().optional(),
         slideId: z.string().optional(),
-        customRenderUrl: z.string().optional(),
+        customRenderUrl: z.string().nullish(),
         boundSource: z.enum(['live', 'gallery']).optional()
     }),
     z.object({
