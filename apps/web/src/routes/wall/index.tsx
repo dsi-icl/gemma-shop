@@ -17,6 +17,7 @@ const COLS = 16;
 const ROWS = 4;
 const HYDRATE_FADE_MS = 1000;
 const HYDRATE_IFRAME_TIMEOUT_MS = 2000;
+const warmedImageUrls = new Set<string>();
 
 function getLineBounds(line: number[]) {
     let minX = Infinity;
@@ -146,12 +147,14 @@ function WallApp() {
         iframeGateRef.current = null;
     };
 
-    const countExpectedIframes = (
+    const countExpectedGatedResources = (
         nextLayers: LayerWithWallComponentState[],
         nextCustomRenderUrl?: string
     ) => {
         if (nextCustomRenderUrl) return 1;
-        return nextLayers.filter((layer) => layer.config.visible && layer.type === 'web').length;
+        return nextLayers.filter(
+            (layer) => layer.config.visible && (layer.type === 'web' || layer.type === 'image')
+        ).length;
     };
 
     const beginFadeIn = () => {
@@ -172,7 +175,7 @@ function WallApp() {
                 setCustomRenderUrl(queued.customRenderUrl);
                 setCustomRenderCompat(queued.customRenderCompat);
                 setCustomRenderProxy(queued.customRenderProxy);
-                const expected = countExpectedIframes(queued.layers, queued.customRenderUrl);
+                const expected = countExpectedGatedResources(queued.layers, queued.customRenderUrl);
                 if (expected <= 0) {
                     beginFadeIn();
                     return;
@@ -211,7 +214,7 @@ function WallApp() {
             setCustomRenderUrl(next.customRenderUrl);
             setCustomRenderCompat(next.customRenderCompat);
             setCustomRenderProxy(next.customRenderProxy);
-            const expected = countExpectedIframes(next.layers, next.customRenderUrl);
+            const expected = countExpectedGatedResources(next.layers, next.customRenderUrl);
             if (expected <= 0) {
                 beginFadeIn();
                 return;
@@ -255,6 +258,14 @@ function WallApp() {
     useEffect(() => {
         const unsubscribe = engine?.subscribeToLayoutUpdates((data) => {
             if (data.type === 'hydrate') {
+                // Eagerly warm the browser cache for image URLs before React mounts them
+                for (const layer of data.layers) {
+                    if (layer.type === 'image' && layer.url && !warmedImageUrls.has(layer.url)) {
+                        warmedImageUrls.add(layer.url);
+                        const img = new Image();
+                        img.src = layer.url;
+                    }
+                }
                 stageHydrateRef.current?.({
                     layers: data.layers,
                     customRenderUrl: data.customRender?.url,
@@ -262,6 +273,16 @@ function WallApp() {
                     customRenderProxy: Boolean(data.customRender?.proxy)
                 });
             } else if (data.type === 'upsert_layer') {
+                // Eagerly warm the browser cache for incoming image layers
+                if (
+                    data.layer.type === 'image' &&
+                    data.layer.url &&
+                    !warmedImageUrls.has(data.layer.url)
+                ) {
+                    warmedImageUrls.add(data.layer.url);
+                    const img = new Image();
+                    img.src = data.layer.url;
+                }
                 setLayers((prev) => {
                     const existing = prev.find((l) => l.numericId === data.layer.numericId);
                     const nextLayer =
@@ -452,7 +473,14 @@ function WallApp() {
                             alt={`Layer ${layer.numericId}`}
                             width="100%"
                             height="100%"
+                            decoding="async"
                             className="block h-full w-full object-fill"
+                            onLoad={() =>
+                                markIframeReady(`img:${layer.numericId}`, iframeGateCycle)
+                            }
+                            onError={() =>
+                                markIframeReady(`img:${layer.numericId}`, iframeGateCycle)
+                            }
                         />
                     </div>
                 );
@@ -542,6 +570,7 @@ function WallApp() {
                         key={layer.numericId}
                         {...commonProps}
                         src={layer.url}
+                        preload="auto"
                         muted
                         playsInline
                         loop={layer.loop ?? true}
