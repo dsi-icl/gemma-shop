@@ -1,5 +1,6 @@
 'use client';
 
+import { TriangleDashedIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState, useMemo, useRef, type CSSProperties } from 'react';
 
@@ -106,25 +107,24 @@ function WallApp() {
         Record<string, { ok: boolean; reason?: string; fallback?: string }>
     >({});
     const isClient = typeof window !== 'undefined';
-    const wallId = useMemo(() => {
+    const searchParams = useMemo(() => {
         if (!isClient) return null;
-        const params = new URLSearchParams(window.location.search);
-        return params.get('w');
+        return new URLSearchParams(window.location.search);
     }, [isClient]);
-    const showVisualDebugger = useMemo(() => {
-        if (!isClient) return false;
-        const params = new URLSearchParams(window.location.search);
-        return params.get('m') === 'dev';
-    }, [isClient]);
+    const wallId = useMemo(() => searchParams?.get('w') ?? null, [searchParams]);
+    const hasMissingParams = useMemo(() => {
+        if (!searchParams) return true;
+        return !searchParams.has('w') || !searchParams.has('c') || !searchParams.has('r');
+    }, [searchParams]);
+    const showVisualDebugger = useMemo(() => searchParams?.get('m') === 'dev', [searchParams]);
 
     const myViewport = useMemo<Viewport>(() => {
-        if (!isClient) return { x: 0, y: 0, w: SCREEN_W, h: SCREEN_H };
-        const params = new URLSearchParams(window.location.search);
-        const col = parseInt(params.get('c') || '0');
-        const row = parseInt(params.get('r') || '0');
+        if (!searchParams) return { x: 0, y: 0, w: SCREEN_W, h: SCREEN_H };
+        const col = parseInt(searchParams.get('c') || '0');
+        const row = parseInt(searchParams.get('r') || '0');
 
         return { x: col * SCREEN_W, y: row * SCREEN_H, w: SCREEN_W, h: SCREEN_H };
-    }, [isClient]);
+    }, [searchParams]);
 
     // Initialize Engine with this screen's specific physical location
     const engine = useMemo(
@@ -442,7 +442,13 @@ function WallApp() {
         };
     }, [layers, frameabilityByUrl]);
 
-    if (!engine) return null;
+    if (hasMissingParams || !engine)
+        return (
+            <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-neutral-900 text-neutral-400">
+                <TriangleDashedIcon size={64} weight="thin" />
+                <p className="text-lg">This screen hasn't been assigned a position yet</p>
+            </div>
+        );
 
     const stage = layers
         .filter((layer) => layer.config.visible)
