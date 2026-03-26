@@ -23,6 +23,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { toast } from 'sonner';
 
+import { SubHeaderSlotOutlet, SubHeaderSlotProvider } from '~/lib/subHeaderSlot';
 import {
     $ensureMutableHead,
     $getCommit,
@@ -50,6 +51,29 @@ const ALL_TABS: { key: TabKey; label: string; to: string; icon: any }[] = [
 ];
 
 const CUSTOM_RENDER_HIDDEN_TABS: ReadonlySet<TabKey> = new Set(['commits', 'assets']);
+
+const TAB_SUBHEADERS: Record<TabKey, { title: string; description?: string }> = {
+    info: {
+        title: 'Project Information',
+        description: 'Manage projects metadata and gallery images.'
+    },
+    permissions: {
+        title: 'Collaborators',
+        description: 'Manage who can view or edit this project.'
+    },
+    commits: {
+        title: 'Commit History',
+        description: 'Select a commit to publish it to the public gallery.'
+    },
+    history: {
+        title: 'Audit Log',
+        description: 'A record of all changes made to this project.'
+    },
+    assets: {
+        title: 'Project Media',
+        description: 'Manage the media assets associated with this project.'
+    }
+};
 
 const slidePanelVariants = {
     enter: () => ({
@@ -107,107 +131,136 @@ function ProjectLayout() {
     });
 
     return (
-        <div className="mx-auto -mt-24 flex min-h-svh w-full max-w-6xl flex-col px-6 pt-18 pb-6">
-            <div className="mb-6 flex items-center gap-3">
-                <Button
-                    render={<Link to="/quarry" />}
-                    variant="ghost"
-                    size="icon-sm"
-                    nativeButton={false}
-                    className="w-5 justify-start"
-                >
-                    <ArrowLeftIcon />
-                </Button>
-                <h2 className="text-xl font-semibold">{project.name}</h2>
-                {project.publishedCommitId && (
-                    <Badge variant="default" className="text-xs">
-                        Published
-                    </Badge>
-                )}
-                {!hasCustomRender && (
-                    <Button
-                        variant="default"
-                        size="sm"
-                        className="ml-auto"
-                        onClick={async () => {
-                            const headCommitId = await $ensureMutableHead({
-                                data: { projectId }
-                            });
-                            const commit = await $getCommit({ data: { id: headCommitId } });
-                            const firstSlideId = commit?.content?.slides?.[0]?.id ?? 'default';
-                            navigate({
-                                to: '/quarry/editor/$projectId/$commitId/$slideId',
-                                params: { projectId, commitId: headCommitId, slideId: firstSlideId }
-                            });
+        <SubHeaderSlotProvider>
+            <div className="flex h-full flex-col overflow-hidden pt-14 pb-14">
+                <div className="mx-auto w-full max-w-6xl shrink-0 px-6 pt-4">
+                    <div className="mb-6 flex items-center gap-3">
+                        <Button
+                            render={<Link to="/quarry" />}
+                            variant="ghost"
+                            size="icon-sm"
+                            nativeButton={false}
+                            className="w-5 justify-start"
+                        >
+                            <ArrowLeftIcon />
+                        </Button>
+                        <h2 className="text-xl font-semibold">{project.name}</h2>
+                        {project.publishedCommitId && (
+                            <Badge variant="default" className="text-xs">
+                                Published
+                            </Badge>
+                        )}
+                        {!hasCustomRender && (
+                            <Button
+                                variant="default"
+                                size="sm"
+                                className="ml-auto"
+                                onClick={async () => {
+                                    const headCommitId = await $ensureMutableHead({
+                                        data: { projectId }
+                                    });
+                                    const commit = await $getCommit({ data: { id: headCommitId } });
+                                    const firstSlideId =
+                                        commit?.content?.slides?.[0]?.id ?? 'default';
+                                    navigate({
+                                        to: '/quarry/editor/$projectId/$commitId/$slideId',
+                                        params: {
+                                            projectId,
+                                            commitId: headCommitId,
+                                            slideId: firstSlideId
+                                        }
+                                    });
+                                }}
+                            >
+                                <PencilSimpleIcon weight="bold" /> Edit
+                            </Button>
+                        )}
+                        {hasCustomRender &&
+                            (project.publishedCommitId ? (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="ml-auto"
+                                    disabled={unpublishCustomRender.isPending}
+                                    onClick={() => unpublishCustomRender.mutate()}
+                                >
+                                    <GlobeIcon weight="bold" /> Unpublish
+                                </Button>
+                            ) : (
+                                <Button
+                                    variant="default"
+                                    size="sm"
+                                    className="ml-auto"
+                                    disabled={publishCustomRender.isPending}
+                                    onClick={() => publishCustomRender.mutate()}
+                                >
+                                    <GlobeIcon weight="bold" /> Publish
+                                </Button>
+                            ))}
+                    </div>
+
+                    <Tabs
+                        value={currentTab}
+                        onValueChange={(value) => {
+                            const tab = tabs.find((t) => t.key === value);
+                            if (tab) {
+                                navigate({
+                                    from: '/quarry/projects/$projectId',
+                                    to: tab.to
+                                });
+                            }
                         }}
+                        className="mb-0"
                     >
-                        <PencilSimpleIcon weight="bold" /> Edit
-                    </Button>
-                )}
-                {hasCustomRender &&
-                    (project.publishedCommitId ? (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="ml-auto"
-                            disabled={unpublishCustomRender.isPending}
-                            onClick={() => unpublishCustomRender.mutate()}
-                        >
-                            <GlobeIcon weight="bold" /> Unpublish
-                        </Button>
-                    ) : (
-                        <Button
-                            variant="default"
-                            size="sm"
-                            className="ml-auto"
-                            disabled={publishCustomRender.isPending}
-                            onClick={() => publishCustomRender.mutate()}
-                        >
-                            <GlobeIcon weight="bold" /> Publish
-                        </Button>
-                    ))}
-            </div>
+                        <TabsList variant="line">
+                            {tabs.map((tab) => (
+                                <TabsTrigger key={tab.key} value={tab.key}>
+                                    <span className="flex items-center gap-1.5">
+                                        <tab.icon size={14} />
+                                        {tab.label}
+                                    </span>
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </Tabs>
 
-            <Tabs
-                value={currentTab}
-                onValueChange={(value) => {
-                    const tab = tabs.find((t) => t.key === value);
-                    if (tab) {
-                        navigate({
-                            from: '/quarry/projects/$projectId',
-                            to: tab.to
-                        });
-                    }
-                }}
-                className="mb-6"
-            >
-                <TabsList variant="line">
-                    {tabs.map((tab) => (
-                        <TabsTrigger key={tab.key} value={tab.key}>
-                            <span className="flex items-center gap-1.5">
-                                <tab.icon size={14} />
-                                {tab.label}
-                            </span>
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
-            </Tabs>
+                    <div className="mt-6 flex items-start justify-between">
+                        <div>
+                            <h3 className="text-base font-medium">
+                                {TAB_SUBHEADERS[currentTab].title}
+                            </h3>
+                            {TAB_SUBHEADERS[currentTab].description && (
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {TAB_SUBHEADERS[currentTab].description}
+                                </p>
+                            )}
+                        </div>
+                        <SubHeaderSlotOutlet />
+                    </div>
+                </div>
 
-            <div className="relative grid">
-                <AnimatePresence mode="sync" initial={false}>
-                    <motion.div
-                        key={resolvedPathname}
-                        className="col-start-1 row-start-1 w-full"
-                        variants={slidePanelVariants}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                    >
-                        <Outlet />
-                    </motion.div>
-                </AnimatePresence>
+                <div className="relative mx-auto min-h-0 w-full max-w-6xl flex-1">
+                    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-linear-to-b from-background to-transparent" />
+                    <div className="scrollbar-none h-full overflow-y-auto px-6 pt-8 pb-6">
+                        <div className="relative grid">
+                            <AnimatePresence mode="sync" initial={false}>
+                                <motion.div
+                                    key={resolvedPathname}
+                                    className="col-start-1 row-start-1 w-full"
+                                    variants={slidePanelVariants}
+                                    initial="enter"
+                                    animate="center"
+                                    exit="exit"
+                                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                                >
+                                    <Outlet />
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
+                    </div>
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-linear-to-t from-background to-transparent" />
+                </div>
             </div>
-        </div>
+        </SubHeaderSlotProvider>
     );
 }

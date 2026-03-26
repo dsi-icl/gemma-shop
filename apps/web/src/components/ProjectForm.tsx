@@ -24,8 +24,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { AssetLibrary } from '~/components/AssetLibrary';
+import { AssetPreviewPortal, isVideoAsset } from '~/components/AssetPreviewOverlay';
 import { ProjectImage } from '~/components/ProjectImage';
-import { projectTagSuggestionsQueryOptions } from '~/server/projects.queries';
+import {
+    projectAssetsQueryOptions,
+    projectTagSuggestionsQueryOptions
+} from '~/server/projects.queries';
 
 interface ProjectFormProps {
     projectId?: string;
@@ -63,9 +67,20 @@ export function ProjectForm({
 }: ProjectFormProps) {
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
     const [heroSelectionDraft, setHeroSelectionDraft] = useState<string[] | null>(null);
+    const [heroPreview, setHeroPreview] = useState<{
+        src: string;
+        name: string;
+        isVideo: boolean;
+        blurhash?: string;
+        sizes?: number[];
+    } | null>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastSubmittedSignatureRef = useRef('');
     const { data: tagSuggestions = [] } = useQuery(projectTagSuggestionsQueryOptions());
+    const { data: projectAssets = [] } = useQuery({
+        ...projectAssetsQueryOptions(projectId || ''),
+        enabled: Boolean(projectId)
+    });
 
     const form = useForm({
         defaultValues: {
@@ -137,6 +152,18 @@ export function ProjectForm({
     }, [flushAutoSave]);
 
     const normalizeHero = useCallback((value: string) => value.replace(/^\/api\/assets\//, ''), []);
+    const toAssetSrc = useCallback((value: string) => {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+        return trimmed.startsWith('/api/assets/') ? trimmed : `/api/assets/${trimmed}`;
+    }, []);
+    const findAssetByUrl = useCallback(
+        (value: string) => {
+            const normalized = normalizeHero(value);
+            return projectAssets.find((asset) => normalizeHero(asset.url) === normalized);
+        },
+        [normalizeHero, projectAssets]
+    );
     const getNormalizedHeroSelection = useCallback(
         () => form.getFieldValue('heroImages').map(normalizeHero),
         [form, normalizeHero]
@@ -430,10 +457,31 @@ export function ProjectForm({
                                                 alt={`Hero ${i + 1}`}
                                                 className="h-24 w-full rounded-lg"
                                                 imgClassName="object-cover"
+                                                onClick={() => {
+                                                    const asset = findAssetByUrl(url);
+                                                    const src = toAssetSrc(asset?.url ?? url);
+
+                                                    setHeroPreview({
+                                                        src,
+                                                        name: asset?.name ?? normalizeHero(url),
+                                                        isVideo: asset
+                                                            ? isVideoAsset({
+                                                                  name: asset.name,
+                                                                  mimeType:
+                                                                      asset.mimeType ?? undefined
+                                                              })
+                                                            : false,
+                                                        blurhash: asset?.blurhash ?? undefined,
+                                                        sizes: asset?.sizes ?? undefined
+                                                    });
+                                                }}
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => removeImage(i)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    removeImage(i);
+                                                }}
                                                 className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100"
                                             >
                                                 <TrashIcon className="size-3" />
@@ -491,6 +539,7 @@ export function ProjectForm({
                     </div>
                 </DialogContent>
             </Dialog>
+            <AssetPreviewPortal preview={heroPreview} onClose={() => setHeroPreview(null)} />
 
             <div className="flex justify-start">
                 <Button type="submit" disabled={isSubmitting || !form.state.isValid}>

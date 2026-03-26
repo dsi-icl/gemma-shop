@@ -26,12 +26,6 @@ function InfoTab() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div>
-                <h3 className="mb-1 text-base font-medium">Project Information</h3>
-                <p className="text-sm text-muted-foreground">
-                    Manage projects metadata and gallery images.
-                </p>
-            </div>
             <ProjectForm
                 projectId={projectId}
                 defaultValues={{

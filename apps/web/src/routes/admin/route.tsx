@@ -20,6 +20,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { Suspense } from 'react';
 
+import { SubHeaderSlotOutlet, SubHeaderSlotProvider } from '~/lib/subHeaderSlot';
 import { $finalizeFirstAdminForCurrentUser } from '~/server/bootstrap.fns';
 
 export const Route = createFileRoute('/admin')({
@@ -63,6 +64,21 @@ const TAB_ORDER = {
 
 type AdminTabKey = keyof typeof TAB_ORDER;
 
+const TAB_SUBHEADERS: Record<AdminTabKey, { title: string; description?: string }> = {
+    users: { title: 'Users' },
+    projects: { title: 'Projects' },
+    walls: { title: 'Walls' },
+    assets: {
+        title: 'Public Media Library',
+        description: 'Assets uploaded here are visible in every project\u2019s media library.'
+    },
+    config: {
+        title: 'Configuration',
+        description: 'Secrets are encrypted at rest in the config collection.'
+    },
+    stats: { title: 'Stats' }
+};
+
 const slidePanelVariants = {
     enter: () => ({
         opacity: 0,
@@ -96,61 +112,85 @@ function AdminLayout() {
     });
 
     return (
-        <div className="mx-auto flex min-h-svh w-full max-w-6xl flex-col px-6 pt-18 pb-6">
-            <div className="mb-6 flex items-center gap-3">
-                <CastleTurretIcon size={18} />
-                <h2 className="text-xl font-semibold">Administration</h2>
-            </div>
+        <SubHeaderSlotProvider>
+            <div className="flex h-full flex-col overflow-hidden pt-14 pb-14">
+                <div className="mx-auto w-full max-w-6xl shrink-0 px-6 pt-4">
+                    <div className="mb-6 flex items-center gap-3">
+                        <CastleTurretIcon size={18} />
+                        <h2 className="text-xl font-semibold">Administration</h2>
+                    </div>
 
-            <Tabs
-                value={currentTab}
-                onValueChange={(value) => {
-                    const tab = NAV.find((t) => t.to.split('/').pop() === value);
-                    if (!tab) return;
-                    navigate({ to: tab.to as any });
-                }}
-                className="mb-6"
-            >
-                <TabsList variant="line">
-                    {NAV.map(({ to, label, icon: Icon }) => {
-                        const key = to.split('/').pop() as AdminTabKey;
-                        return (
-                            <TabsTrigger key={to} value={key}>
-                                <span className="flex items-center gap-1.5">
-                                    <Icon size={14} />
-                                    {label}
-                                </span>
-                            </TabsTrigger>
-                        );
-                    })}
-                </TabsList>
-            </Tabs>
-
-            <div className="relative grid min-h-0 flex-1">
-                <AnimatePresence mode="sync" initial={false}>
-                    <motion.div
-                        key={resolvedPathname}
-                        className="col-start-1 row-start-1 w-full"
-                        variants={slidePanelVariants}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    <Tabs
+                        value={currentTab}
+                        onValueChange={(value) => {
+                            const tab = NAV.find((t) => t.to.split('/').pop() === value);
+                            if (!tab) return;
+                            navigate({ to: tab.to as any });
+                        }}
+                        className="mb-0"
                     >
-                        <Suspense
-                            fallback={
-                                <div className="space-y-3">
-                                    <div className="h-7 w-40 animate-pulse rounded bg-muted" />
-                                    <div className="h-40 animate-pulse rounded-xl border border-border bg-muted/30" />
-                                    <div className="h-40 animate-pulse rounded-xl border border-border bg-muted/30" />
-                                </div>
-                            }
-                        >
-                            <Outlet />
-                        </Suspense>
-                    </motion.div>
-                </AnimatePresence>
+                        <TabsList variant="line">
+                            {NAV.map(({ to, label, icon: Icon }) => {
+                                const key = to.split('/').pop() as AdminTabKey;
+                                return (
+                                    <TabsTrigger key={to} value={key}>
+                                        <span className="flex items-center gap-1.5">
+                                            <Icon size={14} />
+                                            {label}
+                                        </span>
+                                    </TabsTrigger>
+                                );
+                            })}
+                        </TabsList>
+                    </Tabs>
+
+                    <div className="mt-6 flex items-start justify-between">
+                        <div>
+                            <h3 className="text-base font-medium">
+                                {TAB_SUBHEADERS[currentTab].title}
+                            </h3>
+                            {TAB_SUBHEADERS[currentTab].description && (
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {TAB_SUBHEADERS[currentTab].description}
+                                </p>
+                            )}
+                        </div>
+                        <SubHeaderSlotOutlet />
+                    </div>
+                </div>
+
+                <div className="relative mx-auto min-h-0 w-full max-w-6xl flex-1">
+                    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-linear-to-b from-background to-transparent" />
+                    <div className="scrollbar-none h-full overflow-y-auto px-6 pt-8 pb-6">
+                        <div className="relative grid">
+                            <AnimatePresence mode="sync" initial={false}>
+                                <motion.div
+                                    key={resolvedPathname}
+                                    className="col-start-1 row-start-1 w-full"
+                                    variants={slidePanelVariants}
+                                    initial="enter"
+                                    animate="center"
+                                    exit="exit"
+                                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                                >
+                                    <Suspense
+                                        fallback={
+                                            <div className="space-y-3">
+                                                <div className="h-7 w-40 animate-pulse rounded bg-muted" />
+                                                <div className="h-40 animate-pulse rounded-xl border border-border bg-muted/30" />
+                                                <div className="h-40 animate-pulse rounded-xl border border-border bg-muted/30" />
+                                            </div>
+                                        }
+                                    >
+                                        <Outlet />
+                                    </Suspense>
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
+                    </div>
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-linear-to-t from-background to-transparent" />
+                </div>
             </div>
-        </div>
+        </SubHeaderSlotProvider>
     );
 }

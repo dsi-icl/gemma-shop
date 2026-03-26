@@ -1,25 +1,29 @@
 import {
+    CaretUpDownIcon,
     DownloadIcon,
     EyeIcon,
+    FileIcon,
     FileTextIcon,
     ImageIcon,
     ListIcon,
     RowsIcon,
     SquaresFourIcon,
-    TrashIcon
+    TrashIcon,
+    VideoCameraIcon
 } from '@phosphor-icons/react';
+import type { Asset } from '@repo/db/schema';
 import { Button } from '@repo/ui/components/button';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow
-} from '@repo/ui/components/table';
 import { useLocalStorageValue } from '@repo/ui/hooks/use-localstorage-value';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
+import {
+    createColumnHelper,
+    flexRender,
+    getCoreRowModel,
+    getSortedRowModel,
+    useReactTable,
+    type SortingState
+} from '@tanstack/react-table';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -30,9 +34,12 @@ import { UploadDialog } from '~/components/UploadDialog';
 import { PUBLIC_ASSET_PROJECT_ID } from '~/lib/constants';
 import { isFontAsset, sortAssetsFontsLast } from '~/lib/mediaUtils';
 import { toLocalDateTimeString } from '~/lib/safeDate';
+import { useSubHeaderSlot } from '~/lib/subHeaderSlot';
 import { $adminDeletePublicAsset, $adminGetUploadToken } from '~/server/admin.fns';
 import { adminPublicAssetsQueryOptions } from '~/server/admin.queries';
 import { $revokeUploadToken } from '~/server/projects.fns';
+
+const assetColumnHelper = createColumnHelper<Asset>();
 
 export const Route = createFileRoute('/admin/assets')({
     component: AdminAssetsPage,
@@ -70,6 +77,7 @@ function AdminAssetsTab() {
         'admin-assets-kind-filter',
         'media'
     );
+    const [sorting, setSorting] = useState<SortingState>([]);
     const [hydrated] = useState(() => typeof window !== 'undefined');
     const [preview, setPreview] = useState<{
         src: string;
@@ -126,6 +134,205 @@ function AdminAssetsTab() {
     };
 
     const uploadTrigger = <Button variant="outline">Upload assets</Button>;
+    const getAssetTypeLabel = (asset: { mimeType?: string | null; name: string }) =>
+        asset.mimeType || (isFontAsset(asset) ? 'font/woff2' : 'application/octet-stream');
+    const getAssetTypeIcon = (asset: { mimeType?: string | null; name: string }) => {
+        const type = getAssetTypeLabel(asset);
+        if (type.startsWith('image/')) return ImageIcon;
+        if (type.startsWith('video/')) return VideoCameraIcon;
+        if (type.startsWith('font/')) return FileTextIcon;
+        return FileIcon;
+    };
+
+    const columns = useMemo(
+        () => [
+            assetColumnHelper.display({
+                id: 'thumbnail',
+                header: '',
+                size: 50,
+                cell: (info) => {
+                    const asset = info.row.original;
+                    return (
+                        <div className="size-8 shrink-0 overflow-hidden rounded bg-muted">
+                            {isFontAsset(asset) ? (
+                                <FontPlaceholder name={asset.name} className="h-full w-full" />
+                            ) : (
+                                <ProjectImage
+                                    src={asset.previewUrl ?? asset.url}
+                                    blurhash={asset.blurhash ?? undefined}
+                                    sizes={asset.sizes ?? undefined}
+                                    alt={asset.name}
+                                    className="h-full w-full"
+                                    imgClassName="object-cover"
+                                />
+                            )}
+                        </div>
+                    );
+                },
+                enableSorting: false
+            }),
+            assetColumnHelper.accessor('name', {
+                header: ({ column }) => (
+                    <button
+                        type="button"
+                        className="flex items-center gap-1"
+                        onClick={() => column.toggleSorting()}
+                    >
+                        Name <CaretUpDownIcon className="size-3" />
+                    </button>
+                ),
+                cell: (info) => {
+                    const asset = info.row.original;
+                    const TypeIcon = getAssetTypeIcon(asset);
+                    return (
+                        <div>
+                            <span className="font-medium">{info.getValue()}</span>
+                            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                                <TypeIcon size={12} className="shrink-0" />
+                                {getAssetTypeLabel(asset)}
+                            </p>
+                        </div>
+                    );
+                }
+            }),
+            assetColumnHelper.accessor('size', {
+                header: ({ column }) => (
+                    <button
+                        type="button"
+                        className="flex items-center gap-1"
+                        onClick={() => column.toggleSorting()}
+                    >
+                        Size <CaretUpDownIcon className="size-3" />
+                    </button>
+                ),
+                cell: (info) => {
+                    const bytes = info.getValue();
+                    const display =
+                        bytes >= 1048576
+                            ? `${(bytes / 1048576).toFixed(1)} MB`
+                            : `${(bytes / 1024).toFixed(1)} KB`;
+                    return <span className="text-muted-foreground">{display}</span>;
+                }
+            }),
+            assetColumnHelper.accessor('createdAt', {
+                header: ({ column }) => (
+                    <button
+                        type="button"
+                        className="flex items-center gap-1"
+                        onClick={() => column.toggleSorting()}
+                    >
+                        Created <CaretUpDownIcon className="size-3" />
+                    </button>
+                ),
+                cell: (info) => (
+                    <span className="text-muted-foreground">
+                        {toLocalDateTimeString(info.getValue())}
+                    </span>
+                )
+            }),
+            assetColumnHelper.display({
+                id: 'actions',
+                cell: (info) => {
+                    const asset = info.row.original;
+                    return (
+                        <div className="flex items-center justify-end gap-0.5">
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => openPreview(asset)}
+                                disabled={isFontAsset(asset)}
+                                title="Preview"
+                            >
+                                <EyeIcon />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => handleDownload(asset)}
+                                title="Download"
+                            >
+                                <DownloadIcon />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => deleteAssetMutation.mutate(asset._id)}
+                                disabled={deleteAssetMutation.isPending}
+                                title="Delete"
+                            >
+                                <TrashIcon />
+                            </Button>
+                        </div>
+                    );
+                }
+            })
+        ],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [deleteAssetMutation.isPending]
+    );
+
+    // oxlint-disable-next-line
+    const table = useReactTable({
+        data: displayedAssets as Asset[],
+        columns,
+        state: { sorting },
+        onSortingChange: setSorting,
+        getCoreRowModel: getCoreRowModel(),
+        getSortedRowModel: getSortedRowModel()
+    });
+
+    useSubHeaderSlot(
+        hydrated ? (
+            <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 rounded-lg border p-1">
+                    <Button
+                        variant={kindFilter === 'media' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setKindFilter('media')}
+                    >
+                        <ImageIcon size={14} /> Media
+                    </Button>
+                    <Button
+                        variant={kindFilter === 'font' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setKindFilter('font')}
+                    >
+                        <FileTextIcon size={14} /> Fonts
+                    </Button>
+                </div>
+                <div className="flex items-center gap-1 rounded-lg border p-1">
+                    <Button
+                        variant={view === 'list' ? 'secondary' : 'ghost'}
+                        size="icon-sm"
+                        onClick={() => setView('list')}
+                    >
+                        <ListIcon />
+                    </Button>
+                    <Button
+                        variant={view === 'list-preview' ? 'secondary' : 'ghost'}
+                        size="icon-sm"
+                        onClick={() => setView('list-preview')}
+                    >
+                        <RowsIcon />
+                    </Button>
+                    <Button
+                        variant={view === 'grid' ? 'secondary' : 'ghost'}
+                        size="icon-sm"
+                        onClick={() => setView('grid')}
+                    >
+                        <SquaresFourIcon />
+                    </Button>
+                </div>
+                <UploadDialog
+                    projectId={PUBLIC_ASSET_PROJECT_ID}
+                    trigger={uploadTrigger}
+                    createTokenFn={() => $adminGetUploadToken()}
+                    revokeTokenFn={(token) => $revokeUploadToken({ data: { token } })}
+                    onUploadComplete={handleUploadComplete}
+                />
+            </div>
+        ) : null
+    );
 
     if (!hydrated) {
         return <AdminAssetsSkeleton />;
@@ -133,63 +340,6 @@ function AdminAssetsTab() {
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="flex items-start justify-between">
-                <div>
-                    <h3 className="mb-1 text-base font-medium">Public Media Library</h3>
-                    <p className="text-sm text-muted-foreground">
-                        Assets uploaded here are visible in every project's media library.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 rounded-lg border p-1">
-                        <Button
-                            variant={kindFilter === 'media' ? 'secondary' : 'ghost'}
-                            size="sm"
-                            onClick={() => setKindFilter('media')}
-                        >
-                            <ImageIcon size={14} /> Media
-                        </Button>
-                        <Button
-                            variant={kindFilter === 'font' ? 'secondary' : 'ghost'}
-                            size="sm"
-                            onClick={() => setKindFilter('font')}
-                        >
-                            <FileTextIcon size={14} /> Fonts
-                        </Button>
-                    </div>
-                    <div className="flex items-center gap-1 rounded-lg border p-1">
-                        <Button
-                            variant={view === 'list' ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setView('list')}
-                        >
-                            <ListIcon />
-                        </Button>
-                        <Button
-                            variant={view === 'list-preview' ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setView('list-preview')}
-                        >
-                            <RowsIcon />
-                        </Button>
-                        <Button
-                            variant={view === 'grid' ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setView('grid')}
-                        >
-                            <SquaresFourIcon />
-                        </Button>
-                    </div>
-                    <UploadDialog
-                        projectId={PUBLIC_ASSET_PROJECT_ID}
-                        trigger={uploadTrigger}
-                        createTokenFn={() => $adminGetUploadToken()}
-                        revokeTokenFn={(token) => $revokeUploadToken({ data: { token } })}
-                        onUploadComplete={handleUploadComplete}
-                    />
-                </div>
-            </div>
-
             {displayedAssets.length === 0 && (
                 <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed text-muted-foreground">
                     <p>{kindFilter === 'font' ? 'No public fonts yet' : 'No public media yet'}</p>
@@ -209,59 +359,44 @@ function AdminAssetsTab() {
 
             {view === 'list' && displayedAssets.length > 0 && (
                 <div className="overflow-hidden rounded-2xl border">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Size</TableHead>
-                                <TableHead>Created At</TableHead>
-                                <TableHead className="w-28" />
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {displayedAssets.map((asset: any) => (
-                                <TableRow key={asset._id}>
-                                    <TableCell className="font-medium">{asset.name}</TableCell>
-                                    <TableCell>{isFontAsset(asset) ? 'font' : 'media'}</TableCell>
-                                    <TableCell>{(asset.size / 1024).toFixed(2)} KB</TableCell>
-                                    <TableCell>{toLocalDateTimeString(asset.createdAt)}</TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-0.5">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon-sm"
-                                                onClick={() => openPreview(asset)}
-                                                disabled={isFontAsset(asset)}
-                                                title="Preview"
-                                            >
-                                                <EyeIcon />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon-sm"
-                                                onClick={() => handleDownload(asset)}
-                                                title="Download"
-                                            >
-                                                <DownloadIcon />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon-sm"
-                                                onClick={() =>
-                                                    deleteAssetMutation.mutate(asset._id)
-                                                }
-                                                disabled={deleteAssetMutation.isPending}
-                                                title="Delete"
-                                            >
-                                                <TrashIcon />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
+                    <table className="w-full text-sm">
+                        <thead>
+                            {table.getHeaderGroups().map((headerGroup) => (
+                                <tr key={headerGroup.id} className="border-b bg-muted/50 text-left">
+                                    {headerGroup.headers.map((header) => (
+                                        <th
+                                            key={header.id}
+                                            className="px-4 py-2.5 font-medium text-muted-foreground"
+                                        >
+                                            {header.isPlaceholder
+                                                ? null
+                                                : flexRender(
+                                                      header.column.columnDef.header,
+                                                      header.getContext()
+                                                  )}
+                                        </th>
+                                    ))}
+                                </tr>
                             ))}
-                        </TableBody>
-                    </Table>
+                        </thead>
+                        <tbody>
+                            {table.getRowModel().rows.map((row) => (
+                                <tr
+                                    key={row.id}
+                                    className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
+                                >
+                                    {row.getVisibleCells().map((cell) => (
+                                        <td key={cell.id} className="px-4 py-2">
+                                            {flexRender(
+                                                cell.column.columnDef.cell,
+                                                cell.getContext()
+                                            )}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
 

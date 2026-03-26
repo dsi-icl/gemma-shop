@@ -27,13 +27,6 @@ function HistoryTab() {
 
     return (
         <div className="flex flex-col gap-4">
-            <div>
-                <h3 className="mb-1 text-base font-medium">Audit Log</h3>
-                <p className="text-sm text-muted-foreground">
-                    A record of all changes made to this project.
-                </p>
-            </div>
-
             <div className="space-y-3">
                 {logs.map((log) => (
                     <div

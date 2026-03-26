@@ -59,11 +59,6 @@ function AdminConfig() {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-xl font-semibold">Configuration</h1>
-            <p className="text-sm text-muted-foreground">
-                Secrets are encrypted at rest in the <code>config</code> collection.
-            </p>
-
             <div className="overflow-hidden rounded-lg border border-border">
                 <table className="w-full text-sm">
                     <thead className="bg-muted/50 text-muted-foreground">

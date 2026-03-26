@@ -79,13 +79,6 @@ function PermissionsTab() {
     ];
     return (
         <div className="flex flex-col gap-6">
-            <div>
-                <h3 className="mb-1 text-base font-medium">Collaborators</h3>
-                <p className="text-sm text-muted-foreground">
-                    Manage who can view or edit this project.
-                </p>
-            </div>
-
             <div className="flex items-center gap-2">
                 <Input
                     type="email"
@@ -141,7 +134,7 @@ function PermissionsTab() {
                                 <TableCell>
                                     <Select
                                         items={items}
-                                        value={role}
+                                        value={c.role}
                                         onValueChange={(value) =>
                                             changeRole(c.email, value as CollaboratorRole)
                                         }

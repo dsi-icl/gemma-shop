@@ -31,7 +31,6 @@ function AdminWalls() {
 
     return (
         <div>
-            <h1 className="mb-4 text-xl font-semibold">Walls</h1>
             {walls.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                     No walls registered

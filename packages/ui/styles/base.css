@@ -144,6 +144,13 @@
         @apply select-text;
     }
 
+    .scrollbar-none {
+        scrollbar-width: none;
+        &::-webkit-scrollbar {
+            display: none;
+        }
+    }
+
     .bg-checkerboard {
         --checker-size: 20px;
         background-color: var(--checker-bg);

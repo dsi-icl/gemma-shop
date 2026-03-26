@@ -214,13 +214,6 @@ function CommitsTab() {
 
     return (
         <div className="flex flex-col gap-4">
-            <div>
-                <h3 className="mb-1 text-base font-medium">Commit History</h3>
-                <p className="text-sm text-muted-foreground">
-                    Select a commit to publish it to the public gallery.
-                </p>
-            </div>
-
             <div className="overflow-hidden rounded-2xl border">
                 <Table>
                     <TableHeader>

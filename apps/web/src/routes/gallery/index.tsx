@@ -460,7 +460,7 @@ function HomePage() {
     }, [autoOpenProjectId, activeTag]);
 
     return (
-        <div className="container mx-auto p-4 pt-24">
+        <div className="flex h-full flex-col overflow-hidden pt-14 pb-14">
             {pendingOverride ? (
                 <div className="fixed inset-0 z-80 flex items-center justify-center">
                     <div className="absolute inset-0 bg-background/90" />
@@ -496,8 +496,8 @@ function HomePage() {
                     </div>
                 </div>
             ) : null}
-            <div className="flex flex-col gap-8 md:flex-row">
-                <aside ref={filtersAsideRef} className="w-full md:w-1/5">
+            <div className="flex min-h-0 flex-1 flex-col gap-8 px-4 md:flex-row">
+                <aside ref={filtersAsideRef} className="w-full shrink-0 md:w-1/5">
                     <h2 className="mb-4 text-lg font-semibold">Filters</h2>
                     <div className="flex flex-wrap gap-2 md:flex-col md:flex-nowrap">
                         <Button
@@ -519,48 +519,54 @@ function HomePage() {
                         ))}
                     </div>
                 </aside>
-                <main className="w-full md:w-4/5">
-                    {filteredProjects.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-12 text-muted-foreground">
-                            <p>No published projects yet</p>
-                        </div>
-                    ) : (
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            <AnimatePresence mode="popLayout">
-                                {filteredProjects.map((project) => (
-                                    <motion.div
-                                        key={project._id}
-                                        layout
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.95 }}
-                                        transition={{
-                                            type: 'spring',
-                                            duration: 0.3,
-                                            bounce: 0.2
-                                        }}
-                                    >
-                                        <GalleryProjectCard
-                                            project={project}
-                                            autoOpenSignal={
-                                                autoOpenProjectId === project._id
-                                                    ? autoOpenSignal
-                                                    : null
-                                            }
-                                            forceDemoteFullscreenSignal={liveSessionStartedSignal}
-                                            forceCloseMinimizedSignal={liveSessionStartedSignal}
-                                            forceCloseSignal={
-                                                syncedCloseProjectId === null ||
-                                                syncedCloseProjectId === project._id
-                                                    ? syncedCloseSignal
-                                                    : null
-                                            }
-                                        />
-                                    </motion.div>
-                                ))}
-                            </AnimatePresence>
-                        </div>
-                    )}
+                <main className="relative min-h-0 w-full flex-1 md:w-4/5">
+                    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-linear-to-b from-background to-transparent" />
+                    <div className="scrollbar-none h-full overflow-y-auto py-6">
+                        {filteredProjects.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-12 text-muted-foreground">
+                                <p>No published projects yet</p>
+                            </div>
+                        ) : (
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                <AnimatePresence mode="popLayout">
+                                    {filteredProjects.map((project) => (
+                                        <motion.div
+                                            key={project._id}
+                                            layout
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.95 }}
+                                            transition={{
+                                                type: 'spring',
+                                                duration: 0.3,
+                                                bounce: 0.2
+                                            }}
+                                        >
+                                            <GalleryProjectCard
+                                                project={project}
+                                                autoOpenSignal={
+                                                    autoOpenProjectId === project._id
+                                                        ? autoOpenSignal
+                                                        : null
+                                                }
+                                                forceDemoteFullscreenSignal={
+                                                    liveSessionStartedSignal
+                                                }
+                                                forceCloseMinimizedSignal={liveSessionStartedSignal}
+                                                forceCloseSignal={
+                                                    syncedCloseProjectId === null ||
+                                                    syncedCloseProjectId === project._id
+                                                        ? syncedCloseSignal
+                                                        : null
+                                                }
+                                            />
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
+                            </div>
+                        )}
+                    </div>
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-linear-to-t from-background to-transparent" />
                 </main>
             </div>
         </div>

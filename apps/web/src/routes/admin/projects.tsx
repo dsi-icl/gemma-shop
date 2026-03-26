@@ -16,7 +16,6 @@ function AdminProjects() {
 
     return (
         <div>
-            <h1 className="mb-4 text-xl font-semibold">Projects</h1>
             <div className="overflow-hidden rounded-lg border border-border">
                 <table className="w-full text-sm">
                     <thead className="bg-muted/50 text-muted-foreground">

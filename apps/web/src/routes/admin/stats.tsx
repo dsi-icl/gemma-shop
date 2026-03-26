@@ -125,8 +125,6 @@ function AdminStats() {
 
     return (
         <div className="space-y-6">
-            <h1 className="mb-4 text-xl font-semibold">Stats</h1>
-
             <h2 className="mb-2 text-sm font-medium tracking-wider text-muted-foreground uppercase">
                 Database
             </h2>
