@@ -2,6 +2,7 @@ import {
     ArrowClockwiseIcon,
     ArrowsInIcon,
     ArrowsOutSimpleIcon,
+    BookOpenUserIcon,
     CastleTurretIcon,
     CircleNotchIcon,
     SignOutIcon,
@@ -119,6 +120,11 @@ function HeaderAuthSection() {
 
     return (
         <>
+            <Link to="/quarry">
+                <Button variant="outline">
+                    <BookOpenUserIcon className="h-[1.2rem] w-[1.2rem]" />
+                </Button>
+            </Link>
             {(user as any).role === 'admin' && (
                 <Link to="/admin">
                     <Button variant="outline" size="icon" title="Administration">
