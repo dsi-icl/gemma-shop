@@ -460,7 +460,7 @@ function HomePage() {
     }, [autoOpenProjectId, activeTag]);
 
     return (
-        <div className="flex h-full flex-col overflow-hidden pt-14 pb-14">
+        <div className="flex h-full flex-col overflow-hidden pt-30 pb-30">
             {pendingOverride ? (
                 <div className="fixed inset-0 z-80 flex items-center justify-center">
                     <div className="absolute inset-0 bg-background/90" />
@@ -496,7 +496,7 @@ function HomePage() {
                     </div>
                 </div>
             ) : null}
-            <div className="flex min-h-0 flex-1 flex-col gap-8 px-4 md:flex-row">
+            <div className="flex min-h-0 flex-1 flex-col gap-8 px-8 md:flex-row md:px-[5vw]">
                 <aside ref={filtersAsideRef} className="w-full shrink-0 md:w-1/5">
                     <h2 className="mb-4 text-lg font-semibold">Filters</h2>
                     <div className="flex flex-wrap gap-2 md:flex-col md:flex-nowrap">
@@ -520,14 +520,14 @@ function HomePage() {
                     </div>
                 </aside>
                 <main className="relative min-h-0 w-full flex-1 md:w-4/5">
-                    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-linear-to-b from-background to-transparent" />
+                    <div className="gallery-gradient pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-linear-to-b from-background to-transparent" />
                     <div className="scrollbar-none h-full overflow-y-auto py-6">
                         {filteredProjects.length === 0 ? (
                             <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-12 text-muted-foreground">
                                 <p>No published projects yet</p>
                             </div>
                         ) : (
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                                 <AnimatePresence mode="popLayout">
                                     {filteredProjects.map((project) => (
                                         <motion.div
@@ -566,7 +566,7 @@ function HomePage() {
                             </div>
                         )}
                     </div>
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-linear-to-t from-background to-transparent" />
+                    <div className="gallery-gradient pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-linear-to-t from-background to-transparent" />
                 </main>
             </div>
         </div>

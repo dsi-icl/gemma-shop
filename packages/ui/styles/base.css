@@ -151,6 +151,10 @@
         }
     }
 
+    body:has([data-morphing-dialog-backdrop]) .gallery-gradient {
+        opacity: 0;
+    }
+
     .bg-checkerboard {
         --checker-size: 20px;
         background-color: var(--checker-bg);
