@@ -5,6 +5,7 @@ import {
     BookOpenUserIcon,
     CastleTurretIcon,
     CircleNotchIcon,
+    KanbanIcon,
     SignOutIcon,
     UserIcon
 } from '@phosphor-icons/react';
@@ -120,6 +121,11 @@ function HeaderAuthSection() {
 
     return (
         <>
+            <Link to="/gallery">
+                <Button variant="outline">
+                    <KanbanIcon className="h-[1.2rem] w-[1.2rem]" />
+                </Button>
+            </Link>
             <Link to="/quarry">
                 <Button variant="outline">
                     <BookOpenUserIcon className="h-[1.2rem] w-[1.2rem]" />
