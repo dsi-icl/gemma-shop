@@ -655,7 +655,7 @@ function WallApp() {
 
                 if (layer.shape === 'circle')
                     return (
-                        <div key={layer.numericId} {...commonProps} className="origin-top-left">
+                        <div key={layer.numericId} {...commonProps}>
                             <svg
                                 width={layer.config.width}
                                 height={layer.config.height}
@@ -663,8 +663,8 @@ function WallApp() {
                                 xmlns="http://www.w3.org/2000/svg"
                             >
                                 <circle
-                                    cx={0}
-                                    cy={0}
+                                    cx={layer.config.width / 2}
+                                    cy={layer.config.height / 2}
                                     r={layer.config.width / 2}
                                     fill={layer.fill}
                                     stroke={layer.strokeColor}
