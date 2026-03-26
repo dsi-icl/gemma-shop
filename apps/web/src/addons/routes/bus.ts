@@ -718,6 +718,42 @@ handlers.set('stage_dirty', ({ scopeId }) => {
     if (scope) scope.dirty = true;
 });
 
+handlers.set('leave_scope', ({ entry }) => {
+    const meta = unregisterPeer(entry.peer.id);
+    if (meta?.specimen !== 'editor') return;
+
+    const remainingEditors = editorsByScope.get(meta.scopeId)?.size ?? 0;
+    if (remainingEditors <= 0) {
+        for (const [wallId, boundScopeId] of wallBindings) {
+            if (boundScopeId !== meta.scopeId) continue;
+            if (wallBindingSources.get(wallId) !== 'live') continue;
+
+            unbindWall(wallId);
+            hydrateWallNodes(wallId);
+            broadcastToControllersByWallRaw(
+                wallId,
+                JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
+            );
+            notifyControllers(wallId, false);
+            void db.collection('walls').updateOne(
+                { wallId },
+                {
+                    $set: {
+                        boundProjectId: null,
+                        boundCommitId: null,
+                        boundSlideId: null,
+                        boundSource: null,
+                        updatedAt: new Date().toISOString()
+                    }
+                }
+            );
+            broadcastWallBindingToEditors(wallId);
+            broadcastWallBindingToGalleries(wallId);
+        }
+    }
+    logPeerCounts();
+});
+
 handlers.set('stage_save', ({ entry, data, scopeId }) => {
     if (scopeId === null) {
         sendJSON(entry.peer, {

@@ -13,6 +13,7 @@ import { LayerList } from '~/components/LayerList';
 import { MainBoard } from '~/components/MainBoard';
 import { ParametersPanel } from '~/components/ParametersPanel';
 import { SlideList } from '~/components/SlideList';
+import { EditorEngine } from '~/lib/editorEngine';
 import { useEditorStore } from '~/lib/editorStore';
 import { projectQueryOptions } from '~/server/projects.queries';
 
@@ -76,6 +77,13 @@ function SlideEditorInner({
         loadProject(projectId, commitId, slideId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projectId, commitId, loadProject]);
+
+    // Leave the live scope when navigating away from the editor
+    useEffect(() => {
+        return () => {
+            EditorEngine.getInstance().leaveScope();
+        };
+    }, []);
 
     // Ctrl+S keyboard shortcut for manual save
     const handleKeyboardSave = useCallback((e: KeyboardEvent) => {

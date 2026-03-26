@@ -330,6 +330,15 @@ export class EditorEngine {
         }
     }
 
+    public leaveScope() {
+        if (!this.currentProjectId) return;
+        this.sendJSON({ type: 'leave_scope' });
+        this.currentProjectId = null;
+        this.currentCommitId = null;
+        this.currentSlideId = null;
+        this.playbackStates.clear();
+    }
+
     /** Request the bus to save the current scope state */
     public requestSave(message: string, isAutoSave = false) {
         this.sendJSON({ type: 'stage_save', message, isAutoSave });

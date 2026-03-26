@@ -245,6 +245,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         error: z.string().optional()
     }),
     z.object({ type: z.literal('stage_dirty') }),
+    z.object({ type: z.literal('leave_scope') }),
     z.object({
         type: z.literal('bind_wall'),
         wallId: z.string(),
