@@ -402,6 +402,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                     <>
                         <TipButton
                             tip="Back to project"
+                            nativeButton={false}
                             render={
                                 <Link to="/quarry/projects/$projectId" params={{ projectId }} />
                             }
