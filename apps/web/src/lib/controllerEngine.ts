@@ -219,7 +219,7 @@ export class ControllerEngine {
                 projectId: data.projectId,
                 commitId: data.commitId,
                 slideId: data.slideId,
-                customRenderUrl: data.customRenderUrl,
+                customRenderUrl: data.customRenderUrl ?? undefined,
                 boundSource: data.boundSource ?? this.reconciledBinding.boundSource
             };
             this.latestCommitId = data.commitId ?? this.latestCommitId;
