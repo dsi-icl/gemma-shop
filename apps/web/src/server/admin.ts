@@ -12,6 +12,10 @@ import {
 } from '~/lib/busState';
 import { collections } from '~/server/collections';
 import { adminEnrollDeviceBySignature, adminListDevices } from '~/server/devices';
+import { serializeForClient } from '~/server/serialization';
+import { serializeAsset } from '~/server/serializers/asset.serializer';
+import { serializeProject } from '~/server/serializers/project.serializer';
+import { serializeWall } from '~/server/serializers/wall.serializer';
 
 let prevCpuUsage = process.cpuUsage();
 let prevCpuAt = process.hrtime.bigint();
@@ -20,34 +24,6 @@ let prevBusSample: {
     incomingTotal: number;
     outgoingTotal: number;
 } | null = null;
-
-function serializeForClient<T>(value: T): T {
-    if (value instanceof ObjectId) {
-        return value.toHexString() as T;
-    }
-    if (value instanceof Date) {
-        return value.toISOString() as T;
-    }
-    if (Array.isArray(value)) {
-        return value.map((item) => serializeForClient(item)) as T;
-    }
-    if (value && typeof value === 'object') {
-        const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            out[k] = serializeForClient(v);
-        }
-        return out as T;
-    }
-    return value;
-}
-
-function serializeAsset(doc: any) {
-    return serializeForClient({
-        ...doc,
-        _id: doc._id.toHexString(),
-        projectId: doc.projectId?.toString?.() ?? String(doc.projectId ?? '')
-    });
-}
 
 function escapeRegex(input: string): string {
     return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -101,12 +77,7 @@ export async function adminListUsers() {
 export async function adminListProjects() {
     const projects = collections.projects;
     const docs = await projects.find().sort({ updatedAt: -1 }).toArray();
-    return docs.map((doc) =>
-        serializeForClient({
-            ...doc,
-            _id: doc._id.toHexString()
-        })
-    );
+    return docs.map((doc) => serializeProject(doc as Record<string, unknown>));
 }
 
 export async function adminGetStats() {
@@ -171,13 +142,10 @@ export async function adminGetStats() {
 export async function adminListWalls() {
     const walls = collections.walls;
     const docs = await walls.find().sort({ lastSeen: -1 }).toArray();
-    return docs.map((doc) =>
-        serializeForClient({
-            ...doc,
-            _id: doc._id.toHexString(),
-            connectedNodes: Number(doc.connectedNodes ?? 0)
-        })
-    );
+    return docs.map((doc) => ({
+        ...serializeWall(doc as any),
+        connectedNodes: Number((doc as any).connectedNodes ?? 0)
+    }));
 }
 
 export async function adminCreateWall(input: { wallId: string; name?: string | null }) {
@@ -203,7 +171,7 @@ export async function adminCreateWall(input: { wallId: string; name?: string | n
         updatedAt: now
     };
     const result = await collections.walls.insertOne(doc);
-    return serializeForClient({ ...doc, _id: result.insertedId.toHexString() });
+    return serializeWall({ ...doc, _id: result.insertedId } as any);
 }
 
 export async function adminGetWall(wallId: string) {
@@ -211,11 +179,10 @@ export async function adminGetWall(wallId: string) {
     if (!targetWallId) throw new Error('Wall ID is required');
     const doc = await findWallByIdentifier(targetWallId);
     if (!doc) throw new Error('Wall not found');
-    return serializeForClient({
-        ...doc,
-        _id: doc._id.toHexString(),
+    return {
+        ...serializeWall(doc as any),
         connectedNodes: Number(doc.connectedNodes ?? 0)
-    });
+    };
 }
 
 export async function adminUpdateWallMetadata(input: {
@@ -242,11 +209,10 @@ export async function adminUpdateWallMetadata(input: {
         { returnDocument: 'after' }
     );
     if (!result) throw new Error('Wall not found');
-    return serializeForClient({
-        ...result,
-        _id: result._id.toHexString(),
+    return {
+        ...serializeWall(result as any),
         connectedNodes: Number(result.connectedNodes ?? 0)
-    });
+    };
 }
 
 export async function adminDeleteWall(wallId: string) {
