@@ -756,7 +756,7 @@ export async function deleteSlideFromCommit(commitId: string, slideId: string): 
     return true;
 }
 
-function assertCanView(doc: Record<string, unknown>, userEmail: string) {
+export function assertCanView(doc: Record<string, unknown>, userEmail: string) {
     const collaborators = (doc.collaborators || []) as Array<{
         email: string;
         role: string;
@@ -767,7 +767,7 @@ function assertCanView(doc: Record<string, unknown>, userEmail: string) {
     }
 }
 
-function assertCanEdit(doc: Record<string, unknown>, userEmail: string) {
+export function assertCanEdit(doc: Record<string, unknown>, userEmail: string) {
     const collaborators = (doc.collaborators || []) as Array<{
         email: string;
         role: string;

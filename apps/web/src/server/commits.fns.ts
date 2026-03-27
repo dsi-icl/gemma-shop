@@ -1,8 +1,11 @@
+import { authMiddleware } from '@repo/auth/tanstack/middleware';
 import { db } from '@repo/db';
 import { CommitSchema } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
+
+import { assertCanEdit, assertCanView, getProject } from './projects';
 
 function serializeForClient<T>(value: T): T {
     if (value instanceof ObjectId) {
@@ -32,11 +35,17 @@ export const revertToVersion = createServerFn({ method: 'POST' })
             reason: z.string().optional().default('Reverted to previous version')
         })
     )
-    .handler(async ({ data }) => {
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
         const projectId = new ObjectId(data.projectId);
         const targetCommitId = new ObjectId(data.targetCommitId);
 
-        // 1. Fetch the Target Commit (the data we want to restore)
+        // 1. Verify project access
+        const projectDoc = await getProject(data.projectId);
+        if (!projectDoc) throw new Error('Project not found');
+        assertCanEdit(projectDoc, context.user.email);
+
+        // 2. Fetch the Target Commit (the data we want to restore)
         const targetCommit = await db.collection('commits').findOne({
             _id: targetCommitId,
             projectId: projectId
@@ -44,11 +53,11 @@ export const revertToVersion = createServerFn({ method: 'POST' })
 
         if (!targetCommit) throw new Error('Commit not found');
 
-        // 2. Fetch the Current Project State
+        // 3. Fetch the Current Project State (raw doc for headCommitId)
         const project = await db.collection('projects').findOne({ _id: projectId });
         if (!project) throw new Error('Project not found');
 
-        // 3. Create a NEW Commit (This is the "Revert" node)
+        // 4. Create a NEW Commit (This is the "Revert" node)
         const revertCommit = CommitSchema.parse({
             projectId: projectId,
             parentId: project.headCommitId, // Current head becomes the parent
@@ -60,7 +69,7 @@ export const revertToVersion = createServerFn({ method: 'POST' })
 
         const commitResult = await db.collection('commits').insertOne(revertCommit);
 
-        // 4. Update the Project Pointer to the new Revert Commit
+        // 5. Update the Project Pointer to the new Revert Commit
         await db.collection('projects').updateOne(
             { _id: projectId },
             {
@@ -81,11 +90,13 @@ export const saveNamedVersion = createServerFn({ method: 'POST' })
             isAutoSave: z.boolean().optional().default(false)
         })
     )
-    .handler(async ({ data }) => {
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
         const projectId = new ObjectId(data.projectId);
 
-        const project = await db.collection('projects').findOne({ _id: projectId });
+        const project = await getProject(data.projectId);
         if (!project) throw new Error('Project not found');
+        assertCanEdit(project, context.user.email);
 
         // 1. Create a brand new commit node
         const newCommit = {
@@ -116,7 +127,12 @@ export const saveNamedVersion = createServerFn({ method: 'POST' })
 
 export const getProjectHistory = createServerFn({ method: 'GET' })
     .inputValidator(z.string()) // projectId
-    .handler(async ({ data: projectId }) => {
+    .middleware([authMiddleware])
+    .handler(async ({ context, data: projectId }) => {
+        const projectDoc = await getProject(projectId);
+        if (!projectDoc) throw new Error('Project not found');
+        assertCanView(projectDoc, context.user.email);
+
         const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
         if (!project) throw new Error('Project not found');
 

@@ -7,6 +7,7 @@ import { createUploadToken, revokeUploadToken, validateUploadToken } from '~/lib
 
 import {
     archiveProject,
+    assertCanEdit,
     copySlideInCommit,
     createAsset,
     createBranchHead,
@@ -188,7 +189,13 @@ export const $copySlideInCommit = createServerFn({ method: 'POST' })
         })
     )
     .middleware([authMiddleware])
-    .handler(async ({ data }) => {
+    .handler(async ({ context, data }) => {
+        const commit = await getCommit(data.commitId);
+        if (!commit) throw new Error('Commit not found');
+        const project = await getProject(commit.projectId);
+        if (!project) throw new Error('Project not found');
+        assertCanEdit(project, context.user.email);
+
         return copySlideInCommit(
             data.commitId,
             data.sourceSlideId,
@@ -200,7 +207,13 @@ export const $copySlideInCommit = createServerFn({ method: 'POST' })
 export const $deleteSlideFromCommit = createServerFn({ method: 'POST' })
     .inputValidator(z.object({ commitId: z.string(), slideId: z.string() }))
     .middleware([authMiddleware])
-    .handler(async ({ data }) => {
+    .handler(async ({ context, data }) => {
+        const commit = await getCommit(data.commitId);
+        if (!commit) throw new Error('Commit not found');
+        const project = await getProject(commit.projectId);
+        if (!project) throw new Error('Project not found');
+        assertCanEdit(project, context.user.email);
+
         return deleteSlideFromCommit(data.commitId, data.slideId);
     });
 
