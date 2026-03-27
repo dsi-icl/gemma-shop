@@ -3,7 +3,7 @@ import { CreateAssetInput, CreateProjectInput, UpdateProjectInput } from '@repo/
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 
-import { createUploadToken, revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
+import { createUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 
 import {
     archiveProject,
@@ -26,6 +26,7 @@ import {
     publishCommit,
     publishCustomRenderProject,
     restoreProject,
+    revokeUploadTokenForActor,
     updateProject
 } from './projects';
 
@@ -216,8 +217,8 @@ export const $createUploadToken = createServerFn({ method: 'POST' })
 export const $revokeUploadToken = createServerFn({ method: 'POST' })
     .inputValidator(z.object({ token: z.string() }))
     .middleware([authMiddleware])
-    .handler(async ({ data }) => {
-        revokeUploadToken(data.token);
+    .handler(async ({ context, data }) => {
+        await revokeUploadTokenForActor(data.token, context.user.email);
     });
 
 export const $validateUploadToken = createServerFn({ method: 'POST' })

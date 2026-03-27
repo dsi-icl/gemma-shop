@@ -10,6 +10,7 @@ import type {
 import { ObjectId } from 'mongodb';
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
+import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 
 const projects = db.collection('projects');
 const auditLogs = db.collection('audit_logs');
@@ -794,6 +795,40 @@ export function assertCanOwn(doc: Record<string, unknown>, userEmail: string) {
     if (!collab || collab.role !== 'owner') {
         throw new Error('You do not have permission to manage this project');
     }
+}
+
+export async function revokeUploadTokenForActor(token: string, actorEmail: string): Promise<void> {
+    const tokenData = validateUploadToken(token);
+    if (!tokenData) return;
+
+    if (tokenData.userEmail === actorEmail) {
+        revokeUploadToken(token);
+        return;
+    }
+
+    const project = await getProject(tokenData.projectId);
+    if (project) {
+        const collaborators = Array.isArray(project.collaborators)
+            ? (project.collaborators as Array<{ email?: string; role?: string }>)
+            : [];
+        const isOwner = collaborators.some(
+            (collaborator) => collaborator.email === actorEmail && collaborator.role === 'owner'
+        );
+        if (isOwner) {
+            revokeUploadToken(token);
+            return;
+        }
+    }
+
+    const admin = await db
+        .collection('user')
+        .findOne({ email: actorEmail, role: 'admin' }, { projection: { _id: 1 } });
+    if (admin) {
+        revokeUploadToken(token);
+        return;
+    }
+
+    throw new Error('You do not have permission to revoke this upload token');
 }
 
 function serializeAsset(doc: Record<string, unknown>): Asset {
