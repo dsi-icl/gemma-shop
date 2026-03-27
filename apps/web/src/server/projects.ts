@@ -315,7 +315,7 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
 export async function archiveProject(id: string, userEmail: string) {
     const existing = await projects.findOne({ _id: new ObjectId(id) });
     if (!existing) throw new Error('Project not found');
-    assertCanEdit(existing, userEmail);
+    assertCanOwn(existing, userEmail);
 
     await projects.updateOne(
         { _id: new ObjectId(id) },
@@ -363,7 +363,7 @@ export async function deleteAsset(assetId: string, userEmail: string) {
 export async function restoreProject(id: string, userEmail: string) {
     const existing = await projects.findOne({ _id: new ObjectId(id) });
     if (!existing) throw new Error('Project not found');
-    assertCanEdit(existing, userEmail);
+    assertCanOwn(existing, userEmail);
 
     await projects.updateOne(
         { _id: new ObjectId(id) },
@@ -585,7 +585,14 @@ export interface SerializedAuditLog {
     createdAt: string;
 }
 
-export async function getAuditLogs(projectId: string): Promise<SerializedAuditLog[]> {
+export async function getAuditLogs(
+    projectId: string,
+    userEmail: string
+): Promise<SerializedAuditLog[]> {
+    const project = await projects.findOne({ _id: new ObjectId(projectId) });
+    if (!project) throw new Error('Project not found');
+    assertCanOwn(project, userEmail);
+
     const docs = await auditLogs
         .find({ projectId: new ObjectId(projectId) })
         .sort({ createdAt: -1 })
@@ -775,6 +782,17 @@ function assertCanEdit(doc: Record<string, unknown>, userEmail: string) {
     const collab = collaborators.find((c) => c.email === userEmail);
     if (!collab || collab.role === 'viewer') {
         throw new Error('You do not have permission to edit this project');
+    }
+}
+
+export function assertCanOwn(doc: Record<string, unknown>, userEmail: string) {
+    const collaborators = (doc.collaborators || []) as Array<{
+        email: string;
+        role: string;
+    }>;
+    const collab = collaborators.find((c) => c.email === userEmail);
+    if (!collab || collab.role !== 'owner') {
+        throw new Error('You do not have permission to manage this project');
     }
 }
 
