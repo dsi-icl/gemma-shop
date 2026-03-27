@@ -3,12 +3,15 @@ import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { basename, join, extname } from 'path';
 
+import { auth } from '@repo/auth/auth';
 import { db } from '@repo/db';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerOnlyFn } from '@tanstack/react-start';
+import { ObjectId } from 'mongodb';
 
 import { ASSET_MIME_TYPES } from '~/lib/assetMime';
 import { ASSET_DIR } from '~/lib/serverVariables';
+import { assertCanView } from '~/server/projects';
 
 function parseVariantFilename(filename: string): { baseId: string; requested: number } | null {
     const m = filename.match(/^(.*)_([0-9]+)\.webp$/i);
@@ -22,23 +25,66 @@ function escapeRegex(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-async function chooseVariantFallbackFilename(requestedFilename: string): Promise<string | null> {
-    const parsed = parseVariantFilename(requestedFilename);
-    if (!parsed) return null;
+function deriveRootId(filename: string): string | null {
+    const parsedVariant = parseVariantFilename(filename);
+    if (parsedVariant) return parsedVariant.baseId;
+    const dot = filename.lastIndexOf('.');
+    if (dot <= 0) return null;
+    return filename.slice(0, dot);
+}
 
-    const { baseId, requested } = parsed;
-    const escapedBase = escapeRegex(baseId);
+interface AssetAccessContext {
+    rootId: string;
+    assetDoc: {
+        projectId?: unknown;
+        public?: boolean;
+        url?: string;
+        previewUrl?: string;
+        sizes?: unknown[];
+    };
+}
 
-    const assetMeta = (await db.collection('assets').findOne(
+async function resolveAssetAccessContext(
+    requestedFilename: string
+): Promise<AssetAccessContext | null> {
+    const rootId = deriveRootId(requestedFilename);
+    if (!rootId) return null;
+
+    const escapedBase = escapeRegex(rootId);
+    const assetDoc = (await db.collection('assets').findOne(
         {
             $or: [
+                { url: requestedFilename },
+                { previewUrl: requestedFilename },
                 { url: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } },
                 { previewUrl: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } }
             ]
         },
-        { projection: { url: 1, previewUrl: 1, sizes: 1 } }
-    )) as { url?: string; previewUrl?: string; sizes?: unknown[] } | null;
-    if (!assetMeta) return null;
+        {
+            projection: {
+                projectId: 1,
+                public: 1,
+                url: 1,
+                previewUrl: 1,
+                sizes: 1
+            }
+        }
+    )) as AssetAccessContext['assetDoc'] | null;
+    if (!assetDoc) return null;
+
+    return { rootId, assetDoc };
+}
+
+async function chooseVariantFallbackFilename(
+    requestedFilename: string,
+    ctx: AssetAccessContext
+): Promise<string | null> {
+    const parsed = parseVariantFilename(requestedFilename);
+    if (!parsed || parsed.baseId !== ctx.rootId) return null;
+
+    const { requested } = parsed;
+    const { rootId } = ctx;
+    const assetMeta = ctx.assetDoc;
 
     const sizes = Array.from(
         new Set(
@@ -53,7 +99,7 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
     const candidateSizes = [...smallerOrEqualDesc, ...largerAsc];
 
     for (const size of candidateSizes) {
-        const candidate = `${baseId}_${size}.webp`;
+        const candidate = `${rootId}_${size}.webp`;
         const candidatePath = join(ASSET_DIR, candidate);
         const exists = await stat(candidatePath)
             .then((s) => s.isFile())
@@ -70,17 +116,103 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
     return baseExists ? baseOriginal : null;
 }
 
+function isFilenameAllowedByContext(requestedFilename: string, ctx: AssetAccessContext): boolean {
+    if (requestedFilename === ctx.assetDoc.url || requestedFilename === ctx.assetDoc.previewUrl) {
+        return true;
+    }
+    const parsed = parseVariantFilename(requestedFilename);
+    return Boolean(parsed && parsed.baseId === ctx.rootId);
+}
+
+// TODO Remove this as we finish migrations to new project visibility structure
+function isLegacyPublicProject(project: {
+    tags?: unknown[];
+    publishedCommitId?: unknown;
+}): boolean {
+    const hasPublishedCommit = Boolean(project.publishedCommitId);
+    const tags = Array.isArray(project.tags) ? project.tags : [];
+    const hasPublicTag = tags.some((tag) => typeof tag === 'string' && tag === 'public');
+    return hasPublishedCommit || hasPublicTag;
+}
+
+async function enforceAssetAccessPolicy(
+    ctx: AssetAccessContext,
+    requestedFilename: string,
+    userEmail: string | null
+): Promise<void> {
+    const { assetDoc } = ctx;
+
+    if (assetDoc.public) {
+        return;
+    }
+
+    const projectId =
+        assetDoc.projectId instanceof ObjectId
+            ? assetDoc.projectId
+            : typeof assetDoc.projectId === 'string' && ObjectId.isValid(assetDoc.projectId)
+              ? new ObjectId(assetDoc.projectId)
+              : null;
+    if (!projectId) {
+        return;
+    }
+
+    const project = (await db.collection('projects').findOne(
+        { _id: projectId, deletedAt: { $exists: false } },
+        {
+            projection: {
+                createdBy: 1,
+                collaborators: 1,
+                tags: 1,
+                publishedCommitId: 1
+            }
+        }
+    )) as {
+        createdBy?: string;
+        collaborators?: Array<{ email?: string; role?: string }>;
+        tags?: unknown[];
+        publishedCommitId?: unknown;
+    } | null;
+
+    if (!project) {
+        return;
+    }
+
+    if (isLegacyPublicProject(project)) {
+        return;
+    }
+
+    if (userEmail) {
+        assertCanView(project as Record<string, unknown>, userEmail);
+        return;
+    }
+
+    console.warn(
+        `[Assets] Legacy public read path used for private project asset filename=${requestedFilename}; visibility cutover pending`
+    );
+}
+
 const getResponse = createServerOnlyFn(
     async ({
         uri,
         range,
-        ifNoneMatch
+        ifNoneMatch,
+        userEmail
     }: {
         uri: string;
         range: string | null;
         ifNoneMatch: string | null;
+        userEmail: string | null;
     }) => {
         const requestedFilename = basename(decodeURIComponent(uri));
+        const accessContext = await resolveAssetAccessContext(requestedFilename);
+        if (!accessContext) {
+            return new Response('Not Found', { status: 404 });
+        }
+        if (!isFilenameAllowedByContext(requestedFilename, accessContext)) {
+            return new Response('Not Found', { status: 404 });
+        }
+        await enforceAssetAccessPolicy(accessContext, requestedFilename, userEmail);
+
         let resolvedFilename = requestedFilename;
         let asset = join(ASSET_DIR, resolvedFilename);
 
@@ -90,7 +222,10 @@ const getResponse = createServerOnlyFn(
             if (!stats.isFile()) return new Response('Not Found', { status: 404 });
         } catch (error: any) {
             if (error.code === 'ENOENT') {
-                const fallback = await chooseVariantFallbackFilename(requestedFilename);
+                const fallback = await chooseVariantFallbackFilename(
+                    requestedFilename,
+                    accessContext
+                );
                 if (!fallback) return new Response('Not Found', { status: 404 });
                 resolvedFilename = fallback;
                 asset = join(ASSET_DIR, resolvedFilename);
@@ -186,8 +321,12 @@ export const Route = createFileRoute('/api/assets/$uri')({
                 const { uri } = params ?? {};
                 const range = request.headers.get('range');
                 const ifNoneMatch = request.headers.get('if-none-match');
+                const session = await auth.api.getSession({
+                    headers: request.headers
+                });
+                const userEmail = session?.user?.email ?? null;
 
-                return getResponse({ uri, range, ifNoneMatch });
+                return getResponse({ uri, range, ifNoneMatch, userEmail });
             }
         }
     }
