@@ -456,7 +456,7 @@ function WallApp() {
             // Share the exact same spatial and registry logic across both media types
             const commonProps = {
                 ref: (el: HTMLElement | null) => {
-                    if (el) engine.registerLayer(layer, el);
+                    if (el) engine?.registerLayer(layer, el);
                 },
                 style: {
                     position: 'absolute',

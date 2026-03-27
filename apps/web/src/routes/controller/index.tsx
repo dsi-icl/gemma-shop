@@ -595,7 +595,6 @@ function Controller() {
     const handleTouchMove = useCallback(
         (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
             e.evt.preventDefault();
-            console.log('drawing handleTouchMove', e.evt instanceof MouseEvent, e.evt.buttons);
             if (e.evt instanceof TouchEvent && e.evt.touches.length === 2) {
                 if (e.evt.targetTouches && e.evt.targetTouches.length > 1) {
                     const currentX = e.evt.touches[0].screenX;
