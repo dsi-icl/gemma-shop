@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import { devtools } from '@tanstack/devtools-vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import viteBasicSsl from '@vitejs/plugin-basic-ssl';
 import viteReact from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 import { defineConfig } from 'vite';
@@ -27,9 +28,13 @@ export default defineConfig({
     server: {
         host: '0.0.0.0',
         port: 3670,
-        allowedHosts: ['localhost', '127.0.0.1']
+        allowedHosts: ['localhost', '127.0.0.1'],
+        https: {}
     },
     plugins: [
+        viteBasicSsl({
+            domains: ['gemma.shop.127.0.0.1.nip.io']
+        }),
         ttfPlugin(),
         thirdPartyNoticesPlugin(),
         devtools({
