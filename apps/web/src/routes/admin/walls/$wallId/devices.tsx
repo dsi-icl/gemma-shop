@@ -1,13 +1,13 @@
 import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
-import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { Scanner, type IDetectedBarcode } from '@yudiel/react-qr-scanner';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { $adminDevicesEnrollBySignature } from '~/server/admin.fns';
-import { adminDevicesForWallQueryOptions } from '~/server/admin.queries';
+import { adminDevicesForWallQueryOptions, adminDevicesQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/walls/$wallId/devices')({
     component: WallDevicesTab
@@ -17,6 +17,7 @@ function WallDevicesTab() {
     const { wallId } = Route.useParams();
     const queryClient = useQueryClient();
     const { data: devices = [] } = useSuspenseQuery(adminDevicesForWallQueryOptions(wallId));
+    const { data: allDevices = [] } = useQuery(adminDevicesQueryOptions());
     const [scanDialogOpen, setScanDialogOpen] = useState(false);
     const [scanStatus, setScanStatus] = useState<string>('Ready to scan');
     const [cameraPermission, setCameraPermission] = useState<
@@ -98,26 +99,17 @@ function WallDevicesTab() {
     const parsePayload = (raw: string) => {
         try {
             const parsed = JSON.parse(raw) as {
-                schema?: string;
-                kind?: string;
-                deviceId?: string;
-                signature?: string;
+                did?: string;
+                sig?: string;
             };
-            if (parsed.schema !== 'gc-dev-enroll-v1') return null;
-            if (
-                parsed.kind !== 'wall' &&
-                parsed.kind !== 'gallery' &&
-                parsed.kind !== 'controller'
-            ) {
-                return null;
-            }
-            if (typeof parsed.deviceId !== 'string' || typeof parsed.signature !== 'string') {
+            const deviceId = parsed.did;
+            const signature = parsed.sig;
+            if (typeof deviceId !== 'string' || typeof signature !== 'string') {
                 return null;
             }
             return {
-                deviceId: parsed.deviceId,
-                signature: parsed.signature,
-                kind: parsed.kind
+                deviceId,
+                signature
             } as const;
         } catch {
             return null;
@@ -137,6 +129,13 @@ function WallDevicesTab() {
                 pushEvent('Skipped: QR is not a valid enrollment payload', false);
                 continue;
             }
+            const kind = (
+                allDevices as Array<{ deviceId: string; kind?: 'wall' | 'gallery' | 'controller' }>
+            ).find((d) => d.deviceId === payload.deviceId)?.kind;
+            if (!kind) {
+                pushEvent(`Failed ${payload.deviceId.slice(0, 8)}...: unknown device kind`, false);
+                continue;
+            }
 
             processingRef.current = true;
             try {
@@ -144,7 +143,7 @@ function WallDevicesTab() {
                     data: {
                         deviceId: payload.deviceId,
                         signature: payload.signature,
-                        kind: payload.kind,
+                        kind,
                         wallId
                     }
                 });
