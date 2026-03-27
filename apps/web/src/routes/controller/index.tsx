@@ -116,6 +116,9 @@ function buildLineLayer(
 }
 
 function Controller() {
+    const lastX = useRef(0);
+    const stageLastX = useRef(0);
+
     const stageSlot = useRef<HTMLDivElement>(null);
     const stageInstance = useRef<Konva.Stage>(null);
     const [stageScaleFactor, setStageScaleFactor] = useState(DEFAULT_STAGE_SCALE_FACTOR);
@@ -554,32 +557,33 @@ function Controller() {
     const handleDrawMove = useCallback(
         (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
             if (!canDraw || !isDrawing || currentLine.length < 2) return;
-            if (e.evt instanceof TouchEvent && e.evt.touches.length >= 2) return;
+            if (e.evt instanceof TouchEvent && e.evt.touches.length >= 2) {
+                clearCurrentLine();
+                return;
+            }
+            if (e.evt instanceof MouseEvent && e.evt.buttons !== 1) return;
             const point = getStagePoint(e);
             if (!point) return;
             appendLinePoint(point.x, point.y);
         },
-        [canDraw, isDrawing, currentLine.length, getStagePoint, appendLinePoint]
+        [canDraw, isDrawing, currentLine.length, getStagePoint, appendLinePoint, clearCurrentLine]
     );
 
     const handleDrawEnd = useCallback(() => {
         if (!canDraw || !isDrawing) return;
         const line = consumeCurrentLine();
-        if (line.length > 6) {
+        if (line.length > 4) {
             addLineLayer(line);
         }
-    }, [canDraw, isDrawing, consumeCurrentLine, addLineLayer]);
-
-    const touchScrollStartX = useRef(0);
-    const touchScrollStartLeft = useRef(0);
+        clearCurrentLine();
+    }, [canDraw, isDrawing, consumeCurrentLine, addLineLayer, clearCurrentLine]);
 
     const handleTouchStart = useCallback(
         (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
-            if (e.evt instanceof TouchEvent && e.evt.touches.length >= 2) {
-                const slot = stageSlot.current;
-                if (slot) {
-                    touchScrollStartX.current = e.evt.touches[0].clientX;
-                    touchScrollStartLeft.current = slot.scrollLeft;
+            if (e.evt instanceof TouchEvent && e.evt.touches?.length === 2) {
+                lastX.current = e.evt.touches[0].clientX;
+                if (stageSlot.current) {
+                    stageLastX.current = stageSlot.current.scrollLeft;
                 }
                 return;
             }
@@ -590,14 +594,17 @@ function Controller() {
 
     const handleTouchMove = useCallback(
         (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
-            if (e.evt instanceof TouchEvent && e.evt.touches.length >= 2) {
-                e.evt.preventDefault();
-                const slot = stageSlot.current;
-                if (slot) {
-                    const deltaX = e.evt.touches[0].clientX - touchScrollStartX.current;
-                    slot.scrollLeft = touchScrollStartLeft.current - deltaX;
+            e.evt.preventDefault();
+            console.log('drawing handleTouchMove', e.evt instanceof MouseEvent, e.evt.buttons);
+            if (e.evt instanceof TouchEvent && e.evt.touches.length === 2) {
+                if (e.evt.targetTouches && e.evt.targetTouches.length > 1) {
+                    const currentX = e.evt.touches[0].screenX;
+                    const deltaX = currentX - lastX.current;
+                    if (stageSlot.current) {
+                        stageSlot.current.scrollLeft = stageLastX.current - deltaX;
+                    }
+                    return;
                 }
-                return;
             }
             handleDrawMove(e);
         },
@@ -802,6 +809,7 @@ function Controller() {
                                         onMouseDown={handleDrawStart}
                                         onMouseMove={handleDrawMove}
                                         onMouseUp={handleDrawEnd}
+                                        onMouseLeave={handleDrawEnd}
                                         onWheel={handleStageWheel}
                                         onTouchStart={handleTouchStart}
                                         onTouchMove={handleTouchMove}

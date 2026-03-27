@@ -882,15 +882,19 @@ export function EditorSlate() {
         e.evt.preventDefault();
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
         const isTwoFingerTouch = e.evt instanceof TouchEvent && e.evt.touches.length >= 2;
-        if (isDrawing && !isTwoFingerTouch) {
-            if (e.evt instanceof MouseEvent && e.evt.buttons !== 1) return;
-            const stage = e.target.getStage();
-            const point = stage?.getPointerPosition();
-            if (!point) return;
-            setCurrentLine((l) =>
-                l.concat([point.x / stageScaleFactor, point.y / stageScaleFactor])
-            );
-            return;
+        if (isDrawing) {
+            if (!isTwoFingerTouch) {
+                if (e.evt instanceof MouseEvent && e.evt.buttons !== 1) return;
+                const stage = e.target.getStage();
+                const point = stage?.getPointerPosition();
+                if (!point) return;
+                setCurrentLine((l) =>
+                    l.concat([point.x / stageScaleFactor, point.y / stageScaleFactor])
+                );
+                return;
+            } else {
+                setCurrentLine([]);
+            }
         }
         if (
             e.evt instanceof TouchEvent &&
@@ -981,7 +985,7 @@ export function EditorSlate() {
                 );
         }
         // Without enough point this is probably a missfire
-        if (currentLine.length > 6) {
+        if (currentLine.length > 4) {
             addLineLayer(currentLine);
         }
         setCurrentLine([]);
@@ -1040,6 +1044,7 @@ export function EditorSlate() {
                         onMouseDown={handleStageInteractionStart}
                         onMouseMove={handleTouchMove}
                         onMouseUp={handleTouchEnd}
+                        onMouseLeave={handleTouchEnd}
                         onWheel={handleStageWheel}
                         onTouchStart={handleStageInteractionStart}
                         onTouchMove={handleTouchMove}
