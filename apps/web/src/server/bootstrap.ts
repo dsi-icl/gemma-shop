@@ -3,9 +3,10 @@ import { randomBytes, createHash } from 'node:crypto';
 
 import { render } from '@react-email/render';
 import { createSmtpTransport } from '@repo/auth/smtp';
-import { db } from '@repo/db';
 import { getConfigValue, getSmtpConfig, setConfigValue } from '@repo/db/config';
 import { OtpEmail } from '@repo/emails/OtpEmail';
+
+import { collections } from '~/server/collections';
 
 const PHASE_KEY = 'bootstrap.phase';
 const SETUP_CODE_HASH_KEY = 'bootstrap.setupCodeHash';
@@ -85,11 +86,11 @@ function isExpired(iso: string | null): boolean {
 }
 
 async function getUserCount(): Promise<number> {
-    return db.collection('user').countDocuments();
+    return collections.users.countDocuments();
 }
 
 async function getAdminCount(): Promise<number> {
-    return db.collection('user').countDocuments({ role: 'admin' });
+    return collections.users.countDocuments({ role: 'admin' });
 }
 
 function normalizeSmtpInput(input: BootstrapSmtpInput): BootstrapSmtpInput {
@@ -532,7 +533,7 @@ export async function finalizeFirstAdminForUser(input: {
     if (!claimedEmail) return { promoted: false, reason: 'email_not_claimed' };
     if (claimedEmail !== email) return { promoted: false, reason: 'email_not_claimed_for_user' };
 
-    const users = db.collection('user');
+    const users = collections.users;
     let target = null as null | { _id: unknown; email?: string };
     if (input.userId) {
         target = await users.findOne({ id: input.userId }, { projection: { _id: 1, email: 1 } });

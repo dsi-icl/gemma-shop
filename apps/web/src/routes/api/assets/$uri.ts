@@ -3,12 +3,12 @@ import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { basename, join, extname } from 'path';
 
-import { db } from '@repo/db';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerOnlyFn } from '@tanstack/react-start';
 
 import { ASSET_MIME_TYPES } from '~/lib/assetMime';
 import { ASSET_DIR } from '~/lib/serverVariables';
+import { collections } from '~/server/collections';
 
 function parseVariantFilename(filename: string): { baseId: string; requested: number } | null {
     const m = filename.match(/^(.*)_([0-9]+)\.webp$/i);
@@ -29,7 +29,7 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
     const { baseId, requested } = parsed;
     const escapedBase = escapeRegex(baseId);
 
-    const assetMeta = (await db.collection('assets').findOne(
+    const assetMeta = (await collections.assets.findOne(
         {
             $or: [
                 { url: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } },

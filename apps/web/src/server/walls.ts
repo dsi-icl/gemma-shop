@@ -1,5 +1,4 @@
 import '@tanstack/react-start/server-only';
-import { db } from '@repo/db';
 import type { Wall } from '@repo/db/schema';
 import { ObjectId } from 'mongodb';
 
@@ -14,10 +13,11 @@ import {
     notifyControllers,
     seedScopeFromDb
 } from '~/lib/busState';
+import { collections } from '~/server/collections';
 
-const walls = db.collection('walls');
-const commits = db.collection('commits');
-const projects = db.collection('projects');
+const walls = collections.walls;
+const commits = collections.commits;
+const projects = collections.projects;
 
 function serializeForClient<T>(value: T): T {
     if (value instanceof ObjectId) {

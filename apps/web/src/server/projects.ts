@@ -1,5 +1,4 @@
 import '@tanstack/react-start/server-only';
-import { db } from '@repo/db';
 import type {
     Asset,
     CreateAssetInput,
@@ -11,11 +10,12 @@ import { ObjectId } from 'mongodb';
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
+import { collections } from '~/server/collections';
 
-const projects = db.collection('projects');
-const auditLogs = db.collection('audit_logs');
-const assets = db.collection('assets');
-const commits = db.collection('commits');
+const projects = collections.projects;
+const auditLogs = collections.auditLogs;
+const assets = collections.assets;
+const commits = collections.commits;
 
 function serializeForClient<T>(value: T): T {
     if (value instanceof ObjectId) {
@@ -645,8 +645,7 @@ export interface SerializedCommitWithContent extends SerializedCommit {
 }
 
 export async function getProjectCommits(projectId: string): Promise<SerializedCommit[]> {
-    const commits = db.collection('commits');
-    const docs = await commits
+    const docs = await collections.commits
         .find({ projectId: new ObjectId(projectId) })
         .sort({ createdAt: -1 })
         .toArray();
@@ -830,9 +829,10 @@ export async function revokeUploadTokenForActor(token: string, actorEmail: strin
         }
     }
 
-    const admin = await db
-        .collection('user')
-        .findOne({ email: actorEmail, role: 'admin' }, { projection: { _id: 1 } });
+    const admin = await collections.users.findOne(
+        { email: actorEmail, role: 'admin' },
+        { projection: { _id: 1 } }
+    );
     if (admin) {
         revokeUploadToken(token);
         return;

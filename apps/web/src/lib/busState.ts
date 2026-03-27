@@ -1,8 +1,8 @@
-import { db } from '@repo/db';
 import type { Peer } from 'crossws';
-import { ObjectId } from 'mongodb';
+import { ObjectId, type ChangeStreamDocument } from 'mongodb';
 
 import { makeScopeLabel, type GSMessage, type Layer, type ScopeState } from '~/lib/types';
+import { collections } from '~/server/collections';
 
 import { revokePortalTokensForScope, revokePortalTokensForWall } from './portalTokens';
 
@@ -360,12 +360,9 @@ export function deleteYDocForLayer(scopeId: ScopeId, numericId: number) {
     if (!scope) return;
 
     const ydocScope = `${scope.projectId}_${scope.commitId}_${scope.slideId}_${numericId}`;
-    void db
-        .collection('ydocs')
-        .deleteOne({ scope: ydocScope })
-        .catch((err) => {
-            console.error(`[Bus] Failed to delete ydoc for ${ydocScope}:`, err);
-        });
+    void collections.ydocs.deleteOne({ scope: ydocScope }).catch((err: unknown) => {
+        console.error(`[Bus] Failed to delete ydoc for ${ydocScope}:`, err);
+    });
 }
 
 // Pre-allocated empty hydrate payload (avoids re-stringifying on every call).
@@ -1181,9 +1178,7 @@ export async function seedScopeFromDb(scopeId: ScopeId): Promise<boolean> {
     if (!scope || scope.layers.size > 0) return false;
 
     try {
-        const commit = await db
-            .collection('commits')
-            .findOne({ _id: new ObjectId(scope.commitId) });
+        const commit = await collections.commits.findOne({ _id: new ObjectId(scope.commitId) });
         if (!commit?.content?.slides) return false;
 
         const slide = (commit.content.slides as Array<{ id: string; layers: any[] }>).find(
@@ -1214,9 +1209,7 @@ export async function buildSlidesSnapshot(
     let existingSlides: Array<{ id: string; order: number; layers: Layer[] }> = [];
 
     if (headCommitId) {
-        const headCommit = await db
-            .collection('commits')
-            .findOne({ _id: new ObjectId(headCommitId) });
+        const headCommit = await collections.commits.findOne({ _id: new ObjectId(headCommitId) });
         if (headCommit?.content?.slides) {
             existingSlides = headCommit.content.slides;
         }
@@ -1259,7 +1252,7 @@ export async function saveScope(
         if (scope.commitId) {
             headId = new ObjectId(scope.commitId);
         } else {
-            const project = await db.collection('projects').findOne({ _id: projectId });
+            const project = await collections.projects.findOne({ _id: projectId });
             if (!project?.headCommitId) return { success: false, error: 'No HEAD commit' };
             headId = new ObjectId(project.headCommitId);
         }
@@ -1268,7 +1261,7 @@ export async function saveScope(
 
         if (isAutoSave) {
             // Update the mutable HEAD in place
-            await db.collection('commits').updateOne(
+            await collections.commits.updateOne(
                 { _id: headId },
                 {
                     $set: {
@@ -1296,17 +1289,18 @@ export async function saveScope(
         };
 
         // Preserve HEAD's current parentId chain on the snapshot
-        const currentHead = await db.collection('commits').findOne({ _id: headId });
+        const currentHead = await collections.commits.findOne({ _id: headId });
         if (currentHead?.parentId) {
             snapshot.parentId = new ObjectId(currentHead.parentId);
         }
 
-        const result = await db.collection('commits').insertOne(snapshot);
+        const result = await collections.commits.insertOne(snapshot);
 
         // Pointer swap: HEAD now points at the snapshot
-        await db
-            .collection('commits')
-            .updateOne({ _id: headId }, { $set: { parentId: result.insertedId } });
+        await collections.commits.updateOne(
+            { _id: headId },
+            { $set: { parentId: result.insertedId } }
+        );
 
         scope.dirty = false;
         return { success: true, commitId: result.insertedId.toHexString() };
@@ -1325,7 +1319,7 @@ export async function persistSlideMetadata(
     slides: Array<{ id: string; order: number; name: string }>
 ): Promise<boolean> {
     try {
-        const commit = await db.collection('commits').findOne({ _id: new ObjectId(commitId) });
+        const commit = await collections.commits.findOne({ _id: new ObjectId(commitId) });
         if (!commit?.content?.slides) return false;
 
         const existingSlides: Array<{ id: string; order: number; name: string; layers: any[] }> =
@@ -1354,12 +1348,10 @@ export async function persistSlideMetadata(
         // Sort by order
         updatedSlides.sort((a, b) => a.order - b.order);
 
-        await db
-            .collection('commits')
-            .updateOne(
-                { _id: new ObjectId(commitId) },
-                { $set: { 'content.slides': updatedSlides, updatedAt: new Date() } }
-            );
+        await collections.commits.updateOne(
+            { _id: new ObjectId(commitId) },
+            { $set: { 'content.slides': updatedSlides, updatedAt: new Date() } }
+        );
 
         return true;
     } catch (err) {
@@ -1395,11 +1387,11 @@ export function broadcastAssetToEditorsByProject(
 
 function startAssetChangeStream() {
     try {
-        const changeStream = db
-            .collection('assets')
-            .watch([{ $match: { operationType: 'insert' } }], { fullDocument: 'updateLookup' });
+        const changeStream = collections.assets.watch([{ $match: { operationType: 'insert' } }], {
+            fullDocument: 'updateLookup'
+        });
 
-        changeStream.on('change', (change) => {
+        changeStream.on('change', (change: ChangeStreamDocument) => {
             if (change.operationType === 'insert' && change.fullDocument) {
                 const doc = change.fullDocument;
                 broadcastAssetToEditorsByProject(doc.projectId.toString(), {
@@ -1418,7 +1410,7 @@ function startAssetChangeStream() {
             }
         });
 
-        changeStream.on('error', (err) => {
+        changeStream.on('error', (err: unknown) => {
             console.error('[Bus] Asset change stream error:', err);
         });
 

@@ -2,7 +2,6 @@ import { copyFile, open, stat, unlink } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import { extname, join } from 'node:path';
 
-import { db } from '@repo/db';
 import { createFileRoute } from '@tanstack/react-router';
 import { FileStore } from '@tus/file-store';
 import { Server } from '@tus/server';
@@ -19,6 +18,7 @@ import { enqueueJob } from '~/lib/jobs/repo';
 import { jobSignalBus } from '~/lib/jobs/signalBus';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
+import { collections } from '~/server/collections';
 
 const STRICT_BLOCKING = !['0', 'false', 'off', 'no'].includes(
     (process.env.STRICT_BLOCKING || 'true').toLowerCase()
@@ -231,7 +231,7 @@ const tusServer = new Server({
                     upload.size;
 
                 const isPublicAsset = projectId === PUBLIC_ASSET_PROJECT_ID;
-                const insertResult = await db.collection('assets').insertOne({
+                const insertResult = await collections.assets.insertOne({
                     projectId: new ObjectId(projectId),
                     name: originalName,
                     url: assetFilename,
