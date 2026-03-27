@@ -1,8 +1,11 @@
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
-import { Button } from '@repo/ui/components/button';
-import { createFileRoute, Link, redirect } from '@tanstack/react-router';
+import { useSuspenseQuery } from '@tanstack/react-query';
+import { createFileRoute, useNavigate, redirect } from '@tanstack/react-router';
+import { lazy, Suspense, useMemo } from 'react';
 
 import { publishedProjectsQueryOptions } from '~/server/projects.queries';
+
+const LandingHero = lazy(() => import('~/components/LandingHero'));
 
 export const Route = createFileRoute('/')({
     component: HomePage,
@@ -21,16 +24,40 @@ export const Route = createFileRoute('/')({
 });
 
 function HomePage() {
+    const { data: projects } = useSuspenseQuery(publishedProjectsQueryOptions());
+    const navigate = useNavigate();
+
+    const heroImages = useMemo(
+        () =>
+            projects.flatMap((p) => {
+                const images = Array.isArray(p.heroImages) ? p.heroImages : [];
+                const metaBySrc = new Map(
+                    (
+                        (
+                            p as {
+                                heroImageMeta?: Array<{ src: string; sizes?: number[] }>;
+                            }
+                        ).heroImageMeta ?? []
+                    ).map((entry) => [entry.src, entry])
+                );
+                return images.map((src) => ({
+                    src,
+                    sizes: metaBySrc.get(src)?.sizes
+                }));
+            }),
+        [projects]
+    );
+
     return (
-        <div className="container mx-auto h-full min-h-full p-4 pt-24">
-            <div className="flex h-full flex-col items-center justify-center gap-8 align-middle">
-                <Link to="/gallery">
-                    <Button>Gallery</Button>
-                </Link>
-                <Link to="/quarry">
-                    <Button>Projects</Button>
-                </Link>
-            </div>
+        <div
+            className="relative h-screen w-screen overflow-hidden"
+            onClick={() => navigate({ to: '/gallery' })}
+        >
+            <Suspense
+                fallback={<div className="h-full w-full" style={{ backgroundColor: '#111' }} />}
+            >
+                <LandingHero heroImages={heroImages} />
+            </Suspense>
         </div>
     );
 }
