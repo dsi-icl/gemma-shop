@@ -1,7 +1,9 @@
 import { queryOptions } from '@tanstack/react-query';
 
 import {
+    $adminDevicesForWall,
     $adminDevicesList,
+    $adminGetWall,
     $adminGetWallBindingMeta,
     $adminGetStats,
     $adminListConfig,
@@ -71,5 +73,19 @@ export const adminDevicesQueryOptions = () =>
     queryOptions({
         queryKey: ['admin', 'devices'],
         queryFn: () => $adminDevicesList(),
+        refetchInterval: 5_000
+    });
+
+export const adminWallQueryOptions = (wallId: string) =>
+    queryOptions({
+        queryKey: ['admin', 'walls', wallId],
+        queryFn: () => $adminGetWall({ data: { wallId } }),
+        refetchInterval: 5_000
+    });
+
+export const adminDevicesForWallQueryOptions = (wallId: string) =>
+    queryOptions({
+        queryKey: ['admin', 'walls', wallId, 'devices'],
+        queryFn: () => $adminDevicesForWall({ data: { wallId } }),
         refetchInterval: 5_000
     });

@@ -5,7 +5,8 @@ import {
     FolderIcon,
     ImageIcon,
     MonitorIcon,
-    UsersIcon
+    UsersIcon,
+    PanoramaIcon
 } from '@phosphor-icons/react';
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
@@ -35,8 +36,7 @@ export const Route = createFileRoute('/admin')({
         if (promotion.promoted) {
             await context.queryClient.invalidateQueries({ queryKey: authQueryOptions().queryKey });
             user = await context.queryClient.fetchQuery({
-                ...authQueryOptions(),
-                revalidateIfStale: true
+                ...authQueryOptions()
             });
         }
         if ((user as any).role !== 'admin') throw redirect({ to: '/quarry' });
@@ -47,7 +47,8 @@ export const Route = createFileRoute('/admin')({
 const NAV = [
     { to: '/admin/users', label: 'Users', icon: UsersIcon },
     { to: '/admin/projects', label: 'Projects', icon: FolderIcon },
-    { to: '/admin/walls', label: 'Walls', icon: MonitorIcon },
+    { to: '/admin/walls', label: 'Walls', icon: PanoramaIcon },
+    { to: '/admin/devices', label: 'Devices', icon: MonitorIcon },
     { to: '/admin/assets', label: 'Public Assets', icon: ImageIcon },
     { to: '/admin/config', label: 'Config', icon: GearIcon },
     { to: '/admin/stats', label: 'Stats', icon: ChartBarIcon }
@@ -57,9 +58,10 @@ const TAB_ORDER = {
     users: 0,
     projects: 1,
     walls: 2,
-    assets: 3,
-    config: 4,
-    stats: 5
+    devices: 3,
+    assets: 4,
+    config: 5,
+    stats: 6
 } as const;
 
 type AdminTabKey = keyof typeof TAB_ORDER;
@@ -68,6 +70,7 @@ const TAB_SUBHEADERS: Record<AdminTabKey, { title: string; description?: string 
     users: { title: 'Users' },
     projects: { title: 'Projects' },
     walls: { title: 'Walls' },
+    devices: { title: 'Devices' },
     assets: {
         title: 'Public Media Library',
         description: 'Assets uploaded here are visible in every project\u2019s media library.'
@@ -95,11 +98,12 @@ const slidePanelVariants = {
 };
 
 function getTabFromPath(pathname: string): AdminTabKey {
-    if (pathname.endsWith('/projects')) return 'projects';
-    if (pathname.endsWith('/walls')) return 'walls';
-    if (pathname.endsWith('/assets')) return 'assets';
-    if (pathname.endsWith('/config')) return 'config';
-    if (pathname.endsWith('/stats')) return 'stats';
+    if (pathname.startsWith('/admin/projects')) return 'projects';
+    if (pathname.startsWith('/admin/walls')) return 'walls';
+    if (pathname.startsWith('/admin/devices')) return 'devices';
+    if (pathname.startsWith('/admin/assets')) return 'assets';
+    if (pathname.startsWith('/admin/config')) return 'config';
+    if (pathname.startsWith('/admin/stats')) return 'stats';
     return 'users';
 }
 
@@ -144,11 +148,11 @@ function AdminLayout() {
                         </TabsList>
                     </Tabs>
 
-                    <div className="mt-6 flex items-start justify-between">
+                    <div className="flex items-start justify-between">
                         <div>
-                            <h3 className="text-base font-medium">
+                            {/* <h3 className="text-base font-medium">
                                 {TAB_SUBHEADERS[currentTab].title}
-                            </h3>
+                            </h3> */}
                             {TAB_SUBHEADERS[currentTab].description && (
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     {TAB_SUBHEADERS[currentTab].description}
