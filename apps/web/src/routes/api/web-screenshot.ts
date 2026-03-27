@@ -1,6 +1,9 @@
+import { lookup } from 'node:dns/promises';
 import { unlink } from 'node:fs/promises';
+import { isIP } from 'node:net';
 import { join } from 'node:path';
 
+import { auth } from '@repo/auth/auth';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
@@ -29,10 +32,118 @@ async function cleanupPreviousFiles(baseId: string): Promise<void> {
     }
 }
 
+const WEB_SCREENSHOT_RATE_LIMIT_PER_MIN = Math.max(
+    1,
+    Number(process.env.WEB_SCREENSHOT_RATE_LIMIT_PER_MIN ?? '20')
+);
+const screenshotAllowlist = String(process.env.WEB_SCREENSHOT_ALLOWLIST ?? '')
+    .split(',')
+    .map((v) => v.trim().toLowerCase())
+    .filter(Boolean);
+const screenshotRateStore =
+    (process as any).__WEB_SCREENSHOT_RATE_STORE__ ?? new Map<string, number[]>();
+(process as any).__WEB_SCREENSHOT_RATE_STORE__ = screenshotRateStore;
+
+function getRequesterIp(request: Request): string {
+    const xff = request.headers.get('x-forwarded-for');
+    if (xff) return xff.split(',')[0]?.trim() ?? 'unknown';
+    const cf = request.headers.get('cf-connecting-ip');
+    if (cf) return cf.trim();
+    return 'unknown';
+}
+
+function isForbiddenIp(ip: string): boolean {
+    const version = isIP(ip);
+    if (version === 4) {
+        return (
+            ip.startsWith('127.') ||
+            ip.startsWith('10.') ||
+            ip.startsWith('192.168.') ||
+            /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip) ||
+            ip.startsWith('169.254.') ||
+            ip === '0.0.0.0'
+        );
+    }
+    if (version === 6) {
+        const normalized = ip.toLowerCase();
+        return (
+            normalized === '::1' ||
+            normalized.startsWith('fc') ||
+            normalized.startsWith('fd') ||
+            normalized.startsWith('fe80:')
+        );
+    }
+    return false;
+}
+
+async function assertScreenshotTargetSafe(rawUrl: string) {
+    let parsed: URL;
+    try {
+        parsed = new URL(rawUrl);
+    } catch {
+        throw new Error('Invalid URL');
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('Only http/https URLs are allowed');
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host.endsWith('.localhost')) {
+        throw new Error('Blocked host');
+    }
+    if (screenshotAllowlist.length > 0 && !screenshotAllowlist.includes(host)) {
+        throw new Error('Host is not allowlisted');
+    }
+
+    if (isForbiddenIp(host)) throw new Error('Blocked IP target');
+
+    const resolved = await lookup(host, { all: true });
+    if (resolved.some((entry) => isForbiddenIp(entry.address))) {
+        throw new Error('Blocked resolved IP target');
+    }
+}
+
+function checkScreenshotRateLimit(key: string): boolean {
+    const now = Date.now();
+    const cutoff = now - 60_000;
+    const list = (screenshotRateStore.get(key) as number[] | undefined) ?? [];
+    const fresh = list.filter((ts) => ts >= cutoff);
+    if (fresh.length >= WEB_SCREENSHOT_RATE_LIMIT_PER_MIN) {
+        screenshotRateStore.set(key, fresh);
+        return false;
+    }
+    fresh.push(now);
+    screenshotRateStore.set(key, fresh);
+    return true;
+}
+
 export const Route = createFileRoute('/api/web-screenshot')({
     server: {
         handlers: {
             POST: async ({ request }: { request: Request }) => {
+                const session = await auth.api.getSession({ headers: request.headers });
+                const internalToken = request.headers.get('x-internal-screenshot-token');
+                const isInternal =
+                    Boolean(process.env.SCREENSHOT_INTERNAL_TOKEN) &&
+                    internalToken === process.env.SCREENSHOT_INTERNAL_TOKEN;
+                if (!session && !isInternal) {
+                    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                        status: 401,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                const rateKey = session?.user?.email
+                    ? `user:${session.user.email}`
+                    : `ip:${getRequesterIp(request)}`;
+                if (!checkScreenshotRateLimit(rateKey)) {
+                    return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
+                        status: 429,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
                 let body: {
                     url: string;
                     width: number;
@@ -56,6 +167,37 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     return new Response(
                         JSON.stringify({ error: 'url, width, and height are required' }),
                         { status: 400, headers: { 'Content-Type': 'application/json' } }
+                    );
+                }
+                if (
+                    !Number.isFinite(width) ||
+                    !Number.isFinite(height) ||
+                    width < 64 ||
+                    height < 64 ||
+                    width > 8192 ||
+                    height > 8192
+                ) {
+                    return new Response(JSON.stringify({ error: 'Invalid viewport dimensions' }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+                if (!Number.isFinite(scale) || scale <= 0 || scale > 4) {
+                    return new Response(JSON.stringify({ error: 'Invalid scale' }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                try {
+                    await assertScreenshotTargetSafe(url);
+                } catch (error: any) {
+                    return new Response(
+                        JSON.stringify({ error: error?.message ?? 'Blocked target' }),
+                        {
+                            status: 400,
+                            headers: { 'Content-Type': 'application/json' }
+                        }
                     );
                 }
 
@@ -82,7 +224,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     });
                     const page = await context.newPage();
 
-                    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+                    await page.goto(url, { waitUntil: 'networkidle', timeout: 15000 });
 
                     // Clip to the viewport so the screenshot matches the layer dimensions
                     await page.screenshot({
