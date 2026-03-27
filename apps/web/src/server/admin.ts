@@ -49,6 +49,30 @@ function serializeAsset(doc: any) {
     });
 }
 
+function escapeRegex(input: string): string {
+    return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function findWallByIdentifier(identifier: string) {
+    const normalized = identifier.trim();
+    if (!normalized) return null;
+
+    const exact = await db.collection('walls').findOne({ wallId: normalized });
+    if (exact) return exact;
+
+    const whitespaceTolerant = await db.collection('walls').findOne({
+        wallId: { $regex: `^\\s*${escapeRegex(normalized)}\\s*$`, $options: 'i' }
+    });
+    if (whitespaceTolerant) return whitespaceTolerant;
+
+    if (ObjectId.isValid(normalized)) {
+        const byId = await db.collection('walls').findOne({ _id: new ObjectId(normalized) });
+        if (byId) return byId;
+    }
+
+    return null;
+}
+
 export async function adminListUsers() {
     const users = db.collection('user');
     const sessions = db.collection('session');
@@ -153,6 +177,121 @@ export async function adminListWalls() {
             ...doc,
             _id: doc._id.toHexString(),
             connectedNodes: Number(doc.connectedNodes ?? 0)
+        })
+    );
+}
+
+export async function adminCreateWall(input: { wallId: string; name?: string | null }) {
+    const wallId = input.wallId.trim();
+    if (!wallId) throw new Error('Wall ID is required');
+    const now = new Date().toISOString();
+
+    const existing = await db.collection('walls').findOne({ wallId });
+    if (existing) throw new Error('Wall already exists');
+
+    const doc = {
+        wallId,
+        name: input.name?.trim() || wallId,
+        connectedNodes: 0,
+        lastSeen: now,
+        boundProjectId: null,
+        boundCommitId: null,
+        boundSlideId: null,
+        boundSource: null,
+        site: null as string | null,
+        notes: null as string | null,
+        createdAt: now,
+        updatedAt: now
+    };
+    const result = await db.collection('walls').insertOne(doc);
+    return serializeForClient({ ...doc, _id: result.insertedId.toHexString() });
+}
+
+export async function adminGetWall(wallId: string) {
+    const targetWallId = wallId.trim();
+    if (!targetWallId) throw new Error('Wall ID is required');
+    const doc = await findWallByIdentifier(targetWallId);
+    if (!doc) throw new Error('Wall not found');
+    return serializeForClient({
+        ...doc,
+        _id: doc._id.toHexString(),
+        connectedNodes: Number(doc.connectedNodes ?? 0)
+    });
+}
+
+export async function adminUpdateWallMetadata(input: {
+    wallId: string;
+    name?: string | null;
+    site?: string | null;
+    notes?: string | null;
+}) {
+    const wallId = input.wallId.trim();
+    if (!wallId) throw new Error('Wall ID is required');
+    const update = {
+        name: input.name?.trim() || wallId,
+        site: input.site?.trim() || null,
+        notes: input.notes?.trim() || null,
+        updatedAt: new Date().toISOString()
+    };
+
+    const existing = await findWallByIdentifier(wallId);
+    if (!existing) throw new Error('Wall not found');
+
+    const result = await db
+        .collection('walls')
+        .findOneAndUpdate({ _id: existing._id }, { $set: update }, { returnDocument: 'after' });
+    if (!result) throw new Error('Wall not found');
+    return serializeForClient({
+        ...result,
+        _id: result._id.toHexString(),
+        connectedNodes: Number(result.connectedNodes ?? 0)
+    });
+}
+
+export async function adminDeleteWall(wallId: string) {
+    const targetWallId = wallId.trim();
+    if (!targetWallId) throw new Error('Wall ID is required');
+    const existing = await findWallByIdentifier(targetWallId);
+    if (!existing) throw new Error('Wall not found');
+    const resolvedWallId = String(existing.wallId ?? targetWallId).trim();
+
+    unbindWall(resolvedWallId);
+    hydrateWallNodes(resolvedWallId);
+    notifyControllers(resolvedWallId, false);
+
+    const now = new Date().toISOString();
+    await Promise.all([
+        db.collection('walls').deleteOne({ _id: existing._id }),
+        db.collection('devices').updateMany(
+            { assignedWallId: resolvedWallId },
+            {
+                $set: {
+                    assignedWallId: null,
+                    status: 'pending',
+                    updatedAt: now
+                }
+            }
+        )
+    ]);
+
+    process.__BROADCAST_WALL_BINDING_CHANGED__?.(resolvedWallId);
+}
+
+export async function adminListDevicesForWall(wallId: string) {
+    const targetWallId = wallId.trim();
+    if (!targetWallId) throw new Error('Wall ID is required');
+    const existing = await findWallByIdentifier(targetWallId);
+    if (!existing) throw new Error('Wall not found');
+    const resolvedWallId = String(existing.wallId ?? targetWallId).trim();
+    const docs = await db
+        .collection('devices')
+        .find({ assignedWallId: resolvedWallId })
+        .sort({ updatedAt: -1 })
+        .toArray();
+    return docs.map((doc: any) =>
+        serializeForClient({
+            ...doc,
+            _id: doc._id?.toHexString?.() ?? null
         })
     );
 }
