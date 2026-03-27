@@ -358,19 +358,25 @@ function ProjectCardDialogBody({
                             ) : null}
 
                             {!isFullscreen ? (
-                                <Button
-                                    className="mt-5 w-full"
-                                    onClick={handleLoadButton}
-                                    disabled={isLoadingWall}
-                                >
-                                    {isLoadingWall ? (
-                                        <CircleNotchIcon className="animate-spin" />
-                                    ) : (
-                                        <>
-                                            Load project <ArrowRightIcon />
-                                        </>
-                                    )}
-                                </Button>
+                                onLoadProject ? (
+                                    <Button
+                                        className="mt-5 w-full"
+                                        onClick={handleLoadButton}
+                                        disabled={isLoadingWall}
+                                    >
+                                        {isLoadingWall ? (
+                                            <CircleNotchIcon className="animate-spin" />
+                                        ) : (
+                                            <>
+                                                Load project <ArrowRightIcon />
+                                            </>
+                                        )}
+                                    </Button>
+                                ) : (
+                                    <p className="mt-5 text-xs text-muted-foreground">
+                                        Sign in to load this project on a wall.
+                                    </p>
+                                )
                             ) : null}
                         </MorphingDialogDescription>
                     </div>

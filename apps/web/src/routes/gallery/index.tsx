@@ -1,3 +1,4 @@
+import { useAuth } from '@repo/auth/tanstack/hooks';
 import { Button } from '@repo/ui/components/button';
 import type { Project } from '@repo/ui/components/project-card';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -30,13 +31,18 @@ type WallListEntry = {
 };
 
 function HomePage() {
+    const { user } = useAuth();
+    const canManageWalls = Boolean(user);
     const [activeTag, setActiveTag] = useState<string | null>(null);
     const [autoOpenRevision, setAutoOpenRevision] = useState(0);
     const [liveSessionRevision, setLiveSessionRevision] = useState(0);
     const [syncedCloseRevision, setSyncedCloseRevision] = useState(0);
     const [syncedCloseProjectId, setSyncedCloseProjectId] = useState<string | null>(null);
     const { data: publishedProjects = [] } = useQuery(publishedProjectsQueryOptions());
-    const { data: walls = [] } = useQuery(wallsQueryOptions());
+    const { data: walls = [] } = useQuery({
+        ...wallsQueryOptions(),
+        enabled: canManageWalls
+    });
     const queryClient = useQueryClient();
     const searchStr = useLocation({ select: (location) => location.searchStr });
     const [pendingOverride, setPendingOverride] = useState<{

@@ -1,3 +1,4 @@
+import { useAuth } from '@repo/auth/tanstack/hooks';
 import type { Project } from '@repo/ui/components/project-card';
 import { ProjectCard } from '@repo/ui/components/project-card';
 import { useQuery } from '@tanstack/react-query';
@@ -28,19 +29,26 @@ export function GalleryProjectCard({
     forceCloseMinimizedSignal,
     forceCloseSignal
 }: GalleryProjectCardProps) {
-    const { data: walls = [] } = useQuery(wallsQueryOptions());
+    const { user } = useAuth();
+    const canManageWalls = Boolean(user);
+    const { data: walls = [] } = useQuery({
+        ...wallsQueryOptions(),
+        enabled: canManageWalls
+    });
     const presetWallId = useMemo(() => {
         if (typeof window === 'undefined') return null;
         const params = new URLSearchParams(window.location.search);
         return params.get('w');
     }, []);
 
-    const availableWalls = walls.map((wall) => ({
-        id: wall.wallId,
-        name: wall.name,
-        connectedNodes: wall.connectedNodes,
-        isBound: Boolean(wall.boundProjectId)
-    }));
+    const availableWalls = canManageWalls
+        ? walls.map((wall) => ({
+              id: wall.wallId,
+              name: wall.name,
+              connectedNodes: wall.connectedNodes,
+              isBound: Boolean(wall.boundProjectId)
+          }))
+        : [];
 
     const handleLoadProject = useCallback(
         async (wallId: string) => {
@@ -111,10 +119,10 @@ export function GalleryProjectCard({
             forceCloseMinimizedSignal={forceCloseMinimizedSignal}
             forceCloseSignal={forceCloseSignal}
             availableWalls={availableWalls}
-            onLoadProject={handleLoadProject}
-            onWallRebootRequest={handleWallRebootRequest}
-            onWallUnbindRequest={handleWallUnbindRequest}
-            onControllerTokenRequest={handleControllerTokenRequest}
+            onLoadProject={canManageWalls ? handleLoadProject : undefined}
+            onWallRebootRequest={canManageWalls ? handleWallRebootRequest : undefined}
+            onWallUnbindRequest={canManageWalls ? handleWallUnbindRequest : undefined}
+            onControllerTokenRequest={canManageWalls ? handleControllerTokenRequest : undefined}
             presetWallId={presetWallId}
         />
     );
