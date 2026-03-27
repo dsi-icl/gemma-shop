@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 
 import {
+    $adminDevicesList,
     $adminGetWallBindingMeta,
     $adminGetStats,
     $adminListConfig,
@@ -64,4 +65,11 @@ export const adminConfigQueryOptions = () =>
     queryOptions({
         queryKey: ['admin', 'config'],
         queryFn: () => $adminListConfig()
+    });
+
+export const adminDevicesQueryOptions = () =>
+    queryOptions({
+        queryKey: ['admin', 'devices'],
+        queryFn: () => $adminDevicesList(),
+        refetchInterval: 5_000
     });

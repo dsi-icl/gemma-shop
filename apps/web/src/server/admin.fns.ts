@@ -3,6 +3,8 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 
 import {
+    adminDevicesAssignByChallenge,
+    adminDevicesList,
     adminDeletePublicAsset,
     adminListConfig,
     adminGetWallBindingMeta,
@@ -89,5 +91,25 @@ export const $adminSetConfig = createServerFn({ method: 'POST' })
 
 export const $adminSendSmtpTest = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
-    .inputValidator(z.object({ to: z.string().email() }))
+    .inputValidator(z.object({ to: z.email() }))
     .handler(async ({ data }) => adminSendSmtpTest({ to: data.to }));
+
+export const $adminDevicesList = createServerFn({ method: 'GET' })
+    .middleware([adminMiddleware])
+    .handler(async () => adminDevicesList());
+
+export const $adminDevicesAssignByChallenge = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            challenge: z.string(),
+            wallId: z.string()
+        })
+    )
+    .handler(async ({ data, context }) =>
+        adminDevicesAssignByChallenge({
+            challenge: data.challenge,
+            wallId: data.wallId,
+            assignedBy: context.user.email
+        })
+    );
