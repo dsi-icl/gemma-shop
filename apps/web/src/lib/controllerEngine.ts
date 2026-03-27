@@ -1,5 +1,6 @@
 'use client';
 
+import { getOrCreateDeviceIdentity, type DeviceIdentity } from './deviceIdentity';
 import { ReconnectingWebSocket } from './reconnectingWs';
 import { getWebSocketUrl } from './runtimeUrl';
 import { GSMessageSchema, type GSMessage } from './types';
@@ -53,6 +54,8 @@ const TEMP_BOUND_SLIDE_ID = '__bound-current__';
 export class ControllerEngine {
     private rws: ReconnectingWebSocket;
     public wallId: string;
+    public devicePublicKey: string | null = null;
+    private deviceIdentityPromise: Promise<DeviceIdentity>;
     private bindingCallbacks = new Set<BindingCallback>();
     private hydrateCallbacks = new Set<HydrateCallback>();
     private slidesUpdatedCallbacks = new Set<SlidesUpdatedCallback>();
@@ -73,15 +76,30 @@ export class ControllerEngine {
 
     private constructor(wallId: string) {
         this.wallId = wallId;
+        this.deviceIdentityPromise = getOrCreateDeviceIdentity('controller').then((identity) => {
+            this.devicePublicKey = identity.publicKey;
+            return identity;
+        });
         this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
             binaryType: 'arraybuffer',
-            onOpen: () => {
+            onOpen: async () => {
                 console.log('Controller Engine: Connected to Server');
                 this.lastBindSignature = null;
+                let devicePublicKey: string | undefined;
+                try {
+                    const identity = await this.deviceIdentityPromise;
+                    devicePublicKey = identity.publicKey;
+                } catch (error) {
+                    console.warn(
+                        'Controller Engine: device identity unavailable, continuing without device key',
+                        error
+                    );
+                }
                 this.sendJSON({
                     type: 'hello',
                     specimen: 'controller',
-                    wallId: this.wallId
+                    wallId: this.wallId,
+                    ...(devicePublicKey ? { devicePublicKey } : {})
                 });
                 this.flushPendingMessages();
             },

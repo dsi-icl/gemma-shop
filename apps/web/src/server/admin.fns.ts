@@ -3,7 +3,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 
 import {
-    adminDevicesAssignByChallenge,
+    adminDevicesEnrollBySignature,
     adminDevicesList,
     adminDeletePublicAsset,
     adminListConfig,
@@ -98,17 +98,21 @@ export const $adminDevicesList = createServerFn({ method: 'GET' })
     .middleware([adminMiddleware])
     .handler(async () => adminDevicesList());
 
-export const $adminDevicesAssignByChallenge = createServerFn({ method: 'POST' })
+export const $adminDevicesEnrollBySignature = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
     .inputValidator(
         z.object({
-            challenge: z.string(),
+            deviceId: z.string(),
+            signature: z.string(),
+            kind: z.enum(['wall', 'gallery', 'controller']),
             wallId: z.string()
         })
     )
     .handler(async ({ data, context }) =>
-        adminDevicesAssignByChallenge({
-            challenge: data.challenge,
+        adminDevicesEnrollBySignature({
+            deviceId: data.deviceId,
+            signature: data.signature,
+            kind: data.kind,
             wallId: data.wallId,
             assignedBy: context.user.email
         })

@@ -127,11 +127,13 @@ export const HelloSchema = z.discriminatedUnion('specimen', [
         specimen: z.literal('wall'),
         wallId: z.string(),
         col: z.number(),
-        row: z.number()
+        row: z.number(),
+        devicePublicKey: z.string().optional()
     }),
     HelloMessageBaseSchema.extend({
         specimen: z.literal('controller'),
-        wallId: z.string()
+        wallId: z.string(),
+        devicePublicKey: z.string().optional()
     }),
     HelloMessageBaseSchema.extend({
         specimen: z.literal('editor'),
@@ -145,7 +147,8 @@ export const HelloSchema = z.discriminatedUnion('specimen', [
     }),
     HelloMessageBaseSchema.extend({
         specimen: z.literal('gallery'),
-        wallId: z.string().optional()
+        wallId: z.string().optional(),
+        devicePublicKey: z.string().optional()
     })
 ]);
 
@@ -158,12 +161,14 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             specimen: z.literal('wall'),
             wallId: z.string(),
             col: z.number(),
-            row: z.number()
+            row: z.number(),
+            devicePublicKey: z.string().optional()
         }),
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
             specimen: z.literal('controller'),
-            wallId: z.string()
+            wallId: z.string(),
+            devicePublicKey: z.string().optional()
         }),
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
@@ -180,7 +185,8 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
             specimen: z.literal('gallery'),
-            wallId: z.string().optional()
+            wallId: z.string().optional(),
+            devicePublicKey: z.string().optional()
         })
     ]),
     z.object({
@@ -366,6 +372,10 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         projectId: z.string(),
         published: z.boolean(),
         publishedCommitId: z.string().nullable().optional()
+    }),
+    z.object({
+        type: z.literal('device_enrollment'),
+        deviceId: z.string()
     })
 ]);
 

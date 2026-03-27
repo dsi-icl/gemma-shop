@@ -11,32 +11,23 @@ export interface DeviceRecord {
     kind: DeviceKind;
     status: DeviceStatus;
     assignedWallId: string | null;
-    challenge: string;
     createdAt: string;
     updatedAt: string;
     lastSeenAt: string | null;
 }
 
 const devices = db.collection('devices');
-const CHALLENGE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const CHALLENGE_LENGTH = 8;
+const ALGO: EcKeyImportParams & EcdsaParams = {
+    name: 'ECDSA',
+    namedCurve: 'P-256',
+    hash: 'SHA-256'
+};
 
-function randomChallenge(): string {
-    const bytes = crypto.getRandomValues(new Uint8Array(CHALLENGE_LENGTH));
-    let out = '';
-    for (let i = 0; i < CHALLENGE_LENGTH; i++) {
-        out += CHALLENGE_ALPHABET[bytes[i] % CHALLENGE_ALPHABET.length];
-    }
-    return out;
-}
-
-async function generateUniqueChallenge(): Promise<string> {
-    for (let attempt = 0; attempt < 10; attempt++) {
-        const challenge = randomChallenge();
-        const existing = await devices.findOne({ challenge }, { projection: { _id: 1 } });
-        if (!existing) return challenge;
-    }
-    throw new Error('Could not generate unique device challenge');
+function fromBase64Url(input: string): Uint8Array {
+    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    const binary = Buffer.from(padded, 'base64');
+    return new Uint8Array(binary);
 }
 
 function serializeDevice(doc: any): DeviceRecord {
@@ -46,7 +37,6 @@ function serializeDevice(doc: any): DeviceRecord {
         kind: (doc.kind ?? 'wall') as DeviceKind,
         status: (doc.status ?? 'pending') as DeviceStatus,
         assignedWallId: doc.assignedWallId ? String(doc.assignedWallId) : null,
-        challenge: String(doc.challenge ?? ''),
         createdAt: String(doc.createdAt ?? ''),
         updatedAt: String(doc.updatedAt ?? ''),
         lastSeenAt: doc.lastSeenAt ? String(doc.lastSeenAt) : null
@@ -81,7 +71,6 @@ export async function ensureDeviceByPublicKey(input: {
         });
     }
 
-    const challenge = await generateUniqueChallenge();
     const deviceId = new ObjectId().toHexString();
     const created = {
         deviceId,
@@ -89,7 +78,6 @@ export async function ensureDeviceByPublicKey(input: {
         kind: input.kind,
         status: 'pending' as const,
         assignedWallId: null,
-        challenge,
         createdAt: now,
         updatedAt: now,
         lastSeenAt: now
@@ -98,19 +86,44 @@ export async function ensureDeviceByPublicKey(input: {
     return serializeDevice(created);
 }
 
-export async function adminAssignDeviceByChallenge(input: {
-    challenge: string;
+async function verifySignature(publicKeyJwkJson: string, deviceId: string, signature: string) {
+    const pub = JSON.parse(publicKeyJwkJson) as JsonWebKey;
+    const key = await crypto.subtle.importKey('jwk', pub, ALGO, false, ['verify']);
+    const rawSigBytes = fromBase64Url(signature);
+    const sigBytes = new Uint8Array(rawSigBytes.byteLength);
+    sigBytes.set(rawSigBytes);
+    const data = new TextEncoder().encode(deviceId);
+    return crypto.subtle.verify(ALGO, key, sigBytes, data);
+}
+
+export async function adminEnrollDeviceBySignature(input: {
+    deviceId: string;
+    signature: string;
+    kind: DeviceKind;
     wallId: string;
     assignedBy: string;
 }): Promise<DeviceRecord> {
-    const challenge = input.challenge.trim().toUpperCase();
+    const deviceId = input.deviceId.trim();
+    const signature = input.signature.trim();
     const wallId = input.wallId.trim();
-    if (!challenge) throw new Error('Challenge is required');
+    if (!deviceId) throw new Error('Device ID is required');
+    if (!signature) throw new Error('Signature is required');
     if (!wallId) throw new Error('Wall ID is required');
+
+    const device = await devices.findOne({ deviceId });
+    if (!device) throw new Error('Unknown device');
+    if (device.kind !== input.kind) throw new Error('Device kind mismatch');
+    if (device.status === 'revoked') throw new Error('Device is revoked');
+    if (device.assignedWallId || device.status === 'active') {
+        throw new Error('Device is already enrolled');
+    }
+
+    const valid = await verifySignature(String(device.publicKey ?? ''), deviceId, signature);
+    if (!valid) throw new Error('Invalid device signature');
 
     const now = new Date().toISOString();
     const result = await devices.findOneAndUpdate(
-        { challenge, status: { $ne: 'revoked' } },
+        { _id: device._id, status: { $ne: 'revoked' }, assignedWallId: null },
         {
             $set: {
                 assignedWallId: wallId,
@@ -122,7 +135,7 @@ export async function adminAssignDeviceByChallenge(input: {
         },
         { returnDocument: 'after' }
     );
-    if (!result) throw new Error('Device challenge not found');
+    if (!result) throw new Error('Failed to enroll device');
     return serializeDevice(result);
 }
 

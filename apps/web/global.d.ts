@@ -31,6 +31,7 @@ declare global {
                 projectId: string,
                 publishedCommitId: string | null
             ) => void;
+            __REBOOT_WALL__?: (wallId: string, node?: { c: number; r: number }) => number;
             __YJS_UPSERT_LAYER__?: (payload: {
                 projectId: string;
                 commitId: string;

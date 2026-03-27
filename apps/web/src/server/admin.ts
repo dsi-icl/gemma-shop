@@ -11,7 +11,7 @@ import {
     peerCounts,
     unbindWall
 } from '~/lib/busState';
-import { adminAssignDeviceByChallenge, adminListDevices } from '~/server/devices';
+import { adminEnrollDeviceBySignature, adminListDevices } from '~/server/devices';
 
 let prevCpuUsage = process.cpuUsage();
 let prevCpuAt = process.hrtime.bigint();
@@ -223,12 +223,16 @@ export async function adminDevicesList() {
     return adminListDevices();
 }
 
-export async function adminDevicesAssignByChallenge(input: {
-    challenge: string;
+export async function adminDevicesEnrollBySignature(input: {
+    deviceId: string;
+    signature: string;
+    kind: 'wall' | 'gallery' | 'controller';
     wallId: string;
     assignedBy: string;
 }) {
-    return adminAssignDeviceByChallenge(input);
+    const enrolled = await adminEnrollDeviceBySignature(input);
+    process.__REBOOT_WALL__?.(input.wallId);
+    return enrolled;
 }
 
 export async function adminListPublicAssets() {
