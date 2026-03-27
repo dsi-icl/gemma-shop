@@ -4,26 +4,7 @@ import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 
 import { collections } from '~/server/collections';
-
-function serializeForClient<T>(value: T): T {
-    if (value instanceof ObjectId) {
-        return value.toHexString() as T;
-    }
-    if (value instanceof Date) {
-        return value.toISOString() as T;
-    }
-    if (Array.isArray(value)) {
-        return value.map((item) => serializeForClient(item)) as T;
-    }
-    if (value && typeof value === 'object') {
-        const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            out[k] = serializeForClient(v);
-        }
-        return out as T;
-    }
-    return value;
-}
+import { serializeForClient } from '~/server/serialization';
 
 export const revertToVersion = createServerFn({ method: 'POST' })
     .inputValidator(

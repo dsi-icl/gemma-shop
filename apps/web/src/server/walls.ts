@@ -1,5 +1,4 @@
 import '@tanstack/react-start/server-only';
-import type { Wall } from '@repo/db/schema';
 import { ObjectId } from 'mongodb';
 
 import {
@@ -14,34 +13,11 @@ import {
     seedScopeFromDb
 } from '~/lib/busState';
 import { collections } from '~/server/collections';
+import { serializeWall } from '~/server/serializers/wall.serializer';
 
 const walls = collections.walls;
 const commits = collections.commits;
 const projects = collections.projects;
-
-function serializeForClient<T>(value: T): T {
-    if (value instanceof ObjectId) {
-        return value.toHexString() as T;
-    }
-    if (value instanceof Date) {
-        return value.toISOString() as T;
-    }
-    if (Array.isArray(value)) {
-        return value.map((item) => serializeForClient(item)) as T;
-    }
-    if (value && typeof value === 'object') {
-        const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            out[k] = serializeForClient(v);
-        }
-        return out as T;
-    }
-    return value;
-}
-
-function serializeWall(doc: any): Wall {
-    return serializeForClient({ ...doc, _id: doc._id.toHexString() });
-}
 
 export async function listWalls() {
     const docs = await walls.find().sort({ lastSeen: -1 }).toArray();

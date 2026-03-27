@@ -11,47 +11,15 @@ import { ObjectId } from 'mongodb';
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 import { collections } from '~/server/collections';
+import { serializeForClient } from '~/server/serialization';
+import { serializeAsset } from '~/server/serializers/asset.serializer';
+import { serializeCommit, type SerializedCommit } from '~/server/serializers/commit.serializer';
+import { serializeProject } from '~/server/serializers/project.serializer';
 
 const projects = collections.projects;
 const auditLogs = collections.auditLogs;
 const assets = collections.assets;
 const commits = collections.commits;
-
-function serializeForClient<T>(value: T): T {
-    if (value instanceof ObjectId) {
-        return value.toHexString() as T;
-    }
-    if (value instanceof Date) {
-        return value.toISOString() as T;
-    }
-    if (Array.isArray(value)) {
-        return value.map((item) => serializeForClient(item)) as T;
-    }
-    if (value && typeof value === 'object') {
-        const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            out[k] = serializeForClient(v);
-        }
-        return out as T;
-    }
-    return value;
-}
-
-function idToString(value: unknown): string {
-    if (value instanceof ObjectId) return value.toHexString();
-    if (typeof value === 'string') return value;
-    if (value === null || value === undefined) return '';
-    return JSON.stringify(value);
-}
-
-function scalarToString(value: unknown): string {
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-        return `${value}`;
-    }
-    if (value === null || value === undefined) return '';
-    return JSON.stringify(value);
-}
 
 function normalizeAssetFilename(value: unknown): string | null {
     if (typeof value !== 'string' || value.length === 0) return null;
@@ -620,30 +588,6 @@ export async function getAuditLogs(
     }));
 }
 
-export interface SerializedCommit {
-    _id: string;
-    projectId: string;
-    parentId: string | null;
-    authorId: string | null;
-    message: string;
-    isMutableHead: boolean;
-    isAutoSave: boolean;
-    firstSlideId: string | null;
-    createdAt: string;
-    updatedAt: string;
-}
-
-export interface SerializedCommitWithContent extends SerializedCommit {
-    content: {
-        slides: {
-            id: string;
-            name: string;
-            order: number;
-            layers: any[];
-        }[];
-    };
-}
-
 export async function getProjectCommits(projectId: string): Promise<SerializedCommit[]> {
     const docs = await collections.commits
         .find({ projectId: new ObjectId(projectId) })
@@ -773,7 +717,7 @@ export async function deleteSlideFromCommit(commitId: string, slideId: string): 
     return true;
 }
 
-function assertCanView(doc: Record<string, unknown>, userEmail: string) {
+export function assertCanView(doc: Record<string, unknown>, userEmail: string) {
     const collaborators = (doc.collaborators || []) as Array<{
         email: string;
         role: string;
@@ -784,7 +728,7 @@ function assertCanView(doc: Record<string, unknown>, userEmail: string) {
     }
 }
 
-function assertCanEdit(doc: Record<string, unknown>, userEmail: string) {
+export function assertCanEdit(doc: Record<string, unknown>, userEmail: string) {
     const collaborators = (doc.collaborators || []) as Array<{
         email: string;
         role: string;
@@ -839,41 +783,4 @@ export async function revokeUploadTokenForActor(token: string, actorEmail: strin
     }
 
     throw new Error('You do not have permission to revoke this upload token');
-}
-
-function serializeAsset(doc: Record<string, unknown>): Asset {
-    return serializeForClient({
-        ...doc,
-        _id: idToString(doc._id),
-        projectId: idToString(doc.projectId)
-    } as Asset);
-}
-
-function serializeProject(doc: Record<string, unknown>): Project {
-    return serializeForClient({
-        ...doc,
-        visibility: doc.visibility === 'public' ? 'public' : 'private',
-        _id: idToString(doc._id),
-        headCommitId: doc.headCommitId ? idToString(doc.headCommitId) : null,
-        publishedCommitId: doc.publishedCommitId ? idToString(doc.publishedCommitId) : null
-    } as Project);
-}
-
-function serializeCommit(doc: Record<string, unknown>): SerializedCommitWithContent {
-    const content = doc.content as SerializedCommitWithContent['content'];
-    return serializeForClient({
-        _id: idToString(doc._id),
-        projectId: idToString(doc.projectId),
-        parentId: doc.parentId ? idToString(doc.parentId) : null,
-        authorId: doc.authorId ? idToString(doc.authorId) : null,
-        message: scalarToString(doc.message),
-        isMutableHead: Boolean(doc.isMutableHead),
-        isAutoSave: Boolean(doc.isAutoSave),
-        firstSlideId: content?.slides?.[0]?.id ?? null,
-        createdAt:
-            doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
-        updatedAt:
-            doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : String(doc.updatedAt),
-        content
-    });
 }
