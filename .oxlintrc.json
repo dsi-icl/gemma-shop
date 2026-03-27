@@ -24,6 +24,10 @@
         {
             "name": "eslint-tanstack-query",
             "specifier": "@tanstack/eslint-plugin-query"
+        },
+        {
+            "name": "repo",
+            "specifier": "./tooling/eslint-plugin-repo/index.mjs"
         }
     ],
     "rules": {
@@ -39,6 +43,7 @@
         "eslint-tanstack-query/infinite-query-property-order": "warn",
         "eslint-tanstack-query/no-void-query-fn": "warn",
         "eslint-tanstack-query/mutation-property-order": "warn",
+        "repo/no-direct-db-collection": "error",
         // ref: https://github.com/TheAlexLichter/oxlint-react-compiler-rules/issues/1
         // Recommended rules (from LintRulePreset.Recommended)
         "react-hooks-js/component-hook-factories": "error",

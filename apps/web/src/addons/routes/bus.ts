@@ -1,4 +1,3 @@
-import { db } from '@repo/db';
 import { ObjectId } from 'mongodb';
 import { defineWebSocketHandler } from 'nitro/h3';
 
@@ -76,6 +75,7 @@ import {
     type GSMessage,
     type Layer
 } from '~/lib/types';
+import { collections } from '~/server/collections';
 import { ensureDeviceByPublicKey } from '~/server/devices';
 
 // ── Binary opcodes ──────────────────────────────────────────────────────────
@@ -290,7 +290,7 @@ async function performLiveBind(
         cancelWallUnbindGrace(wallId);
         const [resolvedSlideId, project] = await Promise.all([
             resolveBoundSlideId(projectId, commitId, requestedSlideId),
-            db.collection('projects').findOne(
+            collections.projects.findOne(
                 { _id: new ObjectId(projectId) },
                 {
                     projection: {
@@ -340,7 +340,7 @@ async function performLiveBind(
             );
         }
 
-        await db.collection('walls').updateOne(
+        await collections.walls.updateOne(
             { wallId },
             {
                 $set: {
@@ -418,7 +418,7 @@ function broadcastWallNodeCountToEditors(wallId: string) {
 function syncWallNodeCountToDb(wallId: string) {
     const connectedNodes = getWallNodeCount(wallId);
     const hasLiveBinding = wallBindings.has(wallId);
-    void db.collection('walls').updateOne(
+    void collections.walls.updateOne(
         { wallId },
         {
             $set: {
@@ -450,12 +450,10 @@ async function resolveBoundSlideId(
 ): Promise<string | null> {
     let commit: any = null;
     try {
-        commit = await db
-            .collection('commits')
-            .findOne(
-                { _id: new ObjectId(commitId), projectId: new ObjectId(projectId) },
-                { projection: { 'content.slides.id': 1 } }
-            );
+        commit = await collections.commits.findOne(
+            { _id: new ObjectId(commitId), projectId: new ObjectId(projectId) },
+            { projection: { 'content.slides.id': 1 } }
+        );
     } catch {
         return null;
     }
@@ -469,9 +467,10 @@ async function getSlidesMetadata(
     commitId: string
 ): Promise<Array<{ id: string; order: number; name: string }>> {
     try {
-        const commit = await db
-            .collection('commits')
-            .findOne({ _id: new ObjectId(commitId) }, { projection: { 'content.slides': 1 } });
+        const commit = await collections.commits.findOne(
+            { _id: new ObjectId(commitId) },
+            { projection: { 'content.slides': 1 } }
+        );
         const slides =
             (commit?.content?.slides as Array<{
                 id?: string;
@@ -605,8 +604,7 @@ async function sendGalleryStateSnapshot(peer: import('crossws').Peer, wallId?: s
 
     let publishedProjects: Array<{ projectId: string; publishedCommitId: string | null }> = [];
     try {
-        const docs = await db
-            .collection('projects')
+        const docs = await collections.projects
             .find(
                 { publishedCommitId: { $ne: null }, deletedAt: { $exists: false } },
                 { projection: { _id: 1, publishedCommitId: 1 } }
@@ -855,7 +853,7 @@ handlers.set('leave_scope', ({ entry }) => {
                 JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
             );
             notifyControllers(wallId, false);
-            void db.collection('walls').updateOne(
+            void collections.walls.updateOne(
                 { wallId },
                 {
                     $set: {
@@ -1088,7 +1086,7 @@ handlers.set('unbind_wall', ({ entry, data }) => {
         JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
     );
     notifyControllers(data.wallId, false);
-    void db.collection('walls').updateOne(
+    void collections.walls.updateOne(
         { wallId: data.wallId },
         {
             $set: {
@@ -1530,7 +1528,7 @@ export default defineWebSocketHandler({
                         JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
                     );
                     notifyControllers(wallId, false);
-                    void db.collection('walls').updateOne(
+                    void collections.walls.updateOne(
                         { wallId },
                         {
                             $set: {
@@ -1560,7 +1558,7 @@ export default defineWebSocketHandler({
                         JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
                     );
                     notifyControllers(meta.wallId, false);
-                    void db.collection('walls').updateOne(
+                    void collections.walls.updateOne(
                         { wallId: meta.wallId },
                         {
                             $set: {

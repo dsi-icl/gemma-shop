@@ -1,6 +1,5 @@
 import '@tanstack/react-start/server-only';
 import { createSmtpTransport } from '@repo/auth/smtp';
-import { db } from '@repo/db';
 import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
 import { ObjectId } from 'mongodb';
 
@@ -11,6 +10,7 @@ import {
     peerCounts,
     unbindWall
 } from '~/lib/busState';
+import { collections } from '~/server/collections';
 import { adminEnrollDeviceBySignature, adminListDevices } from '~/server/devices';
 
 let prevCpuUsage = process.cpuUsage();
@@ -57,16 +57,16 @@ async function findWallByIdentifier(identifier: string) {
     const normalized = identifier.trim();
     if (!normalized) return null;
 
-    const exact = await db.collection('walls').findOne({ wallId: normalized });
+    const exact = await collections.walls.findOne({ wallId: normalized });
     if (exact) return exact;
 
-    const whitespaceTolerant = await db.collection('walls').findOne({
+    const whitespaceTolerant = await collections.walls.findOne({
         wallId: { $regex: `^\\s*${escapeRegex(normalized)}\\s*$`, $options: 'i' }
     });
     if (whitespaceTolerant) return whitespaceTolerant;
 
     if (ObjectId.isValid(normalized)) {
-        const byId = await db.collection('walls').findOne({ _id: new ObjectId(normalized) });
+        const byId = await collections.walls.findOne({ _id: new ObjectId(normalized) });
         if (byId) return byId;
     }
 
@@ -74,8 +74,8 @@ async function findWallByIdentifier(identifier: string) {
 }
 
 export async function adminListUsers() {
-    const users = db.collection('user');
-    const sessions = db.collection('session');
+    const users = collections.users;
+    const sessions = collections.sessions;
 
     const [docs, activeSessions] = await Promise.all([
         users.find().sort({ createdAt: -1 }).limit(500).toArray(),
@@ -99,7 +99,7 @@ export async function adminListUsers() {
 }
 
 export async function adminListProjects() {
-    const projects = db.collection('projects');
+    const projects = collections.projects;
     const docs = await projects.find().sort({ updatedAt: -1 }).toArray();
     return docs.map((doc) =>
         serializeForClient({
@@ -111,13 +111,12 @@ export async function adminListProjects() {
 
 export async function adminGetStats() {
     const [userCount, projectCount, commitCount, assetCount] = await Promise.all([
-        db.collection('user').countDocuments(),
-        db.collection('projects').countDocuments(),
-        db.collection('commits').countDocuments(),
-        db.collection('assets').countDocuments({ deletedAt: { $exists: false } })
+        collections.users.countDocuments(),
+        collections.projects.countDocuments(),
+        collections.commits.countDocuments(),
+        collections.assets.countDocuments({ deletedAt: { $exists: false } })
     ]);
-    const wallDocs = await db
-        .collection('walls')
+    const wallDocs = await collections.walls
         .find()
         .project({ wallId: 1, connectedNodes: 1 })
         .toArray();
@@ -170,7 +169,7 @@ export async function adminGetStats() {
 }
 
 export async function adminListWalls() {
-    const walls = db.collection('walls');
+    const walls = collections.walls;
     const docs = await walls.find().sort({ lastSeen: -1 }).toArray();
     return docs.map((doc) =>
         serializeForClient({
@@ -186,7 +185,7 @@ export async function adminCreateWall(input: { wallId: string; name?: string | n
     if (!wallId) throw new Error('Wall ID is required');
     const now = new Date().toISOString();
 
-    const existing = await db.collection('walls').findOne({ wallId });
+    const existing = await collections.walls.findOne({ wallId });
     if (existing) throw new Error('Wall already exists');
 
     const doc = {
@@ -203,7 +202,7 @@ export async function adminCreateWall(input: { wallId: string; name?: string | n
         createdAt: now,
         updatedAt: now
     };
-    const result = await db.collection('walls').insertOne(doc);
+    const result = await collections.walls.insertOne(doc);
     return serializeForClient({ ...doc, _id: result.insertedId.toHexString() });
 }
 
@@ -237,9 +236,11 @@ export async function adminUpdateWallMetadata(input: {
     const existing = await findWallByIdentifier(wallId);
     if (!existing) throw new Error('Wall not found');
 
-    const result = await db
-        .collection('walls')
-        .findOneAndUpdate({ _id: existing._id }, { $set: update }, { returnDocument: 'after' });
+    const result = await collections.walls.findOneAndUpdate(
+        { _id: existing._id },
+        { $set: update },
+        { returnDocument: 'after' }
+    );
     if (!result) throw new Error('Wall not found');
     return serializeForClient({
         ...result,
@@ -261,8 +262,8 @@ export async function adminDeleteWall(wallId: string) {
 
     const now = new Date().toISOString();
     await Promise.all([
-        db.collection('walls').deleteOne({ _id: existing._id }),
-        db.collection('devices').updateMany(
+        collections.walls.deleteOne({ _id: existing._id }),
+        collections.devices.updateMany(
             { assignedWallId: resolvedWallId },
             {
                 $set: {
@@ -283,8 +284,7 @@ export async function adminListDevicesForWall(wallId: string) {
     const existing = await findWallByIdentifier(targetWallId);
     if (!existing) throw new Error('Wall not found');
     const resolvedWallId = String(existing.wallId ?? targetWallId).trim();
-    const docs = await db
-        .collection('devices')
+    const docs = await collections.devices
         .find({ assignedWallId: resolvedWallId })
         .sort({ updatedAt: -1 })
         .toArray();
@@ -310,9 +310,10 @@ export async function adminGetWallBindingMeta(input: {
     let slideName: string | null = null;
 
     try {
-        const project = await db
-            .collection('projects')
-            .findOne({ _id: new ObjectId(boundProjectId) }, { projection: { name: 1 } });
+        const project = await collections.projects.findOne(
+            { _id: new ObjectId(boundProjectId) },
+            { projection: { name: 1 } }
+        );
         projectName = project?.name ? String(project.name) : null;
     } catch {
         // Keep null fallback when IDs are malformed or project does not exist.
@@ -320,12 +321,10 @@ export async function adminGetWallBindingMeta(input: {
 
     if (boundCommitId && boundSlideId) {
         try {
-            const commit = await db
-                .collection('commits')
-                .findOne(
-                    { _id: new ObjectId(boundCommitId) },
-                    { projection: { 'content.slides.id': 1, 'content.slides.name': 1 } }
-                );
+            const commit = await collections.commits.findOne(
+                { _id: new ObjectId(boundCommitId) },
+                { projection: { 'content.slides.id': 1, 'content.slides.name': 1 } }
+            );
             const slides = (commit?.content?.slides as Array<{ id?: string; name?: string }>) ?? [];
             const slide = slides.find((s) => s.id === boundSlideId);
             slideName = slide?.name ? String(slide.name) : null;
@@ -342,7 +341,7 @@ export async function adminUnbindWall(wallId: string) {
     hydrateWallNodes(wallId);
     notifyControllers(wallId, false);
 
-    await db.collection('walls').updateOne(
+    await collections.walls.updateOne(
         { wallId },
         {
             $set: {
@@ -375,8 +374,7 @@ export async function adminDevicesEnrollBySignature(input: {
 }
 
 export async function adminListPublicAssets() {
-    const docs = await db
-        .collection('assets')
+    const docs = await collections.assets
         .find({ public: true, deletedAt: { $exists: false } })
         .sort({ createdAt: -1 })
         .toArray();
@@ -384,7 +382,7 @@ export async function adminListPublicAssets() {
 }
 
 export async function adminDeletePublicAsset(assetId: string, userEmail: string) {
-    const assets = db.collection('assets');
+    const assets = collections.assets;
     const asset = await assets.findOne({
         _id: new ObjectId(assetId),
         public: true,

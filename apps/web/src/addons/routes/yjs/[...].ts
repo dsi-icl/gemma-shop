@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { createHeadlessEditor } from '@lexical/headless';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { createBinding, syncLexicalUpdateToYjs, syncYjsChangesToLexical } from '@lexical/yjs';
-import { db } from '@repo/db';
 import type * as crossws from 'crossws';
 import { Window } from 'happy-dom';
 import { $createParagraphNode, $getRoot } from 'lexical';
@@ -16,6 +15,7 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 
 import type { Layer } from '~/lib/types';
+import { collections } from '~/server/collections';
 
 const messageSync = 0;
 const messageAwareness = 1;
@@ -254,7 +254,7 @@ async function applyHtmlToDoc(doc: Y.Doc, html: string, docName: string) {
 }
 
 async function loadTextLayer(scope: DocScope): Promise<TextLayer> {
-    const commit = await db.collection('commits').findOne({
+    const commit = await collections.commits.findOne({
         _id: new ObjectId(scope.commitId),
         projectId: new ObjectId(scope.projectId)
     });
@@ -276,7 +276,7 @@ async function loadTextLayer(scope: DocScope): Promise<TextLayer> {
 
 class MongoYDocPersistence implements Persistence {
     provider: unknown = null;
-    private collection = db.collection('ydocs');
+    private collection = collections.ydocs;
     private indexReady: Promise<void>;
 
     constructor() {

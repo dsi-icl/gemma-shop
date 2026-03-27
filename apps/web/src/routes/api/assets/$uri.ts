@@ -4,13 +4,13 @@ import { Readable } from 'node:stream';
 import { basename, join, extname } from 'path';
 
 import { auth } from '@repo/auth/auth';
-import { db } from '@repo/db';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerOnlyFn } from '@tanstack/react-start';
 import { ObjectId } from 'mongodb';
 
 import { ASSET_MIME_TYPES } from '~/lib/assetMime';
 import { ASSET_DIR } from '~/lib/serverVariables';
+import { collections } from '~/server/collections';
 import { assertCanView } from '~/server/projects';
 
 const ASSETS_ALLOW_LEGACY_PUBLIC_READ_SHIM = !['0', 'false', 'no', 'off'].includes(
@@ -55,7 +55,7 @@ async function resolveAssetAccessContext(
     if (!rootId) return null;
 
     const escapedBase = escapeRegex(rootId);
-    const assetDoc = (await db.collection('assets').findOne(
+    const assetDoc = (await collections.assets.findOne(
         {
             $or: [
                 { url: requestedFilename },
@@ -160,7 +160,7 @@ async function enforceAssetAccessPolicy(
         return;
     }
 
-    const project = (await db.collection('projects').findOne(
+    const project = (await collections.projects.findOne(
         { _id: projectId, deletedAt: { $exists: false } },
         {
             projection: {

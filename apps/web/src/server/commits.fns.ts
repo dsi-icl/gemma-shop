@@ -1,9 +1,10 @@
 import { authMiddleware } from '@repo/auth/tanstack/middleware';
-import { db } from '@repo/db';
 import { CommitSchema } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
+
+import { collections } from '~/server/collections';
 
 import { assertCanEdit, assertCanView, getProject } from './projects';
 
@@ -46,7 +47,7 @@ export const revertToVersion = createServerFn({ method: 'POST' })
         assertCanEdit(projectDoc, context.user.email);
 
         // 2. Fetch the Target Commit (the data we want to restore)
-        const targetCommit = await db.collection('commits').findOne({
+        const targetCommit = await collections.commits.findOne({
             _id: targetCommitId,
             projectId: projectId
         });
@@ -54,7 +55,7 @@ export const revertToVersion = createServerFn({ method: 'POST' })
         if (!targetCommit) throw new Error('Commit not found');
 
         // 3. Fetch the Current Project State (raw doc for headCommitId)
-        const project = await db.collection('projects').findOne({ _id: projectId });
+        const project = await collections.projects.findOne({ _id: projectId });
         if (!project) throw new Error('Project not found');
 
         // 4. Create a NEW Commit (This is the "Revert" node)
@@ -67,10 +68,10 @@ export const revertToVersion = createServerFn({ method: 'POST' })
             createdAt: new Date()
         });
 
-        const commitResult = await db.collection('commits').insertOne(revertCommit);
+        const commitResult = await collections.commits.insertOne(revertCommit);
 
         // 5. Update the Project Pointer to the new Revert Commit
-        await db.collection('projects').updateOne(
+        await collections.projects.updateOne(
             { _id: projectId },
             {
                 $set: { headCommitId: commitResult.insertedId },
@@ -109,10 +110,10 @@ export const saveNamedVersion = createServerFn({ method: 'POST' })
             createdAt: new Date()
         };
 
-        const result = await db.collection('commits').insertOne(newCommit);
+        const result = await collections.commits.insertOne(newCommit);
 
         // 2. Move the project pointer forward
-        await db.collection('projects').updateOne(
+        await collections.projects.updateOne(
             { _id: projectId },
             {
                 $set: {
@@ -133,12 +134,11 @@ export const getProjectHistory = createServerFn({ method: 'GET' })
         if (!projectDoc) throw new Error('Project not found');
         assertCanView(projectDoc, context.user.email);
 
-        const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+        const project = await collections.projects.findOne({ _id: new ObjectId(projectId) });
         if (!project) throw new Error('Project not found');
 
         // Fetch commits, projecting ONLY metadata (excluding the heavy `content` array)
-        const commits = await db
-            .collection('commits')
+        const commits = await collections.commits
             .find(
                 { projectId: new ObjectId(projectId) },
                 { projection: { content: 0 } } // Exclude layers for performance

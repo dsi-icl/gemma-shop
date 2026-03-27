@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only';
-import { db } from '@repo/db';
 import { ObjectId } from 'mongodb';
+
+import { collections } from '~/server/collections';
 
 export type DeviceKind = 'wall' | 'gallery' | 'controller';
 export type DeviceStatus = 'pending' | 'active' | 'revoked';
@@ -16,7 +17,7 @@ export interface DeviceRecord {
     lastSeenAt: string | null;
 }
 
-const devices = db.collection('devices');
+const devices = collections.devices;
 const ALGO: EcKeyImportParams & EcdsaParams = {
     name: 'ECDSA',
     namedCurve: 'P-256',

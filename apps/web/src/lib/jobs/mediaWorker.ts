@@ -3,10 +3,9 @@ import { readdir, stat, unlink } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 
-import { db } from '@repo/db';
-
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { ASSET_DIR, TMP_DIR } from '~/lib/serverVariables';
+import { collections } from '~/server/collections';
 
 import {
     claimNextJob,
@@ -247,7 +246,7 @@ async function drainQueue() {
 }
 
 function startSignalWatcher() {
-    const stream = db.collection('jobs').watch(
+    const stream = collections.jobs.watch(
         [
             {
                 $match: {

@@ -1,5 +1,6 @@
-import { db } from '@repo/db';
 import { ObjectId } from 'mongodb';
+
+import { collections } from '~/server/collections';
 
 import { getJobById } from './repo';
 import type { JobDocument } from './types';
@@ -67,7 +68,7 @@ class MongoJobSignalBus implements JobSignalBus {
                 }
             }, 1000);
 
-            const stream = db.collection('jobs').watch(
+            const stream = collections.jobs.watch(
                 [
                     {
                         $match: {
