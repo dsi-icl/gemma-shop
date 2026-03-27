@@ -11,6 +11,7 @@ import {
     peerCounts,
     unbindWall
 } from '~/lib/busState';
+import { adminAssignDeviceByChallenge, adminListDevices } from '~/server/devices';
 
 let prevCpuUsage = process.cpuUsage();
 let prevCpuAt = process.hrtime.bigint();
@@ -216,6 +217,18 @@ export async function adminUnbindWall(wallId: string) {
     );
 
     process.__BROADCAST_WALL_BINDING_CHANGED__?.(wallId);
+}
+
+export async function adminDevicesList() {
+    return adminListDevices();
+}
+
+export async function adminDevicesAssignByChallenge(input: {
+    challenge: string;
+    wallId: string;
+    assignedBy: string;
+}) {
+    return adminAssignDeviceByChallenge(input);
 }
 
 export async function adminListPublicAssets() {
