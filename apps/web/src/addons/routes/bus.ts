@@ -144,6 +144,76 @@ interface PendingBindOverride {
 const pendingBindOverrides = new Map<string, PendingBindOverride>();
 const pendingBindOverrideByWall = new Map<string, string>();
 
+function canManageWallFromPeer(entry: PeerEntry, wallId: string, action: string): boolean {
+    const auth = entry.meta.auth;
+    if (!auth || auth.mode === 'public-shim') {
+        console.warn(
+            `[WS][AUTH-SHIM] Allowing ${action} from ${entry.meta.specimen} on wall=${wallId} via public shim`
+        );
+        return true;
+    }
+
+    if (auth.mode === 'user') return true;
+
+    if (auth.mode === 'device-pending') {
+        console.warn(
+            `[WS][AUTH] Denied ${action}: pending device ${auth.deviceId ?? 'unknown'} cannot manage wall=${wallId}`
+        );
+        return false;
+    }
+
+    if (auth.mode === 'device-active') {
+        if (auth.assignedWallId === wallId) return true;
+        console.warn(
+            `[WS][AUTH] Denied ${action}: device ${auth.deviceId ?? 'unknown'} assigned to ${auth.assignedWallId ?? 'none'} cannot manage wall=${wallId}`
+        );
+        return false;
+    }
+
+    return false;
+}
+
+function canMutateBoundWallScope(entry: PeerEntry, action: string): boolean {
+    const meta = entry.meta;
+    if (meta.specimen === 'editor') return true;
+
+    if (meta.specimen === 'controller' || meta.specimen === 'wall') {
+        return canManageWallFromPeer(entry, meta.wallId, action);
+    }
+
+    if (meta.specimen === 'gallery') {
+        if (!meta.wallId) {
+            console.warn(`[WS][AUTH] Denied ${action}: gallery peer has no wall scope`);
+            return false;
+        }
+        return canManageWallFromPeer(entry, meta.wallId, action);
+    }
+
+    console.warn(
+        `[WS][AUTH] Denied ${action}: specimen ${meta.specimen} has no scope mutation rights`
+    );
+    return false;
+}
+
+function canRunEditorOnlyAction(entry: PeerEntry, action: string): boolean {
+    if (entry.meta.specimen !== 'editor') {
+        console.warn(
+            `[WS][AUTH] Denied ${action}: specimen ${entry.meta.specimen} is not allowed for editor-only action`
+        );
+        return false;
+    }
+
+    const auth = entry.meta.auth;
+    if (!auth || auth.mode !== 'user') {
+        console.warn(
+            `[WS][AUTH] Denied ${action}: editor peer is missing authenticated user context`
+        );
+        return false;
+    }
+
+    return true;
+}
+
 function playbackCommandKey(scopeId: number, numericId: number): string {
     return `${scopeId}:${numericId}`;
 }
@@ -547,6 +617,7 @@ handlers.set('rehydrate_please', ({ entry }) => {
 
 handlers.set('clear_stage', ({ entry, scopeId }) => {
     if (scopeId === null) return;
+    if (!canMutateBoundWallScope(entry, 'clear_stage')) return;
     const scope = scopedState.get(scopeId);
     if (scope) {
         for (const numericId of scope.layers.keys()) {
@@ -567,6 +638,7 @@ handlers.set('clear_stage', ({ entry, scopeId }) => {
 handlers.set('upsert_layer', ({ entry, data, scopeId, rawText }) => {
     let layer = data.layer;
     if (typeof layer?.numericId !== 'number') return;
+    if (!canMutateBoundWallScope(entry, 'upsert_layer')) return;
 
     const isControllerTransientUpsert = data.origin === 'controller:add_line_layer';
     let relayPayload = rawText;
@@ -616,6 +688,7 @@ handlers.set('upsert_layer', ({ entry, data, scopeId, rawText }) => {
 
 handlers.set('delete_layer', ({ entry, data, scopeId, rawText }) => {
     if (scopeId === null) return;
+    if (!canMutateBoundWallScope(entry, 'delete_layer')) return;
     const isControllerTransientDelete = data.origin === 'controller:add_line_layer';
     const scope = scopedState.get(scopeId);
     let deletedPersistentLayer = false;
@@ -690,6 +763,8 @@ handlers.set('seed_scope', ({ entry, data, scopeId }) => {
 });
 
 handlers.set('update_slides', ({ entry, data }) => {
+    if (!canRunEditorOnlyAction(entry, 'update_slides')) return;
+
     const { commitId, slides } = data;
     if (!commitId || !Array.isArray(slides)) return;
 
@@ -707,14 +782,16 @@ handlers.set('update_slides', ({ entry, data }) => {
     });
 });
 
-handlers.set('reboot', ({ scopeId, rawText }) => {
+handlers.set('reboot', ({ entry, scopeId, rawText }) => {
+    if (!canMutateBoundWallScope(entry, 'reboot')) return;
     if (scopeId !== null) {
         broadcastToWallsRaw(scopeId, rawText);
     }
 });
 
-handlers.set('stage_dirty', ({ scopeId }) => {
+handlers.set('stage_dirty', ({ entry, scopeId }) => {
     if (scopeId === null) return;
+    if (!canMutateBoundWallScope(entry, 'stage_dirty')) return;
     const scope = scopedState.get(scopeId);
     if (scope) scope.dirty = true;
 });
@@ -756,6 +833,8 @@ handlers.set('leave_scope', ({ entry }) => {
 });
 
 handlers.set('stage_save', ({ entry, data, scopeId }) => {
+    if (!canRunEditorOnlyAction(entry, 'stage_save')) return;
+
     if (scopeId === null) {
         sendJSON(entry.peer, {
             type: 'stage_save_response',
@@ -783,9 +862,10 @@ handlers.set('stage_save', ({ entry, data, scopeId }) => {
     });
 });
 
-handlers.set('bind_wall', ({ data }) => {
+handlers.set('bind_wall', ({ entry, data }) => {
     // Editors should route through request_bind_wall (approval gate).
     // Keep bind_wall for controllers and system/internal callers.
+    if (!canManageWallFromPeer(entry, data.wallId, 'bind_wall')) return;
     void (async () => {
         const currentSource = wallBindingSources.get(data.wallId);
         const source = currentSource === 'gallery' ? 'gallery' : 'live';
@@ -795,6 +875,16 @@ handlers.set('bind_wall', ({ data }) => {
 
 handlers.set('request_bind_wall', ({ entry, data }) => {
     if (entry.meta.specimen !== 'editor') {
+        sendJSON(entry.peer, {
+            type: 'bind_override_result',
+            requestId: data.requestId,
+            wallId: data.wallId,
+            allow: false,
+            reason: 'invalid'
+        });
+        return;
+    }
+    if (!canManageWallFromPeer(entry, data.wallId, 'request_bind_wall')) {
         sendJSON(entry.peer, {
             type: 'bind_override_result',
             requestId: data.requestId,
@@ -912,6 +1002,7 @@ handlers.set('request_bind_wall', ({ entry, data }) => {
 handlers.set('bind_override_decision', ({ entry, data }) => {
     if (entry.meta.specimen !== 'gallery') return;
     if (entry.meta.wallId !== data.wallId) return;
+    if (!canManageWallFromPeer(entry, data.wallId, 'bind_override_decision')) return;
 
     const pending = clearPendingBindOverride(data.requestId);
     if (!pending) return;
@@ -945,7 +1036,8 @@ handlers.set('bind_override_decision', ({ entry, data }) => {
     })();
 });
 
-handlers.set('unbind_wall', ({ data }) => {
+handlers.set('unbind_wall', ({ entry, data }) => {
+    if (!canManageWallFromPeer(entry, data.wallId, 'unbind_wall')) return;
     cancelWallUnbindGrace(data.wallId);
     unbindWall(data.wallId);
     hydrateWallNodes(data.wallId);
@@ -972,8 +1064,9 @@ handlers.set('unbind_wall', ({ data }) => {
     console.log(`[WS] Wall ${data.wallId} unbound`);
 });
 
-handlers.set('video_play', ({ data, scopeId }) => {
+handlers.set('video_play', ({ entry, data, scopeId }) => {
     if (scopeId === null) return;
+    if (!canMutateBoundWallScope(entry, 'video_play')) return;
     if (!shouldApplyPlaybackCommand(scopeId, data.numericId, data.issuedAt)) return;
     const layer = scopedState.get(scopeId)?.layers.get(data.numericId);
     if (layer?.type === 'video') {
@@ -987,8 +1080,9 @@ handlers.set('video_play', ({ data, scopeId }) => {
     }
 });
 
-handlers.set('video_pause', ({ data, scopeId }) => {
+handlers.set('video_pause', ({ entry, data, scopeId }) => {
     if (scopeId === null) return;
+    if (!canMutateBoundWallScope(entry, 'video_pause')) return;
     if (!shouldApplyPlaybackCommand(scopeId, data.numericId, data.issuedAt)) return;
     const layer = scopedState.get(scopeId)?.layers.get(data.numericId);
     if (layer?.type === 'video' && layer.playback.status === 'playing') {
@@ -1006,8 +1100,9 @@ handlers.set('video_pause', ({ data, scopeId }) => {
     }
 });
 
-handlers.set('video_seek', ({ data, scopeId }) => {
+handlers.set('video_seek', ({ entry, data, scopeId }) => {
     if (scopeId === null) return;
+    if (!canMutateBoundWallScope(entry, 'video_seek')) return;
     if (!shouldApplyPlaybackCommand(scopeId, data.numericId, data.issuedAt)) return;
     const layer = scopedState.get(scopeId)?.layers.get(data.numericId);
     if (layer?.type === 'video') {
