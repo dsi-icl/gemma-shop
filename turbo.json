@@ -13,7 +13,9 @@
         "PROXY_MAX_BYTES",
         "FFMPEG_PATH",
         "STRICT_BLOCKING",
-        "WS_ALLOW_PUBLIC_SHIM"
+        "WS_ALLOW_PUBLIC_SHIM",
+        "ALLOW_LEGACY_PROJECT_PUBLIC_SHIM",
+        "ASSETS_ALLOW_LEGACY_PUBLIC_READ_SHIM"
     ],
     "tasks": {
         "build": {

@@ -17,6 +17,10 @@ const auditLogs = db.collection('audit_logs');
 const assets = db.collection('assets');
 const commits = db.collection('commits');
 
+const ALLOW_LEGACY_PROJECT_PUBLIC_SHIM = !['0', 'false', 'no', 'off'].includes(
+    String(process.env.ALLOW_LEGACY_PROJECT_PUBLIC_SHIM ?? 'true').toLowerCase()
+);
+
 function serializeForClient<T>(value: T): T {
     if (value instanceof ObjectId) {
         return value.toHexString() as T;
@@ -78,14 +82,23 @@ export async function listProjects(userEmail: string, includeArchived = false) {
 
 export async function listPublishedProjects() {
     const docs = await projects
-        .find({
-            publishedCommitId: { $ne: null },
-            deletedAt: { $exists: false }
-        })
+        .find({ deletedAt: { $exists: false } })
         .sort({ updatedAt: -1 })
         .toArray();
 
-    const serialized = docs.map(serializeProject);
+    const visibleDocs = docs.filter((doc: any) => {
+        const visibility = doc.visibility === 'public' ? 'public' : 'private';
+        const hasPublishedCommit = Boolean(doc.publishedCommitId);
+        if (visibility === 'public' && hasPublishedCommit) return true;
+        if (!ALLOW_LEGACY_PROJECT_PUBLIC_SHIM) return false;
+        const tags = Array.isArray(doc.tags) ? doc.tags : [];
+        const hasPublicTag = tags.some(
+            (tag: unknown) => typeof tag === 'string' && tag === 'public'
+        );
+        return hasPublishedCommit || hasPublicTag;
+    });
+
+    const serialized = visibleDocs.map(serializeProject);
     const heroFilenames = Array.from(
         new Set(
             serialized
@@ -236,6 +249,7 @@ export async function createProject(input: CreateProjectInput, userEmail: string
     const doc = {
         ...input,
         collaborators: [{ email: userEmail, role: 'owner' as const }, ...input.collaborators],
+        visibility: input.visibility ?? 'private',
         headCommitId: null,
         publishedCommitId: null,
         createdBy: userEmail,
@@ -402,6 +416,7 @@ export async function publishCommit(projectId: string, commitId: string | null, 
         {
             $set: {
                 publishedCommitId: commitId,
+                visibility: isPublishing ? 'public' : 'private',
                 tags: updatedTags,
                 updatedAt: new Date().toISOString()
             }
@@ -842,6 +857,7 @@ function serializeAsset(doc: Record<string, unknown>): Asset {
 function serializeProject(doc: Record<string, unknown>): Project {
     return serializeForClient({
         ...doc,
+        visibility: doc.visibility === 'public' ? 'public' : 'private',
         _id: idToString(doc._id),
         headCommitId: doc.headCommitId ? idToString(doc.headCommitId) : null,
         publishedCommitId: doc.publishedCommitId ? idToString(doc.publishedCommitId) : null

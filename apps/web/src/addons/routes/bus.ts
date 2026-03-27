@@ -148,24 +148,48 @@ const ALLOW_PUBLIC_SHIM = !['0', 'false', 'no', 'off'].includes(
     String(process.env.WS_ALLOW_PUBLIC_SHIM ?? 'true').toLowerCase()
 );
 
+const wsAuthMetrics = (process as any).__WS_AUTH_METRICS__ ?? {
+    allowed: 0,
+    denied: 0,
+    shimAllowed: 0
+};
+(process as any).__WS_AUTH_METRICS__ = wsAuthMetrics;
+
+function recordAuthDecision(outcome: 'allowed' | 'denied' | 'shimAllowed') {
+    wsAuthMetrics[outcome] += 1;
+}
+
+if (!(process as any).__WS_AUTH_MODE_LOGGED__) {
+    console.log(
+        `[WS][AUTH] Startup mode: ${ALLOW_PUBLIC_SHIM ? 'compatibility-shim-enabled' : 'strict'} (WS_ALLOW_PUBLIC_SHIM=${String(process.env.WS_ALLOW_PUBLIC_SHIM ?? '') || 'unset'})`
+    );
+    (process as any).__WS_AUTH_MODE_LOGGED__ = true;
+}
+
 function canManageWallFromPeer(entry: PeerEntry, wallId: string, action: string): boolean {
     const auth = entry.meta.auth;
     if (!auth || auth.mode === 'public-shim') {
         if (ALLOW_PUBLIC_SHIM) {
+            recordAuthDecision('shimAllowed');
             console.warn(
                 `[WS][AUTH-SHIM] Allowing ${action} from ${entry.meta.specimen} on wall=${wallId} via public shim`
             );
             return true;
         }
+        recordAuthDecision('denied');
         console.warn(
             `[WS][AUTH] Denied ${action}: ${entry.meta.specimen} on wall=${wallId} requires authenticated user or enrolled device`
         );
         return false;
     }
 
-    if (auth.mode === 'user') return true;
+    if (auth.mode === 'user') {
+        recordAuthDecision('allowed');
+        return true;
+    }
 
     if (auth.mode === 'device-pending') {
+        recordAuthDecision('denied');
         console.warn(
             `[WS][AUTH] Denied ${action}: pending device ${auth.deviceId ?? 'unknown'} cannot manage wall=${wallId}`
         );
@@ -173,7 +197,11 @@ function canManageWallFromPeer(entry: PeerEntry, wallId: string, action: string)
     }
 
     if (auth.mode === 'device-active') {
-        if (auth.assignedWallId === wallId) return true;
+        if (auth.assignedWallId === wallId) {
+            recordAuthDecision('allowed');
+            return true;
+        }
+        recordAuthDecision('denied');
         console.warn(
             `[WS][AUTH] Denied ${action}: device ${auth.deviceId ?? 'unknown'} assigned to ${auth.assignedWallId ?? 'none'} cannot manage wall=${wallId}`
         );
@@ -207,6 +235,7 @@ function canMutateBoundWallScope(entry: PeerEntry, action: string): boolean {
 
 function canRunEditorOnlyAction(entry: PeerEntry, action: string): boolean {
     if (entry.meta.specimen !== 'editor') {
+        recordAuthDecision('denied');
         console.warn(
             `[WS][AUTH] Denied ${action}: specimen ${entry.meta.specimen} is not allowed for editor-only action`
         );
@@ -215,12 +244,14 @@ function canRunEditorOnlyAction(entry: PeerEntry, action: string): boolean {
 
     const auth = entry.meta.auth;
     if (!auth || auth.mode !== 'user') {
+        recordAuthDecision('denied');
         console.warn(
             `[WS][AUTH] Denied ${action}: editor peer is missing authenticated user context`
         );
         return false;
     }
 
+    recordAuthDecision('allowed');
     return true;
 }
 
@@ -741,6 +772,7 @@ handlers.set('delete_layer', ({ entry, data, scopeId, rawText }) => {
 
 handlers.set('seed_scope', ({ entry, data, scopeId }) => {
     if (scopeId === null) return;
+    if (!canRunEditorOnlyAction(entry, 'seed_scope')) return;
     const scope = scopedState.get(scopeId);
     if (!scope) return;
 

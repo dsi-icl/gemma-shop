@@ -13,6 +13,10 @@ import { ASSET_MIME_TYPES } from '~/lib/assetMime';
 import { ASSET_DIR } from '~/lib/serverVariables';
 import { assertCanView } from '~/server/projects';
 
+const ASSETS_ALLOW_LEGACY_PUBLIC_READ_SHIM = !['0', 'false', 'no', 'off'].includes(
+    String(process.env.ASSETS_ALLOW_LEGACY_PUBLIC_READ_SHIM ?? 'true').toLowerCase()
+);
+
 function parseVariantFilename(filename: string): { baseId: string; requested: number } | null {
     const m = filename.match(/^(.*)_([0-9]+)\.webp$/i);
     if (!m) return null;
@@ -162,6 +166,7 @@ async function enforceAssetAccessPolicy(
             projection: {
                 createdBy: 1,
                 collaborators: 1,
+                visibility: 1,
                 tags: 1,
                 publishedCommitId: 1
             }
@@ -169,6 +174,7 @@ async function enforceAssetAccessPolicy(
     )) as {
         createdBy?: string;
         collaborators?: Array<{ email?: string; role?: string }>;
+        visibility?: unknown;
         tags?: unknown[];
         publishedCommitId?: unknown;
     } | null;
@@ -177,7 +183,7 @@ async function enforceAssetAccessPolicy(
         return;
     }
 
-    if (isLegacyPublicProject(project)) {
+    if (project.visibility === 'public') {
         return;
     }
 
@@ -186,9 +192,15 @@ async function enforceAssetAccessPolicy(
         return;
     }
 
-    console.warn(
-        `[Assets] Legacy public read path used for private project asset filename=${requestedFilename}; visibility cutover pending`
-    );
+    if (ASSETS_ALLOW_LEGACY_PUBLIC_READ_SHIM && isLegacyPublicProject(project)) {
+        console.warn(
+            `[Assets][SHIM] Legacy public read path used for filename=${requestedFilename}; visibility cutover pending`
+        );
+        return;
+    }
+
+    console.warn(`[Assets] Denied private asset read without auth filename=${requestedFilename}`);
+    throw new Error('Forbidden');
 }
 
 const getResponse = createServerOnlyFn(
@@ -211,7 +223,14 @@ const getResponse = createServerOnlyFn(
         if (!isFilenameAllowedByContext(requestedFilename, accessContext)) {
             return new Response('Not Found', { status: 404 });
         }
-        await enforceAssetAccessPolicy(accessContext, requestedFilename, userEmail);
+        try {
+            await enforceAssetAccessPolicy(accessContext, requestedFilename, userEmail);
+        } catch (error: any) {
+            if (error?.message === 'Forbidden') {
+                return new Response('Forbidden', { status: 403 });
+            }
+            throw error;
+        }
 
         let resolvedFilename = requestedFilename;
         let asset = join(ASSET_DIR, resolvedFilename);

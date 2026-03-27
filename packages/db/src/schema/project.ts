@@ -15,12 +15,16 @@ export const Collaborator = z.object({
 });
 export type Collaborator = z.infer<typeof Collaborator>;
 
+export const ProjectVisibility = z.enum(['public', 'private']);
+export type ProjectVisibility = z.infer<typeof ProjectVisibility>;
+
 export const ProjectSchema = z.object({
     _id: oid,
     name: z.string().min(1, 'Name is required'),
     authorOrganisation: z.string().min(1, 'Author/Organisation is required'),
     description: z.string().default(''),
     tags: z.array(z.string()).default([]),
+    visibility: ProjectVisibility.default('private'),
     heroImages: z.array(z.string()).default([]),
     customControlUrl: z.string().nullish(),
     customRenderUrl: z.string().nullish(),
@@ -44,6 +48,7 @@ export const CreateProjectInput = z.object({
     authorOrganisation: z.string().min(1, 'Author/Organisation is required'),
     description: z.string().default(''),
     tags: z.array(z.string()).default([]),
+    visibility: ProjectVisibility.default('private'),
     heroImages: z.array(z.string()).default([]),
     customControlUrl: z.string().optional(),
     customRenderUrl: z.string().optional(),
@@ -59,6 +64,7 @@ export const UpdateProjectInput = z.object({
     authorOrganisation: z.string().min(1, 'Author/Organisation is required').optional(),
     description: z.string().optional(),
     tags: z.array(z.string()).optional(),
+    visibility: ProjectVisibility.optional(),
     heroImages: z.array(z.string()).optional(),
     customControlUrl: z.string().optional(),
     customRenderUrl: z.string().optional(),
