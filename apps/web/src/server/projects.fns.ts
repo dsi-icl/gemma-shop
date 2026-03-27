@@ -145,8 +145,8 @@ export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
 export const $getAuditLogs = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ projectId: z.string() }))
     .middleware([authMiddleware])
-    .handler(async ({ data }) => {
-        return getAuditLogs(data.projectId);
+    .handler(async ({ context, data }) => {
+        return getAuditLogs(data.projectId, context.user.email);
     });
 
 export const $ensureMutableHead = createServerFn({ method: 'POST' })

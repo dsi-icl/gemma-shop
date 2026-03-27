@@ -116,22 +116,19 @@ const tusServer = new Server({
             const numericId = parseInt(upload.metadata?.numericId ?? '0') || 0;
             const duration = parseFloat(upload.metadata?.duration ?? '0') || 0;
 
-            // Resolve projectId and userEmail from either upload token or session metadata
-            let projectId: string | null = null;
-            let userEmail = 'system';
+            // Resolve project identity from the upload token only.
             const uploadToken = upload.metadata?.uploadToken;
-            if (uploadToken) {
-                const tokenData = validateUploadToken(uploadToken);
-                if (!tokenData) {
-                    console.warn('[Tus] Upload rejected: invalid or expired token');
-                    throw new Error('Invalid or expired upload token');
-                }
-                projectId = tokenData.projectId;
-                userEmail = tokenData.userEmail;
-            } else {
-                projectId = upload.metadata?.projectId ?? null;
-                userEmail = upload.metadata?.userEmail ?? 'system';
+            if (!uploadToken) {
+                console.warn('[Tus] Upload rejected: missing upload token');
+                throw new Error('Missing upload token');
             }
+            const tokenData = validateUploadToken(uploadToken);
+            if (!tokenData) {
+                console.warn('[Tus] Upload rejected: invalid or expired token');
+                throw new Error('Invalid or expired upload token');
+            }
+            const projectId = tokenData.projectId;
+            const userEmail = tokenData.userEmail;
 
             // Detect type via magic bytes
             const headerBytes = await readHeaderBytes(tusFilePath, 48);
@@ -228,7 +225,7 @@ const tusServer = new Server({
             }
 
             // ── Create asset record in DB ──
-            if (assetFilename && projectId) {
+            if (assetFilename) {
                 const fileSize =
                     (await stat(join(ASSET_DIR, assetFilename)).catch(() => null))?.size ??
                     upload.size;
