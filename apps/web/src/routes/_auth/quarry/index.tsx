@@ -110,10 +110,8 @@ function QuarryIndex() {
                         ) : (
                             <AnimatedBlurPattern
                                 seed={info.row.original.name}
-                                width={40}
-                                height={40}
-                                blobs={4}
-                                animate={false}
+                                width={400}
+                                height={400}
                                 className="h-full w-full"
                             />
                         )}
