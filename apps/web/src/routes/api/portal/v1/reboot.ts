@@ -1,9 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
-import { wallBindings, wallsByWallId } from '~/lib/busState';
+import { wallBindings } from '~/lib/busState';
 import { pruneExpiredPortalTokens, validatePortalToken } from '~/lib/portalTokens';
-import type { GSMessage } from '~/lib/types';
 
 const rebootRequestSchema = z
     .object({
@@ -89,10 +88,9 @@ export const Route = createFileRoute('/api/portal/v1/reboot')({
                     });
                 }
 
-                const payload = JSON.stringify({ type: 'reboot' } satisfies GSMessage);
-                const peers = wallsByWallId.get(targetWallId);
-                if (!peers || peers.size === 0) {
-                    return json(request, 404, { error: 'No connected wall nodes for this wall' });
+                const rebootWall = process.__REBOOT_WALL__;
+                if (!rebootWall) {
+                    return json(request, 503, { error: 'Wall bus bridge unavailable' });
                 }
 
                 const hasNodeTarget = body.c !== undefined || body.r !== undefined;
@@ -102,21 +100,15 @@ export const Route = createFileRoute('/api/portal/v1/reboot')({
                     });
                 }
 
-                let sent = 0;
-                for (const entry of peers) {
-                    if (entry.meta.specimen !== 'wall') continue;
-                    if (hasNodeTarget && (entry.meta.col !== body.c || entry.meta.row !== body.r)) {
-                        continue;
-                    }
-                    entry.peer.send(payload);
-                    sent += 1;
-                }
+                const sent = hasNodeTarget
+                    ? rebootWall(targetWallId, { c: body.c!, r: body.r! })
+                    : rebootWall(targetWallId);
 
-                if (sent === 0) {
+                if (sent <= 0) {
                     return json(request, 404, {
                         error: hasNodeTarget
                             ? 'No wall node found for the requested c/r'
-                            : 'No target nodes available'
+                            : 'No connected wall nodes for this wall'
                     });
                 }
 
