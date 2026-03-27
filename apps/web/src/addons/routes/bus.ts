@@ -1040,7 +1040,8 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
             commitId: parsed.commitId,
             slideId: parsed.slideId,
             scopeId,
-            ...(parsed.requesterEmail ? { requesterEmail: parsed.requesterEmail } : {})
+            ...(parsed.requesterEmail ? { requesterEmail: parsed.requesterEmail } : {}),
+            auth: { mode: 'user' }
         });
 
         if (scope.layers.size === 0) {
@@ -1129,12 +1130,28 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
             });
         }
         const effectiveWallId = wallDevice?.assignedWallId ?? parsed.wallId;
+        const wallAuth = !wallDevice
+            ? ({ mode: 'public-shim' } as const)
+            : wallDevice.status === 'active'
+              ? ({
+                    mode: 'device-active',
+                    deviceId: wallDevice.deviceId,
+                    deviceKind: wallDevice.kind,
+                    assignedWallId: wallDevice.assignedWallId
+                } as const)
+              : ({
+                    mode: 'device-pending',
+                    deviceId: wallDevice.deviceId,
+                    deviceKind: wallDevice.kind,
+                    assignedWallId: wallDevice.assignedWallId
+                } as const);
 
         registerPeer(peer, {
             specimen: 'wall',
             wallId: effectiveWallId,
             col: parsed.col,
-            row: parsed.row
+            row: parsed.row,
+            auth: wallAuth
         });
 
         const boundScope = wallBindings.get(effectiveWallId);
@@ -1153,18 +1170,40 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
 
         console.log(
             `[WS] Wall joined wallId=${effectiveWallId} ` +
-                `(bound=${boundScope !== undefined ? scopeLabel(boundScope) : 'none'})`
+                `(bound=${boundScope !== undefined ? scopeLabel(boundScope) : 'none'}) ` +
+                `(auth=${wallAuth.mode}${wallAuth.deviceId ? `:${wallAuth.deviceId}` : ''})`
         );
         logPeerCounts();
         return;
     }
 
     if (parsed.specimen === 'controller') {
+        let controllerAuth: {
+            mode: 'public-shim' | 'device-active' | 'device-pending';
+            deviceId?: string;
+            deviceKind?: 'wall' | 'gallery' | 'controller';
+            assignedWallId?: string | null;
+        } = { mode: 'public-shim' };
+
         if (parsed.devicePublicKey) {
             const controllerDevice = await ensureDeviceByPublicKey({
                 publicKey: parsed.devicePublicKey,
                 kind: 'controller'
             });
+            controllerAuth =
+                controllerDevice.status === 'active'
+                    ? {
+                          mode: 'device-active',
+                          deviceId: controllerDevice.deviceId,
+                          deviceKind: controllerDevice.kind,
+                          assignedWallId: controllerDevice.assignedWallId
+                      }
+                    : {
+                          mode: 'device-pending',
+                          deviceId: controllerDevice.deviceId,
+                          deviceKind: controllerDevice.kind,
+                          assignedWallId: controllerDevice.assignedWallId
+                      };
             if (controllerDevice.status === 'pending') {
                 sendJSON(peer, {
                     type: 'device_enrollment',
@@ -1173,7 +1212,11 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
             }
         }
 
-        registerPeer(peer, { specimen: 'controller', wallId: parsed.wallId });
+        registerPeer(peer, {
+            specimen: 'controller',
+            wallId: parsed.wallId,
+            auth: controllerAuth
+        });
 
         const boundScope = wallBindings.get(parsed.wallId);
         const scope = boundScope !== undefined ? scopedState.get(boundScope) : null;
@@ -1200,17 +1243,41 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
             void sendSlidesSnapshotToControllerPeer(peer, scope.commitId);
         }
 
-        console.log(`[WS] Controller joined wallId=${parsed.wallId}`);
+        console.log(
+            `[WS] Controller joined wallId=${parsed.wallId} ` +
+                `(auth=${controllerAuth.mode}${controllerAuth.deviceId ? `:${controllerAuth.deviceId}` : ''})`
+        );
         logPeerCounts();
         return;
     }
 
     if (parsed.specimen === 'gallery') {
+        let galleryAuth: {
+            mode: 'public-shim' | 'device-active' | 'device-pending';
+            deviceId?: string;
+            deviceKind?: 'wall' | 'gallery' | 'controller';
+            assignedWallId?: string | null;
+        } = { mode: 'public-shim' };
+
         if (parsed.devicePublicKey) {
             const galleryDevice = await ensureDeviceByPublicKey({
                 publicKey: parsed.devicePublicKey,
                 kind: 'gallery'
             });
+            galleryAuth =
+                galleryDevice.status === 'active'
+                    ? {
+                          mode: 'device-active',
+                          deviceId: galleryDevice.deviceId,
+                          deviceKind: galleryDevice.kind,
+                          assignedWallId: galleryDevice.assignedWallId
+                      }
+                    : {
+                          mode: 'device-pending',
+                          deviceId: galleryDevice.deviceId,
+                          deviceKind: galleryDevice.kind,
+                          assignedWallId: galleryDevice.assignedWallId
+                      };
             if (galleryDevice.status === 'pending') {
                 sendJSON(peer, {
                     type: 'device_enrollment',
@@ -1221,18 +1288,20 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
 
         registerPeer(peer, {
             specimen: 'gallery',
-            ...(parsed.wallId ? { wallId: parsed.wallId } : {})
+            ...(parsed.wallId ? { wallId: parsed.wallId } : {}),
+            auth: galleryAuth
         });
         void sendGalleryStateSnapshot(peer, parsed.wallId);
         console.log(
-            `[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ' (global)'}`
+            `[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ' (global)'} ` +
+                `(auth=${galleryAuth.mode}${galleryAuth.deviceId ? `:${galleryAuth.deviceId}` : ''})`
         );
         logPeerCounts();
         return;
     }
 
     if (parsed.specimen === 'roy') {
-        registerPeer(peer, { specimen: 'roy' });
+        registerPeer(peer, { specimen: 'roy', auth: { mode: 'public-shim' } });
         console.log('[WS] Roy client joined');
         logPeerCounts();
         return;

@@ -119,6 +119,13 @@ export function scopeLabel(id: ScopeId): string {
     return scopeIdToKey.get(id) ?? `<unknown:${id}>`;
 }
 
+export type ConnectionAuthMeta = {
+    mode: 'user' | 'device-active' | 'device-pending' | 'public-shim';
+    deviceId?: string;
+    deviceKind?: 'wall' | 'gallery' | 'controller';
+    assignedWallId?: string | null;
+};
+
 export type PeerMeta =
     | {
           specimen: 'editor';
@@ -127,11 +134,18 @@ export type PeerMeta =
           slideId: string;
           scopeId: ScopeId;
           requesterEmail?: string;
+          auth?: ConnectionAuthMeta;
       }
-    | { specimen: 'wall'; wallId: string; col: number; row: number }
-    | { specimen: 'controller'; wallId: string }
-    | { specimen: 'gallery'; wallId?: string }
-    | { specimen: 'roy' };
+    | {
+          specimen: 'wall';
+          wallId: string;
+          col: number;
+          row: number;
+          auth?: ConnectionAuthMeta;
+      }
+    | { specimen: 'controller'; wallId: string; auth?: ConnectionAuthMeta }
+    | { specimen: 'gallery'; wallId?: string; auth?: ConnectionAuthMeta }
+    | { specimen: 'roy'; auth?: ConnectionAuthMeta };
 
 export interface PeerEntry {
     peer: Peer;
