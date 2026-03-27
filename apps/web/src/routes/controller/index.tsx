@@ -19,6 +19,7 @@ import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { ControllerEngine } from '~/lib/controllerEngine';
 import { useControllerStore } from '~/lib/controllerStore';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
+import { wsEnrollmentFallbackEnabled } from '~/lib/runtimeFlags';
 import type { LayerWithEditorState } from '~/lib/types';
 
 const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
@@ -192,6 +193,7 @@ function Controller() {
         if (!engine) return;
         return engine.onMessage((data) => {
             if (data.type === 'device_enrollment') {
+                if (!wsEnrollmentFallbackEnabled) return;
                 setDeviceEnrollmentId(data.deviceId);
             }
         });
@@ -715,7 +717,7 @@ function Controller() {
             </div>
         );
 
-    if (deviceEnrollmentId)
+    if (wsEnrollmentFallbackEnabled && deviceEnrollmentId)
         return (
             <div
                 className={cn(

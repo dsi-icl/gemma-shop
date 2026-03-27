@@ -9,6 +9,7 @@ import { MapWrapper } from '~/components/MapWrapper';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { toCssFilterString } from '~/lib/layerFilters';
+import { wsEnrollmentFallbackEnabled } from '~/lib/runtimeFlags';
 import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
 import type { LayerWithWallComponentState } from '~/lib/types';
 import { WallEngine, type Viewport } from '~/lib/wallEngine';
@@ -298,6 +299,7 @@ function WallApp() {
             } else if (data.type === 'delete_layer') {
                 setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
             } else if (data.type === 'device_enrollment') {
+                if (!wsEnrollmentFallbackEnabled) return;
                 setDeviceEnrollmentId(data.deviceId);
             } else if (data.type === 'reboot') {
                 setBlackOverlayOpacity(1);
@@ -483,7 +485,7 @@ function WallApp() {
         };
     }, [layers, frameabilityByUrl]);
 
-    if (deviceEnrollmentId) {
+    if (wsEnrollmentFallbackEnabled && deviceEnrollmentId) {
         return (
             <div className="flex h-screen w-screen flex-col items-center justify-center gap-5 bg-neutral-900 px-6 text-neutral-500">
                 <TriangleDashedIcon size={56} weight="thin" />

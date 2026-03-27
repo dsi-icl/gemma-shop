@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { GalleryProjectCard } from '~/components/GalleryProjectCard';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { GalleryEngine } from '~/lib/galleryEngine';
+import { wsEnrollmentFallbackEnabled } from '~/lib/runtimeFlags';
 import { publishedProjectsQueryOptions } from '~/server/projects.queries';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
@@ -80,7 +81,8 @@ function HomePage() {
         return params.has('enroll');
     }, [searchStr]);
 
-    const galleryEnrollmentGateActive = enrollmentModeEnabled && Boolean(deviceEnrollmentId);
+    const galleryEnrollmentGateActive =
+        wsEnrollmentFallbackEnabled && enrollmentModeEnabled && Boolean(deviceEnrollmentId);
 
     const galleryEngine = useMemo(
         () => (typeof window !== 'undefined' ? GalleryEngine.getInstance(wallId) : null),
@@ -186,7 +188,7 @@ function HomePage() {
 
         const unsubs = [
             galleryEngine.onMessage((data) => {
-                if (!enrollmentModeEnabled) return;
+                if (!wsEnrollmentFallbackEnabled || !enrollmentModeEnabled) return;
                 if (data.type === 'device_enrollment') {
                     setDeviceEnrollmentId(data.deviceId);
                 }
@@ -328,7 +330,7 @@ function HomePage() {
 
     useEffect(() => {
         const deviceId = deviceEnrollmentId?.trim();
-        if (!enrollmentModeEnabled || !deviceId) return;
+        if (!wsEnrollmentFallbackEnabled || !enrollmentModeEnabled || !deviceId) return;
         let cancelled = false;
         Promise.resolve()
             .then(async () => {

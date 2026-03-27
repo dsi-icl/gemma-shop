@@ -144,13 +144,23 @@ interface PendingBindOverride {
 const pendingBindOverrides = new Map<string, PendingBindOverride>();
 const pendingBindOverrideByWall = new Map<string, string>();
 
+const ALLOW_PUBLIC_SHIM = !['0', 'false', 'no', 'off'].includes(
+    String(process.env.WS_ALLOW_PUBLIC_SHIM ?? 'true').toLowerCase()
+);
+
 function canManageWallFromPeer(entry: PeerEntry, wallId: string, action: string): boolean {
     const auth = entry.meta.auth;
     if (!auth || auth.mode === 'public-shim') {
+        if (ALLOW_PUBLIC_SHIM) {
+            console.warn(
+                `[WS][AUTH-SHIM] Allowing ${action} from ${entry.meta.specimen} on wall=${wallId} via public shim`
+            );
+            return true;
+        }
         console.warn(
-            `[WS][AUTH-SHIM] Allowing ${action} from ${entry.meta.specimen} on wall=${wallId} via public shim`
+            `[WS][AUTH] Denied ${action}: ${entry.meta.specimen} on wall=${wallId} requires authenticated user or enrolled device`
         );
-        return true;
+        return false;
     }
 
     if (auth.mode === 'user') return true;

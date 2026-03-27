@@ -12,7 +12,8 @@
         "PROXY_FETCH_TIMEOUT_MS",
         "PROXY_MAX_BYTES",
         "FFMPEG_PATH",
-        "STRICT_BLOCKING"
+        "STRICT_BLOCKING",
+        "WS_ALLOW_PUBLIC_SHIM"
     ],
     "tasks": {
         "build": {
