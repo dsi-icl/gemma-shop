@@ -12,7 +12,10 @@
         "PROXY_FETCH_TIMEOUT_MS",
         "PROXY_MAX_BYTES",
         "FFMPEG_PATH",
-        "STRICT_BLOCKING"
+        "STRICT_BLOCKING",
+        "WEB_SCREENSHOT_ALLOWLIST",
+        "WEB_SCREENSHOT_RATE_LIMIT_PER_MIN",
+        "SCREENSHOT_INTERNAL_TOKEN"
     ],
     "tasks": {
         "build": {
