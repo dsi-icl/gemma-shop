@@ -8,6 +8,7 @@ import { createUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 import {
     archiveProject,
     assertCanEdit,
+    assertCanView,
     copySlideInCommit,
     createAsset,
     createBranchHead,
@@ -160,7 +161,10 @@ export const $ensureMutableHead = createServerFn({ method: 'POST' })
 export const $getProjectCommits = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ projectId: z.string() }))
     .middleware([authMiddleware])
-    .handler(async ({ data }) => {
+    .handler(async ({ context, data }) => {
+        const project = await getProject(data.projectId);
+        if (!project) throw new Error('Project not found');
+        assertCanView(project, context.user.email);
         return getProjectCommits(data.projectId);
     });
 
@@ -224,6 +228,9 @@ export const $createUploadToken = createServerFn({ method: 'POST' })
     .inputValidator(z.object({ projectId: z.string() }))
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
+        const project = await getProject(data.projectId);
+        if (!project) throw new Error('Project not found');
+        assertCanEdit(project, context.user.email);
         return createUploadToken(data.projectId, context.user.email);
     });
 
