@@ -44,6 +44,7 @@
         "@uppy/core": "catalog:",
         "@uppy/react": "catalog:",
         "@uppy/tus": "catalog:",
+        "@yudiel/react-qr-scanner": "catalog:",
         "better-auth": "catalog:",
         "blurhash": "catalog:",
         "date-fns": "catalog:",

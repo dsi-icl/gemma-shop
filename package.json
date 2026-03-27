@@ -62,6 +62,7 @@
             "@uppy/core": "^5.2.0",
             "@uppy/react": "^5.2.0",
             "@uppy/tus": "^5.1.1",
+            "@yudiel/react-qr-scanner": "^2.5.1",
             "@vitejs/plugin-react": "^6.0.1",
             "babel-plugin-react-compiler": "^1.0.0",
             "better-auth": "^1.5.6",
