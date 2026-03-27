@@ -19,6 +19,11 @@ function WallDevicesTab() {
     const { data: devices = [] } = useSuspenseQuery(adminDevicesForWallQueryOptions(wallId));
     const [scanDialogOpen, setScanDialogOpen] = useState(false);
     const [scanStatus, setScanStatus] = useState<string>('Ready to scan');
+    const [cameraPermission, setCameraPermission] = useState<
+        'unknown' | 'prompt' | 'granted' | 'denied'
+    >('unknown');
+    const [cameraReady, setCameraReady] = useState(false);
+    const [scannerKey, setScannerKey] = useState(0);
     const [scanEvents, setScanEvents] = useState<Array<{ id: string; text: string; ok: boolean }>>(
         []
     );
@@ -27,10 +32,62 @@ function WallDevicesTab() {
 
     useEffect(() => {
         if (!scanDialogOpen) return;
-        setScanStatus('Scanning... Keep moving between screens.');
+        setScanStatus('Checking camera access...');
+        setCameraPermission('unknown');
+        setCameraReady(false);
         seenPayloadsRef.current.clear();
         setScanEvents([]);
+
+        void (async () => {
+            try {
+                const permissionsApi = (navigator as any).permissions;
+                if (!permissionsApi?.query) {
+                    setScanStatus('Allow camera access to scan device QR codes.');
+                    return;
+                }
+
+                const permission = await permissionsApi.query({ name: 'camera' });
+                const nextState = permission.state as 'prompt' | 'granted' | 'denied';
+                setCameraPermission(nextState);
+
+                if (nextState === 'granted') {
+                    setScanStatus('Scanning... Keep moving between screens.');
+                    setCameraReady(true);
+                } else if (nextState === 'prompt') {
+                    setScanStatus('Tap Enable Camera to continue.');
+                } else {
+                    setScanStatus('Camera access is blocked. Enable camera permission and retry.');
+                }
+            } catch {
+                setScanStatus('Tap Enable Camera to continue.');
+            }
+        })();
     }, [scanDialogOpen]);
+
+    const requestCameraPermission = async () => {
+        setScanStatus('Requesting camera access...');
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+                audio: false
+            });
+            for (const track of stream.getTracks()) track.stop();
+            setCameraPermission('granted');
+            setCameraReady(true);
+            setScanStatus('Scanning... Keep moving between screens.');
+            setScannerKey((current) => current + 1);
+        } catch (error: any) {
+            const errorName = error?.name ?? '';
+            if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+                setCameraPermission('denied');
+                setCameraReady(false);
+                setScanStatus('Camera access is blocked. Enable camera permission and retry.');
+                return;
+            }
+            setCameraReady(false);
+            setScanStatus('Camera unavailable. Check permissions and retry.');
+        }
+    };
 
     const pushEvent = (text: string, ok: boolean) => {
         setScanEvents((prev) =>
@@ -69,6 +126,7 @@ function WallDevicesTab() {
 
     const handleScan = async (detectedCodes: IDetectedBarcode[]) => {
         if (!scanDialogOpen || processingRef.current) return;
+        if (cameraPermission !== 'granted' && cameraPermission !== 'prompt') return;
 
         for (const detection of detectedCodes) {
             const raw = detection.rawValue?.trim();
@@ -162,23 +220,65 @@ function WallDevicesTab() {
 
                     <div className="mt-4 space-y-3">
                         <div className="overflow-hidden rounded-lg border border-border bg-black">
-                            <Scanner
-                                onScan={(codes) => void handleScan(codes)}
-                                onError={() =>
-                                    setScanStatus('Camera access denied or unavailable.')
-                                }
-                                constraints={{ facingMode: { ideal: 'environment' } }}
-                                formats={['qr_code']}
-                                sound={false}
-                                paused={!scanDialogOpen}
-                                scanDelay={250}
-                                classNames={{
-                                    container: 'h-72 w-full',
-                                    video: 'h-72 w-full object-cover'
-                                }}
-                            />
+                            {cameraReady ? (
+                                <Scanner
+                                    key={scannerKey}
+                                    onScan={(codes) => void handleScan(codes)}
+                                    onError={(error: any) => {
+                                        const errorName = error?.name ?? '';
+                                        if (
+                                            errorName === 'NotAllowedError' ||
+                                            errorName === 'PermissionDeniedError'
+                                        ) {
+                                            setCameraPermission('denied');
+                                            setCameraReady(false);
+                                            setScanStatus(
+                                                'Camera access is blocked. Enable camera permission and retry.'
+                                            );
+                                            return;
+                                        }
+
+                                        setScanStatus(
+                                            'Camera unavailable. Check permissions and retry.'
+                                        );
+                                    }}
+                                    constraints={{ facingMode: { ideal: 'environment' } }}
+                                    formats={['qr_code']}
+                                    sound={false}
+                                    paused={!scanDialogOpen || cameraPermission === 'denied'}
+                                    scanDelay={250}
+                                    classNames={{
+                                        container: 'h-72 w-full',
+                                        video: 'h-72 w-full object-cover'
+                                    }}
+                                />
+                            ) : (
+                                <div className="flex h-72 w-full items-center justify-center text-sm text-muted-foreground">
+                                    Camera is not active yet.
+                                </div>
+                            )}
                         </div>
                         <p className="text-xs text-muted-foreground">{scanStatus}</p>
+                        <div className="flex justify-end gap-2">
+                            {!cameraReady ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => void requestCameraPermission()}
+                                >
+                                    Enable Camera
+                                </Button>
+                            ) : null}
+                            {cameraPermission === 'denied' ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => void requestCameraPermission()}
+                                >
+                                    Retry Camera
+                                </Button>
+                            ) : null}
+                        </div>
                         <div className="max-h-40 overflow-auto rounded border border-border bg-muted/20 p-2 text-xs">
                             {scanEvents.length === 0 ? (
                                 <div className="text-muted-foreground">No scans yet.</div>
