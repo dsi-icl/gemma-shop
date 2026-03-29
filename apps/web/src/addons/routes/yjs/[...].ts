@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { createHeadlessEditor } from '@lexical/headless';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { createBinding, syncLexicalUpdateToYjs, syncYjsChangesToLexical } from '@lexical/yjs';
+import { auth } from '@repo/auth/auth';
 import type * as crossws from 'crossws';
 import { Window } from 'happy-dom';
 import { $createParagraphNode, $getRoot } from 'lexical';
@@ -149,6 +150,48 @@ function parseScope(docName: string): DocScope {
         throw new Error(`Invalid numeric layerId in docName: ${docName}`);
     }
     return { projectId, commitId, slideId, layerId };
+}
+
+function canUserEditProject(
+    project: { collaborators?: Array<{ email?: string; role?: string }> },
+    userEmail: string
+): boolean {
+    const collaborators = Array.isArray(project.collaborators) ? project.collaborators : [];
+    const collab = collaborators.find((c) => c.email === userEmail);
+    if (!collab) return false;
+    return collab.role !== 'viewer';
+}
+
+async function requireProjectEditor(peer: crossws.Peer, scope: DocScope, docName: string) {
+    const cache = ((peer as any)._ycauthScopes ??= new Set<string>()) as Set<string>;
+    if (cache.has(docName)) return;
+
+    const headers = peer.request?.headers;
+    if (!headers) {
+        throw new Error('YJS auth denied: missing request headers');
+    }
+
+    const session = await auth.api.getSession({ headers });
+    const userEmail = session?.user?.email;
+    if (!userEmail) {
+        throw new Error('YJS auth denied: missing user session');
+    }
+
+    const project = await collections.projects.findOne(
+        { _id: new ObjectId(scope.projectId), deletedAt: { $exists: false } },
+        { projection: { collaborators: 1 } }
+    );
+    if (!project) {
+        throw new Error(`YJS auth denied: project ${scope.projectId} not found`);
+    }
+
+    if (!canUserEditProject(project as any, userEmail)) {
+        throw new Error(
+            `YJS auth denied: user ${userEmail} is not ProjectEditor for ${scope.projectId}`
+        );
+    }
+
+    cache.add(docName);
 }
 
 function binaryToUint8Array(data: unknown): Uint8Array | null {
@@ -558,6 +601,8 @@ class YCrossws {
         if ((peer as any)._ycdoc) return (peer as any)._ycdoc;
 
         const docName = getDocName(peer);
+        const scope = parseScope(docName);
+        await requireProjectEditor(peer, scope, docName);
         let doc = this.docs.get(docName);
         if (!doc) {
             let pending = this.initializing.get(docName);
@@ -576,10 +621,25 @@ class YCrossws {
         (peer as any)._ycdoc = doc;
         return doc;
     }
+
+    revalidateProject(projectId: string): number {
+        let closed = 0;
+        for (const doc of this.docs.values()) {
+            if (doc.scope.projectId !== projectId) continue;
+            for (const peer of doc.peerIds.keys()) {
+                try {
+                    peer.close();
+                    closed += 1;
+                } catch {
+                    // no-op
+                }
+            }
+        }
+        return closed;
+    }
 }
 
-function createHandler() {
-    const yc = new YCrossws();
+function createHandler(yc: YCrossws) {
     const hooks: Partial<crossws.Hooks> = {
         async open(peer) {
             await yc.onOpen(peer);
@@ -594,4 +654,10 @@ function createHandler() {
     return { hooks: hooks as crossws.Hooks };
 }
 
-export default defineWebSocketHandler(createHandler().hooks);
+const yCrossws = new YCrossws();
+
+(process as any).__YJS_REVALIDATE_PROJECT__ = (projectId: string) => {
+    return yCrossws.revalidateProject(projectId);
+};
+
+export default defineWebSocketHandler(createHandler(yCrossws).hooks);
