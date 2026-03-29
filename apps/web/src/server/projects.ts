@@ -10,6 +10,7 @@ import { ObjectId } from 'mongodb';
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
+import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
 import { serializeForClient } from '~/server/serialization';
 import { serializeAsset } from '~/server/serializers/asset.serializer';
@@ -193,6 +194,13 @@ export async function deletePublicAsset(assetId: string, userEmail: string) {
             }
         }
     );
+    await logAuditSuccess({
+        action: 'PUBLIC_ASSET_DELETED',
+        actorId: userEmail,
+        projectId: asset.projectId,
+        resourceType: 'asset',
+        resourceId: assetId
+    });
 }
 
 export async function getProject(id: string) {
@@ -221,12 +229,13 @@ export async function createProject(input: CreateProjectInput, userEmail: string
     };
     const result = await projects.insertOne(doc);
 
-    await auditLogs.insertOne({
-        projectId: result.insertedId,
-        actorId: userEmail,
+    await logAuditSuccess({
         action: 'PROJECT_CREATED',
-        changes: { name: input.name },
-        createdAt: new Date()
+        actorId: userEmail,
+        projectId: result.insertedId,
+        resourceType: 'project',
+        resourceId: result.insertedId.toHexString(),
+        changes: { name: input.name }
     });
 
     return serializeProject({ ...doc, _id: result.insertedId });
@@ -247,6 +256,14 @@ export async function createAsset(input: CreateAssetInput, userEmail: string) {
     };
 
     const result = await assets.insertOne(doc);
+    await logAuditSuccess({
+        action: 'ASSET_CREATED',
+        actorId: userEmail,
+        projectId: input.projectId,
+        resourceType: 'asset',
+        resourceId: result.insertedId.toHexString(),
+        changes: { name: input.name, public: Boolean((input as any).public) }
+    });
 
     return serializeAsset({ ...doc, _id: result.insertedId });
 }
@@ -265,12 +282,13 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
     );
     if (!result) throw new Error('Update failed');
 
-    await auditLogs.insertOne({
-        projectId: new ObjectId(_id),
-        actorId: userEmail,
+    await logAuditSuccess({
         action: 'PROJECT_UPDATED',
-        changes: updates,
-        createdAt: new Date()
+        actorId: userEmail,
+        projectId: _id,
+        resourceType: 'project',
+        resourceId: _id,
+        changes: updates as Record<string, unknown>
     });
 
     // Live-push custom render settings changes to any bound walls
@@ -306,12 +324,13 @@ export async function archiveProject(id: string, userEmail: string) {
         }
     );
 
-    await auditLogs.insertOne({
-        projectId: new ObjectId(id),
+    await logAuditSuccess({
+        action: 'PROJECT_ARCHIVED',
         actorId: userEmail,
-        action: 'PROJECT_UPDATED',
-        changes: { deletedAt: true },
-        createdAt: new Date()
+        projectId: id,
+        resourceType: 'project',
+        resourceId: id,
+        changes: { deletedAt: true }
     });
 }
 
@@ -336,6 +355,13 @@ export async function deleteAsset(assetId: string, userEmail: string) {
             }
         }
     );
+    await logAuditSuccess({
+        action: 'ASSET_DELETED',
+        actorId: userEmail,
+        projectId: asset.projectId,
+        resourceType: 'asset',
+        resourceId: assetId
+    });
 }
 
 export async function restoreProject(id: string, userEmail: string) {
@@ -351,12 +377,13 @@ export async function restoreProject(id: string, userEmail: string) {
         }
     );
 
-    await auditLogs.insertOne({
-        projectId: new ObjectId(id),
+    await logAuditSuccess({
+        action: 'PROJECT_RESTORED',
         actorId: userEmail,
-        action: 'PROJECT_UPDATED',
-        changes: { deletedAt: false },
-        createdAt: new Date()
+        projectId: id,
+        resourceType: 'project',
+        resourceId: id,
+        changes: { deletedAt: false }
     });
 }
 
@@ -386,12 +413,13 @@ export async function publishCommit(projectId: string, commitId: string | null, 
         }
     );
 
-    await auditLogs.insertOne({
-        projectId: new ObjectId(projectId),
+    await logAuditSuccess({
+        action: commitId ? 'PROJECT_PUBLISHED' : 'PROJECT_UNPUBLISHED',
         actorId: userEmail,
-        action: 'PROJECT_UPDATED',
-        changes: { publishedCommitId: commitId },
-        createdAt: new Date()
+        projectId,
+        resourceType: 'project',
+        resourceId: projectId,
+        changes: { publishedCommitId: commitId }
     });
 
     process.__BROADCAST_PROJECT_PUBLISH_CHANGED__?.(projectId, commitId);
@@ -461,6 +489,14 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
             { _id: new ObjectId(projectId) },
             { $set: { headCommitId: result.insertedId, updatedAt: new Date().toISOString() } }
         );
+        await logAuditSuccess({
+            action: 'MUTABLE_HEAD_ENSURED',
+            actorId: userEmail,
+            projectId,
+            resourceType: 'commit',
+            resourceId: result.insertedId.toHexString(),
+            changes: { source: 'legacy-head-migration' }
+        });
         return result.insertedId.toHexString();
     }
 
@@ -481,6 +517,14 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
         { _id: new ObjectId(projectId) },
         { $set: { headCommitId: result.insertedId, updatedAt: new Date().toISOString() } }
     );
+    await logAuditSuccess({
+        action: 'MUTABLE_HEAD_ENSURED',
+        actorId: userEmail,
+        projectId,
+        resourceType: 'commit',
+        resourceId: result.insertedId.toHexString(),
+        changes: { source: 'head-created' }
+    });
     return result.insertedId.toHexString();
 }
 
@@ -514,6 +558,14 @@ export async function createBranchHead(
         createdAt: new Date()
     };
     const result = await commits.insertOne(branchHead);
+    await logAuditSuccess({
+        action: 'BRANCH_HEAD_CREATED',
+        actorId: userEmail,
+        projectId,
+        resourceType: 'commit',
+        resourceId: result.insertedId.toHexString(),
+        changes: { sourceCommitId }
+    });
     return result.insertedId.toHexString();
 }
 
@@ -546,12 +598,13 @@ export async function promoteBranchHead(
         }
     );
 
-    await auditLogs.insertOne({
-        projectId: new ObjectId(projectId),
-        actorId: userEmail,
+    await logAuditSuccess({
         action: 'BRANCH_PROMOTED',
-        changes: { headCommitId: branchCommitId },
-        createdAt: new Date()
+        actorId: userEmail,
+        projectId,
+        resourceType: 'project',
+        resourceId: projectId,
+        changes: { headCommitId: branchCommitId }
     });
 }
 

@@ -12,6 +12,7 @@ import {
     notifyControllers,
     seedScopeFromDb
 } from '~/lib/busState';
+import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
 import { serializeWall } from '~/server/serializers/wall.serializer';
 
@@ -87,6 +88,18 @@ export async function bindWallToScope(
         },
         { upsert: true }
     );
+    await logAuditSuccess({
+        action: 'WALL_BOUND',
+        resourceType: 'wall',
+        resourceId: wallId,
+        projectId,
+        changes: {
+            projectId,
+            commitId,
+            slideId: resolvedSlideId,
+            source: 'gallery'
+        }
+    });
 
     process.__BROADCAST_WALL_BINDING_CHANGED__?.(wallId);
 }

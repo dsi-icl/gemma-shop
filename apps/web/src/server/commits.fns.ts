@@ -3,6 +3,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 
+import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
 import { serializeForClient } from '~/server/serialization';
 
@@ -50,6 +51,18 @@ export const revertToVersion = createServerFn({ method: 'POST' })
                 $inc: { version: 1 } // Optional: increment a visible version number
             }
         );
+        await logAuditSuccess({
+            action: 'COMMIT_REVERTED',
+            actorId: context.user.email,
+            projectId,
+            resourceType: 'commit',
+            resourceId: commitResult.insertedId.toHexString(),
+            changes: {
+                targetCommitId: data.targetCommitId,
+                newHeadCommitId: commitResult.insertedId.toHexString(),
+                reason: data.reason
+            }
+        });
 
         return { success: true, newHead: commitResult.insertedId.toString() };
     });
@@ -92,6 +105,14 @@ export const saveNamedVersion = createServerFn({ method: 'POST' })
                 }
             }
         );
+        await logAuditSuccess({
+            action: 'COMMIT_NAMED_VERSION_SAVED',
+            actorId: context.user.email,
+            projectId,
+            resourceType: 'commit',
+            resourceId: result.insertedId.toHexString(),
+            changes: { message: data.message, isAutoSave: data.isAutoSave }
+        });
 
         return { success: true, commitId: result.insertedId.toHexString() };
     });
