@@ -1,3 +1,4 @@
+import { auth } from '@repo/auth/auth';
 import { ObjectId } from 'mongodb';
 import { defineWebSocketHandler } from 'nitro/h3';
 
@@ -151,12 +152,17 @@ const ALLOW_PUBLIC_SHIM = !['0', 'false', 'no', 'off'].includes(
 const wsAuthMetrics = (process as any).__WS_AUTH_METRICS__ ?? {
     allowed: 0,
     denied: 0,
-    shimAllowed: 0
+    shimAllowed: 0,
+    deniedByReason: {} as Record<string, number>
 };
 (process as any).__WS_AUTH_METRICS__ = wsAuthMetrics;
 
 function recordAuthDecision(outcome: 'allowed' | 'denied' | 'shimAllowed') {
     wsAuthMetrics[outcome] += 1;
+}
+
+function recordDeniedReason(reason: string) {
+    wsAuthMetrics.deniedByReason[reason] = (wsAuthMetrics.deniedByReason[reason] ?? 0) + 1;
 }
 
 if (!(process as any).__WS_AUTH_MODE_LOGGED__) {
@@ -253,6 +259,17 @@ function canRunEditorOnlyAction(entry: PeerEntry, action: string): boolean {
 
     recordAuthDecision('allowed');
     return true;
+}
+
+async function canEditorEditProject(projectId: string, userEmail: string): Promise<boolean> {
+    const project = (await collections.projects.findOne(
+        { _id: new ObjectId(projectId), deletedAt: { $exists: false } },
+        { projection: { collaborators: 1 } }
+    )) as { collaborators?: Array<{ email?: string; role?: string }> } | null;
+    if (!project) return false;
+    const collaborators = Array.isArray(project.collaborators) ? project.collaborators : [];
+    const collab = collaborators.find((c) => c.email === userEmail);
+    return Boolean(collab && collab.role !== 'viewer');
 }
 
 function playbackCommandKey(scopeId: number, numericId: number): string {
@@ -1166,6 +1183,27 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
     if (existing) unregisterPeer(peer.id);
 
     if (parsed.specimen === 'editor') {
+        const headers = peer.request?.headers;
+        const session = headers ? await auth.api.getSession({ headers }) : null;
+        const sessionEmail = session?.user?.email ?? null;
+        if (!sessionEmail) {
+            recordAuthDecision('denied');
+            recordDeniedReason('editor_missing_session');
+            console.warn('[WS][AUTH] Denied editor hello: missing authenticated user session');
+            peer.close();
+            return;
+        }
+        const canEdit = await canEditorEditProject(parsed.projectId, sessionEmail);
+        if (!canEdit) {
+            recordAuthDecision('denied');
+            recordDeniedReason('editor_project_editor_required');
+            console.warn(
+                `[WS][AUTH] Denied editor hello: user=${sessionEmail} is not ProjectEditor for project=${parsed.projectId}`
+            );
+            peer.close();
+            return;
+        }
+
         const scopeId = internScope(parsed.projectId, parsed.commitId, parsed.slideId);
         const scope = getOrCreateScope(scopeId, parsed.projectId, parsed.commitId, parsed.slideId);
 
@@ -1175,7 +1213,7 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
             commitId: parsed.commitId,
             slideId: parsed.slideId,
             scopeId,
-            ...(parsed.requesterEmail ? { requesterEmail: parsed.requesterEmail } : {}),
+            requesterEmail: sessionEmail,
             auth: { mode: 'user' }
         });
 
@@ -1245,7 +1283,7 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
         }
 
         console.log(
-            `[WS] Editor joined scope=${makeScopeLabel(parsed.projectId, parsed.commitId, parsed.slideId)}`
+            `[WS] Editor joined scope=${makeScopeLabel(parsed.projectId, parsed.commitId, parsed.slideId)} user=${sessionEmail}`
         );
         logPeerCounts();
         return;
@@ -1748,6 +1786,66 @@ export default defineWebSocketHandler({
         sent += 1;
     }
     return sent;
+};
+
+function closePeerSafely(entry: PeerEntry): boolean {
+    try {
+        entry.peer.close();
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+(process as any).__WS_REVALIDATE_PROJECT_PEERS__ = (projectId: string) => {
+    let closed = 0;
+    for (const entry of peers.values()) {
+        const meta = entry.meta;
+        if (meta.specimen === 'editor') {
+            if (meta.projectId === projectId && closePeerSafely(entry)) closed += 1;
+            continue;
+        }
+
+        if (
+            meta.specimen === 'wall' ||
+            meta.specimen === 'controller' ||
+            (meta.specimen === 'gallery' && meta.wallId)
+        ) {
+            const wallId = meta.specimen === 'gallery' ? meta.wallId! : meta.wallId;
+            const scopeId = wallBindings.get(wallId);
+            const scope = scopeId !== undefined ? scopedState.get(scopeId) : null;
+            if (scope?.projectId === projectId && closePeerSafely(entry)) {
+                closed += 1;
+            }
+        }
+    }
+    const yjsClosed = (process as any).__YJS_REVALIDATE_PROJECT__?.(projectId) ?? 0;
+    return { wsClosed: closed, yjsClosed };
+};
+
+(process as any).__WS_REVALIDATE_DEVICE_PEERS__ = (deviceId: string) => {
+    let closed = 0;
+    for (const entry of peers.values()) {
+        if (entry.meta.auth?.deviceId !== deviceId) continue;
+        if (closePeerSafely(entry)) closed += 1;
+    }
+    return closed;
+};
+
+(process as any).__WS_REVALIDATE_WALL_PEERS__ = (wallId: string) => {
+    let closed = 0;
+    for (const entry of peers.values()) {
+        const meta = entry.meta;
+        const entryWallId =
+            meta.specimen === 'wall' || meta.specimen === 'controller'
+                ? meta.wallId
+                : meta.specimen === 'gallery'
+                  ? meta.wallId
+                  : null;
+        if (entryWallId !== wallId) continue;
+        if (closePeerSafely(entry)) closed += 1;
+    }
+    return closed;
 };
 
 // Bridge for YJS text updates — scope-targeted upsert into bus state + fanout.
