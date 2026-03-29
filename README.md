@@ -241,6 +241,17 @@ The notices are generated from tree-shaken modules detected in production bundle
 - A dedicated authorization flow is still required for controller sessions (and likely other public runtime surfaces), so unauthenticated clients cannot access private assets/configuration.
 - Recommendation: introduce scoped, short-lived controller/session tokens with explicit asset permissions and origin constraints, then apply the same pattern consistently across other public endpoints.
 
+### CSP rationale (apps/web/src/start.ts)
+
+- CSP is set server-side in middleware and uses a per-request nonce for script execution.
+- Development uses `Content-Security-Policy-Report-Only` so violations are visible without breaking local workflow.
+- Production enforces CSP and keeps `script-src` strict (dev-only `unsafe-eval` support exists for tooling/HMR behavior).
+- Styles are split intentionally:
+- `style-src` / `style-src-elem` stay nonce-based in production for `<style>` blocks.
+- `style-src-attr 'unsafe-inline'` is enabled because the app currently relies on many React inline style attributes (`style={{ ... }}`) for runtime positioning/rendering.
+- Reporting is wired to `/api/report-csp` on the same origin, and both legacy (`report-uri` / `Report-To`) and modern (`Reporting-Endpoints`) signals are emitted to improve browser coverage.
+- Current resource directives (`connect-src`, `frame-src`, `img-src`, `media-src`, `font-src`, `worker-src`) are intentionally broader than minimum to support websocket transport, iframe web layers, map resources, and media pipelines; tighten these host lists over time using collected CSP reports.
+
 ## Development considerations
 
 ### Safe Order for Refactors

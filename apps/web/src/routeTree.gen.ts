@@ -24,6 +24,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
 import { Route as LegalNoticesRouteImport } from './routes/legal/notices'
 import { Route as ApiWebScreenshotRouteImport } from './routes/api/web-screenshot'
+import { Route as ApiReportCspRouteImport } from './routes/api/report-csp'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminStatsRouteImport } from './routes/admin/stats'
 import { Route as AdminProjectsRouteImport } from './routes/admin/projects'
@@ -127,6 +128,11 @@ const LegalNoticesRoute = LegalNoticesRouteImport.update({
 const ApiWebScreenshotRoute = ApiWebScreenshotRouteImport.update({
   id: '/api/web-screenshot',
   path: '/api/web-screenshot',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiReportCspRoute = ApiReportCspRouteImport.update({
+  id: '/api/report-csp',
+  path: '/api/report-csp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
@@ -311,6 +317,7 @@ export interface FileRoutesByFullPath {
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/api/report-csp': typeof ApiReportCspRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
@@ -356,6 +363,7 @@ export interface FileRoutesByTo {
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/api/report-csp': typeof ApiReportCspRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
@@ -403,6 +411,7 @@ export interface FileRoutesById {
   '/admin/projects': typeof AdminProjectsRoute
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/api/report-csp': typeof ApiReportCspRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
@@ -451,6 +460,7 @@ export interface FileRouteTypes {
     | '/admin/projects'
     | '/admin/stats'
     | '/admin/users'
+    | '/api/report-csp'
     | '/api/web-screenshot'
     | '/legal/notices'
     | '/upload/$projectId'
@@ -496,6 +506,7 @@ export interface FileRouteTypes {
     | '/admin/projects'
     | '/admin/stats'
     | '/admin/users'
+    | '/api/report-csp'
     | '/api/web-screenshot'
     | '/legal/notices'
     | '/upload/$projectId'
@@ -542,6 +553,7 @@ export interface FileRouteTypes {
     | '/admin/projects'
     | '/admin/stats'
     | '/admin/users'
+    | '/api/report-csp'
     | '/api/web-screenshot'
     | '/legal/notices'
     | '/upload/$projectId'
@@ -582,6 +594,7 @@ export interface RootRouteChildren {
   WebCorsissueRoute: typeof WebCorsissueRoute
   WebNonetRoute: typeof WebNonetRoute
   WebPlaceholderRoute: typeof WebPlaceholderRoute
+  ApiReportCspRoute: typeof ApiReportCspRoute
   ApiWebScreenshotRoute: typeof ApiWebScreenshotRoute
   LegalNoticesRoute: typeof LegalNoticesRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
@@ -699,6 +712,13 @@ declare module '@tanstack/react-router' {
       path: '/api/web-screenshot'
       fullPath: '/api/web-screenshot'
       preLoaderRoute: typeof ApiWebScreenshotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/report-csp': {
+      id: '/api/report-csp'
+      path: '/api/report-csp'
+      fullPath: '/api/report-csp'
+      preLoaderRoute: typeof ApiReportCspRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/users': {
@@ -1069,6 +1089,7 @@ const rootRouteChildren: RootRouteChildren = {
   WebCorsissueRoute: WebCorsissueRoute,
   WebNonetRoute: WebNonetRoute,
   WebPlaceholderRoute: WebPlaceholderRoute,
+  ApiReportCspRoute: ApiReportCspRoute,
   ApiWebScreenshotRoute: ApiWebScreenshotRoute,
   LegalNoticesRoute: LegalNoticesRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,
@@ -1085,10 +1106,11 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }
