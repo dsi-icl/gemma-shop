@@ -76,8 +76,14 @@ import {
     type GSMessage,
     type Layer
 } from '~/lib/types';
+import { logAuditDenied } from '~/server/audit';
 import { collections } from '~/server/collections';
 import { ensureDeviceByPublicKey } from '~/server/devices';
+import {
+    buildRateLimitSubjectKey,
+    checkRateLimit,
+    getClientIpFromHeaders
+} from '~/server/rateLimit';
 
 // ── Binary opcodes ──────────────────────────────────────────────────────────
 
@@ -144,6 +150,11 @@ interface PendingBindOverride {
 
 const pendingBindOverrides = new Map<string, PendingBindOverride>();
 const pendingBindOverrideByWall = new Map<string, string>();
+const wsRateLimitStrikes = new Map<string, number>();
+const WS_RATE_LIMIT_STRIKE_LIMIT = Math.max(
+    1,
+    Number(process.env.WS_RATE_LIMIT_STRIKE_LIMIT ?? '5')
+);
 
 const ALLOW_PUBLIC_SHIM = !['0', 'false', 'no', 'off'].includes(
     String(process.env.WS_ALLOW_PUBLIC_SHIM ?? 'true').toLowerCase()
@@ -294,6 +305,114 @@ function shouldApplyPlaybackCommand(
 
 function clearPlaybackCommand(scopeId: number, numericId: number) {
     lastPlaybackCommandAt.delete(playbackCommandKey(scopeId, numericId));
+}
+
+const WS_MUTATION_MESSAGE_TYPES = new Set([
+    'clear_stage',
+    'upsert_layer',
+    'delete_layer',
+    'seed_scope',
+    'update_slides',
+    'reboot',
+    'stage_dirty',
+    'stage_save',
+    'bind_wall',
+    'request_bind_wall',
+    'bind_override_decision',
+    'unbind_wall',
+    'video_play',
+    'video_pause',
+    'video_seek'
+]);
+
+function getWsRateLimitIdentity(entry: PeerEntry, peer: import('crossws').Peer): string {
+    const meta = entry.meta;
+    const auth = meta.auth;
+    const actorId =
+        auth?.mode === 'user'
+            ? meta.specimen === 'editor'
+                ? (meta.requesterEmail ?? null)
+                : null
+            : null;
+    const deviceId =
+        auth?.mode === 'device-active' || auth?.mode === 'device-pending' ? auth.deviceId : null;
+    const ip = getClientIpFromHeaders(peer.request?.headers as Headers | undefined);
+
+    return buildRateLimitSubjectKey({
+        actorId,
+        deviceId,
+        ip,
+        peerId: peer.id
+    });
+}
+
+function getEntryProjectId(entry: PeerEntry): string | null {
+    const meta = entry.meta;
+    if (meta.specimen === 'editor') return meta.projectId;
+    if (meta.specimen === 'wall' || meta.specimen === 'controller') {
+        const scopeId = wallBindings.get(meta.wallId);
+        const scope = scopeId !== undefined ? scopedState.get(scopeId) : null;
+        return scope?.projectId ?? null;
+    }
+    if (meta.specimen === 'gallery' && meta.wallId) {
+        const scopeId = wallBindings.get(meta.wallId);
+        const scope = scopeId !== undefined ? scopedState.get(scopeId) : null;
+        return scope?.projectId ?? null;
+    }
+    return null;
+}
+
+async function enforceWsRateLimit(
+    peer: import('crossws').Peer,
+    entry: PeerEntry,
+    messageType: string
+): Promise<boolean> {
+    if (!WS_MUTATION_MESSAGE_TYPES.has(messageType)) return true;
+
+    const subjectKey = getWsRateLimitIdentity(entry, peer);
+    const result = checkRateLimit({
+        subjectKey
+    });
+
+    if (result.allowed) {
+        wsRateLimitStrikes.set(peer.id, 0);
+        return true;
+    }
+
+    const nextStrikes = (wsRateLimitStrikes.get(peer.id) ?? 0) + 1;
+    wsRateLimitStrikes.set(peer.id, nextStrikes);
+    recordDeniedReason('rate_limited');
+
+    const actorId =
+        entry.meta.auth?.mode === 'user' && entry.meta.specimen === 'editor'
+            ? (entry.meta.requesterEmail ?? null)
+            : (entry.meta.auth?.deviceId ?? null);
+    void logAuditDenied({
+        action: 'WS_MESSAGE_RATE_LIMITED',
+        actorId,
+        projectId: getEntryProjectId(entry),
+        resourceType: 'ws_message',
+        resourceId: messageType,
+        reasonCode: 'RATE_LIMITED',
+        changes: { retryAfterMs: result.retryAfterMs, strikes: nextStrikes }
+    });
+
+    peer.send(
+        JSON.stringify({
+            type: 'rate_limited',
+            messageType,
+            retryAfterMs: result.retryAfterMs
+        })
+    );
+
+    if (nextStrikes >= WS_RATE_LIMIT_STRIKE_LIMIT) {
+        try {
+            peer.close();
+        } catch {
+            // no-op
+        }
+    }
+    return false;
 }
 
 async function performLiveBind(
@@ -1545,6 +1664,7 @@ export default defineWebSocketHandler({
     },
 
     close(peer) {
+        wsRateLimitStrikes.delete(peer.id);
         // Cancel pending override requests from disconnected requester.
         for (const [requestId, pending] of pendingBindOverrides) {
             if (pending.requesterPeerId !== peer.id) continue;
@@ -1675,11 +1795,21 @@ export default defineWebSocketHandler({
 
                 const handler = handlers.get(data.type);
                 if (handler) {
-                    handler({
-                        entry,
-                        data,
-                        scopeId: resolveScopeId(entry.meta),
-                        rawText
+                    void enforceWsRateLimit(peer, entry, data.type).then((allowed) => {
+                        if (!allowed) return;
+                        try {
+                            handler({
+                                entry,
+                                data,
+                                scopeId: resolveScopeId(entry.meta),
+                                rawText
+                            });
+                        } catch (handlerError) {
+                            console.error(
+                                '[WS] Handler error after rate-limit check:',
+                                handlerError
+                            );
+                        }
                     });
                 }
             } catch (err) {
@@ -1728,11 +1858,21 @@ export default defineWebSocketHandler({
 
                 const handler = handlers.get(data.type);
                 if (handler) {
-                    handler({
-                        entry,
-                        data,
-                        scopeId: resolveScopeId(entry.meta),
-                        rawText: raw
+                    void enforceWsRateLimit(peer, entry, data.type).then((allowed) => {
+                        if (!allowed) return;
+                        try {
+                            handler({
+                                entry,
+                                data,
+                                scopeId: resolveScopeId(entry.meta),
+                                rawText: raw
+                            });
+                        } catch (handlerError) {
+                            console.error(
+                                '[WS] Handler error after rate-limit check:',
+                                handlerError
+                            );
+                        }
                     });
                 }
             } catch (err) {

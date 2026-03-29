@@ -20,6 +20,11 @@ import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
 import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
+import {
+    buildRateLimitSubjectKey,
+    checkRateLimit,
+    getClientIpFromHeaders
+} from '~/server/rateLimit';
 
 const STRICT_BLOCKING = !['0', 'false', 'off', 'no'].includes(
     (process.env.STRICT_BLOCKING || 'true').toLowerCase()
@@ -130,6 +135,17 @@ const tusServer = new Server({
             }
             const projectId = tokenData.projectId;
             const userEmail = tokenData.userEmail;
+
+            const uploaderIp = getClientIpFromHeaders(req.headers as any);
+            const uploadFinalizeRate = checkRateLimit({
+                subjectKey: buildRateLimitSubjectKey({
+                    actorId: userEmail,
+                    ip: uploaderIp
+                })
+            });
+            if (!uploadFinalizeRate.allowed) {
+                throw new Error('Upload finalize rate limit exceeded');
+            }
 
             // Detect type via magic bytes
             const headerBytes = await readHeaderBytes(tusFilePath, 48);
