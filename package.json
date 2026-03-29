@@ -28,7 +28,6 @@
             "@lexical/yjs": "^0.42.0",
             "@phosphor-icons/react": "^2.1.10",
             "@react-email/components": "^1.0.10",
-            "@react-email/preview-server": "^5.2.10",
             "@react-email/render": "^2.0.4",
             "@react-three/drei": "^10.7.7",
             "@react-three/fiber": "^9.5.0",
@@ -141,7 +140,6 @@
     "devDependencies": {
         "@commitlint/cli": "catalog:",
         "@commitlint/config-conventional": "catalog:",
-        "@react-email/preview-server": "catalog:",
         "@tanstack/eslint-plugin-query": "catalog:",
         "@tanstack/eslint-plugin-router": "catalog:",
         "eslint-plugin-react-hooks": "catalog:",
