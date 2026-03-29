@@ -3,6 +3,50 @@ import crypto from 'node:crypto';
 import { createMiddleware, createStart } from '@tanstack/react-start';
 import { setResponseHeader } from '@tanstack/react-start/server';
 
+import { logAuditDenied } from '~/server/audit';
+import {
+    buildRateLimitSubjectKey,
+    checkRateLimit,
+    getClientIpFromHeaders
+} from '~/server/rateLimit';
+
+const startRateLimitMiddleware = createMiddleware().server(async ({ next, request }) => {
+    const method = request.method.toUpperCase();
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        return next();
+    }
+
+    const url = new URL(request.url);
+    // Dedicated API routes keep their own route-specific policies.
+    if (url.pathname.startsWith('/api/')) {
+        return next();
+    }
+
+    const ip = getClientIpFromHeaders(request.headers);
+    const subjectKey = buildRateLimitSubjectKey({ ip });
+    const rate = checkRateLimit({
+        subjectKey
+    });
+
+    if (rate.allowed) return next();
+
+    void logAuditDenied({
+        action: 'START_ROUTE_RATE_LIMITED',
+        resourceType: 'start_route',
+        resourceId: `${method}:${url.pathname}`,
+        reasonCode: 'RATE_LIMITED',
+        changes: { retryAfterMs: rate.retryAfterMs, ip }
+    });
+
+    return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
+        status: 429,
+        headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(Math.ceil(rate.retryAfterMs / 1000))
+        }
+    });
+});
+
 const cspMiddleware = createMiddleware().server(({ next, request }) => {
     if (request.method !== 'GET') {
         return next();
@@ -59,6 +103,6 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
 
 export const startInstance = createStart(() => {
     return {
-        requestMiddleware: [cspMiddleware]
+        requestMiddleware: [startRateLimitMiddleware, cspMiddleware]
     };
 });

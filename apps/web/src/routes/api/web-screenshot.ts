@@ -8,6 +8,11 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { ASSET_DIR } from '~/lib/serverVariables';
+import {
+    buildRateLimitSubjectKey,
+    checkRateLimit,
+    getClientIpFromHeaders
+} from '~/server/rateLimit';
 
 function urlToBaseId(url: string): string {
     // Deterministic short id from URL for filenames
@@ -32,25 +37,10 @@ async function cleanupPreviousFiles(baseId: string): Promise<void> {
     }
 }
 
-const WEB_SCREENSHOT_RATE_LIMIT_PER_MIN = Math.max(
-    1,
-    Number(process.env.WEB_SCREENSHOT_RATE_LIMIT_PER_MIN ?? '20')
-);
 const screenshotAllowlist = String(process.env.WEB_SCREENSHOT_ALLOWLIST ?? '')
     .split(',')
     .map((v) => v.trim().toLowerCase())
     .filter(Boolean);
-const screenshotRateStore =
-    (process as any).__WEB_SCREENSHOT_RATE_STORE__ ?? new Map<string, number[]>();
-(process as any).__WEB_SCREENSHOT_RATE_STORE__ = screenshotRateStore;
-
-function getRequesterIp(request: Request): string {
-    const xff = request.headers.get('x-forwarded-for');
-    if (xff) return xff.split(',')[0]?.trim() ?? 'unknown';
-    const cf = request.headers.get('cf-connecting-ip');
-    if (cf) return cf.trim();
-    return 'unknown';
-}
 
 function isForbiddenIp(ip: string): boolean {
     const version = isIP(ip);
@@ -104,20 +94,6 @@ async function assertScreenshotTargetSafe(rawUrl: string) {
     }
 }
 
-function checkScreenshotRateLimit(key: string): boolean {
-    const now = Date.now();
-    const cutoff = now - 60_000;
-    const list = (screenshotRateStore.get(key) as number[] | undefined) ?? [];
-    const fresh = list.filter((ts) => ts >= cutoff);
-    if (fresh.length >= WEB_SCREENSHOT_RATE_LIMIT_PER_MIN) {
-        screenshotRateStore.set(key, fresh);
-        return false;
-    }
-    fresh.push(now);
-    screenshotRateStore.set(key, fresh);
-    return true;
-}
-
 export const Route = createFileRoute('/api/web-screenshot')({
     server: {
         handlers: {
@@ -134,13 +110,21 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     });
                 }
 
-                const rateKey = session?.user?.email
-                    ? `user:${session.user.email}`
-                    : `ip:${getRequesterIp(request)}`;
-                if (!checkScreenshotRateLimit(rateKey)) {
+                const requesterIp = getClientIpFromHeaders(request.headers);
+                const subjectKey = buildRateLimitSubjectKey({
+                    actorId: session?.user?.email ?? null,
+                    ip: requesterIp
+                });
+                const rateLimit = checkRateLimit({
+                    subjectKey
+                });
+                if (!rateLimit.allowed) {
                     return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
                         status: 429,
-                        headers: { 'Content-Type': 'application/json' }
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Retry-After': String(Math.ceil(rateLimit.retryAfterMs / 1000))
+                        }
                     });
                 }
 
