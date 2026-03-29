@@ -1,10 +1,10 @@
 import tailwindcss from '@tailwindcss/vite';
 import { devtools } from '@tanstack/devtools-vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-import viteBasicSsl from '@vitejs/plugin-basic-ssl';
 import viteReact from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 import { defineConfig, loadEnv } from 'vite';
+import mkcert from 'vite-plugin-mkcert';
 
 import { thirdPartyNoticesPlugin } from './plugins/thirdPartyNotices';
 import { ttfPlugin } from './plugins/ttf';
@@ -15,7 +15,7 @@ const shouldEnableSourceMaps = ['1', 'true', 'yes', 'on'].includes(
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
-    const isHttps = env.HTTPS === 'true';
+    const isHttps = env.VITE_HTTPS === 'true';
 
     return {
         build: {
@@ -32,13 +32,14 @@ export default defineConfig(({ mode }) => {
         server: {
             host: '0.0.0.0',
             port: 3670,
-            allowedHosts: ['localhost', '127.0.0.1'],
-            https: isHttps ? {} : undefined
+            allowedHosts: ['localhost', '127.0.0.1']
+            // https: isHttps ? {} : undefined
         },
         plugins: [
             isHttps
-                ? viteBasicSsl({
-                      domains: ['gemma.shop.127.0.0.1.nip.io']
+                ? mkcert({
+                      keyFileName: 'gemma-shop-dev-key.pem',
+                      certFileName: 'gemma-shop-dev-cert.pem'
                   })
                 : undefined,
             ttfPlugin(),

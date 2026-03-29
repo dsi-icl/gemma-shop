@@ -85,11 +85,11 @@
         "@types/qrcode": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
-        "@vitejs/plugin-basic-ssl": "catalog:",
         "@vitejs/plugin-react": "catalog:",
         "babel-plugin-react-compiler": "catalog:",
         "tailwindcss": "catalog:",
         "typescript": "catalog:",
-        "vite": "catalog:"
+        "vite": "catalog:",
+        "vite-plugin-mkcert": "catalog:"
     }
 }
