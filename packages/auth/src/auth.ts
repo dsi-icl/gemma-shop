@@ -7,7 +7,7 @@ import { OtpEmail } from '@repo/emails/OtpEmail';
 import { env, splitCsv } from '@repo/env';
 import { mongodbAdapter } from 'better-auth/adapters/mongodb';
 import { betterAuth } from 'better-auth/minimal';
-import { admin, emailOTP, magicLink } from 'better-auth/plugins';
+import { admin, emailOTP, magicLink, testUtils } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 
 import { createSmtpTransport } from './smtp';
@@ -116,6 +116,7 @@ export const auth = betterAuth({
     plugins: [
         tanstackStartCookies(),
         admin(),
+        ...(env.NODE_ENV === 'test' ? [testUtils()] : []),
         magicLink({
             sendMagicLink: async ({ email, token, url }) => {
                 const html = await render(MagicLinkEmail({ url }));

@@ -134,6 +134,13 @@
         "lint": "oxlint --type-aware --type-check",
         "lint:fix": "oxlint --type-aware --type-check --fix",
         "prepare": "husky",
+        "test:e2e": "bunx playwright test --config apps/web/playwright.config.ts",
+        "test:harness:down": "bun run docker:test:down",
+        "test:harness:prepare": "bun run tooling/testing/prepare.mjs",
+        "test:harness:seed": "bun run tooling/testing/seed.mjs",
+        "test:harness:up": "bun run docker:test:up",
+        "test:integration": "bun test apps/web/tests/integration",
+        "test:security": "bun run test:harness:prepare && bun run test:integration && bun run test:e2e",
         "ui": "bun run --filter=@repo/ui ui",
         "ui:web": "bun run --filter=@repo/web run ui"
     },
