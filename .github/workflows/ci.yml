@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
     pull_request:
@@ -40,22 +40,20 @@ jobs:
             - name: Build web app
               run: bun run build --filter=@repo/web
 
-    playwright-e2e:
+    security-harness:
         runs-on: ubuntu-latest
         needs: quality-and-build
-        services:
-            mongo:
-                image: mongo:7
-                ports:
-                    - 27017:27017
         env:
             CI: true
-            VITE_BASE_URL: http://127.0.0.1:3670
-            SERVER_DATABASE_URL: mongodb://127.0.0.1:27017/gemmashop?directConnection=true
+            NODE_ENV: test
+            WEB_HOST_PORT: 3870
+            TEST_BASE_URL: http://127.0.0.1:3870
+            VITE_BASE_URL: http://127.0.0.1:3870
+            SERVER_DATABASE_URL: mongodb://127.0.0.1:37017/gemmashop?replicaSet=rs0&directConnection=true
             SERVER_AUTH_SECRET: 00000000000000000000000000000000
             SERVER_CONFIG_ENCRYPTION_KEY: ci-test-config-key
-            ALLOWED_HOSTS: http://127.0.0.1:3670
-            TRUSTED_ORIGINS: http://127.0.0.1:3670
+            ALLOWED_HOSTS: http://127.0.0.1:3870
+            TRUSTED_ORIGINS: http://127.0.0.1:3870
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -68,23 +66,31 @@ jobs:
             - name: Install dependencies
               run: bun install
 
-            - name: Detect Playwright config
-              id: detect-playwright
-              run: |
-                  if [ -f playwright.config.ts ] || [ -f playwright.config.js ] || [ -f apps/web/playwright.config.ts ] || [ -f apps/web/playwright.config.js ]; then
-                    echo "has_config=true" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "has_config=false" >> "$GITHUB_OUTPUT"
-                  fi
-
             - name: Install Playwright browsers
-              if: ${{ steps.detect-playwright.outputs.has_config == 'true' }}
               run: bunx playwright install --with-deps chromium
 
-            - name: Run Playwright tests
-              if: ${{ steps.detect-playwright.outputs.has_config == 'true' }}
-              run: bunx playwright test
+            - name: Start test stack
+              run: bun run test:harness:up
 
-            - name: Skip Playwright tests (no config found)
-              if: ${{ steps.detect-playwright.outputs.has_config != 'true' }}
-              run: echo "No Playwright config found, skipping E2E tests."
+            - name: Prepare harness fixtures
+              run: bun run test:harness:prepare
+
+            - name: Run integration suite
+              run: bun run test:integration
+
+            - name: Run end-to-end suite
+              run: bun run test:e2e
+
+            - name: Upload Playwright report
+              if: ${{ failure() && (hashFiles('playwright-report/**') != '' || hashFiles('apps/web/playwright-report/**') != '') }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: playwright-report
+                  path: |
+                      playwright-report
+                      apps/web/playwright-report
+                  if-no-files-found: ignore
+
+            - name: Stop test stack
+              if: ${{ always() }}
+              run: bun run test:harness:down
