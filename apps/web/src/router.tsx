@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
+import { getGlobalStartContext } from '@tanstack/react-start';
 
 import { DefaultCatchBoundary } from '~/components/DefaultCatchBoundary';
 import { DefaultNotFound } from '~/components/DefaultNotFound';
@@ -44,8 +45,10 @@ const getContext = async (): Promise<RootRouteContext> => {
 };
 
 export async function getRouter() {
+    const nonce = getGlobalStartContext()?.nonce;
     const router = createRouter({
         routeTree,
+        ssr: { nonce },
         context: await getContext(),
         defaultPreload: 'intent',
         // react-query will handle data fetching & caching

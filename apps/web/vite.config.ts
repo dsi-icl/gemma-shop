@@ -35,6 +35,12 @@ export default defineConfig(({ mode }) => {
             allowedHosts: ['localhost', '127.0.0.1']
             // https: isHttps ? {} : undefined
         },
+        css: {
+            transformer: 'lightningcss',
+            lightningcss: {
+                cssModules: true
+            }
+        },
         plugins: [
             isHttps
                 ? mkcert({
