@@ -20,3 +20,7 @@ dist
 /api/
 /server/build
 /public/build
+tests/.auth
+tests/.fixtures/seed-manifest.json
+test-results
+playwright-report
