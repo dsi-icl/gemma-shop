@@ -18,6 +18,7 @@ import { enqueueJob } from '~/lib/jobs/repo';
 import { jobSignalBus } from '~/lib/jobs/signalBus';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
+import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
 
 const STRICT_BLOCKING = !['0', 'false', 'off', 'no'].includes(
@@ -243,6 +244,19 @@ const tusServer = new Server({
                     public: isPublicAsset,
                     createdBy: userEmail,
                     createdAt: new Date().toISOString()
+                });
+                await logAuditSuccess({
+                    action: 'UPLOAD_FINALIZED',
+                    actorId: userEmail,
+                    projectId,
+                    resourceType: 'asset',
+                    resourceId: insertResult.insertedId.toHexString(),
+                    changes: {
+                        name: originalName,
+                        url: assetFilename,
+                        mimeType,
+                        public: isPublicAsset
+                    }
                 });
 
                 // Broadcast to all editors on this project via bus bridge

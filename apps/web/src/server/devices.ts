@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only';
 import { ObjectId } from 'mongodb';
 
+import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
 
 export type DeviceKind = 'wall' | 'gallery' | 'controller';
@@ -64,6 +65,12 @@ export async function ensureDeviceByPublicKey(input: {
                 }
             }
         );
+        await logAuditSuccess({
+            action: 'DEVICE_SEEN',
+            resourceType: 'device',
+            resourceId: String(existing.deviceId ?? existing._id?.toHexString?.() ?? ''),
+            changes: { kind: input.kind }
+        });
         return serializeDevice({
             ...existing,
             kind: input.kind,
@@ -84,6 +91,12 @@ export async function ensureDeviceByPublicKey(input: {
         lastSeenAt: now
     };
     await devices.insertOne(created);
+    await logAuditSuccess({
+        action: 'DEVICE_CREATED',
+        resourceType: 'device',
+        resourceId: deviceId,
+        changes: { kind: input.kind, status: 'pending' }
+    });
     return serializeDevice(created);
 }
 
@@ -137,6 +150,14 @@ export async function adminEnrollDeviceBySignature(input: {
         { returnDocument: 'after' }
     );
     if (!result) throw new Error('Failed to enroll device');
+    await logAuditSuccess({
+        action: 'DEVICE_ENROLLED',
+        actorId: input.assignedBy,
+        resourceType: 'device',
+        resourceId: deviceId,
+        projectId: null,
+        changes: { wallId, kind: input.kind, status: 'active' }
+    });
     return serializeDevice(result);
 }
 

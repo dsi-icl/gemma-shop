@@ -10,6 +10,7 @@ import {
     peerCounts,
     unbindWall
 } from '~/lib/busState';
+import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
 import { adminEnrollDeviceBySignature, adminListDevices } from '~/server/devices';
 import { serializeForClient } from '~/server/serialization';
@@ -171,6 +172,12 @@ export async function adminCreateWall(input: { wallId: string; name?: string | n
         updatedAt: now
     };
     const result = await collections.walls.insertOne(doc);
+    await logAuditSuccess({
+        action: 'WALL_CREATED',
+        resourceType: 'wall',
+        resourceId: wallId,
+        changes: { name: doc.name }
+    });
     return serializeWall({ ...doc, _id: result.insertedId } as any);
 }
 
@@ -209,6 +216,12 @@ export async function adminUpdateWallMetadata(input: {
         { returnDocument: 'after' }
     );
     if (!result) throw new Error('Wall not found');
+    await logAuditSuccess({
+        action: 'WALL_UPDATED',
+        resourceType: 'wall',
+        resourceId: String(existing.wallId ?? wallId),
+        changes: update
+    });
     return {
         ...serializeWall(result as any),
         connectedNodes: Number(result.connectedNodes ?? 0)
@@ -240,6 +253,11 @@ export async function adminDeleteWall(wallId: string) {
             }
         )
     ]);
+    await logAuditSuccess({
+        action: 'WALL_DELETED',
+        resourceType: 'wall',
+        resourceId: resolvedWallId
+    });
 
     process.__BROADCAST_WALL_BINDING_CHANGED__?.(resolvedWallId);
 }
@@ -319,6 +337,11 @@ export async function adminUnbindWall(wallId: string) {
             }
         }
     );
+    await logAuditSuccess({
+        action: 'WALL_UNBOUND',
+        resourceType: 'wall',
+        resourceId: wallId
+    });
 
     process.__BROADCAST_WALL_BINDING_CHANGED__?.(wallId);
 }
@@ -365,6 +388,13 @@ export async function adminDeletePublicAsset(assetId: string, userEmail: string)
             }
         }
     );
+    await logAuditSuccess({
+        action: 'PUBLIC_ASSET_DELETED',
+        actorId: userEmail,
+        projectId: asset.projectId,
+        resourceType: 'asset',
+        resourceId: assetId
+    });
 }
 
 type ConfigField = {
