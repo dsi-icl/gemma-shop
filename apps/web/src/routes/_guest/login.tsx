@@ -109,7 +109,7 @@ function LoginForm() {
                                 Signing in as <strong>{email}</strong>
                             </p>
                             <div className="flex w-full flex-col gap-4">
-                                <Button
+                                {/* <Button
                                     className="w-full"
                                     size="lg"
                                     disabled={isSending}
@@ -119,9 +119,9 @@ function LoginForm() {
                                         <CircleNotchIcon className="animate-spin" />
                                     )}
                                     Send magic link
-                                </Button>
+                                </Button> */}
                                 <Button
-                                    variant="outline"
+                                    // variant="outline"
                                     className="w-full"
                                     size="lg"
                                     disabled={isSending}
