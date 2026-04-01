@@ -63,6 +63,11 @@ export function UploadDialog({
     const [dragOver, setDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const uppyRef = useRef<Uppy | null>(null);
+    const onUploadCompleteRef = useRef(onUploadComplete);
+
+    useEffect(() => {
+        onUploadCompleteRef.current = onUploadComplete;
+    }, [onUploadComplete]);
 
     const resetDialogState = useCallback(
         (tokenToRevoke?: string | null) => {
@@ -139,9 +144,10 @@ export function UploadDialog({
             }
             scrubInsecureTusResumeEntries();
 
-            const uppy =
-                uppyRef.current ??
-                new Uppy({
+            let uppy = uppyRef.current;
+            const shouldAttachHandlers = !uppy;
+            if (!uppy) {
+                uppy = new Uppy({
                     restrictions: { allowedFileTypes: ['image/*', '.svg', 'video/*', '.woff2'] }
                 }).use(Tus, {
                     endpoint: '/api/uploads/',
@@ -151,7 +157,51 @@ export function UploadDialog({
                     storeFingerprintForResuming: false,
                     removeFingerprintOnSuccess: true
                 });
+            }
             uppyRef.current = uppy;
+
+            if (shouldAttachHandlers) {
+                uppy.on('upload-progress', (file, progress) => {
+                    if (!file || !progress.bytesTotal) return;
+                    const pct = Math.round((progress.bytesUploaded / progress.bytesTotal) * 100);
+                    setFiles((prev) =>
+                        prev.map((f) => (f.name === file.name ? { ...f, progress: pct } : f))
+                    );
+                });
+
+                uppy.on('upload-success', (file) => {
+                    if (!file) return;
+                    setFiles((prev) =>
+                        prev.map((f) =>
+                            f.name === file.name ? { ...f, progress: 100, status: 'complete' } : f
+                        )
+                    );
+                });
+
+                uppy.on('upload-error', (file, error) => {
+                    if (!file) return;
+                    setFiles((prev) =>
+                        prev.map((f) => (f.name === file.name ? { ...f, status: 'error' } : f))
+                    );
+                    const message = error instanceof Error ? error.message : 'Upload failed';
+                    toast.error(`${file.name}: ${message}`);
+                });
+
+                uppy.on('complete', (result) => {
+                    const failed = result.failed?.length ?? 0;
+                    const successful = result.successful?.length ?? 0;
+                    if (failed > 0) {
+                        toast.error(
+                            successful > 0
+                                ? `${successful} uploaded, ${failed} failed`
+                                : `Upload failed (${failed} file${failed === 1 ? '' : 's'})`
+                        );
+                        return;
+                    }
+                    toast.success('Upload complete');
+                    if (successful > 0) onUploadCompleteRef.current?.();
+                });
+            }
 
             const newEntries: FileProgress[] = [];
 
@@ -171,50 +221,9 @@ export function UploadDialog({
 
             setFiles((prev) => [...prev, ...newEntries]);
 
-            uppy.on('upload-progress', (file, progress) => {
-                if (!file || !progress.bytesTotal) return;
-                const pct = Math.round((progress.bytesUploaded / progress.bytesTotal) * 100);
-                setFiles((prev) =>
-                    prev.map((f) => (f.name === file.name ? { ...f, progress: pct } : f))
-                );
-            });
-
-            uppy.on('upload-success', (file) => {
-                if (!file) return;
-                setFiles((prev) =>
-                    prev.map((f) =>
-                        f.name === file.name ? { ...f, progress: 100, status: 'complete' } : f
-                    )
-                );
-            });
-
-            uppy.on('upload-error', (file, error) => {
-                if (!file) return;
-                setFiles((prev) =>
-                    prev.map((f) => (f.name === file.name ? { ...f, status: 'error' } : f))
-                );
-                const message = error instanceof Error ? error.message : 'Upload failed';
-                toast.error(`${file.name}: ${message}`);
-            });
-
-            uppy.on('complete', (result) => {
-                const failed = result.failed?.length ?? 0;
-                const successful = result.successful?.length ?? 0;
-                if (failed > 0) {
-                    toast.error(
-                        successful > 0
-                            ? `${successful} uploaded, ${failed} failed`
-                            : `Upload failed (${failed} file${failed === 1 ? '' : 's'})`
-                    );
-                    return;
-                }
-                toast.success('Upload complete');
-                if (successful > 0) onUploadComplete?.();
-            });
-
             uppy.upload();
         },
-        [projectId, onUploadComplete, token]
+        [projectId, token]
     );
 
     const handleDrop = useCallback(
