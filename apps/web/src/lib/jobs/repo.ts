@@ -1,22 +1,18 @@
-import { db } from '@repo/db';
 import { ObjectId } from 'mongodb';
 import type { OptionalId } from 'mongodb';
 
+import { collections } from '~/server/collections';
+
 import type { JobDocument, JobPayload, JobResult, JobType } from './types';
 
-const JOB_COLLECTION = 'jobs';
 const LEASE_MS = 30_000;
 const RETRY_BACKOFF_MS = 5_000;
 
 let indexesReady = false;
 
-function jobs() {
-    return db.collection<JobDocument>(JOB_COLLECTION);
-}
-
 export async function ensureJobIndexes() {
     if (indexesReady) return;
-    await jobs().createIndexes([
+    await collections.jobs.createIndexes([
         {
             key: { nodeId: 1, status: 1, runAfter: 1, createdAt: 1 },
             name: 'nodeId_status_runAfter_createdAt'
@@ -50,17 +46,17 @@ export async function enqueueJob({
         createdAt: now,
         updatedAt: now
     };
-    const inserted = await jobs().insertOne(doc as any);
+    const inserted = await collections.jobs.insertOne(doc as any);
     return inserted.insertedId;
 }
 
 export async function getJobById(jobId: ObjectId) {
-    return jobs().findOne({ _id: jobId });
+    return collections.jobs.findOne({ _id: jobId });
 }
 
 export async function claimNextJob(workerId: string, nodeId: string) {
     const now = new Date();
-    const claimed = await jobs().findOneAndUpdate(
+    const claimed = await collections.jobs.findOneAndUpdate(
         {
             nodeId,
             status: 'queued',
@@ -87,7 +83,7 @@ export async function claimNextJob(workerId: string, nodeId: string) {
 
 export async function heartbeatJob(jobId: ObjectId, workerId: string, progress?: number) {
     const now = new Date();
-    await jobs().updateOne(
+    await collections.jobs.updateOne(
         { _id: jobId, status: 'running', leaseOwner: workerId },
         {
             $set: {
@@ -102,7 +98,7 @@ export async function heartbeatJob(jobId: ObjectId, workerId: string, progress?:
 
 export async function completeJob(jobId: ObjectId, workerId: string, result: JobResult) {
     const now = new Date();
-    await jobs().updateOne(
+    await collections.jobs.updateOne(
         { _id: jobId, status: 'running', leaseOwner: workerId },
         {
             $set: {
@@ -118,11 +114,11 @@ export async function completeJob(jobId: ObjectId, workerId: string, result: Job
 
 export async function failJob(jobId: ObjectId, workerId: string, error: string) {
     const now = new Date();
-    const current = await jobs().findOne({ _id: jobId });
+    const current = await collections.jobs.findOne({ _id: jobId });
     if (!current) return;
 
     const shouldRetry = current.attempts < current.maxAttempts;
-    await jobs().updateOne(
+    await collections.jobs.updateOne(
         { _id: jobId, status: 'running', leaseOwner: workerId },
         shouldRetry
             ? {
@@ -148,14 +144,14 @@ export async function failJob(jobId: ObjectId, workerId: string, error: string) 
 
 export async function markStalledRunningJobs(staleMs: number) {
     const cutoff = new Date(Date.now() - staleMs);
-    const cursor = jobs().find({
+    const cursor = collections.jobs.find({
         status: 'running',
         $or: [{ lastHeartbeatAt: { $lt: cutoff } }, { leaseUntil: { $lt: new Date() } }]
     });
     for await (const job of cursor) {
         const shouldRetry = job.attempts < job.maxAttempts;
         const now = new Date();
-        await jobs().updateOne(
+        await collections.jobs.updateOne(
             { _id: job._id, status: 'running' },
             shouldRetry
                 ? {
