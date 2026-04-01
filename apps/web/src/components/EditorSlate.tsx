@@ -19,6 +19,7 @@ import { fitSizeToViewport, MIN_LAYER_DIMENSION } from '~/lib/fitSizeToViewport'
 import { scrubInsecureTusResumeEntries } from '~/lib/tusClient';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
+import { $createUploadToken } from '~/server/projects.fns';
 
 // import DOPreview from './DOPreview';
 import { SlatePreview } from './SlatePreview';
@@ -463,6 +464,24 @@ export function EditorSlate() {
         // 3. Background tus upload with metadata for server-side post-processing
         const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
         const currentProjectId = useEditorStore.getState().projectId;
+        if (!currentProjectId) {
+            useEditorStore.getState().removeLayer(numericId);
+            toast.error('Upload failed: project context is missing');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
+        let uploadToken: string;
+        try {
+            const tokenResult = await $createUploadToken({ data: { projectId: currentProjectId } });
+            uploadToken = tokenResult.token;
+        } catch (err) {
+            console.error('Upload token creation failure', err);
+            useEditorStore.getState().removeLayer(numericId);
+            toast.error(err instanceof Error ? err.message : 'Upload failed to initialize');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
         scrubInsecureTusResumeEntries();
 
         const uppy = new Uppy().use(Tus, {
@@ -482,7 +501,8 @@ export function EditorSlate() {
                 meta: {
                     numericId: numericId.toString(),
                     duration: duration.toString(),
-                    projectId: currentProjectId ?? ''
+                    projectId: currentProjectId,
+                    uploadToken
                 }
             });
         } catch (err) {
