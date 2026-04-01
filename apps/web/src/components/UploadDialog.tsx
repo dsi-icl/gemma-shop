@@ -133,6 +133,10 @@ export function UploadDialog({
     const uploadFiles = useCallback(
         (selectedFiles: File[]) => {
             if (selectedFiles.length === 0) return;
+            if (!token) {
+                toast.error('Upload token missing or expired. Reopen the dialog to refresh it.');
+                return;
+            }
             scrubInsecureTusResumeEntries();
 
             const uppy =
@@ -157,7 +161,7 @@ export function UploadDialog({
                         name: file.name,
                         type: file.type,
                         data: file,
-                        meta: { projectId }
+                        meta: { projectId, uploadToken: token }
                     });
                     newEntries.push({ name: file.name, progress: 0, status: 'uploading' });
                 } catch (e: any) {
@@ -210,7 +214,7 @@ export function UploadDialog({
 
             uppy.upload();
         },
-        [projectId, onUploadComplete]
+        [projectId, onUploadComplete, token]
     );
 
     const handleDrop = useCallback(
