@@ -74,6 +74,7 @@
     },
     "devDependencies": {
         "@repo/tsconfig": "workspace:*",
+        "@rolldown/plugin-babel": "catalog:",
         "@tailwindcss/vite": "catalog:",
         "@tanstack/devtools-vite": "catalog:",
         "@tanstack/react-devtools": "catalog:",
