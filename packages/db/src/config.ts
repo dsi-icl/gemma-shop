@@ -1,11 +1,11 @@
 import '@tanstack/react-start/server-only';
+import { Buffer } from 'node:buffer';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
 import { env } from '@repo/env';
 
 import { db } from './index';
 
-const CONFIG_COLLECTION = 'config';
 const ALGO = 'aes-256-gcm';
 const KEY_BYTES = 32;
 
@@ -25,6 +25,11 @@ type ConfigDoc = {
     updatedBy: string;
     version: number;
 };
+
+function configCollection() {
+    // oxlint-disable-next-line repo/no-direct-db-collection -- This is the shared DB package.
+    return db.collection<ConfigDoc>('config');
+}
 
 function getKey(): Buffer {
     if (!env.SERVER_CONFIG_ENCRYPTION_KEY) {
@@ -66,12 +71,8 @@ function decryptValue(envelope: SecretEnvelope): unknown {
     return JSON.parse(plaintext.toString('utf8'));
 }
 
-function collection() {
-    return db.collection<ConfigDoc>(CONFIG_COLLECTION);
-}
-
 export async function getConfigValue<T>(key: string): Promise<T | null> {
-    const doc = await collection().findOne({ key });
+    const doc = await configCollection().findOne({ key });
     if (!doc) return null;
     if (doc.encrypted && doc.secret) return decryptValue(doc.secret) as T;
     return (doc.value ?? null) as T | null;
@@ -84,12 +85,12 @@ export async function setConfigValue(input: {
     updatedBy: string;
 }): Promise<void> {
     const now = new Date().toISOString();
-    const prev = await collection().findOne({ key: input.key });
+    const prev = await configCollection().findOne({ key: input.key });
     const version = (prev?.version ?? 0) + 1;
 
     if (input.encrypted) {
         const secret = encryptValue(input.value);
-        await collection().updateOne(
+        await configCollection().updateOne(
             { key: input.key },
             {
                 $set: {
@@ -107,17 +108,19 @@ export async function setConfigValue(input: {
         return;
     }
 
-    await collection().updateOne(
+    await configCollection().updateOne(
         { key: input.key },
         {
             $set: {
                 key: input.key,
                 encrypted: false,
                 value: input.value,
-                secret: null,
                 updatedAt: now,
                 updatedBy: input.updatedBy,
                 version
+            },
+            $unset: {
+                secret: ''
             }
         },
         { upsert: true }
@@ -135,7 +138,7 @@ export async function listConfigEntries(): Promise<
         version: number;
     }>
 > {
-    const docs = await collection().find().sort({ key: 1 }).toArray();
+    const docs = await configCollection().find().sort({ key: 1 }).toArray();
     return docs.map((doc) => ({
         key: doc.key,
         encrypted: !!doc.encrypted,
