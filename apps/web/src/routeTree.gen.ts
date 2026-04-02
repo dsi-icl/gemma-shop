@@ -18,10 +18,12 @@ import { Route as GuestRouteRouteImport } from './routes/_guest/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WallIndexRouteImport } from './routes/wall/index'
+import { Route as PlaygroundIndexRouteImport } from './routes/playground/index'
 import { Route as GalleryIndexRouteImport } from './routes/gallery/index'
 import { Route as ControllerIndexRouteImport } from './routes/controller/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
+import { Route as PlaygroundNoopRouteImport } from './routes/playground/noop'
 import { Route as LegalNoticesRouteImport } from './routes/legal/notices'
 import { Route as ApiWebScreenshotRouteImport } from './routes/api/web-screenshot'
 import { Route as ApiReportCspRouteImport } from './routes/api/report-csp'
@@ -100,6 +102,11 @@ const WallIndexRoute = WallIndexRouteImport.update({
   path: '/wall/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlaygroundIndexRoute = PlaygroundIndexRouteImport.update({
+  id: '/playground/',
+  path: '/playground/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GalleryIndexRoute = GalleryIndexRouteImport.update({
   id: '/gallery/',
   path: '/gallery/',
@@ -118,6 +125,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const UploadProjectIdRoute = UploadProjectIdRouteImport.update({
   id: '/upload/$projectId',
   path: '/upload/$projectId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlaygroundNoopRoute = PlaygroundNoopRouteImport.update({
+  id: '/playground/noop',
+  path: '/playground/noop',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LegalNoticesRoute = LegalNoticesRouteImport.update({
@@ -320,10 +332,12 @@ export interface FileRoutesByFullPath {
   '/api/report-csp': typeof ApiReportCspRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
+  '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
+  '/playground/': typeof PlaygroundIndexRoute
   '/wall/': typeof WallIndexRoute
   '/quarry/editor': typeof AuthQuarryEditorRouteRouteWithChildren
   '/quarry/projects': typeof AuthQuarryProjectsRouteRouteWithChildren
@@ -366,10 +380,12 @@ export interface FileRoutesByTo {
   '/api/report-csp': typeof ApiReportCspRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
+  '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/admin': typeof AdminIndexRoute
   '/controller': typeof ControllerIndexRoute
   '/gallery': typeof GalleryIndexRoute
+  '/playground': typeof PlaygroundIndexRoute
   '/wall': typeof WallIndexRoute
   '/quarry/editor': typeof AuthQuarryEditorRouteRouteWithChildren
   '/quarry/projects': typeof AuthQuarryProjectsRouteRouteWithChildren
@@ -414,10 +430,12 @@ export interface FileRoutesById {
   '/api/report-csp': typeof ApiReportCspRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
+  '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
+  '/playground/': typeof PlaygroundIndexRoute
   '/wall/': typeof WallIndexRoute
   '/_auth/quarry/editor': typeof AuthQuarryEditorRouteRouteWithChildren
   '/_auth/quarry/projects': typeof AuthQuarryProjectsRouteRouteWithChildren
@@ -463,10 +481,12 @@ export interface FileRouteTypes {
     | '/api/report-csp'
     | '/api/web-screenshot'
     | '/legal/notices'
+    | '/playground/noop'
     | '/upload/$projectId'
     | '/admin/'
     | '/controller/'
     | '/gallery/'
+    | '/playground/'
     | '/wall/'
     | '/quarry/editor'
     | '/quarry/projects'
@@ -509,10 +529,12 @@ export interface FileRouteTypes {
     | '/api/report-csp'
     | '/api/web-screenshot'
     | '/legal/notices'
+    | '/playground/noop'
     | '/upload/$projectId'
     | '/admin'
     | '/controller'
     | '/gallery'
+    | '/playground'
     | '/wall'
     | '/quarry/editor'
     | '/quarry/projects'
@@ -556,10 +578,12 @@ export interface FileRouteTypes {
     | '/api/report-csp'
     | '/api/web-screenshot'
     | '/legal/notices'
+    | '/playground/noop'
     | '/upload/$projectId'
     | '/admin/'
     | '/controller/'
     | '/gallery/'
+    | '/playground/'
     | '/wall/'
     | '/_auth/quarry/editor'
     | '/_auth/quarry/projects'
@@ -597,9 +621,11 @@ export interface RootRouteChildren {
   ApiReportCspRoute: typeof ApiReportCspRoute
   ApiWebScreenshotRoute: typeof ApiWebScreenshotRoute
   LegalNoticesRoute: typeof LegalNoticesRoute
+  PlaygroundNoopRoute: typeof PlaygroundNoopRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
   ControllerIndexRoute: typeof ControllerIndexRoute
   GalleryIndexRoute: typeof GalleryIndexRoute
+  PlaygroundIndexRoute: typeof PlaygroundIndexRoute
   WallIndexRoute: typeof WallIndexRoute
   ApiAssetsUriRoute: typeof ApiAssetsUriRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -672,6 +698,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WallIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/playground/': {
+      id: '/playground/'
+      path: '/playground'
+      fullPath: '/playground/'
+      preLoaderRoute: typeof PlaygroundIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/gallery/': {
       id: '/gallery/'
       path: '/gallery'
@@ -698,6 +731,13 @@ declare module '@tanstack/react-router' {
       path: '/upload/$projectId'
       fullPath: '/upload/$projectId'
       preLoaderRoute: typeof UploadProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/playground/noop': {
+      id: '/playground/noop'
+      path: '/playground/noop'
+      fullPath: '/playground/noop'
+      preLoaderRoute: typeof PlaygroundNoopRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal/notices': {
@@ -1092,9 +1132,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiReportCspRoute: ApiReportCspRoute,
   ApiWebScreenshotRoute: ApiWebScreenshotRoute,
   LegalNoticesRoute: LegalNoticesRoute,
+  PlaygroundNoopRoute: PlaygroundNoopRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,
   ControllerIndexRoute: ControllerIndexRoute,
   GalleryIndexRoute: GalleryIndexRoute,
+  PlaygroundIndexRoute: PlaygroundIndexRoute,
   WallIndexRoute: WallIndexRoute,
   ApiAssetsUriRoute: ApiAssetsUriRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
