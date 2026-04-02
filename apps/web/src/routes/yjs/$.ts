@@ -50,8 +50,11 @@ type BridgePayload = {
 };
 
 type EditorPeerMeta = Extract<PeerMeta, { specimen: 'editor' }>;
+const YJS_OPEN_WAIT_TIMEOUT_MS = 5_000;
 type YjsPeerState = {
-    meta: EditorPeerMeta;
+    meta?: EditorPeerMeta;
+    openReady?: boolean;
+    openPromise?: Promise<void>;
     doc?: SharedDoc;
 };
 
@@ -102,6 +105,28 @@ function setYjsPeerState(peer: Peer, state: YjsPeerState) {
 
 function clearYjsPeerState(peer: Peer) {
     delete (peer as any)[YJS_PEER_STATE_KEY];
+}
+
+async function waitForOpenCompletion(
+    peer: Peer,
+    timeoutMs = YJS_OPEN_WAIT_TIMEOUT_MS
+): Promise<boolean> {
+    const state = getYjsPeerState(peer);
+    if (!state) return false;
+    if (state.openReady) return true;
+    if (!state.openPromise) return false;
+
+    const timeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('open_timeout')), timeoutMs);
+    });
+
+    try {
+        await Promise.race([state.openPromise, timeout]);
+    } catch {
+        return false;
+    }
+
+    return getYjsPeerState(peer)?.openReady === true;
 }
 
 function withLexicalDomGlobals<T>(fn: () => T): T {
@@ -418,51 +443,95 @@ class YCrossws {
     }
 
     async onOpen(peer: Peer) {
-        try {
-            const userEmail = await resolvePeerUserEmail(peer, { cacheInPeer: false });
-            if (!userEmail) {
-                console.warn(`[YJS] Rejecting unauthenticated peer ${peer.id}`);
-                peer.close();
-                return;
-            }
+        const existing = getYjsPeerState(peer) ?? ({} satisfies YjsPeerState);
+        if (!getYjsPeerState(peer)) setYjsPeerState(peer, existing);
 
-            setYjsPeerState(peer, {
-                meta: {
-                    specimen: 'editor',
-                    authContext: { user: { email: userEmail } }
+        if (existing.openReady) return;
+        if (existing.openPromise) {
+            await existing.openPromise;
+            return;
+        }
+
+        const openPromise = (async (): Promise<void> => {
+            try {
+                const userEmail = await resolvePeerUserEmail(peer, { cacheInPeer: false });
+                if (!userEmail) {
+                    const latest = getYjsPeerState(peer) ?? existing;
+                    setYjsPeerState(peer, {
+                        ...latest
+                    });
+                    throw new Error('unauthenticated');
                 }
-            });
-            this.peers.add(peer);
 
-            const doc = await this.getDoc(peer);
-            const encoder = encoding.createEncoder();
-            encoding.writeVarUint(encoder, messageSync);
-            syncProtocol.writeSyncStep1(encoder, doc);
-            peer.send(encoding.toUint8Array(encoder));
+                const latestAuthed = getYjsPeerState(peer) ?? existing;
+                setYjsPeerState(peer, {
+                    ...latestAuthed,
+                    meta: {
+                        specimen: 'editor',
+                        authContext: { user: { email: userEmail } }
+                    }
+                });
 
-            const awarenessStates = doc.awareness.getStates();
-            if (awarenessStates.size > 0) {
-                const awarenessEncoder = encoding.createEncoder();
-                encoding.writeVarUint(awarenessEncoder, messageAwareness);
-                encoding.writeVarUint8Array(
-                    awarenessEncoder,
-                    awarenessProtocol.encodeAwarenessUpdate(doc.awareness, [
-                        ...awarenessStates.keys()
-                    ])
-                );
-                peer.send(encoding.toUint8Array(awarenessEncoder));
+                this.peers.add(peer);
+
+                const doc = await this.getDoc(peer);
+                const encoder = encoding.createEncoder();
+                encoding.writeVarUint(encoder, messageSync);
+                syncProtocol.writeSyncStep1(encoder, doc);
+                peer.send(encoding.toUint8Array(encoder));
+
+                const awarenessStates = doc.awareness.getStates();
+                if (awarenessStates.size > 0) {
+                    const awarenessEncoder = encoding.createEncoder();
+                    encoding.writeVarUint(awarenessEncoder, messageAwareness);
+                    encoding.writeVarUint8Array(
+                        awarenessEncoder,
+                        awarenessProtocol.encodeAwarenessUpdate(doc.awareness, [
+                            ...awarenessStates.keys()
+                        ])
+                    );
+                    peer.send(encoding.toUint8Array(awarenessEncoder));
+                }
+                const latest = getYjsPeerState(peer) ?? existing;
+                setYjsPeerState(peer, {
+                    ...latest,
+                    openReady: true,
+                    openPromise: undefined
+                });
+            } catch (error) {
+                const latest = getYjsPeerState(peer) ?? existing;
+                setYjsPeerState(peer, {
+                    ...latest,
+                    openReady: false,
+                    openPromise: undefined
+                });
+                throw error;
             }
+        })();
+
+        setYjsPeerState(peer, {
+            ...(getYjsPeerState(peer) ?? existing),
+            openReady: false,
+            openPromise
+        });
+
+        try {
+            await openPromise;
         } catch (error) {
-            console.error('[YJS] Failed to open peer:', error);
+            const message = error instanceof Error ? error.message : String(error);
+            if (message === 'unauthenticated') {
+                console.warn(`[YJS] Rejecting unauthenticated peer ${peer.id}`);
+            } else {
+                console.error('[YJS] Failed to open peer:', error);
+            }
             peer.close();
         }
     }
 
     async onMessage(peer: Peer, message: Message) {
-        const state = getYjsPeerState(peer);
-        const userEmail = state?.meta.authContext?.user?.email;
-        if (typeof userEmail !== 'string' || userEmail.length === 0) {
-            console.warn(`[YJS] Rejecting unauthenticated message from peer ${peer.id}`);
+        const ready = await waitForOpenCompletion(peer);
+        if (!ready) {
+            console.warn(`[YJS] Message from unknown peer ${peer.id}`);
             peer.close();
             return;
         }
@@ -606,7 +675,10 @@ class YCrossws {
 
     async getDoc(peer: Peer): Promise<SharedDoc> {
         const state = getYjsPeerState(peer);
-        if (!state) throw new Error('Missing YJS peer state');
+        const email = state?.meta?.authContext?.user?.email;
+        if (!state || typeof email !== 'string' || email.length === 0) {
+            throw new Error('Missing authenticated YJS peer state');
+        }
         if (state.doc) return state.doc;
 
         const docName = getDocName(peer);
@@ -636,7 +708,7 @@ class YCrossws {
 
         for (const peer of this.peers) {
             const state = getYjsPeerState(peer);
-            const currentEmail = state?.meta.authContext?.user?.email ?? null;
+            const currentEmail = state?.meta?.authContext?.user?.email ?? null;
             if (input.email && currentEmail !== input.email) continue;
             inspected += 1;
 
@@ -645,6 +717,11 @@ class YCrossws {
                 cacheInPeer: false
             });
             if (!nextEmail) {
+                if (state) {
+                    setYjsPeerState(peer, {
+                        ...state
+                    });
+                }
                 try {
                     peer.close();
                 } catch {
@@ -658,9 +735,10 @@ class YCrossws {
                 setYjsPeerState(peer, {
                     ...state,
                     meta: {
-                        ...state.meta,
+                        specimen: 'editor',
+                        ...(state.meta?.scope ? { scope: state.meta.scope } : {}),
                         authContext: {
-                            ...(state.meta.authContext ?? {}),
+                            ...(state.meta?.authContext ?? {}),
                             user: { email: nextEmail }
                         }
                     }
