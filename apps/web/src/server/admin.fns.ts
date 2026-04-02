@@ -3,8 +3,12 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 
 import {
-    adminDevicesAssignByChallenge,
+    adminCreateWall,
+    adminDeleteWall,
+    adminDevicesEnrollBySignature,
     adminDevicesList,
+    adminGetWall,
+    adminListDevicesForWall,
     adminDeletePublicAsset,
     adminListConfig,
     adminGetWallBindingMeta,
@@ -15,6 +19,7 @@ import {
     adminListWalls,
     adminSendSmtpTest,
     adminSetConfig,
+    adminUpdateWallMetadata,
     adminUnbindWall
 } from './admin';
 
@@ -47,6 +52,40 @@ export const $adminUnbindWall = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
     .inputValidator(z.object({ wallId: z.string() }))
     .handler(async ({ data }) => adminUnbindWall(data.wallId));
+
+export const $adminCreateWall = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(z.object({ wallId: z.string(), name: z.string().optional().nullable() }))
+    .handler(async ({ data }) => adminCreateWall({ wallId: data.wallId, name: data.name ?? null }));
+
+export const $adminGetWall = createServerFn({ method: 'GET' })
+    .middleware([adminMiddleware])
+    .inputValidator(z.object({ wallId: z.string() }))
+    .handler(async ({ data }) => adminGetWall(data.wallId));
+
+export const $adminUpdateWallMetadata = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            wallId: z.string(),
+            name: z.string().optional().nullable(),
+            site: z.string().optional().nullable(),
+            notes: z.string().optional().nullable()
+        })
+    )
+    .handler(async ({ data }) =>
+        adminUpdateWallMetadata({
+            wallId: data.wallId,
+            name: data.name ?? null,
+            site: data.site ?? null,
+            notes: data.notes ?? null
+        })
+    );
+
+export const $adminDeleteWall = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(z.object({ wallId: z.string() }))
+    .handler(async ({ data }) => adminDeleteWall(data.wallId));
 
 export const $adminGetUploadToken = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
@@ -98,17 +137,26 @@ export const $adminDevicesList = createServerFn({ method: 'GET' })
     .middleware([adminMiddleware])
     .handler(async () => adminDevicesList());
 
-export const $adminDevicesAssignByChallenge = createServerFn({ method: 'POST' })
+export const $adminDevicesForWall = createServerFn({ method: 'GET' })
+    .middleware([adminMiddleware])
+    .inputValidator(z.object({ wallId: z.string() }))
+    .handler(async ({ data }) => adminListDevicesForWall(data.wallId));
+
+export const $adminDevicesEnrollBySignature = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
     .inputValidator(
         z.object({
-            challenge: z.string(),
+            deviceId: z.string(),
+            signature: z.string(),
+            kind: z.enum(['wall', 'gallery', 'controller']),
             wallId: z.string()
         })
     )
     .handler(async ({ data, context }) =>
-        adminDevicesAssignByChallenge({
-            challenge: data.challenge,
+        adminDevicesEnrollBySignature({
+            deviceId: data.deviceId,
+            signature: data.signature,
+            kind: data.kind,
             wallId: data.wallId,
             assignedBy: context.user.email
         })

@@ -1,5 +1,6 @@
 'use client';
 
+import { getOrCreateDeviceIdentity, type DeviceIdentity } from './deviceIdentity';
 import { ReconnectingWebSocket } from './reconnectingWs';
 import { getWebSocketUrl } from './runtimeUrl';
 import { GSMessageSchema, type GSMessage } from './types';
@@ -26,6 +27,8 @@ type GalleryStateCallback = (state: GalleryState) => void;
 export class GalleryEngine {
     private rws: ReconnectingWebSocket;
     public wallId: string | null;
+    public devicePublicKey: string | null = null;
+    private deviceIdentityPromise: Promise<DeviceIdentity>;
     private messageCallbacks = new Set<ServerMessageCallback>();
     private wallBindingChangedCallbacks = new Set<WallBindingChangedCallback>();
     private wallUnboundCallbacks = new Set<WallUnboundCallback>();
@@ -37,14 +40,29 @@ export class GalleryEngine {
 
     private constructor(wallId: string | null) {
         this.wallId = wallId;
+        this.deviceIdentityPromise = getOrCreateDeviceIdentity('gallery').then((identity) => {
+            this.devicePublicKey = identity.publicKey;
+            return identity;
+        });
         this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
             binaryType: 'arraybuffer',
-            onOpen: () => {
+            onOpen: async () => {
                 console.log('Gallery Engine: Connected to Server');
+                let devicePublicKey: string | undefined;
+                try {
+                    const identity = await this.deviceIdentityPromise;
+                    devicePublicKey = identity.publicKey;
+                } catch (error) {
+                    console.warn(
+                        'Gallery Engine: device identity unavailable, continuing without device key',
+                        error
+                    );
+                }
                 this.sendJSON({
                     type: 'hello',
                     specimen: 'gallery',
-                    ...(this.wallId ? { wallId: this.wallId } : {})
+                    ...(this.wallId ? { wallId: this.wallId } : {}),
+                    ...(devicePublicKey ? { devicePublicKey } : {})
                 });
                 this.flushPendingMessages();
             },

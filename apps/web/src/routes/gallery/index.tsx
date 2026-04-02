@@ -1,13 +1,16 @@
+import { TriangleDashedIcon } from '@phosphor-icons/react';
 import { useAuth } from '@repo/auth/tanstack/hooks';
 import { Button } from '@repo/ui/components/button';
 import type { Project } from '@repo/ui/components/project-card';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
+import QRCode from 'qrcode';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { GalleryProjectCard } from '~/components/GalleryProjectCard';
+import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { GalleryEngine } from '~/lib/galleryEngine';
 import { publishedProjectsQueryOptions } from '~/server/projects.queries';
 import { wallsQueryOptions } from '~/server/walls.queries';
@@ -34,6 +37,8 @@ function HomePage() {
     const { user } = useAuth();
     const canManageWalls = Boolean(user);
     const [activeTag, setActiveTag] = useState<string | null>(null);
+    const [deviceEnrollmentId, setDeviceEnrollmentId] = useState<string | null>(null);
+    const [enrollmentQrDataUrl, setEnrollmentQrDataUrl] = useState<string | null>(null);
     const [autoOpenRevision, setAutoOpenRevision] = useState(0);
     const [liveSessionRevision, setLiveSessionRevision] = useState(0);
     const [syncedCloseRevision, setSyncedCloseRevision] = useState(0);
@@ -69,6 +74,13 @@ function HomePage() {
         const w = params.get('w');
         return w && w.trim().length > 0 ? w : null;
     }, [searchStr]);
+
+    const enrollmentModeEnabled = useMemo(() => {
+        const params = new URLSearchParams(searchStr);
+        return params.has('enroll');
+    }, [searchStr]);
+
+    const galleryEnrollmentGateActive = enrollmentModeEnabled && Boolean(deviceEnrollmentId);
 
     const galleryEngine = useMemo(
         () => (typeof window !== 'undefined' ? GalleryEngine.getInstance(wallId) : null),
@@ -173,6 +185,12 @@ function HomePage() {
         };
 
         const unsubs = [
+            galleryEngine.onMessage((data) => {
+                if (!enrollmentModeEnabled) return;
+                if (data.type === 'device_enrollment') {
+                    setDeviceEnrollmentId(data.deviceId);
+                }
+            }),
             galleryEngine.onGalleryState((snapshot) => {
                 queryClient.setQueryData<WallListEntry[]>(wallsQueryKey, (current) => {
                     const byWallId = new Map(
@@ -306,7 +324,42 @@ function HomePage() {
         return () => {
             for (const unsub of unsubs) unsub();
         };
-    }, [galleryEngine, queryClient, wallId, pendingOverride]);
+    }, [galleryEngine, queryClient, wallId, pendingOverride, enrollmentModeEnabled]);
+
+    useEffect(() => {
+        const deviceId = deviceEnrollmentId?.trim();
+        if (!enrollmentModeEnabled || !deviceId) return;
+        let cancelled = false;
+        Promise.resolve()
+            .then(async () => {
+                const identity = await getOrCreateDeviceIdentity('gallery');
+                const signature = await identity.signDeviceId(deviceId);
+                const payload = JSON.stringify({
+                    // schema: 'gem://',
+                    // kind: 'wall',
+                    did: deviceId,
+                    sig: signature
+                });
+                return QRCode.toDataURL(payload, {
+                    margin: 0,
+                    width: 240,
+                    errorCorrectionLevel: 'L',
+                    color: {
+                        dark: '#737373',
+                        light: '#171717'
+                    }
+                });
+            })
+            .then((url) => {
+                if (!cancelled) setEnrollmentQrDataUrl(url);
+            })
+            .catch(() => {
+                if (!cancelled) setEnrollmentQrDataUrl(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [deviceEnrollmentId, enrollmentModeEnabled]);
 
     useEffect(() => {
         if (!pendingOverride) return;
@@ -465,6 +518,27 @@ function HomePage() {
         setActiveTag(null);
     }, [autoOpenProjectId, activeTag]);
 
+    if (galleryEnrollmentGateActive) {
+        return (
+            <div className="flex h-full flex-col items-center justify-center gap-5 bg-background px-6 text-center text-neutral-500">
+                <TriangleDashedIcon size={56} weight="thin" />
+                <p className="text-center text-xl font-medium">
+                    This gallery hasn't been registered yet
+                </p>
+                <div className="flex flex-col items-center p-10">
+                    {enrollmentQrDataUrl ? (
+                        <img
+                            src={enrollmentQrDataUrl}
+                            alt="Device enrollment QR code"
+                            width={200}
+                            height={200}
+                        />
+                    ) : null}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-full flex-col overflow-hidden pt-30 pb-30">
             {pendingOverride ? (
@@ -550,6 +624,7 @@ function HomePage() {
                                         >
                                             <GalleryProjectCard
                                                 project={project}
+                                                allowWallActions={!enrollmentModeEnabled}
                                                 autoOpenSignal={
                                                     autoOpenProjectId === project._id
                                                         ? autoOpenSignal

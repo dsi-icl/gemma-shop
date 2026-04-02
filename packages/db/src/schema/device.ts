@@ -15,7 +15,6 @@ export const DeviceSchema = z.object({
     kind: DeviceKind,
     status: DeviceStatus,
     assignedWallId: z.string().nullable().optional(),
-    challenge: z.string(),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
     lastSeenAt: z.iso.datetime().nullable().optional(),

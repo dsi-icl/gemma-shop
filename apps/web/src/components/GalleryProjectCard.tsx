@@ -20,6 +20,7 @@ interface GalleryProjectCardProps {
     forceDemoteFullscreenSignal?: string | number | null;
     forceCloseMinimizedSignal?: string | number | null;
     forceCloseSignal?: string | number | null;
+    allowWallActions?: boolean;
 }
 
 export function GalleryProjectCard({
@@ -27,10 +28,11 @@ export function GalleryProjectCard({
     autoOpenSignal,
     forceDemoteFullscreenSignal,
     forceCloseMinimizedSignal,
-    forceCloseSignal
+    forceCloseSignal,
+    allowWallActions = true
 }: GalleryProjectCardProps) {
     const { user } = useAuth();
-    const canManageWalls = Boolean(user);
+    const canManageWalls = Boolean(user) && allowWallActions;
     const { data: walls = [] } = useQuery({
         ...wallsQueryOptions(),
         enabled: canManageWalls

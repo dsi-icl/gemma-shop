@@ -76,6 +76,7 @@ import {
     type GSMessage,
     type Layer
 } from '~/lib/types';
+import { ensureDeviceByPublicKey } from '~/server/devices';
 
 // ── Binary opcodes ──────────────────────────────────────────────────────────
 
@@ -1021,7 +1022,7 @@ handlers.set('video_seek', ({ data, scopeId }) => {
     }
 });
 
-function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
+async function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
     // Full Zod validation on handshake
     const parsed = HelloSchema.parse(data);
 
@@ -1115,29 +1116,43 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
     }
 
     if (parsed.specimen === 'wall') {
+        const wallDevice = parsed.devicePublicKey
+            ? await ensureDeviceByPublicKey({
+                  publicKey: parsed.devicePublicKey,
+                  kind: 'wall'
+              })
+            : null;
+        if (wallDevice?.status === 'pending') {
+            sendJSON(peer, {
+                type: 'device_enrollment',
+                deviceId: wallDevice.deviceId
+            });
+        }
+        const effectiveWallId = wallDevice?.assignedWallId ?? parsed.wallId;
+
         registerPeer(peer, {
             specimen: 'wall',
-            wallId: parsed.wallId,
+            wallId: effectiveWallId,
             col: parsed.col,
             row: parsed.row
         });
 
-        const boundScope = wallBindings.get(parsed.wallId);
+        const boundScope = wallBindings.get(effectiveWallId);
 
         peer.send(
             boundScope !== undefined
-                ? getWallHydratePayload(boundScope, parsed.wallId)
+                ? getWallHydratePayload(boundScope, effectiveWallId)
                 : EMPTY_HYDRATE
         );
 
         // if (boundScope !== undefined) recomputeAllLayerNodes(boundScope);
-        broadcastWallNodeCountToEditors(parsed.wallId);
-        broadcastWallBindingToEditors(parsed.wallId);
-        broadcastWallBindingToGalleries(parsed.wallId);
-        syncWallNodeCountToDb(parsed.wallId);
+        broadcastWallNodeCountToEditors(effectiveWallId);
+        broadcastWallBindingToEditors(effectiveWallId);
+        broadcastWallBindingToGalleries(effectiveWallId);
+        syncWallNodeCountToDb(effectiveWallId);
 
         console.log(
-            `[WS] Wall joined wallId=${parsed.wallId} ` +
+            `[WS] Wall joined wallId=${effectiveWallId} ` +
                 `(bound=${boundScope !== undefined ? scopeLabel(boundScope) : 'none'})`
         );
         logPeerCounts();
@@ -1145,6 +1160,19 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
     }
 
     if (parsed.specimen === 'controller') {
+        if (parsed.devicePublicKey) {
+            const controllerDevice = await ensureDeviceByPublicKey({
+                publicKey: parsed.devicePublicKey,
+                kind: 'controller'
+            });
+            if (controllerDevice.status === 'pending') {
+                sendJSON(peer, {
+                    type: 'device_enrollment',
+                    deviceId: controllerDevice.deviceId
+                });
+            }
+        }
+
         registerPeer(peer, { specimen: 'controller', wallId: parsed.wallId });
 
         const boundScope = wallBindings.get(parsed.wallId);
@@ -1178,6 +1206,19 @@ function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
     }
 
     if (parsed.specimen === 'gallery') {
+        if (parsed.devicePublicKey) {
+            const galleryDevice = await ensureDeviceByPublicKey({
+                publicKey: parsed.devicePublicKey,
+                kind: 'gallery'
+            });
+            if (galleryDevice.status === 'pending') {
+                sendJSON(peer, {
+                    type: 'device_enrollment',
+                    deviceId: galleryDevice.deviceId
+                });
+            }
+        }
+
         registerPeer(peer, {
             specimen: 'gallery',
             ...(parsed.wallId ? { wallId: parsed.wallId } : {})
@@ -1377,7 +1418,9 @@ export default defineWebSocketHandler({
 
                 // Hello: full Zod validation (cold path, once per connection)
                 if (data.type === 'hello') {
-                    handleHello(peer, data);
+                    void handleHello(peer, data).catch((err) => {
+                        console.error(`[WS] Hello handler failed for peer ${peer.id}:`, err);
+                    });
                     return;
                 }
 
@@ -1429,7 +1472,9 @@ export default defineWebSocketHandler({
                 }
 
                 if (data.type === 'hello') {
-                    handleHello(peer, data);
+                    void handleHello(peer, data).catch((err) => {
+                        console.error(`[WS] Hello handler failed for peer ${peer.id}:`, err);
+                    });
                     return;
                 }
 
@@ -1485,6 +1530,20 @@ export default defineWebSocketHandler({
     publishedCommitId: string | null
 ) => {
     broadcastProjectPublishChanged(projectId, publishedCommitId);
+};
+
+(process as any).__REBOOT_WALL__ = (wallId: string, node?: { c: number; r: number }) => {
+    const peersForWall = wallsByWallId.get(wallId);
+    if (!peersForWall || peersForWall.size === 0) return 0;
+    const payload = JSON.stringify({ type: 'reboot' } satisfies GSMessage);
+    let sent = 0;
+    for (const entry of peersForWall) {
+        if (entry.meta.specimen !== 'wall') continue;
+        if (node && (entry.meta.col !== node.c || entry.meta.row !== node.r)) continue;
+        entry.peer.send(payload);
+        sent += 1;
+    }
+    return sent;
 };
 
 // Bridge for YJS text updates — scope-targeted upsert into bus state + fanout.

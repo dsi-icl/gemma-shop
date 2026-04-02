@@ -1,4 +1,4 @@
-import { CircleNotchIcon, SlideshowIcon } from '@phosphor-icons/react';
+import { CircleNotchIcon, SlideshowIcon, TriangleDashedIcon } from '@phosphor-icons/react';
 import {
     ResizableHandle,
     ResizablePanel,
@@ -8,6 +8,7 @@ import { cn } from '@repo/ui/lib/utils';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
+import QRCode from 'qrcode';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer as KonvaLayer, Rect, Circle, Line } from 'react-konva';
 import { useShallow } from 'zustand/react/shallow';
@@ -17,6 +18,7 @@ import { ReadOnlyMediaLayer, ReadOnlyTextLayer } from '~/components/ReadOnlyLaye
 import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { ControllerEngine } from '~/lib/controllerEngine';
 import { useControllerStore } from '~/lib/controllerStore';
+import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import type { LayerWithEditorState } from '~/lib/types';
 
 const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
@@ -140,6 +142,8 @@ function Controller() {
         [wallId]
     );
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
+    const [deviceEnrollmentId, setDeviceEnrollmentId] = useState<string | null>(null);
+    const [enrollmentQrDataUrl, setEnrollmentQrDataUrl] = useState<string | null>(null);
     const [renderState, setRenderState] = useState<RenderState>({ hydrationReady: false });
     const [hasBindingSignal, setHasBindingSignal] = useState(false);
     const [slides, setSlides] = useState<SlideEntry[]>([]);
@@ -183,6 +187,50 @@ function Controller() {
             consumeCurrentLine: s.consumeCurrentLine
         }))
     );
+
+    useEffect(() => {
+        if (!engine) return;
+        return engine.onMessage((data) => {
+            if (data.type === 'device_enrollment') {
+                setDeviceEnrollmentId(data.deviceId);
+            }
+        });
+    }, [engine]);
+
+    useEffect(() => {
+        const deviceId = deviceEnrollmentId?.trim();
+        if (!deviceId) return;
+        let cancelled = false;
+        Promise.resolve()
+            .then(async () => {
+                const identity = await getOrCreateDeviceIdentity('controller');
+                const signature = await identity.signDeviceId(deviceId);
+                const payload = JSON.stringify({
+                    // schema: 'gem://',
+                    // kind: 'wall',
+                    did: deviceId,
+                    sig: signature
+                });
+                return QRCode.toDataURL(payload, {
+                    margin: 0,
+                    width: 240,
+                    errorCorrectionLevel: 'L',
+                    color: {
+                        dark: '#737373',
+                        light: '#171717'
+                    }
+                });
+            })
+            .then((url) => {
+                if (!cancelled) setEnrollmentQrDataUrl(url);
+            })
+            .catch(() => {
+                if (!cancelled) setEnrollmentQrDataUrl(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [deviceEnrollmentId]);
 
     useEffect(() => {
         if (!engine) return;
@@ -664,6 +712,33 @@ function Controller() {
                 <p className="max-w-md text-sm text-muted-foreground">
                     Missing wall id in URL. Open this page with <code>?w=&lt;wallId&gt;</code>.
                 </p>
+            </div>
+        );
+
+    if (deviceEnrollmentId)
+        return (
+            <div
+                className={cn(
+                    'container flex h-full max-h-full min-h-0 min-w-full flex-col items-center justify-center gap-5 overflow-hidden bg-background px-4 text-center text-neutral-500',
+                    showHideHeadAndFoot
+                        ? 'fixed inset-0 top-0 right-0 bottom-0 left-0 z-1000! p-0'
+                        : 'pt-18 pb-13'
+                )}
+            >
+                <TriangleDashedIcon size={56} weight="thin" />
+                <p className="text-center text-xl font-medium">
+                    This controller hasn't been registered yet
+                </p>
+                <div className="flex flex-col items-center p-10">
+                    {enrollmentQrDataUrl ? (
+                        <img
+                            src={enrollmentQrDataUrl}
+                            alt="Device enrollment QR code"
+                            width={200}
+                            height={200}
+                        />
+                    ) : null}
+                </div>
             </div>
         );
 

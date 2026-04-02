@@ -1,5 +1,6 @@
 'use client';
 
+import { getOrCreateDeviceIdentity, type DeviceIdentity } from './deviceIdentity';
 import { ReconnectingWebSocket } from './reconnectingWs';
 import { getWebSocketUrl } from './runtimeUrl';
 import {
@@ -39,31 +40,48 @@ export class WallEngine {
     public layers = new Map<number, LayerWithWallEngineState>();
     private layoutCallbacks = new Set<LayoutUpdateCallback>();
     public viewport: Viewport;
-    public wallId: string | null;
+    public wallId: string;
+    public devicePublicKey: string | null = null;
+    private deviceIdentityPromise: Promise<DeviceIdentity>;
     public customRenderUrl: string | undefined;
     public boundSource: 'live' | 'gallery' | undefined;
 
     private constructor(wallId: string, viewport: Viewport) {
         this.wallId = wallId;
+        this.deviceIdentityPromise = getOrCreateDeviceIdentity('wall').then((identity) => {
+            this.devicePublicKey = identity.publicKey;
+            return identity;
+        });
         this.viewport = viewport;
 
         this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
             binaryType: 'arraybuffer',
-            onOpen: () => {
+            onOpen: async () => {
                 console.log('Wall Engine: Connected to Master Server');
                 // Reset clock sync on every (re)connect
                 this.clockOffset = 0;
                 this.bestRTT = Infinity;
                 if (this.pingTimer) clearTimeout(this.pingTimer);
                 this.startClockSync();
+                let devicePublicKey: string | undefined;
+                try {
+                    const identity = await this.deviceIdentityPromise;
+                    devicePublicKey = identity.publicKey;
+                } catch (error) {
+                    console.warn(
+                        'Wall Engine: device identity unavailable, continuing without device key',
+                        error
+                    );
+                }
 
                 // Re-identify ourselves to the server
                 this.sendJSON({
                     type: 'hello',
                     specimen: 'wall',
-                    wallId,
+                    wallId: this.wallId,
                     col: Math.round(viewport.x / 1920),
-                    row: Math.round(viewport.y / 1080)
+                    row: Math.round(viewport.y / 1080),
+                    ...(devicePublicKey ? { devicePublicKey } : {})
                 });
             },
             onMessage: (event) => this.handleMessage(event)
@@ -276,7 +294,8 @@ export class WallEngine {
                 data.type === 'hydrate' ||
                 data.type === 'upsert_layer' ||
                 data.type === 'delete_layer' ||
-                data.type === 'reboot'
+                data.type === 'reboot' ||
+                data.type === 'device_enrollment'
             ) {
                 this.layoutCallbacks.forEach((cb) => cb(data));
             } else if (data.type === 'video_sync' || data.type === 'video_seek') {

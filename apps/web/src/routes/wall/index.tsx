@@ -2,10 +2,12 @@
 
 import { TriangleDashedIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
+import QRCode from 'qrcode';
 import { useEffect, useState, useMemo, useRef, type CSSProperties } from 'react';
 
 import { MapWrapper } from '~/components/MapWrapper';
 // import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
+import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { toCssFilterString } from '~/lib/layerFilters';
 import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
 import type { LayerWithWallComponentState } from '~/lib/types';
@@ -106,6 +108,8 @@ function WallApp() {
     const [frameabilityByUrl, setFrameabilityByUrl] = useState<
         Record<string, { ok: boolean; reason?: string; fallback?: string }>
     >({});
+    const [deviceEnrollmentId, setDeviceEnrollmentId] = useState<string | null>(null);
+    const [enrollmentQrDataUrl, setEnrollmentQrDataUrl] = useState<string | null>(null);
     const isClient = typeof window !== 'undefined';
     const searchParams = useMemo(() => {
         if (!isClient) return null;
@@ -293,6 +297,8 @@ function WallApp() {
                 });
             } else if (data.type === 'delete_layer') {
                 setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
+            } else if (data.type === 'device_enrollment') {
+                setDeviceEnrollmentId(data.deviceId);
             } else if (data.type === 'reboot') {
                 setBlackOverlayOpacity(1);
                 setTimeout(() => window.location.reload(), Math.random() * 1000 + 2000);
@@ -378,6 +384,41 @@ function WallApp() {
     }, [engine, myViewport]);
 
     useEffect(() => {
+        const deviceId = deviceEnrollmentId?.trim();
+        if (!deviceId) return;
+        let cancelled = false;
+        Promise.resolve()
+            .then(async () => {
+                const identity = await getOrCreateDeviceIdentity('wall');
+                const signature = await identity.signDeviceId(deviceId);
+                const payload = JSON.stringify({
+                    // schema: 'gem://',
+                    // kind: 'wall',
+                    did: deviceId,
+                    sig: signature
+                });
+                return QRCode.toDataURL(payload, {
+                    margin: 0,
+                    width: 240,
+                    errorCorrectionLevel: 'L',
+                    color: {
+                        dark: '#737373',
+                        light: '#171717'
+                    }
+                });
+            })
+            .then((url) => {
+                if (!cancelled) setEnrollmentQrDataUrl(url);
+            })
+            .catch(() => {
+                if (!cancelled) setEnrollmentQrDataUrl(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [deviceEnrollmentId]);
+
+    useEffect(() => {
         return () => {
             clearFadeTimer();
             clearIframeGate();
@@ -442,7 +483,28 @@ function WallApp() {
         };
     }, [layers, frameabilityByUrl]);
 
-    if (isClient && (hasMissingParams || !engine))
+    if (deviceEnrollmentId) {
+        return (
+            <div className="flex h-screen w-screen flex-col items-center justify-center gap-5 bg-neutral-900 px-6 text-neutral-500">
+                <TriangleDashedIcon size={56} weight="thin" />
+                <p className="text-center text-xl font-medium">
+                    This screen hasn't been registered yet
+                </p>
+                <div className="flex flex-col items-center p-10">
+                    {enrollmentQrDataUrl ? (
+                        <img
+                            src={enrollmentQrDataUrl}
+                            alt="Device enrollment QR code"
+                            width={200}
+                            height={200}
+                        />
+                    ) : null}
+                </div>
+            </div>
+        );
+    }
+
+    if (isClient && hasMissingParams)
         return (
             <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-neutral-900 text-neutral-400">
                 <TriangleDashedIcon size={64} weight="thin" />

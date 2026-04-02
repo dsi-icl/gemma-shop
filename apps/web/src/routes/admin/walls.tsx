@@ -30,7 +30,7 @@ function AdminWalls() {
     });
 
     return (
-        <div>
+        <div className="space-y-6">
             {walls.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                     No walls registered
