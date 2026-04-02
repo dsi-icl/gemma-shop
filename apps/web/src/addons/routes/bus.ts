@@ -1,3 +1,7 @@
+import { randomBytes } from 'node:crypto';
+
+import { auth } from '@repo/auth/auth';
+import type { Peer } from 'crossws';
 import { ObjectId } from 'mongodb';
 import { defineWebSocketHandler } from 'nitro/h3';
 
@@ -12,6 +16,7 @@ import {
     activeVideos,
     registerPeer,
     unregisterPeer,
+    setEditorScope,
     getOrCreateScope,
     internScope,
     scopeLabel,
@@ -66,8 +71,10 @@ import {
     // layerNodes,
     // canSendNonCritical,
     EMPTY_HYDRATE,
+    type AuthContext,
     type PeerEntry
 } from '~/lib/busState';
+import { validatePortalToken } from '~/lib/portalTokens';
 import {
     HelloSchema,
     GSMessageSchema,
@@ -149,6 +156,21 @@ interface PendingBindOverride {
 
 const pendingBindOverrides = new Map<string, PendingBindOverride>();
 const pendingBindOverrideByWall = new Map<string, string>();
+type HelloMessage = Extract<GSMessage, { type: 'hello' }>;
+type DeviceHelloMessage = Exclude<HelloMessage, { specimen: 'editor' }>;
+type HelloChallengeMessage = Extract<GSMessage, { type: 'hello_challenge' }>;
+
+interface PendingHelloAuth {
+    hello: DeviceHelloMessage;
+    nonce: string;
+}
+
+interface ResolvedHelloAuthContext {
+    device?: AuthContext['device'];
+    portal?: AuthContext['portal'];
+}
+
+const pendingHelloAuthByPeer = new Map<string, PendingHelloAuth>();
 const wsRateLimitStrikes = new Map<string, number>();
 const WS_RATE_LIMIT_STRIKE_LIMIT = Math.max(
     1,
@@ -179,6 +201,19 @@ function clearPlaybackCommand(scopeId: number, numericId: number) {
     lastPlaybackCommandAt.delete(playbackCommandKey(scopeId, numericId));
 }
 
+async function resolvePeerUserEmail(peer: Peer): Promise<string | null> {
+    try {
+        const headers = peer.request?.headers as Headers | undefined;
+        if (!headers) return null;
+        const session = await auth.api.getSession({ headers });
+        const email = session?.user?.email;
+        return typeof email === 'string' && email.length > 0 ? email : null;
+    } catch (error) {
+        console.warn(`[WS] Failed to resolve user session for peer ${peer.id}:`, error);
+        return null;
+    }
+}
+
 const WS_MUTATION_MESSAGE_TYPES = new Set([
     'clear_stage',
     'upsert_layer',
@@ -188,6 +223,7 @@ const WS_MUTATION_MESSAGE_TYPES = new Set([
     'reboot',
     'stage_dirty',
     'stage_save',
+    'switch_scope',
     'bind_wall',
     'request_bind_wall',
     'bind_override_decision',
@@ -198,7 +234,7 @@ const WS_MUTATION_MESSAGE_TYPES = new Set([
 ]);
 
 // TODO Review if authed logic is waranted here
-function getWsRateLimitIdentity(peer: import('crossws').Peer): string {
+function getWsRateLimitIdentity(peer: Peer): string {
     const ip = getClientIpFromHeaders(peer.request?.headers as Headers | undefined);
 
     return buildRateLimitSubjectKey({
@@ -209,7 +245,7 @@ function getWsRateLimitIdentity(peer: import('crossws').Peer): string {
 
 function getEntryProjectId(entry: PeerEntry): string | null {
     const meta = entry.meta;
-    if (meta.specimen === 'editor') return meta.projectId;
+    if (meta.specimen === 'editor') return meta.scope?.projectId ?? null;
     if (meta.specimen === 'wall' || meta.specimen === 'controller') {
         const scopeId = wallBindings.get(meta.wallId);
         const scope = scopeId !== undefined ? scopedState.get(scopeId) : null;
@@ -224,9 +260,9 @@ function getEntryProjectId(entry: PeerEntry): string | null {
 }
 
 async function enforceWsRateLimit(
-    peer: import('crossws').Peer,
-    entry: PeerEntry,
-    messageType: string
+    peer: Peer,
+    messageType: string,
+    opts?: { entry?: PeerEntry; projectId?: string | null }
 ): Promise<boolean> {
     if (!WS_MUTATION_MESSAGE_TYPES.has(messageType)) return true;
 
@@ -248,7 +284,7 @@ async function enforceWsRateLimit(
     void logAuditDenied({
         action: 'WS_MESSAGE_RATE_LIMITED',
         actorId,
-        projectId: getEntryProjectId(entry),
+        projectId: opts?.projectId ?? (opts?.entry ? getEntryProjectId(opts.entry) : null),
         resourceType: 'ws_message',
         resourceId: messageType,
         reasonCode: 'RATE_LIMITED',
@@ -490,7 +526,7 @@ async function getSlidesMetadata(
     }
 }
 
-async function sendSlidesSnapshotToControllerPeer(peer: import('crossws').Peer, commitId: string) {
+async function sendSlidesSnapshotToControllerPeer(peer: Peer, commitId: string) {
     const slides = await getSlidesMetadata(commitId);
     sendJSON(peer, {
         type: 'slides_updated',
@@ -569,7 +605,7 @@ function broadcastProjectPublishChanged(projectId: string, publishedCommitId: st
     }
 }
 
-async function sendGalleryStateSnapshot(peer: import('crossws').Peer, wallId?: string) {
+async function sendGalleryStateSnapshot(peer: Peer, wallId?: string) {
     const candidateWallIds = new Set<string>();
     if (wallId) {
         candidateWallIds.add(wallId);
@@ -620,11 +656,398 @@ async function sendGalleryStateSnapshot(peer: import('crossws').Peer, wallId?: s
     });
 }
 
+function clearPendingHelloAuth(peerId: string): PendingHelloAuth | null {
+    const pending = pendingHelloAuthByPeer.get(peerId);
+    if (!pending) return null;
+    pendingHelloAuthByPeer.delete(peerId);
+    return pending;
+}
+
+function issueHelloChallenge(peer: Peer, hello: DeviceHelloMessage) {
+    const pending: PendingHelloAuth = {
+        hello,
+        nonce: randomBytes(16).toString('base64url')
+    };
+    pendingHelloAuthByPeer.set(peer.id, pending);
+    const challenge: HelloChallengeMessage = {
+        type: 'hello_challenge',
+        nonce: pending.nonce
+    };
+    sendJSON(peer, challenge);
+}
+
+function base64UrlToBytes(input: string): Uint8Array {
+    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    return Uint8Array.from(Buffer.from(padded, 'base64'));
+}
+
+function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+    const out = new Uint8Array(bytes.byteLength);
+    out.set(bytes);
+    return out.buffer;
+}
+
+async function verifyDeviceSignature(
+    publicKeyRaw: string,
+    nonce: string,
+    signatureBase64Url: string
+): Promise<boolean> {
+    try {
+        const jwk = JSON.parse(publicKeyRaw) as JsonWebKey;
+        const key = await crypto.subtle.importKey(
+            'jwk',
+            jwk,
+            {
+                name: 'ECDSA',
+                namedCurve: 'P-256'
+            },
+            false,
+            ['verify']
+        );
+        return crypto.subtle.verify(
+            {
+                name: 'ECDSA',
+                hash: 'SHA-256'
+            },
+            key,
+            asArrayBuffer(base64UrlToBytes(signatureBase64Url)),
+            asArrayBuffer(new TextEncoder().encode(nonce))
+        );
+    } catch (error) {
+        console.warn('[WS] Failed to verify device signature', error);
+        return false;
+    }
+}
+
+function registerEditorPeer(
+    peer: Peer,
+    scopeInput: {
+        projectId: string;
+        commitId: string;
+        slideId: string;
+        userEmail?: string;
+    }
+) {
+    const scopeId = internScope(scopeInput.projectId, scopeInput.commitId, scopeInput.slideId);
+    const scope = getOrCreateScope(
+        scopeId,
+        scopeInput.projectId,
+        scopeInput.commitId,
+        scopeInput.slideId
+    );
+
+    const existing = peers.get(peer.id);
+    if (existing?.meta.specimen === 'editor') {
+        setEditorScope(existing, {
+            projectId: scopeInput.projectId,
+            commitId: scopeInput.commitId,
+            slideId: scopeInput.slideId,
+            scopeId
+        });
+    } else {
+        registerPeer(peer, {
+            specimen: 'editor',
+            scope: {
+                projectId: scopeInput.projectId,
+                commitId: scopeInput.commitId,
+                slideId: scopeInput.slideId,
+                scopeId
+            },
+            ...(scopeInput.userEmail
+                ? { authContext: { user: { email: scopeInput.userEmail } } }
+                : {})
+        });
+    }
+
+    if (scope.layers.size === 0) {
+        // Fresh scope — auto-seed from DB so the editor gets layers immediately
+        seedScopeFromDb(scopeId).then(() => {
+            peer.send(getEditorHydratePayload(scopeId));
+            for (const wallId of wallsByWallId.keys()) {
+                peer.send(
+                    JSON.stringify({
+                        type: 'wall_node_count',
+                        wallId,
+                        connectedNodes: getWallNodeCount(wallId)
+                    } satisfies GSMessage)
+                );
+                const boundScope = wallBindings.get(wallId);
+                const bound = boundScope !== undefined;
+                const s = bound ? scopedState.get(boundScope) : null;
+                peer.send(
+                    JSON.stringify({
+                        type: 'wall_binding_status',
+                        wallId,
+                        bound,
+                        ...(s
+                            ? {
+                                  projectId: s.projectId,
+                                  commitId: s.commitId,
+                                  slideId: s.slideId,
+                                  customRenderUrl: s.customRenderUrl,
+                                  boundSource: wallBindingSources.get(wallId)
+                              }
+                            : {})
+                    } satisfies GSMessage)
+                );
+            }
+        });
+    } else {
+        peer.send(getEditorHydratePayload(scopeId));
+        for (const wallId of wallsByWallId.keys()) {
+            peer.send(
+                JSON.stringify({
+                    type: 'wall_node_count',
+                    wallId,
+                    connectedNodes: getWallNodeCount(wallId)
+                } satisfies GSMessage)
+            );
+            const boundScope = wallBindings.get(wallId);
+            const bound = boundScope !== undefined;
+            const s = bound ? scopedState.get(boundScope) : null;
+            peer.send(
+                JSON.stringify({
+                    type: 'wall_binding_status',
+                    wallId,
+                    bound,
+                    ...(s
+                        ? {
+                              projectId: s.projectId,
+                              commitId: s.commitId,
+                              slideId: s.slideId,
+                              customRenderUrl: s.customRenderUrl,
+                              boundSource: wallBindingSources.get(wallId)
+                          }
+                        : {})
+                } satisfies GSMessage)
+            );
+        }
+    }
+}
+
+async function completeHelloRegistration(
+    peer: Peer,
+    parsed: DeviceHelloMessage,
+    auth: ResolvedHelloAuthContext
+) {
+    if (parsed.specimen === 'wall') {
+        const wallDevice = parsed.devicePublicKey
+            ? await ensureDeviceByPublicKey({
+                  publicKey: parsed.devicePublicKey,
+                  kind: 'wall'
+              })
+            : null;
+        if (wallDevice?.status === 'pending') {
+            sendJSON(peer, {
+                type: 'device_enrollment',
+                deviceId: wallDevice.deviceId
+            });
+        }
+        const effectiveWallId = wallDevice?.assignedWallId ?? parsed.wallId;
+        const authContext: AuthContext = {
+            ...(auth.device
+                ? {
+                      device: {
+                          kind: 'wall',
+                          wallId: effectiveWallId
+                      }
+                  }
+                : {})
+        };
+
+        registerPeer(peer, {
+            specimen: 'wall',
+            wallId: effectiveWallId,
+            col: parsed.col,
+            row: parsed.row,
+            authContext
+        });
+
+        const boundScope = wallBindings.get(effectiveWallId);
+
+        peer.send(
+            boundScope !== undefined
+                ? getWallHydratePayload(boundScope, effectiveWallId)
+                : EMPTY_HYDRATE
+        );
+
+        broadcastWallNodeCountToEditors(effectiveWallId);
+        broadcastWallBindingToEditors(effectiveWallId);
+        broadcastWallBindingToGalleries(effectiveWallId);
+        syncWallNodeCountToDb(effectiveWallId);
+
+        console.log(
+            `[WS] Wall joined wallId=${effectiveWallId} ` +
+                `(bound=${boundScope !== undefined ? scopeLabel(boundScope) : 'none'})`
+        );
+        logPeerCounts();
+        return;
+    }
+
+    if (parsed.specimen === 'controller') {
+        if (parsed.devicePublicKey) {
+            const controllerDevice = await ensureDeviceByPublicKey({
+                publicKey: parsed.devicePublicKey,
+                kind: 'controller'
+            });
+            if (controllerDevice.status === 'pending') {
+                sendJSON(peer, {
+                    type: 'device_enrollment',
+                    deviceId: controllerDevice.deviceId
+                });
+            }
+        }
+
+        const authContext: AuthContext = {
+            ...(auth.device ? { device: auth.device } : {}),
+            ...(auth.portal ? { portal: auth.portal } : {})
+        };
+
+        registerPeer(peer, {
+            specimen: 'controller',
+            wallId: parsed.wallId,
+            authContext
+        });
+
+        const boundScope = wallBindings.get(parsed.wallId);
+        const scope = boundScope !== undefined ? scopedState.get(boundScope) : null;
+        sendJSON(peer, {
+            type: 'wall_binding_status',
+            wallId: parsed.wallId,
+            bound: boundScope !== undefined,
+            ...(scope
+                ? {
+                      projectId: scope.projectId,
+                      commitId: scope.commitId,
+                      slideId: scope.slideId,
+                      customRenderUrl: scope.customRenderUrl,
+                      boundSource: wallBindingSources.get(parsed.wallId)
+                  }
+                : {})
+        });
+        peer.send(
+            boundScope !== undefined
+                ? getWallHydratePayload(boundScope, parsed.wallId)
+                : EMPTY_HYDRATE
+        );
+        if (scope?.commitId) {
+            void sendSlidesSnapshotToControllerPeer(peer, scope.commitId);
+        }
+
+        console.log(`[WS] Controller joined wallId=${parsed.wallId}`);
+        logPeerCounts();
+        return;
+    }
+
+    if (parsed.devicePublicKey) {
+        const galleryDevice = await ensureDeviceByPublicKey({
+            publicKey: parsed.devicePublicKey,
+            kind: 'gallery'
+        });
+        if (galleryDevice.status === 'pending') {
+            sendJSON(peer, {
+                type: 'device_enrollment',
+                deviceId: galleryDevice.deviceId
+            });
+        }
+    }
+
+    const authContext: AuthContext = {
+        ...(auth.device ? { device: auth.device } : {})
+    };
+
+    registerPeer(peer, {
+        specimen: 'gallery',
+        ...(parsed.wallId ? { wallId: parsed.wallId } : {}),
+        authContext
+    });
+    void sendGalleryStateSnapshot(peer, parsed.wallId);
+    console.log(`[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ' (global)'}`);
+    logPeerCounts();
+}
+
+function handleEditorScopeVacated(scopeId: number) {
+    const remainingEditors = editorsByScope.get(scopeId)?.size ?? 0;
+    if (remainingEditors > 0) return;
+
+    for (const [wallId, boundScopeId] of wallBindings) {
+        if (boundScopeId !== scopeId) continue;
+        if (wallBindingSources.get(wallId) !== 'live') continue;
+
+        unbindWall(wallId);
+        hydrateWallNodes(wallId);
+        broadcastToControllersByWallRaw(
+            wallId,
+            JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
+        );
+        notifyControllers(wallId, false);
+        void collections.walls.updateOne(
+            { wallId },
+            {
+                $set: {
+                    boundProjectId: null,
+                    boundCommitId: null,
+                    boundSlideId: null,
+                    boundSource: null,
+                    updatedAt: new Date().toISOString()
+                }
+            }
+        );
+        broadcastWallBindingToEditors(wallId);
+        broadcastWallBindingToGalleries(wallId);
+    }
+}
+
+async function recomputePeerAuthContexts(input: { email?: string; projectId?: string } = {}) {
+    let inspected = 0;
+    let refreshed = 0;
+    let disconnected = 0;
+
+    for (const entry of peers.values()) {
+        if (entry.meta.specimen !== 'editor') continue;
+        const currentEmail = entry.meta.authContext?.user?.email ?? null;
+        const scopeProjectId = entry.meta.scope?.projectId ?? null;
+        if (input.email && currentEmail !== input.email) continue;
+        if (input.projectId && scopeProjectId !== input.projectId) continue;
+        inspected += 1;
+
+        const resolvedEmail = await resolvePeerUserEmail(entry.peer);
+        if (!resolvedEmail) {
+            sendJSON(entry.peer, { type: 'auth_denied', reason: 'missing_session' });
+            try {
+                entry.peer.close();
+            } catch {
+                // no-op
+            }
+            disconnected += 1;
+            continue;
+        }
+
+        if (resolvedEmail !== currentEmail) {
+            entry.meta = {
+                ...entry.meta,
+                authContext: {
+                    ...(entry.meta.authContext ?? {}),
+                    user: { email: resolvedEmail }
+                }
+            };
+            refreshed += 1;
+        }
+    }
+
+    return { inspected, refreshed, disconnected };
+}
+
 handlers.set('rehydrate_please', ({ entry }) => {
     const { meta } = entry;
 
     if (meta.specimen === 'editor') {
-        entry.peer.send(getEditorHydratePayload(meta.scopeId));
+        if (!meta.scope) {
+            entry.peer.send(EMPTY_HYDRATE);
+            return;
+        }
+        entry.peer.send(getEditorHydratePayload(meta.scope.scopeId));
     } else if (meta.specimen === 'wall') {
         const boundScope = wallBindings.get(meta.wallId);
         entry.peer.send(
@@ -823,38 +1246,11 @@ handlers.set('stage_dirty', ({ scopeId }) => {
 });
 
 handlers.set('leave_scope', ({ entry }) => {
-    const meta = unregisterPeer(entry.peer.id);
-    if (meta?.specimen !== 'editor') return;
-
-    const remainingEditors = editorsByScope.get(meta.scopeId)?.size ?? 0;
-    if (remainingEditors <= 0) {
-        for (const [wallId, boundScopeId] of wallBindings) {
-            if (boundScopeId !== meta.scopeId) continue;
-            if (wallBindingSources.get(wallId) !== 'live') continue;
-
-            unbindWall(wallId);
-            hydrateWallNodes(wallId);
-            broadcastToControllersByWallRaw(
-                wallId,
-                JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
-            );
-            notifyControllers(wallId, false);
-            void collections.walls.updateOne(
-                { wallId },
-                {
-                    $set: {
-                        boundProjectId: null,
-                        boundCommitId: null,
-                        boundSlideId: null,
-                        boundSource: null,
-                        updatedAt: new Date().toISOString()
-                    }
-                }
-            );
-            broadcastWallBindingToEditors(wallId);
-            broadcastWallBindingToGalleries(wallId);
-        }
-    }
+    const meta = entry.meta;
+    if (meta.specimen !== 'editor' || !meta.scope) return;
+    const scopeId = meta.scope.scopeId;
+    setEditorScope(entry, null);
+    handleEditorScopeVacated(scopeId);
     logPeerCounts();
 });
 
@@ -907,7 +1303,8 @@ handlers.set('request_bind_wall', ({ entry, data }) => {
         });
         return;
     }
-    const requesterEmail = entry.meta.requesterEmail;
+    const userEmail =
+        entry.meta.specimen === 'editor' ? entry.meta.authContext?.user?.email : undefined;
 
     void (async () => {
         const resolvedSlideId = await resolveBoundSlideId(
@@ -1003,7 +1400,7 @@ handlers.set('request_bind_wall', ({ entry, data }) => {
             commitId: data.commitId,
             slideId: resolvedSlideId,
             expiresAt,
-            ...(requesterEmail ? { requesterEmail } : {})
+            ...(userEmail ? { requesterEmail: userEmail } : {})
         } satisfies GSMessage);
 
         for (const galleryEntry of galleries!) {
@@ -1125,219 +1522,145 @@ handlers.set('video_seek', ({ data, scopeId }) => {
     }
 });
 
-async function handleHello(peer: import('crossws').Peer, data: Record<string, any>) {
+async function handleHello(peer: Peer, data: Record<string, any>) {
     // Full Zod validation on handshake
     const parsed = HelloSchema.parse(data);
 
     // Re-registration: clean up old state first
     const existing = peers.get(peer.id);
     if (existing) unregisterPeer(peer.id);
+    clearPendingHelloAuth(peer.id);
 
     if (parsed.specimen === 'editor') {
-        const scopeId = internScope(parsed.projectId, parsed.commitId, parsed.slideId);
-        const scope = getOrCreateScope(scopeId, parsed.projectId, parsed.commitId, parsed.slideId);
-
+        const userEmail = await resolvePeerUserEmail(peer);
+        if (!userEmail) {
+            sendJSON(peer, { type: 'auth_denied', reason: 'missing_session' });
+            try {
+                peer.close();
+            } catch {
+                // no-op
+            }
+            return;
+        }
         registerPeer(peer, {
             specimen: 'editor',
-            projectId: parsed.projectId,
-            commitId: parsed.commitId,
-            slideId: parsed.slideId,
-            scopeId,
-            ...(parsed.requesterEmail ? { requesterEmail: parsed.requesterEmail } : {})
+            authContext: { user: { email: userEmail } }
         });
+        sendJSON(peer, { type: 'hello_authenticated' });
+        console.log('[WS] Editor registered (no scope)');
+        logPeerCounts();
+        return;
+    }
 
-        if (scope.layers.size === 0) {
-            // Fresh scope — auto-seed from DB so the editor gets layers immediately
-            seedScopeFromDb(scopeId).then(() => {
-                peer.send(getEditorHydratePayload(scopeId));
-                for (const wallId of wallsByWallId.keys()) {
-                    peer.send(
-                        JSON.stringify({
-                            type: 'wall_node_count',
-                            wallId,
-                            connectedNodes: getWallNodeCount(wallId)
-                        } satisfies GSMessage)
-                    );
-                    const boundScope = wallBindings.get(wallId);
-                    const bound = boundScope !== undefined;
-                    const s = bound ? scopedState.get(boundScope) : null;
-                    peer.send(
-                        JSON.stringify({
-                            type: 'wall_binding_status',
-                            wallId,
-                            bound,
-                            ...(s
-                                ? {
-                                      projectId: s.projectId,
-                                      commitId: s.commitId,
-                                      slideId: s.slideId,
-                                      customRenderUrl: s.customRenderUrl,
-                                      boundSource: wallBindingSources.get(wallId)
-                                  }
-                                : {})
-                        } satisfies GSMessage)
-                    );
-                }
-            });
+    issueHelloChallenge(peer, parsed);
+}
+
+async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
+    const parsed = GSMessageSchema.parse(data);
+    if (parsed.type !== 'hello_auth') return;
+
+    const pending = pendingHelloAuthByPeer.get(peer.id);
+    if (!pending) {
+        console.warn(`[WS] hello_auth without pending challenge from peer ${peer.id}`);
+        return;
+    }
+
+    let authenticated = false;
+    const resolvedAuth: ResolvedHelloAuthContext = {};
+
+    if (parsed.proof.signature && pending.hello.devicePublicKey) {
+        const valid = await verifyDeviceSignature(
+            pending.hello.devicePublicKey,
+            pending.nonce,
+            parsed.proof.signature
+        );
+        if (valid) {
+            authenticated = true;
+            if (pending.hello.specimen === 'wall') {
+                resolvedAuth.device = {
+                    kind: 'wall',
+                    wallId: pending.hello.wallId
+                };
+            } else if (pending.hello.specimen === 'controller') {
+                resolvedAuth.device = {
+                    kind: 'controller',
+                    wallId: pending.hello.wallId
+                };
+            } else {
+                resolvedAuth.device = {
+                    kind: 'gallery',
+                    ...(pending.hello.wallId ? { wallId: pending.hello.wallId } : {})
+                };
+            }
         } else {
-            peer.send(getEditorHydratePayload(scopeId));
-            for (const wallId of wallsByWallId.keys()) {
-                peer.send(
-                    JSON.stringify({
-                        type: 'wall_node_count',
-                        wallId,
-                        connectedNodes: getWallNodeCount(wallId)
-                    } satisfies GSMessage)
-                );
-                const boundScope = wallBindings.get(wallId);
-                const bound = boundScope !== undefined;
-                const s = bound ? scopedState.get(boundScope) : null;
-                peer.send(
-                    JSON.stringify({
-                        type: 'wall_binding_status',
-                        wallId,
-                        bound,
-                        ...(s
-                            ? {
-                                  projectId: s.projectId,
-                                  commitId: s.commitId,
-                                  slideId: s.slideId,
-                                  customRenderUrl: s.customRenderUrl,
-                                  boundSource: wallBindingSources.get(wallId)
-                              }
-                            : {})
-                    } satisfies GSMessage)
-                );
+            console.warn(`[WS] Invalid hello signature from peer ${peer.id}`);
+        }
+    }
+
+    if (!authenticated && parsed.proof.portalToken) {
+        if (pending.hello.specimen === 'controller') {
+            const validated = validatePortalToken(parsed.proof.portalToken);
+            if (validated && validated.wallId === pending.hello.wallId) {
+                authenticated = true;
+                resolvedAuth.portal = { wallId: validated.wallId };
+            } else {
+                console.warn(`[WS] Invalid controller portal token on peer ${peer.id}`);
             }
+        } else {
+            console.warn(
+                `[WS] portalToken proof is only supported for controller peers (${peer.id})`
+            );
         }
+    }
 
-        console.log(
-            `[WS] Editor joined scope=${makeScopeLabel(parsed.projectId, parsed.commitId, parsed.slideId)}`
-        );
-        logPeerCounts();
+    if (!authenticated) {
+        clearPendingHelloAuth(peer.id);
+        console.warn(`[WS] hello_auth failed for peer ${peer.id}`);
         return;
     }
 
-    if (parsed.specimen === 'wall') {
-        const wallDevice = parsed.devicePublicKey
-            ? await ensureDeviceByPublicKey({
-                  publicKey: parsed.devicePublicKey,
-                  kind: 'wall'
-              })
-            : null;
-        if (wallDevice?.status === 'pending') {
-            sendJSON(peer, {
-                type: 'device_enrollment',
-                deviceId: wallDevice.deviceId
-            });
-        }
-        const effectiveWallId = wallDevice?.assignedWallId ?? parsed.wallId;
+    clearPendingHelloAuth(peer.id);
+    sendJSON(peer, { type: 'hello_authenticated' });
+    await completeHelloRegistration(peer, pending.hello, resolvedAuth);
+}
 
-        registerPeer(peer, {
-            specimen: 'wall',
-            wallId: effectiveWallId,
-            col: parsed.col,
-            row: parsed.row
-        });
+async function handleSwitchScope(peer: Peer, data: Record<string, any>) {
+    const parsed = GSMessageSchema.parse(data);
+    if (parsed.type !== 'switch_scope') return;
 
-        const boundScope = wallBindings.get(effectiveWallId);
-
-        peer.send(
-            boundScope !== undefined
-                ? getWallHydratePayload(boundScope, effectiveWallId)
-                : EMPTY_HYDRATE
-        );
-
-        // if (boundScope !== undefined) recomputeAllLayerNodes(boundScope);
-        broadcastWallNodeCountToEditors(effectiveWallId);
-        broadcastWallBindingToEditors(effectiveWallId);
-        broadcastWallBindingToGalleries(effectiveWallId);
-        syncWallNodeCountToDb(effectiveWallId);
-
-        console.log(
-            `[WS] Wall joined wallId=${effectiveWallId} ` +
-                `(bound=${boundScope !== undefined ? scopeLabel(boundScope) : 'none'})`
-        );
-        logPeerCounts();
+    if (!(await enforceWsRateLimit(peer, parsed.type, { projectId: parsed.projectId }))) {
         return;
     }
 
-    if (parsed.specimen === 'controller') {
-        if (parsed.devicePublicKey) {
-            const controllerDevice = await ensureDeviceByPublicKey({
-                publicKey: parsed.devicePublicKey,
-                kind: 'controller'
-            });
-            if (controllerDevice.status === 'pending') {
-                sendJSON(peer, {
-                    type: 'device_enrollment',
-                    deviceId: controllerDevice.deviceId
-                });
-            }
-        }
-
-        registerPeer(peer, { specimen: 'controller', wallId: parsed.wallId });
-
-        const boundScope = wallBindings.get(parsed.wallId);
-        const scope = boundScope !== undefined ? scopedState.get(boundScope) : null;
-        sendJSON(peer, {
-            type: 'wall_binding_status',
-            wallId: parsed.wallId,
-            bound: boundScope !== undefined,
-            ...(scope
-                ? {
-                      projectId: scope.projectId,
-                      commitId: scope.commitId,
-                      slideId: scope.slideId,
-                      customRenderUrl: scope.customRenderUrl,
-                      boundSource: wallBindingSources.get(parsed.wallId)
-                  }
-                : {})
-        });
-        peer.send(
-            boundScope !== undefined
-                ? getWallHydratePayload(boundScope, parsed.wallId)
-                : EMPTY_HYDRATE
-        );
-        if (scope?.commitId) {
-            void sendSlidesSnapshotToControllerPeer(peer, scope.commitId);
-        }
-
-        console.log(`[WS] Controller joined wallId=${parsed.wallId}`);
-        logPeerCounts();
+    const existing = peers.get(peer.id);
+    if (existing && existing.meta.specimen !== 'editor') {
+        console.warn(`[WS] switch_scope rejected for non-editor peer ${peer.id}`);
         return;
     }
 
-    if (parsed.specimen === 'gallery') {
-        if (parsed.devicePublicKey) {
-            const galleryDevice = await ensureDeviceByPublicKey({
-                publicKey: parsed.devicePublicKey,
-                kind: 'gallery'
-            });
-            if (galleryDevice.status === 'pending') {
-                sendJSON(peer, {
-                    type: 'device_enrollment',
-                    deviceId: galleryDevice.deviceId
-                });
-            }
-        }
-
-        registerPeer(peer, {
-            specimen: 'gallery',
-            ...(parsed.wallId ? { wallId: parsed.wallId } : {})
-        });
-        void sendGalleryStateSnapshot(peer, parsed.wallId);
-        console.log(
-            `[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ' (global)'}`
-        );
-        logPeerCounts();
+    if (!existing || existing.meta.specimen !== 'editor') {
+        console.warn(`[WS] switch_scope from unauthenticated peer ${peer.id}`);
         return;
     }
+
+    const userEmail = existing.meta.authContext?.user?.email;
+
+    registerEditorPeer(peer, {
+        projectId: parsed.projectId,
+        commitId: parsed.commitId,
+        slideId: parsed.slideId,
+        ...(userEmail ? { userEmail } : {})
+    });
+
+    console.log(
+        `[WS] Editor switched scope=${makeScopeLabel(parsed.projectId, parsed.commitId, parsed.slideId)}`
+    );
+    logPeerCounts();
 }
 
 // ── Binary message handler ──────────────────────────────────────────────────
 
-function handleBinary(peer: import('crossws').Peer, rawData: ArrayBuffer) {
+function handleBinary(peer: Peer, rawData: ArrayBuffer) {
     markIncomingBinary();
     const view = new DataView(rawData);
     const opcode = view.getUint8(0);
@@ -1400,6 +1723,7 @@ export default defineWebSocketHandler({
 
     close(peer) {
         wsRateLimitStrikes.delete(peer.id);
+        clearPendingHelloAuth(peer.id);
         // Cancel pending override requests from disconnected requester.
         for (const [requestId, pending] of pendingBindOverrides) {
             if (pending.requesterPeerId !== peer.id) continue;
@@ -1407,36 +1731,8 @@ export default defineWebSocketHandler({
         }
 
         const meta = unregisterPeer(peer.id);
-        if (meta?.specimen === 'editor') {
-            const remainingEditors = editorsByScope.get(meta.scopeId)?.size ?? 0;
-            if (remainingEditors <= 0) {
-                for (const [wallId, boundScopeId] of wallBindings) {
-                    if (boundScopeId !== meta.scopeId) continue;
-                    if (wallBindingSources.get(wallId) !== 'live') continue;
-
-                    unbindWall(wallId);
-                    hydrateWallNodes(wallId);
-                    broadcastToControllersByWallRaw(
-                        wallId,
-                        JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
-                    );
-                    notifyControllers(wallId, false);
-                    void collections.walls.updateOne(
-                        { wallId },
-                        {
-                            $set: {
-                                boundProjectId: null,
-                                boundCommitId: null,
-                                boundSlideId: null,
-                                boundSource: null,
-                                updatedAt: new Date().toISOString()
-                            }
-                        }
-                    );
-                    broadcastWallBindingToEditors(wallId);
-                    broadcastWallBindingToGalleries(wallId);
-                }
-            }
+        if (meta?.specimen === 'editor' && meta.scope?.scopeId !== undefined) {
+            handleEditorScopeVacated(meta.scope.scopeId);
         }
         if (meta?.specimen === 'wall') {
             if (getWallNodeCount(meta.wallId) <= 0) {
@@ -1520,6 +1816,18 @@ export default defineWebSocketHandler({
                     });
                     return;
                 }
+                if (data.type === 'hello_auth') {
+                    void handleHelloAuth(peer, data).catch((err) => {
+                        console.error(`[WS] Hello auth handler failed for peer ${peer.id}:`, err);
+                    });
+                    return;
+                }
+                if (data.type === 'switch_scope') {
+                    void handleSwitchScope(peer, data).catch((err) => {
+                        console.error(`[WS] switch_scope handler failed for peer ${peer.id}:`, err);
+                    });
+                    return;
+                }
 
                 // All other messages: require registered peer
                 const entry = peers.get(peer.id);
@@ -1530,7 +1838,7 @@ export default defineWebSocketHandler({
 
                 const handler = handlers.get(data.type);
                 if (handler) {
-                    void enforceWsRateLimit(peer, entry, data.type).then((allowed) => {
+                    void enforceWsRateLimit(peer, data.type, { entry }).then((allowed) => {
                         if (!allowed) return;
                         try {
                             handler({
@@ -1584,6 +1892,18 @@ export default defineWebSocketHandler({
                     });
                     return;
                 }
+                if (data.type === 'hello_auth') {
+                    void handleHelloAuth(peer, data).catch((err) => {
+                        console.error(`[WS] Hello auth handler failed for peer ${peer.id}:`, err);
+                    });
+                    return;
+                }
+                if (data.type === 'switch_scope') {
+                    void handleSwitchScope(peer, data).catch((err) => {
+                        console.error(`[WS] switch_scope handler failed for peer ${peer.id}:`, err);
+                    });
+                    return;
+                }
 
                 const entry = peers.get(peer.id);
                 if (!entry) {
@@ -1593,7 +1913,7 @@ export default defineWebSocketHandler({
 
                 const handler = handlers.get(data.type);
                 if (handler) {
-                    void enforceWsRateLimit(peer, entry, data.type).then((allowed) => {
+                    void enforceWsRateLimit(peer, data.type, { entry }).then((allowed) => {
                         if (!allowed) return;
                         try {
                             handler({
@@ -1647,6 +1967,13 @@ export default defineWebSocketHandler({
     publishedCommitId: string | null
 ) => {
     broadcastProjectPublishChanged(projectId, publishedCommitId);
+};
+
+(process as any).__BUS_RECOMPUTE_AUTH_CONTEXT__ = async (input?: {
+    email?: string;
+    projectId?: string;
+}) => {
+    return recomputePeerAuthContexts(input ?? {});
 };
 
 (process as any).__REBOOT_WALL__ = (wallId: string, node?: { c: number; r: number }) => {

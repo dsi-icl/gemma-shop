@@ -63,7 +63,7 @@ export class WallEngine {
 
         // On reconnecting: avoid immediate full clear/hydrate churn during short network blips.
         // Only clear if disconnect is sustained.
-        this.bus.onStateChange((status) => {
+        this.bus.onSocketStateChange((status) => {
             if (status === 'reconnecting') {
                 if (this.reconnectClearTimer) clearTimeout(this.reconnectClearTimer);
                 this.reconnectClearTimer = setTimeout(() => {

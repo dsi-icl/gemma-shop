@@ -119,18 +119,33 @@ export function scopeLabel(id: ScopeId): string {
     return scopeIdToKey.get(id) ?? `<unknown:${id}>`;
 }
 
+export type AuthContext = {
+    user?: {
+        email?: string;
+    };
+    device?: {
+        kind: 'wall' | 'controller' | 'gallery';
+        wallId?: string;
+    };
+    portal?: {
+        wallId: string;
+    };
+};
+
 export type PeerMeta =
     | {
           specimen: 'editor';
-          projectId: string;
-          commitId: string;
-          slideId: string;
-          scopeId: ScopeId;
-          requesterEmail?: string;
+          scope?: {
+              projectId: string;
+              commitId: string;
+              slideId: string;
+              scopeId: ScopeId;
+          };
+          authContext?: AuthContext;
       }
-    | { specimen: 'wall'; wallId: string; col: number; row: number }
-    | { specimen: 'controller'; wallId: string }
-    | { specimen: 'gallery'; wallId?: string };
+    | { specimen: 'wall'; wallId: string; col: number; row: number; authContext?: AuthContext }
+    | { specimen: 'controller'; wallId: string; authContext?: AuthContext }
+    | { specimen: 'gallery'; wallId?: string; authContext?: AuthContext };
 
 export interface PeerEntry {
     peer: Peer;
@@ -240,9 +255,11 @@ export function registerPeer(peer: Peer, meta: PeerMeta): PeerEntry {
 
     switch (meta.specimen) {
         case 'editor':
-            addToIndex(editorsByScope, meta.scopeId, entry);
             allEditors.add(entry);
-            cancelScopeCleanup(meta.scopeId);
+            if (meta.scope) {
+                addToIndex(editorsByScope, meta.scope.scopeId, entry);
+                cancelScopeCleanup(meta.scope.scopeId);
+            }
             break;
         case 'wall': {
             cancelWallUnbindGrace(meta.wallId);
@@ -273,9 +290,11 @@ export function unregisterPeer(peerId: string): PeerMeta | null {
     const { meta } = entry;
     switch (meta.specimen) {
         case 'editor':
-            removeFromIndex(editorsByScope, meta.scopeId, entry);
+            if (meta.scope) {
+                removeFromIndex(editorsByScope, meta.scope.scopeId, entry);
+                scheduleScopeCleanup(meta.scope.scopeId);
+            }
             allEditors.delete(entry);
-            scheduleScopeCleanup(meta.scopeId);
             break;
         case 'wall': {
             removeFromIndex(wallsByWallId, meta.wallId, entry);
@@ -1108,13 +1127,47 @@ async function executeScopeCleanup(scopeId: ScopeId) {
 export function resolveScopeId(meta: PeerMeta): ScopeId | null {
     switch (meta.specimen) {
         case 'editor':
-            return meta.scopeId;
+            return meta.scope?.scopeId ?? null;
         case 'wall':
         case 'controller':
             return wallBindings.get(meta.wallId) ?? null;
         default:
             return null;
     }
+}
+
+export function setEditorScope(
+    entry: PeerEntry,
+    scope: {
+        projectId: string;
+        commitId: string;
+        slideId: string;
+        scopeId: ScopeId;
+    } | null
+) {
+    if (entry.meta.specimen !== 'editor') return;
+
+    const previousScopeId = entry.meta.scope?.scopeId;
+    if (previousScopeId !== undefined) {
+        removeFromIndex(editorsByScope, previousScopeId, entry);
+        scheduleScopeCleanup(previousScopeId);
+    }
+
+    if (!scope) {
+        entry.meta = {
+            specimen: 'editor',
+            ...(entry.meta.authContext ? { authContext: entry.meta.authContext } : {})
+        };
+        return;
+    }
+
+    entry.meta = {
+        specimen: 'editor',
+        scope,
+        ...(entry.meta.authContext ? { authContext: entry.meta.authContext } : {})
+    };
+    addToIndex(editorsByScope, scope.scopeId, entry);
+    cancelScopeCleanup(scope.scopeId);
 }
 
 const PING_TIMEOUT_MS = 60_000; // Force-close peers with no ping for 60s

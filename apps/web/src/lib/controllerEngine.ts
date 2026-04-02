@@ -48,6 +48,7 @@ const TEMP_BOUND_SLIDE_ID = '__bound-current__';
 export class ControllerEngine {
     private bus: BusClient;
     public wallId: string;
+    public portalToken: string | null;
     private bindingCallbacks = new Set<BindingCallback>();
     private hydrateCallbacks = new Set<HydrateCallback>();
     private slidesUpdatedCallbacks = new Set<SlidesUpdatedCallback>();
@@ -65,12 +66,14 @@ export class ControllerEngine {
     private emitScheduled = false;
     private lastSnapshotSignature: string | null = null;
 
-    private constructor(wallId: string) {
+    private constructor(wallId: string, portalToken: string | null = null) {
         this.wallId = wallId;
+        this.portalToken = portalToken;
         this.bus = new BusClient({
             auth: {
                 kind: 'controller',
-                wallId: this.wallId
+                wallId: this.wallId,
+                portalToken: this.portalToken
             },
             onOpen: () => {
                 console.log('Controller Engine: Connected to Server');
@@ -85,7 +88,7 @@ export class ControllerEngine {
         });
 
         // On disconnect: notify UI that binding state is unknown
-        this.bus.onStateChange((status) => {
+        this.bus.onSocketStateChange((status) => {
             if (status === 'reconnecting' || status === 'disconnected') {
                 this.reconciledBinding = { bound: false };
                 this.bindingCallbacks.forEach((cb) => cb({ bound: false }));
@@ -94,13 +97,17 @@ export class ControllerEngine {
         });
     }
 
-    public static getInstance(wallId: string): ControllerEngine {
+    public static getInstance(wallId: string, portalToken: string | null = null): ControllerEngine {
         if (typeof window === 'undefined') {
             throw new Error('ControllerEngine can only be used in the browser');
         }
-        if (!window.__CONTROLLER_ENGINE__ || window.__CONTROLLER_ENGINE__.wallId !== wallId) {
+        if (
+            !window.__CONTROLLER_ENGINE__ ||
+            window.__CONTROLLER_ENGINE__.wallId !== wallId ||
+            window.__CONTROLLER_ENGINE__.portalToken !== portalToken
+        ) {
             window.__CONTROLLER_ENGINE__?.destroy();
-            window.__CONTROLLER_ENGINE__ = new ControllerEngine(wallId);
+            window.__CONTROLLER_ENGINE__ = new ControllerEngine(wallId, portalToken);
         }
         return window.__CONTROLLER_ENGINE__;
     }

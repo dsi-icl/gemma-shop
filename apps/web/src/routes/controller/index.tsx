@@ -129,17 +129,23 @@ function Controller() {
     const searchStr = useLocation({
         select: (location) => location.searchStr
     });
-    const { wallId, mountLocation } = useMemo(() => {
+    const { wallId, mountLocation, portalToken } = useMemo(() => {
         const params = new URLSearchParams(searchStr);
-        return { wallId: params.get('w'), mountLocation: params.get('l') };
+        return {
+            wallId: params.get('w')?.trim(),
+            mountLocation: params.get('l')?.trim(),
+            portalToken: params.get('_gem_t')?.trim()
+        };
     }, [searchStr]);
 
     const showHideHeadAndFoot = mountLocation === 'gallery';
 
     const engine = useMemo(
         () =>
-            typeof window !== 'undefined' && wallId ? ControllerEngine.getInstance(wallId) : null,
-        [wallId]
+            typeof window !== 'undefined' && wallId
+                ? ControllerEngine.getInstance(wallId, portalToken)
+                : null,
+        [wallId, portalToken]
     );
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
     const [deviceEnrollmentId, setDeviceEnrollmentId] = useState<string | null>(null);

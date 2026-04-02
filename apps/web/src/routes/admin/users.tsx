@@ -1,11 +1,11 @@
 import { ProhibitIcon, ShieldCheckIcon } from '@phosphor-icons/react';
-import authClient from '@repo/auth/auth-client';
 import { Button } from '@repo/ui/components/button';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { toast } from 'sonner';
 
 import { formatDateValue } from '~/lib/safeDate';
+import { $adminSetUserBanStatus } from '~/server/admin.fns';
 import { adminUsersQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/users')({
@@ -21,11 +21,7 @@ function AdminUsers() {
 
     const banMutation = useMutation({
         mutationFn: async ({ userId, banned }: { userId: string; banned: boolean }) => {
-            if (banned) {
-                await (authClient as any).admin.banUser({ userId });
-            } else {
-                await (authClient as any).admin.unbanUser({ userId });
-            }
+            await $adminSetUserBanStatus({ data: { userId, banned } });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });

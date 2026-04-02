@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
-import { ControllerEngine } from '~/lib/controllerEngine';
 import { GalleryEngine } from '~/lib/galleryEngine';
 import { $issueControllerPortalToken } from '~/server/portal.fns';
 import { $bindWall } from '~/server/walls.fns';
@@ -78,16 +77,19 @@ export function GalleryProjectCard({
         [project._id, project.publishedCommitId]
     );
 
-    const handleWallRebootRequest = useCallback(async (wallId: string) => {
-        try {
-            const engine = ControllerEngine.getInstance(wallId);
-            engine.sendJSON({ type: 'reboot' });
-            return true;
-        } catch (e: any) {
-            toast.error(e?.message ?? 'Could not refresh wall screens');
-            return false;
-        }
-    }, []);
+    const handleWallRebootRequest = useCallback(
+        async (_wallId: string) => {
+            try {
+                const engine = GalleryEngine.getInstance(presetWallId);
+                engine.sendJSON({ type: 'reboot' });
+                return true;
+            } catch (e: any) {
+                toast.error(e?.message ?? 'Could not refresh wall screens');
+                return false;
+            }
+        },
+        [presetWallId]
+    );
 
     const handleWallUnbindRequest = useCallback(
         async (wallId: string) => {

@@ -1,6 +1,7 @@
 'use client';
 
 import { throttle } from '@tanstack/pacer';
+import { toast } from 'sonner';
 
 import { BusClient } from './busClient';
 import { type ConnectionStatus } from './reconnectingWs';
@@ -45,10 +46,10 @@ export class EditorEngine {
     private currentProjectId: string | null = null;
     private currentCommitId: string | null = null;
     private currentSlideId: string | null = null;
-    private requesterEmail: string | null = null;
 
     private constructor() {
         this.bus = new BusClient({
+            auth: { kind: 'editor' },
             onOpen: () => {
                 console.log('Editor Engine: Connected to Server');
                 // Reset clock sync state on every (re)connect
@@ -69,8 +70,29 @@ export class EditorEngine {
             onMessage: (event) => this.handleMessage(event)
         });
 
-        this.bus.onStateChange((status) => {
+        this.bus.onSocketStateChange((status) => {
             this.connectionStatusCallbacks.forEach((cb) => cb(status));
+        });
+        this.bus.onReady(() => {
+            if (!this.currentProjectId || !this.currentCommitId || !this.currentSlideId) return;
+            this.sendJSON({
+                type: 'switch_scope',
+                projectId: this.currentProjectId,
+                commitId: this.currentCommitId,
+                slideId: this.currentSlideId
+            });
+            if (this.boundWallId) {
+                const requestId = this.makeBindRequestId();
+                this.lastBindRequestId = requestId;
+                this.sendJSON({
+                    type: 'request_bind_wall',
+                    requestId,
+                    wallId: this.boundWallId,
+                    projectId: this.currentProjectId,
+                    commitId: this.currentCommitId,
+                    slideId: this.currentSlideId
+                });
+            }
         });
     }
 
@@ -144,6 +166,11 @@ export class EditorEngine {
 
             if (data.type === 'bind_override_result') {
                 this.bindOverrideResultCallbacks.forEach((cb) => cb(data));
+                return;
+            }
+
+            if (data.type === 'auth_denied') {
+                toast.error('Session expired. Reconnect after signing in again.');
                 return;
             }
 
@@ -275,17 +302,17 @@ export class EditorEngine {
         // Playback cache is scope-local; avoid cross-scope numericId collisions.
         this.playbackStates.clear();
 
-        this.sendJSON({
-            type: 'hello',
-            specimen: 'editor',
-            projectId,
-            commitId,
-            slideId,
-            ...(this.requesterEmail ? { requesterEmail: this.requesterEmail } : {})
-        });
+        if (this.bus.ready) {
+            this.sendJSON({
+                type: 'switch_scope',
+                projectId,
+                commitId,
+                slideId
+            });
+        }
 
         // Auto-rebind the wall to the new slide when navigating
-        if (this.boundWallId) {
+        if (this.boundWallId && this.bus.ready) {
             const requestId = this.makeBindRequestId();
             this.lastBindRequestId = requestId;
             this.sendJSON({
@@ -368,24 +395,6 @@ export class EditorEngine {
 
     public getLastBindRequestId() {
         return this.lastBindRequestId;
-    }
-
-    public setRequesterEmail(email: string | null | undefined) {
-        const normalized = email?.trim() ? email.trim() : null;
-        if (this.requesterEmail === normalized) return;
-        this.requesterEmail = normalized;
-
-        // Refresh editor identity on the bus while staying in the same scope.
-        if (this.currentProjectId && this.currentCommitId && this.currentSlideId) {
-            this.sendJSON({
-                type: 'hello',
-                specimen: 'editor',
-                projectId: this.currentProjectId,
-                commitId: this.currentCommitId,
-                slideId: this.currentSlideId,
-                ...(this.requesterEmail ? { requesterEmail: this.requesterEmail } : {})
-            });
-        }
     }
 
     /** Current connection status */

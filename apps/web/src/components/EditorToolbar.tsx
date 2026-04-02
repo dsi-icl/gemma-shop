@@ -25,7 +25,6 @@ import {
     WarningCircleIcon,
     XIcon
 } from '@phosphor-icons/react';
-import { useAuth } from '@repo/auth/tanstack/hooks';
 import { Button } from '@repo/ui/components/button';
 import {
     Dialog,
@@ -63,7 +62,6 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
-    const { user } = useAuth();
     // Project header — only changes on project load
     const { projectId, projectName, parentSaveMessage } = useEditorStore(
         useShallow((s) => ({
@@ -313,11 +311,6 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
             });
         }
     };
-
-    useEffect(() => {
-        if (!engine) return;
-        engine.setRequesterEmail(user?.email ?? null);
-    }, [engine, user?.email]);
 
     const handleWallUnbind = () => {
         if (!engine) return;

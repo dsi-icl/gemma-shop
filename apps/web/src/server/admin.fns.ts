@@ -17,6 +17,7 @@ import {
     adminListPublicAssets,
     adminListUsers,
     adminListWalls,
+    adminSetUserBanStatus,
     adminSendSmtpTest,
     adminSetConfig,
     adminUpdateWallMetadata,
@@ -159,5 +160,21 @@ export const $adminDevicesEnrollBySignature = createServerFn({ method: 'POST' })
             kind: data.kind,
             wallId: data.wallId,
             assignedBy: context.user.email
+        })
+    );
+
+export const $adminSetUserBanStatus = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            userId: z.string(),
+            banned: z.boolean()
+        })
+    )
+    .handler(async ({ data, context }) =>
+        adminSetUserBanStatus({
+            userId: data.userId,
+            banned: data.banned,
+            actorEmail: context.user.email
         })
     );

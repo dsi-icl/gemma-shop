@@ -1,6 +1,8 @@
 import '@tanstack/react-start/server-only';
+import { auth } from '@repo/auth/auth';
 import { createSmtpTransport } from '@repo/auth/smtp';
 import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
+import { getRequest } from '@tanstack/react-start/server';
 import { ObjectId } from 'mongodb';
 
 import {
@@ -360,6 +362,56 @@ export async function adminDevicesEnrollBySignature(input: {
     const enrolled = await adminEnrollDeviceBySignature(input);
     process.__REBOOT_WALL__?.(input.wallId);
     return enrolled;
+}
+
+export async function adminRecomputeBusAuthContext(input: { email?: string }) {
+    return (
+        (process as any).__BUS_RECOMPUTE_AUTH_CONTEXT__?.({
+            ...(input.email ? { email: input.email } : {})
+        }) ?? null
+    );
+}
+
+export async function adminSetUserBanStatus(input: {
+    userId: string;
+    banned: boolean;
+    actorEmail: string;
+}) {
+    const userId = input.userId.trim();
+    if (!userId) throw new Error('User ID is required');
+
+    const users = collections.users;
+
+    const user = await users.findOne({ id: userId }, { projection: { email: 1, id: 1 } });
+    if (!user) throw new Error('User not found');
+    if (user.email === input.actorEmail)
+        throw new Error('You cannot modify your own account status');
+
+    const headers = getRequest().headers;
+
+    if (input.banned) {
+        await (auth.api as any).banUser({
+            headers,
+            body: { userId }
+        });
+    } else {
+        await (auth.api as any).unbanUser({
+            headers,
+            body: { userId }
+        });
+    }
+
+    if (typeof user.email === 'string' && user.email.length > 0) {
+        await adminRecomputeBusAuthContext({ email: user.email });
+    }
+
+    await logAuditSuccess({
+        action: input.banned ? 'ADMIN_USER_BANNED' : 'ADMIN_USER_UNBANNED',
+        actorId: input.actorEmail,
+        resourceType: 'user',
+        resourceId: userId,
+        changes: { banned: input.banned }
+    });
 }
 
 export async function adminListPublicAssets() {

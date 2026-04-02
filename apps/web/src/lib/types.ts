@@ -136,11 +136,7 @@ export const HelloSchema = z.discriminatedUnion('specimen', [
         devicePublicKey: z.string().optional()
     }),
     HelloMessageBaseSchema.extend({
-        specimen: z.literal('editor'),
-        projectId: z.string(),
-        commitId: z.string(),
-        slideId: z.string(),
-        requesterEmail: z.email().optional()
+        specimen: z.literal('editor')
     }),
     HelloMessageBaseSchema.extend({
         specimen: z.literal('gallery'),
@@ -169,11 +165,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         }),
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
-            specimen: z.literal('editor'),
-            projectId: z.string(),
-            commitId: z.string(),
-            slideId: z.string(),
-            requesterEmail: z.email().optional()
+            specimen: z.literal('editor')
         }),
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
@@ -182,6 +174,37 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             devicePublicKey: z.string().optional()
         })
     ]),
+    z.object({
+        type: z.literal('hello_challenge'),
+        nonce: z.string()
+    }),
+    z.object({
+        type: z.literal('hello_auth'),
+        proof: z
+            .object({
+                signature: z.string().optional(),
+                portalToken: z.string().optional()
+            })
+            .refine(
+                (proof) =>
+                    (typeof proof.signature === 'string' && proof.signature.length > 0) ||
+                    (typeof proof.portalToken === 'string' && proof.portalToken.length > 0),
+                { message: 'hello_auth.proof requires at least one auth credential' }
+            )
+    }),
+    z.object({
+        type: z.literal('hello_authenticated')
+    }),
+    z.object({
+        type: z.literal('auth_denied'),
+        reason: z.enum(['missing_session']).optional()
+    }),
+    z.object({
+        type: z.literal('switch_scope'),
+        projectId: z.string(),
+        commitId: z.string(),
+        slideId: z.string()
+    }),
     z.object({
         type: z.literal('hydrate'),
         layers: LayerSchema.array(),
