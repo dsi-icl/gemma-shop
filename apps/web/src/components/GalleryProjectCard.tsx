@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 
 import { GalleryEngine } from '~/lib/galleryEngine';
 import { $issueControllerPortalToken } from '~/server/portal.fns';
-import { $bindWall } from '~/server/walls.fns';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
 interface GalleryProjectCardProps {
@@ -59,13 +58,13 @@ export function GalleryProjectCard({
             }
 
             try {
-                await $bindWall({
-                    data: {
-                        wallId,
-                        projectId: project._id,
-                        commitId: project.publishedCommitId,
-                        slideId: 'default'
-                    }
+                const engine = GalleryEngine.getInstance(presetWallId);
+                engine.sendJSON({
+                    type: 'bind_wall',
+                    wallId,
+                    projectId: project._id,
+                    commitId: project.publishedCommitId,
+                    slideId: 'default'
                 });
                 toast.success('Project loaded on wall');
                 return true;
@@ -74,7 +73,7 @@ export function GalleryProjectCard({
                 return false;
             }
         },
-        [project._id, project.publishedCommitId]
+        [presetWallId, project._id, project.publishedCommitId]
     );
 
     const handleWallRebootRequest = useCallback(

@@ -234,6 +234,7 @@ The notices are generated from tree-shaken modules detected in production bundle
 
 - While a controller is bound to a wall under active editor live broadcast, controller slide state can drift from scope reality; `slides_updated` metadata events are now partially reconciled client-side, but structural slide changes still require full commit refetch and can momentarily desync.
 - Gallery takeover confirmation modal currently uses a custom layering treatment instead of the shared app dialog stack; this was introduced to work around dialog z-index conflicts with project cards and should be replaced by a unified, application-level dialog layering fix.
+- Upload/session tokens are currently in-memory and unsigned (including upload tokens and portal tokens), so process restart or multi-instance deployment can invalidate active tokens unexpectedly.
 
 ### Things to look at in the future
 

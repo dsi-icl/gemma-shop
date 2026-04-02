@@ -3,7 +3,6 @@ import { unlink } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { join } from 'node:path';
 
-import { auth } from '@repo/auth/auth';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
@@ -13,6 +12,7 @@ import {
     checkRateLimit,
     getClientIpFromHeaders
 } from '~/server/rateLimit';
+import { hasAuthenticatedActor, type RequestAuthContext } from '~/server/requestAuthContext';
 
 function urlToBaseId(url: string): string {
     // Deterministic short id from URL for filenames
@@ -97,13 +97,13 @@ async function assertScreenshotTargetSafe(rawUrl: string) {
 export const Route = createFileRoute('/api/web-screenshot')({
     server: {
         handlers: {
-            POST: async ({ request }: { request: Request }) => {
-                const session = await auth.api.getSession({ headers: request.headers });
-                const internalToken = request.headers.get('x-internal-screenshot-token');
-                const isInternal =
-                    Boolean(process.env.SCREENSHOT_INTERNAL_TOKEN) &&
-                    internalToken === process.env.SCREENSHOT_INTERNAL_TOKEN;
-                if (!session && !isInternal) {
+            POST: async ({ request, context }: { request: Request; context?: unknown }) => {
+                const upstream = (context ?? {}) as {
+                    authContext?: RequestAuthContext;
+                    user?: Record<string, any> | null;
+                };
+                const authContext: RequestAuthContext = upstream.authContext ?? { guest: true };
+                if (!hasAuthenticatedActor(authContext)) {
                     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                         status: 401,
                         headers: { 'Content-Type': 'application/json' }
@@ -112,7 +112,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
 
                 const requesterIp = getClientIpFromHeaders(request.headers);
                 const subjectKey = buildRateLimitSubjectKey({
-                    actorId: session?.user?.email ?? null,
+                    actorId: authContext.user?.email ?? null,
                     ip: requesterIp
                 });
                 const rateLimit = checkRateLimit({

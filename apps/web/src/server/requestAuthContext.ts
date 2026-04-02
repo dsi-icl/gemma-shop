@@ -1,0 +1,259 @@
+import { resolveAuthContextFromHeaders } from '@repo/auth/auth-context';
+
+import { validatePortalToken } from '~/lib/portalTokens';
+import { collections } from '~/server/collections';
+
+type DeviceKind = 'wall' | 'controller' | 'gallery';
+
+export type RequestAuthContext = {
+    guest?: true;
+    user?: {
+        email: string;
+    };
+    device?: {
+        kind: DeviceKind;
+        wallId?: string;
+    };
+    portal?: {
+        wallId: string;
+    };
+};
+
+type ResolveOptions = {
+    requireDeviceAssigned?: boolean;
+};
+
+const DEVICE_HEADER_KIND = 'x-gemma-device-kind';
+const DEVICE_HEADER_PUBLIC_KEY = 'x-gemma-device-public-key';
+const DEVICE_HEADER_SIGNATURE = 'x-gemma-device-signature';
+const DEVICE_HEADER_TIMESTAMP = 'x-gemma-device-timestamp';
+const DEVICE_HEADER_NONCE = 'x-gemma-device-nonce';
+const DEVICE_HEADER_WALL_ID = 'x-gemma-device-wall-id';
+
+const DEVICE_CLOCK_SKEW_MS = 60_000;
+const NONCE_TTL_MS = 5 * 60_000;
+const NONCE_MIN_LENGTH = 12;
+const NONCE_MAX_LENGTH = 128;
+const NONCE_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+const _hmr = ((globalThis as any).__HTTP_DEVICE_NONCES__ as
+    | { byPublicKey: Map<string, Map<string, number>> }
+    | undefined) ?? {
+    byPublicKey: new Map<string, Map<string, number>>()
+};
+(globalThis as any).__HTTP_DEVICE_NONCES__ = _hmr;
+
+function readBearerToken(request: Request): string | null {
+    const auth = request.headers.get('authorization');
+    if (auth && auth.toLowerCase().startsWith('bearer ')) {
+        const token = auth.slice(7).trim();
+        return token.length > 0 ? token : null;
+    }
+    const url = new URL(request.url);
+    const queryToken = url.searchParams.get('_gem_t')?.trim();
+    return queryToken && queryToken.length > 0 ? queryToken : null;
+}
+
+function toBase64(input: string): string {
+    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+    return normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+}
+
+function base64ToBytes(input: string): Uint8Array {
+    const raw = Buffer.from(toBase64(input), 'base64');
+    return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+}
+
+function toArrayBufferView(input: Uint8Array): Uint8Array<ArrayBuffer> {
+    const out = new Uint8Array(input.byteLength);
+    out.set(input);
+    return out;
+}
+
+function normalizeDeviceKind(raw: string | null): DeviceKind | null {
+    if (raw === 'wall' || raw === 'controller' || raw === 'gallery') return raw;
+    return null;
+}
+
+function buildDeviceSignaturePayload(request: Request, timestamp: number, nonce: string): string {
+    const url = new URL(request.url);
+    return `${request.method.toUpperCase()}\n${url.pathname}\n${timestamp}\n${nonce}`;
+}
+
+function cleanupExpiredNonces(now: number) {
+    for (const [key, nonces] of _hmr.byPublicKey) {
+        for (const [nonce, seenAt] of nonces) {
+            if (now - seenAt > NONCE_TTL_MS) {
+                nonces.delete(nonce);
+            }
+        }
+        if (nonces.size === 0) {
+            _hmr.byPublicKey.delete(key);
+        }
+    }
+}
+
+function registerNonce(publicKey: string, nonce: string, now: number): boolean {
+    cleanupExpiredNonces(now);
+
+    let nonces = _hmr.byPublicKey.get(publicKey);
+    if (!nonces) {
+        nonces = new Map<string, number>();
+        _hmr.byPublicKey.set(publicKey, nonces);
+    }
+
+    if (nonces.has(nonce)) return false;
+    nonces.set(nonce, now);
+    return true;
+}
+
+async function verifyDeviceSignature(input: {
+    request: Request;
+    kind: DeviceKind;
+    publicKey: string;
+    signature: string;
+    timestamp: number;
+    nonce: string;
+    wallId?: string;
+    requireDeviceAssigned?: boolean;
+}): Promise<RequestAuthContext['device'] | null> {
+    const now = Date.now();
+    if (Math.abs(now - input.timestamp) > DEVICE_CLOCK_SKEW_MS) {
+        return null;
+    }
+
+    if (
+        input.nonce.length < NONCE_MIN_LENGTH ||
+        input.nonce.length > NONCE_MAX_LENGTH ||
+        !NONCE_PATTERN.test(input.nonce)
+    ) {
+        return null;
+    }
+
+    const registered = registerNonce(input.publicKey, input.nonce, now);
+    if (!registered) return null;
+
+    let jwk: JsonWebKey;
+    try {
+        jwk = JSON.parse(input.publicKey) as JsonWebKey;
+    } catch {
+        return null;
+    }
+
+    const algo: EcKeyImportParams & EcdsaParams = {
+        name: 'ECDSA',
+        namedCurve: 'P-256',
+        hash: 'SHA-256'
+    };
+
+    const payload = buildDeviceSignaturePayload(input.request, input.timestamp, input.nonce);
+    const payloadBytes = new TextEncoder().encode(payload);
+    const signatureBytes = toArrayBufferView(base64ToBytes(input.signature));
+
+    try {
+        const key = await crypto.subtle.importKey('jwk', jwk, algo, false, ['verify']);
+        const verified = await crypto.subtle.verify(algo, key, signatureBytes, payloadBytes);
+        if (!verified) return null;
+    } catch {
+        return null;
+    }
+
+    const deviceRecord = await collections.devices.findOne(
+        {
+            publicKey: input.publicKey,
+            kind: input.kind,
+            ...(input.requireDeviceAssigned !== false ? { status: 'active' } : {})
+        },
+        { projection: { assignedWallId: 1, status: 1 } }
+    );
+    if (!deviceRecord) return null;
+
+    if (input.requireDeviceAssigned !== false && deviceRecord.status !== 'active') return null;
+
+    const assignedWallId =
+        typeof deviceRecord.assignedWallId === 'string' ? deviceRecord.assignedWallId : undefined;
+    if (input.wallId && assignedWallId && input.wallId !== assignedWallId) {
+        return null;
+    }
+
+    return {
+        kind: input.kind,
+        ...(assignedWallId
+            ? { wallId: assignedWallId }
+            : input.wallId
+              ? { wallId: input.wallId }
+              : {})
+    };
+}
+
+async function resolveDeviceContext(
+    request: Request,
+    opts?: ResolveOptions
+): Promise<RequestAuthContext['device'] | null> {
+    const kind = normalizeDeviceKind(request.headers.get(DEVICE_HEADER_KIND));
+    const publicKey = request.headers.get(DEVICE_HEADER_PUBLIC_KEY)?.trim();
+    const signature = request.headers.get(DEVICE_HEADER_SIGNATURE)?.trim();
+    const timestampRaw = request.headers.get(DEVICE_HEADER_TIMESTAMP)?.trim();
+    const nonce = request.headers.get(DEVICE_HEADER_NONCE)?.trim();
+    const wallId = request.headers.get(DEVICE_HEADER_WALL_ID)?.trim();
+
+    if (!kind || !publicKey || !signature || !timestampRaw || !nonce) {
+        return null;
+    }
+
+    const timestamp = Number(timestampRaw);
+    if (!Number.isFinite(timestamp)) return null;
+
+    return verifyDeviceSignature({
+        request,
+        kind,
+        publicKey,
+        signature,
+        timestamp,
+        nonce,
+        wallId: wallId && wallId.length > 0 ? wallId : undefined,
+        requireDeviceAssigned: opts?.requireDeviceAssigned
+    });
+}
+
+export async function resolveRequestAuthContext(
+    request: Request,
+    opts?: ResolveOptions
+): Promise<{ authContext: RequestAuthContext; user: Record<string, any> | null }> {
+    const [{ authContext: sessionAuthContext, user }, device] = await Promise.all([
+        resolveAuthContextFromHeaders(request.headers),
+        resolveDeviceContext(request, opts)
+    ]);
+
+    const context: RequestAuthContext = {};
+
+    const userEmail = sessionAuthContext.user?.email;
+    if (typeof userEmail === 'string' && userEmail.length > 0) {
+        context.user = { email: userEmail };
+    }
+
+    if (device) {
+        context.device = device;
+    }
+
+    const pathname = new URL(request.url).pathname;
+    if (pathname.startsWith('/api/portal/')) {
+        const token = readBearerToken(request);
+        if (token) {
+            const validated = validatePortalToken(token);
+            if (validated) {
+                context.portal = { wallId: validated.wallId };
+            }
+        }
+    }
+
+    if (!context.user && !context.device && !context.portal) {
+        context.guest = true;
+    }
+
+    return { authContext: context, user };
+}
+
+export function hasAuthenticatedActor(authContext: RequestAuthContext): boolean {
+    return Boolean(authContext.user || authContext.device || authContext.portal);
+}

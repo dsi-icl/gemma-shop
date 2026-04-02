@@ -9,6 +9,7 @@ import {
     checkRateLimit,
     getClientIpFromHeaders
 } from '~/server/rateLimit';
+import { resolveRequestAuthContext } from '~/server/requestAuthContext';
 
 const startRateLimitMiddleware = createMiddleware().server(async ({ next, request }) => {
     const method = request.method.toUpperCase();
@@ -101,8 +102,20 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
     });
 });
 
+const authContextMiddleware = createMiddleware().server(async ({ next, request, context }) => {
+    const resolved = await resolveRequestAuthContext(request);
+    return next({
+        context: {
+            nonce: undefined,
+            ...(context ?? {}),
+            authContext: resolved.authContext,
+            user: resolved.user
+        }
+    });
+});
+
 export const startInstance = createStart(() => {
     return {
-        requestMiddleware: [startRateLimitMiddleware, cspMiddleware]
+        requestMiddleware: [startRateLimitMiddleware, cspMiddleware, authContextMiddleware]
     };
 });
