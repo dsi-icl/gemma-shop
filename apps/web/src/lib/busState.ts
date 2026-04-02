@@ -367,10 +367,6 @@ export function invalidateHydrateCache(scopeId: ScopeId) {
     if (scope) scope.hydrateCache = null;
 }
 
-export function invalidateWallHydrateCache(_scopeId: ScopeId) {
-    // no-op: wall hydrate payloads are generated per wall, on demand
-}
-
 export function getEditorHydratePayload(scopeId: ScopeId): string {
     const scope = scopedState.get(scopeId);
     if (!scope) return EMPTY_HYDRATE;
@@ -1196,7 +1192,6 @@ export async function seedScopeFromDb(scopeId: ScopeId): Promise<boolean> {
 
 // DB snapshoting
 export async function buildSlidesSnapshot(
-    scopeId: ScopeId,
     scope: ScopeState,
     headCommitId: ObjectId | string | null
 ): Promise<Array<{ id: string; order: number; layers: Layer[] }>> {
@@ -1251,7 +1246,7 @@ export async function saveScope(
             headId = new ObjectId(project.headCommitId);
         }
 
-        const updatedSlides = await buildSlidesSnapshot(scopeId, scope, headId);
+        const updatedSlides = await buildSlidesSnapshot(scope, headId);
 
         if (isAutoSave) {
             // Update the mutable HEAD in place

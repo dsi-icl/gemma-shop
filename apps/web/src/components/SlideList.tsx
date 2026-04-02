@@ -19,7 +19,6 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
     const selectedSlides = useEditorStore((s) => s.selectedSlides);
     const reorderSlides = useEditorStore((s) => s.reorderSlides);
     const toggleSlideSelection = useEditorStore((s) => s.toggleSlideSelection);
-    const setActiveSlideId = useEditorStore((s) => s.setActiveSlideId);
     const switchSlide = useEditorStore((s) => s.switchSlide);
     const copySlide = useEditorStore((s) => s.copySlide);
     const deleteSlide = useEditorStore((s) => s.deleteSlide);

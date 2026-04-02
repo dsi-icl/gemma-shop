@@ -3,7 +3,6 @@
     "version": "0.0.0",
     "private": true,
     "exports": {
-        "./MagicLinkEmail": "./src/MagicLinkEmail.tsx",
         "./OtpEmail": "./src/OtpEmail.tsx"
     },
     "scripts": {

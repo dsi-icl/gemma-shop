@@ -21,15 +21,6 @@ function toBase64Url(bytes: Uint8Array): string {
     return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
-function fromBase64Url(input: string): Uint8Array {
-    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-    const binary = atob(padded);
-    const out = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-    return out;
-}
-
 function resolveDeviceSalt(): string {
     try {
         const url = new URL(window.location.href);
@@ -104,18 +95,4 @@ export function getOrCreateDeviceIdentity(kind: DeviceKind): Promise<DeviceIdent
 
     identityCache.set(kind, pending);
     return pending;
-}
-
-export async function verifyDeviceSignature(
-    publicKeyJwkJson: string,
-    deviceId: string,
-    signature: string
-) {
-    const pub = JSON.parse(publicKeyJwkJson) as JsonWebKey;
-    const key = await crypto.subtle.importKey('jwk', pub, ALGO, false, ['verify']);
-    const rawSigBytes = fromBase64Url(signature);
-    const sigBytes = new Uint8Array(rawSigBytes.byteLength);
-    sigBytes.set(rawSigBytes);
-    const data = new TextEncoder().encode(deviceId);
-    return crypto.subtle.verify(ALGO, key, sigBytes, data);
 }

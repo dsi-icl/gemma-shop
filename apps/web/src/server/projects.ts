@@ -1,5 +1,5 @@
 import '@tanstack/react-start/server-only';
-import type { CreateAssetInput, CreateProjectInput, UpdateProjectInput } from '@repo/db/schema';
+import type { CreateProjectInput, UpdateProjectInput } from '@repo/db/schema';
 import { ObjectId } from 'mongodb';
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
@@ -161,40 +161,6 @@ export async function listAssets(projectId: string) {
     return [...projectAssets, ...publicAssets];
 }
 
-export async function listPublicAssets() {
-    const docs = await assets
-        .find({ public: true, deletedAt: { $exists: false } })
-        .sort({ createdAt: -1 })
-        .toArray();
-    return docs.map(serializeAsset);
-}
-
-export async function deletePublicAsset(assetId: string, userEmail: string) {
-    const asset = await assets.findOne({
-        _id: new ObjectId(assetId),
-        public: true,
-        deletedAt: { $exists: false }
-    });
-    if (!asset) throw new Error('Public asset not found');
-
-    await assets.updateOne(
-        { _id: new ObjectId(assetId) },
-        {
-            $set: {
-                deletedAt: new Date().toISOString(),
-                deletedBy: userEmail
-            }
-        }
-    );
-    await logAuditSuccess({
-        action: 'PUBLIC_ASSET_DELETED',
-        actorId: userEmail,
-        projectId: asset.projectId,
-        resourceType: 'asset',
-        resourceId: assetId
-    });
-}
-
 export async function getProject(id: string) {
     const doc = await projects.findOne({ _id: new ObjectId(id) });
     if (!doc) return null;
@@ -231,31 +197,6 @@ export async function createProject(input: CreateProjectInput, userEmail: string
     });
 
     return serializeProject({ ...doc, _id: result.insertedId });
-}
-
-export async function createAsset(input: CreateAssetInput, userEmail: string) {
-    const project = await getProject(input.projectId);
-    if (!project) throw new Error('Project not found');
-
-    const now = new Date().toISOString();
-    const doc = {
-        ...input,
-        projectId: new ObjectId(input.projectId),
-        createdBy: userEmail,
-        createdAt: now
-    };
-
-    const result = await assets.insertOne(doc);
-    await logAuditSuccess({
-        action: 'ASSET_CREATED',
-        actorId: userEmail,
-        projectId: input.projectId,
-        resourceType: 'asset',
-        resourceId: result.insertedId.toHexString(),
-        changes: { name: input.name, public: Boolean((input as any).public) }
-    });
-
-    return serializeAsset({ ...doc, _id: result.insertedId });
 }
 
 export async function updateProject(input: UpdateProjectInput, userEmail: string) {

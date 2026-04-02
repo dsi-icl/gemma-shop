@@ -198,7 +198,7 @@ const WS_MUTATION_MESSAGE_TYPES = new Set([
 ]);
 
 // TODO Review if authed logic is waranted here
-function getWsRateLimitIdentity(entry: PeerEntry, peer: import('crossws').Peer): string {
+function getWsRateLimitIdentity(peer: import('crossws').Peer): string {
     const ip = getClientIpFromHeaders(peer.request?.headers as Headers | undefined);
 
     return buildRateLimitSubjectKey({
@@ -230,7 +230,7 @@ async function enforceWsRateLimit(
 ): Promise<boolean> {
     if (!WS_MUTATION_MESSAGE_TYPES.has(messageType)) return true;
 
-    const subjectKey = getWsRateLimitIdentity(entry, peer);
+    const subjectKey = getWsRateLimitIdentity(peer);
     const result = checkRateLimit({
         subjectKey
     });
