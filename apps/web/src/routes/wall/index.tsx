@@ -442,7 +442,7 @@ function WallApp() {
         };
     }, [layers, frameabilityByUrl]);
 
-    if (hasMissingParams || !engine)
+    if (isClient && (hasMissingParams || !engine))
         return (
             <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-neutral-900 text-neutral-400">
                 <TriangleDashedIcon size={64} weight="thin" />
