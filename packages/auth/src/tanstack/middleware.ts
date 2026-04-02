@@ -1,6 +1,7 @@
 import { createMiddleware } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 
+import { buildAuthContextFromUser } from '../auth-context';
 import { _getUser } from './functions';
 
 /**
@@ -12,13 +13,14 @@ import { _getUser } from './functions';
  */
 export const authMiddleware = createMiddleware().server(async ({ next }) => {
     const user = await _getUser();
+    const authContext = buildAuthContextFromUser(user);
 
     if (!user) {
         setResponseStatus(401);
         throw new Error('Unauthorized');
     }
 
-    return next({ context: { user } });
+    return next({ context: { user, authContext } });
 });
 
 /**
@@ -34,17 +36,19 @@ export const freshAuthMiddleware = createMiddleware().server(async ({ next }) =>
         // https://better-auth.com/docs/concepts/session-management#cookie-cache
         disableCookieCache: true
     });
+    const authContext = buildAuthContextFromUser(user);
 
     if (!user) {
         setResponseStatus(401);
         throw new Error('Unauthorized');
     }
 
-    return next({ context: { user } });
+    return next({ context: { user, authContext } });
 });
 
 export const adminMiddleware = createMiddleware().server(async ({ next }) => {
     const user = await _getUser();
+    const authContext = buildAuthContextFromUser(user);
 
     if (!user) {
         setResponseStatus(401);
@@ -56,5 +60,5 @@ export const adminMiddleware = createMiddleware().server(async ({ next }) => {
         throw new Error('Forbidden');
     }
 
-    return next({ context: { user } });
+    return next({ context: { user, authContext } });
 });

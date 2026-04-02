@@ -1,9 +1,8 @@
 import { randomBytes } from 'node:crypto';
 
-import { auth } from '@repo/auth/auth';
-import type { Peer } from 'crossws';
+import { createFileRoute } from '@tanstack/react-router';
+import { defineHooks, type Peer } from 'crossws';
 import { ObjectId } from 'mongodb';
-import { defineWebSocketHandler } from 'nitro/h3';
 
 import {
     peers,
@@ -82,6 +81,7 @@ import {
     type GSMessage,
     type Layer
 } from '~/lib/types';
+import { resolvePeerUserEmail } from '~/lib/wsAuth';
 import { logAuditDenied } from '~/server/audit';
 import { collections } from '~/server/collections';
 import { ensureDeviceByPublicKey } from '~/server/devices';
@@ -199,19 +199,6 @@ function shouldApplyPlaybackCommand(
 
 function clearPlaybackCommand(scopeId: number, numericId: number) {
     lastPlaybackCommandAt.delete(playbackCommandKey(scopeId, numericId));
-}
-
-async function resolvePeerUserEmail(peer: Peer): Promise<string | null> {
-    try {
-        const headers = peer.request?.headers as Headers | undefined;
-        if (!headers) return null;
-        const session = await auth.api.getSession({ headers });
-        const email = session?.user?.email;
-        return typeof email === 'string' && email.length > 0 ? email : null;
-    } catch (error) {
-        console.warn(`[WS] Failed to resolve user session for peer ${peer.id}:`, error);
-        return null;
-    }
 }
 
 const WS_MUTATION_MESSAGE_TYPES = new Set([
@@ -879,7 +866,7 @@ async function completeHelloRegistration(
 
         console.log(
             `[WS] Wall joined wallId=${effectiveWallId} ` +
-                `(bound=${boundScope !== undefined ? scopeLabel(boundScope) : 'none'})`
+                `(bound=${boundScope !== undefined ? scopeLabel(boundScope) : `none`})`
         );
         logPeerCounts();
         return;
@@ -963,7 +950,7 @@ async function completeHelloRegistration(
         authContext
     });
     void sendGalleryStateSnapshot(peer, parsed.wallId);
-    console.log(`[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ' (global)'}`);
+    console.log(`[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ` (global)`}`);
     logPeerCounts();
 }
 
@@ -1012,7 +999,10 @@ async function recomputePeerAuthContexts(input: { email?: string; projectId?: st
         if (input.projectId && scopeProjectId !== input.projectId) continue;
         inspected += 1;
 
-        const resolvedEmail = await resolvePeerUserEmail(entry.peer);
+        const resolvedEmail = await resolvePeerUserEmail(entry.peer, {
+            cacheKey: '__busUserEmail',
+            forceRefresh: true
+        });
         if (!resolvedEmail) {
             sendJSON(entry.peer, { type: 'auth_denied', reason: 'missing_session' });
             try {
@@ -1532,7 +1522,7 @@ async function handleHello(peer: Peer, data: Record<string, any>) {
     clearPendingHelloAuth(peer.id);
 
     if (parsed.specimen === 'editor') {
-        const userEmail = await resolvePeerUserEmail(peer);
+        const userEmail = await resolvePeerUserEmail(peer, { cacheKey: '__busUserEmail' });
         if (!userEmail) {
             sendJSON(peer, { type: 'auth_denied', reason: 'missing_session' });
             try {
@@ -1715,7 +1705,7 @@ function handleBinary(peer: Peer, rawData: ArrayBuffer) {
 
 // ── WebSocket Handler ───────────────────────────────────────────────────────
 
-export default defineWebSocketHandler({
+const hooks = defineHooks({
     open(peer) {
         peer.websocket.binaryType = 'arraybuffer';
         console.log(`[WS] Peer ${peer.id} connected`);
@@ -1932,6 +1922,24 @@ export default defineWebSocketHandler({
                 }
             } catch (err) {
                 console.error(`[WS] Unparseable string message from peer ${peer.id}:`, err);
+            }
+        }
+    }
+});
+
+export const Route = createFileRoute('/bus')({
+    server: {
+        handlers: {
+            GET: async () => {
+                // HTTP fallback response: this endpoint is a websocket upgrade target.
+                return Object.assign(
+                    new Response('WebSocket upgrade is required.', {
+                        status: 426
+                    }),
+                    {
+                        crossws: hooks
+                    }
+                );
             }
         }
     }

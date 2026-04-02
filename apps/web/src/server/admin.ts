@@ -365,11 +365,28 @@ export async function adminDevicesEnrollBySignature(input: {
 }
 
 export async function adminRecomputeBusAuthContext(input: { email?: string }) {
-    return (
-        (process as any).__BUS_RECOMPUTE_AUTH_CONTEXT__?.({
-            ...(input.email ? { email: input.email } : {})
-        }) ?? null
-    );
+    const payload = {
+        ...(input.email ? { email: input.email } : {})
+    };
+
+    const bus =
+        ((process as any).__BUS_RECOMPUTE_AUTH_CONTEXT__?.(payload) as Promise<unknown>) ?? null;
+    const yjs =
+        ((process as any).__YJS_RECOMPUTE_AUTH_CONTEXT__?.(payload) as Promise<unknown>) ?? null;
+
+    const [busSettled, yjsSettled] = await Promise.allSettled([bus, yjs]);
+
+    if (busSettled.status === 'rejected') {
+        console.warn('[Admin] BUS auth-context recompute failed', busSettled.reason);
+    }
+    if (yjsSettled.status === 'rejected') {
+        console.warn('[Admin] YJS auth-context recompute failed', yjsSettled.reason);
+    }
+
+    return {
+        bus: busSettled.status === 'fulfilled' ? busSettled.value : null,
+        yjs: yjsSettled.status === 'fulfilled' ? yjsSettled.value : null
+    };
 }
 
 export async function adminSetUserBanStatus(input: {

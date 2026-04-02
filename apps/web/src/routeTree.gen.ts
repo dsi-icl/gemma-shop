@@ -13,6 +13,7 @@ import { Route as WebPlaceholderRouteImport } from './routes/web-placeholder'
 import { Route as WebNonetRouteImport } from './routes/web-nonet'
 import { Route as WebCorsissueRouteImport } from './routes/web-corsissue'
 import { Route as OgRouteImport } from './routes/og'
+import { Route as BusRouteImport } from './routes/bus'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as GuestRouteRouteImport } from './routes/_guest/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
@@ -22,6 +23,7 @@ import { Route as PlaygroundIndexRouteImport } from './routes/playground/index'
 import { Route as GalleryIndexRouteImport } from './routes/gallery/index'
 import { Route as ControllerIndexRouteImport } from './routes/controller/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as YjsSplatRouteImport } from './routes/yjs/$'
 import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
 import { Route as PlaygroundNoopRouteImport } from './routes/playground/noop'
 import { Route as LegalNoticesRouteImport } from './routes/legal/notices'
@@ -79,6 +81,11 @@ const OgRoute = OgRouteImport.update({
   path: '/og',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BusRoute = BusRouteImport.update({
+  id: '/bus',
+  path: '/bus',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRouteRoute = AdminRouteRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -121,6 +128,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRouteRoute,
+} as any)
+const YjsSplatRoute = YjsSplatRouteImport.update({
+  id: '/yjs/$',
+  path: '/yjs/$',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const UploadProjectIdRoute = UploadProjectIdRouteImport.update({
   id: '/upload/$projectId',
@@ -316,6 +328,7 @@ const AuthQuarryEditorProjectIdCommitIdSlideIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
+  '/bus': typeof BusRoute
   '/og': typeof OgRoute
   '/web-corsissue': typeof WebCorsissueRoute
   '/web-nonet': typeof WebNonetRoute
@@ -334,6 +347,7 @@ export interface FileRoutesByFullPath {
   '/legal/notices': typeof LegalNoticesRoute
   '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
+  '/yjs/$': typeof YjsSplatRoute
   '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
@@ -364,6 +378,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/bus': typeof BusRoute
   '/og': typeof OgRoute
   '/web-corsissue': typeof WebCorsissueRoute
   '/web-nonet': typeof WebNonetRoute
@@ -382,6 +397,7 @@ export interface FileRoutesByTo {
   '/legal/notices': typeof LegalNoticesRoute
   '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
+  '/yjs/$': typeof YjsSplatRoute
   '/admin': typeof AdminIndexRoute
   '/controller': typeof ControllerIndexRoute
   '/gallery': typeof GalleryIndexRoute
@@ -414,6 +430,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_guest': typeof GuestRouteRouteWithChildren
   '/admin': typeof AdminRouteRouteWithChildren
+  '/bus': typeof BusRoute
   '/og': typeof OgRoute
   '/web-corsissue': typeof WebCorsissueRoute
   '/web-nonet': typeof WebNonetRoute
@@ -432,6 +449,7 @@ export interface FileRoutesById {
   '/legal/notices': typeof LegalNoticesRoute
   '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
+  '/yjs/$': typeof YjsSplatRoute
   '/admin/': typeof AdminIndexRoute
   '/controller/': typeof ControllerIndexRoute
   '/gallery/': typeof GalleryIndexRoute
@@ -465,6 +483,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/bus'
     | '/og'
     | '/web-corsissue'
     | '/web-nonet'
@@ -483,6 +502,7 @@ export interface FileRouteTypes {
     | '/legal/notices'
     | '/playground/noop'
     | '/upload/$projectId'
+    | '/yjs/$'
     | '/admin/'
     | '/controller/'
     | '/gallery/'
@@ -513,6 +533,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/bus'
     | '/og'
     | '/web-corsissue'
     | '/web-nonet'
@@ -531,6 +552,7 @@ export interface FileRouteTypes {
     | '/legal/notices'
     | '/playground/noop'
     | '/upload/$projectId'
+    | '/yjs/$'
     | '/admin'
     | '/controller'
     | '/gallery'
@@ -562,6 +584,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/_guest'
     | '/admin'
+    | '/bus'
     | '/og'
     | '/web-corsissue'
     | '/web-nonet'
@@ -580,6 +603,7 @@ export interface FileRouteTypes {
     | '/legal/notices'
     | '/playground/noop'
     | '/upload/$projectId'
+    | '/yjs/$'
     | '/admin/'
     | '/controller/'
     | '/gallery/'
@@ -614,6 +638,7 @@ export interface RootRouteChildren {
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   GuestRouteRoute: typeof GuestRouteRouteWithChildren
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
+  BusRoute: typeof BusRoute
   OgRoute: typeof OgRoute
   WebCorsissueRoute: typeof WebCorsissueRoute
   WebNonetRoute: typeof WebNonetRoute
@@ -623,6 +648,7 @@ export interface RootRouteChildren {
   LegalNoticesRoute: typeof LegalNoticesRoute
   PlaygroundNoopRoute: typeof PlaygroundNoopRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
+  YjsSplatRoute: typeof YjsSplatRoute
   ControllerIndexRoute: typeof ControllerIndexRoute
   GalleryIndexRoute: typeof GalleryIndexRoute
   PlaygroundIndexRoute: typeof PlaygroundIndexRoute
@@ -661,6 +687,13 @@ declare module '@tanstack/react-router' {
       path: '/og'
       fullPath: '/og'
       preLoaderRoute: typeof OgRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bus': {
+      id: '/bus'
+      path: '/bus'
+      fullPath: '/bus'
+      preLoaderRoute: typeof BusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -725,6 +758,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/yjs/$': {
+      id: '/yjs/$'
+      path: '/yjs/$'
+      fullPath: '/yjs/$'
+      preLoaderRoute: typeof YjsSplatRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/upload/$projectId': {
       id: '/upload/$projectId'
@@ -1125,6 +1165,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
   GuestRouteRoute: GuestRouteRouteWithChildren,
   AdminRouteRoute: AdminRouteRouteWithChildren,
+  BusRoute: BusRoute,
   OgRoute: OgRoute,
   WebCorsissueRoute: WebCorsissueRoute,
   WebNonetRoute: WebNonetRoute,
@@ -1134,6 +1175,7 @@ const rootRouteChildren: RootRouteChildren = {
   LegalNoticesRoute: LegalNoticesRoute,
   PlaygroundNoopRoute: PlaygroundNoopRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,
+  YjsSplatRoute: YjsSplatRoute,
   ControllerIndexRoute: ControllerIndexRoute,
   GalleryIndexRoute: GalleryIndexRoute,
   PlaygroundIndexRoute: PlaygroundIndexRoute,
