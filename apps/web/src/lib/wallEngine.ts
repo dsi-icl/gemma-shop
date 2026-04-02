@@ -1,8 +1,6 @@
 'use client';
 
-import { getOrCreateDeviceIdentity, type DeviceIdentity } from './deviceIdentity';
-import { ReconnectingWebSocket } from './reconnectingWs';
-import { getWebSocketUrl } from './runtimeUrl';
+import { BusClient } from './busClient';
 import {
     GSMessageSchema,
     type GSMessage,
@@ -10,9 +8,6 @@ import {
     type LayerWithWallEngineState
 } from './types';
 
-const getGemmaBusUrl = (): string => {
-    return getWebSocketUrl('/bus');
-};
 const LAYER_ANIMATION_DURATION = 100;
 
 export interface Viewport {
@@ -25,7 +20,7 @@ export interface Viewport {
 type LayoutUpdateCallback = (data: GSMessage) => void;
 
 export class WallEngine {
-    private rws: ReconnectingWebSocket;
+    private bus: BusClient;
     private pingTimer: ReturnType<typeof setTimeout> | null = null;
     private reconnectClearTimer: ReturnType<typeof setTimeout> | null = null;
     private playbackStartRafs = new Map<number, number>();
@@ -41,59 +36,38 @@ export class WallEngine {
     private layoutCallbacks = new Set<LayoutUpdateCallback>();
     public viewport: Viewport;
     public wallId: string;
-    public devicePublicKey: string | null = null;
-    private deviceIdentityPromise: Promise<DeviceIdentity>;
     public customRenderUrl: string | undefined;
     public boundSource: 'live' | 'gallery' | undefined;
 
     private constructor(wallId: string, viewport: Viewport) {
         this.wallId = wallId;
-        this.deviceIdentityPromise = getOrCreateDeviceIdentity('wall').then((identity) => {
-            this.devicePublicKey = identity.publicKey;
-            return identity;
-        });
         this.viewport = viewport;
 
-        this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
-            binaryType: 'arraybuffer',
-            onOpen: async () => {
+        this.bus = new BusClient({
+            auth: {
+                kind: 'wall',
+                wallId: this.wallId,
+                col: Math.round(viewport.x / 1920),
+                row: Math.round(viewport.y / 1080)
+            },
+            onOpen: () => {
                 console.log('Wall Engine: Connected to Master Server');
                 // Reset clock sync on every (re)connect
                 this.clockOffset = 0;
                 this.bestRTT = Infinity;
                 if (this.pingTimer) clearTimeout(this.pingTimer);
                 this.startClockSync();
-                let devicePublicKey: string | undefined;
-                try {
-                    const identity = await this.deviceIdentityPromise;
-                    devicePublicKey = identity.publicKey;
-                } catch (error) {
-                    console.warn(
-                        'Wall Engine: device identity unavailable, continuing without device key',
-                        error
-                    );
-                }
-
-                // Re-identify ourselves to the server
-                this.sendJSON({
-                    type: 'hello',
-                    specimen: 'wall',
-                    wallId: this.wallId,
-                    col: Math.round(viewport.x / 1920),
-                    row: Math.round(viewport.y / 1080),
-                    ...(devicePublicKey ? { devicePublicKey } : {})
-                });
             },
             onMessage: (event) => this.handleMessage(event)
         });
 
         // On reconnecting: avoid immediate full clear/hydrate churn during short network blips.
         // Only clear if disconnect is sustained.
-        this.rws.onStateChange((status) => {
+        this.bus.onStateChange((status) => {
             if (status === 'reconnecting') {
                 if (this.reconnectClearTimer) clearTimeout(this.reconnectClearTimer);
                 this.reconnectClearTimer = setTimeout(() => {
-                    if (this.rws.status === 'connected') return;
+                    if (this.bus.status === 'connected') return;
                     this.layers.clear();
                     this.layoutCallbacks.forEach((cb) => cb({ type: 'hydrate', layers: [] }));
                 }, 8_000);
@@ -108,7 +82,7 @@ export class WallEngine {
 
     /** Access the underlying WebSocket (changes on each reconnect) */
     public get ws(): WebSocket {
-        return this.rws.ws;
+        return this.bus.ws;
     }
 
     public destroy() {
@@ -119,7 +93,7 @@ export class WallEngine {
         this.playbackStartRafs.clear();
         for (const rafId of this.playbackDriftRafs.values()) cancelAnimationFrame(rafId);
         this.playbackDriftRafs.clear();
-        this.rws.destroy();
+        this.bus.destroy();
         this.layoutCallbacks.clear();
     }
 
@@ -191,7 +165,7 @@ export class WallEngine {
             const view = new DataView(buffer);
             view.setUint8(0, 0x08);
             view.setFloat64(1, Date.now(), true);
-            this.rws.send(buffer);
+            this.bus.sendRaw(buffer);
             this.pingTimer = setTimeout(sendPing, 2000);
         };
         sendPing();
@@ -482,7 +456,7 @@ export class WallEngine {
     }
 
     public sendJSON = (data: GSMessage) => {
-        this.rws.send(JSON.stringify(data));
+        this.bus.sendJSON(data);
     };
 }
 

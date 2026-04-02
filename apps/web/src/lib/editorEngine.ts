@@ -2,13 +2,9 @@
 
 import { throttle } from '@tanstack/pacer';
 
-import { type ConnectionStatus, ReconnectingWebSocket } from './reconnectingWs';
-import { getWebSocketUrl } from './runtimeUrl';
+import { BusClient } from './busClient';
+import { type ConnectionStatus } from './reconnectingWs';
 import { GSMessageSchema, type GSMessage, type Layer } from './types';
-
-const getGemmaBusUrl = (): string => {
-    return getWebSocketUrl('/bus');
-};
 
 type SaveResponseCallback = (data: Extract<GSMessage, { type: 'stage_save_response' }>) => void;
 type ServerMessageCallback = (data: GSMessage) => void;
@@ -32,7 +28,7 @@ type BindOverrideResultCallback = (
 ) => void;
 
 export class EditorEngine {
-    private rws: ReconnectingWebSocket;
+    private bus: BusClient;
     private messageCallbacks = new Set<ServerMessageCallback>();
     private binaryCallbacks = new Set<BinaryMessageCallback>();
     private playbackCallbacks = new Set<PlaybackCallback>();
@@ -52,8 +48,7 @@ export class EditorEngine {
     private requesterEmail: string | null = null;
 
     private constructor() {
-        this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
-            binaryType: 'arraybuffer',
+        this.bus = new BusClient({
             onOpen: () => {
                 console.log('Editor Engine: Connected to Server');
                 // Reset clock sync state on every (re)connect
@@ -74,14 +69,14 @@ export class EditorEngine {
             onMessage: (event) => this.handleMessage(event)
         });
 
-        this.rws.onStateChange((status) => {
+        this.bus.onStateChange((status) => {
             this.connectionStatusCallbacks.forEach((cb) => cb(status));
         });
     }
 
     /** Access the underlying WebSocket (changes on each reconnect) */
     public get ws(): WebSocket {
-        return this.rws.ws;
+        return this.bus.ws;
     }
 
     private handleMessage(event: MessageEvent) {
@@ -181,7 +176,7 @@ export class EditorEngine {
     public destroy() {
         console.log('Editor Engine: Assassinating ghost instance...');
         if (this.pingTimer) clearTimeout(this.pingTimer);
-        this.rws.destroy();
+        this.bus.destroy();
         this.messageCallbacks.clear();
         this.binaryCallbacks.clear();
         this.playbackCallbacks.clear();
@@ -221,7 +216,7 @@ export class EditorEngine {
             const view = new DataView(buffer);
             view.setUint8(0, 0x08);
             view.setFloat64(1, Date.now(), true);
-            this.rws.send(buffer);
+            this.bus.sendRaw(buffer);
             this.pingTimer = setTimeout(sendPing, 3000);
         };
         sendPing();
@@ -395,7 +390,7 @@ export class EditorEngine {
 
     /** Current connection status */
     public get connectionStatus(): ConnectionStatus {
-        return this.rws.status;
+        return this.bus.status;
     }
 
     private makeBindRequestId(): string {
@@ -408,10 +403,10 @@ export class EditorEngine {
         // Editor upsert_layer for video should never carry playback timeline fields.
         if (data.type === 'upsert_layer' && data.layer.type === 'video') {
             const { playback: _playback, ...layerWithoutPlayback } = data.layer;
-            this.rws.send(JSON.stringify({ ...data, layer: layerWithoutPlayback }));
+            this.bus.sendRaw(JSON.stringify({ ...data, layer: layerWithoutPlayback }));
             return;
         }
-        this.rws.send(JSON.stringify(data));
+        this.bus.sendJSON(data);
     };
 
     public broadcastBinaryMove = throttle(
@@ -437,7 +432,7 @@ export class EditorEngine {
             view.setFloat32(21, scaleX, true);
             view.setFloat32(25, scaleY, true);
             view.setFloat32(29, rotation, true);
-            this.rws.send(buffer);
+            this.bus.sendRaw(buffer);
         },
         { wait: 16 }
     );

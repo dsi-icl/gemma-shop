@@ -1,13 +1,7 @@
 'use client';
 
-import { getOrCreateDeviceIdentity, type DeviceIdentity } from './deviceIdentity';
-import { ReconnectingWebSocket } from './reconnectingWs';
-import { getWebSocketUrl } from './runtimeUrl';
+import { BusClient } from './busClient';
 import { GSMessageSchema, type GSMessage } from './types';
-
-const getGemmaBusUrl = (): string => {
-    return getWebSocketUrl('/bus');
-};
 
 type GalleryState = Extract<GSMessage, { type: 'gallery_state' }>;
 type WallBindingChanged = Extract<GSMessage, { type: 'wall_binding_changed' }>;
@@ -25,10 +19,8 @@ type BindOverrideResultCallback = (data: BindOverrideResult) => void;
 type GalleryStateCallback = (state: GalleryState) => void;
 
 export class GalleryEngine {
-    private rws: ReconnectingWebSocket;
+    private bus: BusClient;
     public wallId: string | null;
-    public devicePublicKey: string | null = null;
-    private deviceIdentityPromise: Promise<DeviceIdentity>;
     private messageCallbacks = new Set<ServerMessageCallback>();
     private wallBindingChangedCallbacks = new Set<WallBindingChangedCallback>();
     private wallUnboundCallbacks = new Set<WallUnboundCallback>();
@@ -36,35 +28,16 @@ export class GalleryEngine {
     private bindOverrideRequestedCallbacks = new Set<BindOverrideRequestedCallback>();
     private bindOverrideResultCallbacks = new Set<BindOverrideResultCallback>();
     private galleryStateCallbacks = new Set<GalleryStateCallback>();
-    private pendingJsonMessages: string[] = [];
 
     private constructor(wallId: string | null) {
         this.wallId = wallId;
-        this.deviceIdentityPromise = getOrCreateDeviceIdentity('gallery').then((identity) => {
-            this.devicePublicKey = identity.publicKey;
-            return identity;
-        });
-        this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
-            binaryType: 'arraybuffer',
-            onOpen: async () => {
+        this.bus = new BusClient({
+            auth: {
+                kind: 'gallery',
+                ...(this.wallId ? { wallId: this.wallId } : {})
+            },
+            onOpen: () => {
                 console.log('Gallery Engine: Connected to Server');
-                let devicePublicKey: string | undefined;
-                try {
-                    const identity = await this.deviceIdentityPromise;
-                    devicePublicKey = identity.publicKey;
-                } catch (error) {
-                    console.warn(
-                        'Gallery Engine: device identity unavailable, continuing without device key',
-                        error
-                    );
-                }
-                this.sendJSON({
-                    type: 'hello',
-                    specimen: 'gallery',
-                    ...(this.wallId ? { wallId: this.wallId } : {}),
-                    ...(devicePublicKey ? { devicePublicKey } : {})
-                });
-                this.flushPendingMessages();
             },
             onMessage: (event) => {
                 if (typeof event.data !== 'string') return;
@@ -116,8 +89,7 @@ export class GalleryEngine {
 
     public destroy() {
         console.log('Gallery Engine: Assassinating ghost instance...');
-        this.rws.destroy();
-        this.pendingJsonMessages = [];
+        this.bus.destroy();
         this.messageCallbacks.clear();
         this.wallBindingChangedCallbacks.clear();
         this.wallUnboundCallbacks.clear();
@@ -128,25 +100,8 @@ export class GalleryEngine {
     }
 
     public sendJSON = (data: GSMessage) => {
-        const payload = JSON.stringify(data);
-        if (this.rws.status === 'connected') {
-            this.rws.send(payload);
-            return;
-        }
-        this.pendingJsonMessages.push(payload);
-        if (this.pendingJsonMessages.length > 50) {
-            this.pendingJsonMessages = this.pendingJsonMessages.slice(-50);
-        }
+        this.bus.sendJSON(data);
     };
-
-    private flushPendingMessages() {
-        if (this.rws.status !== 'connected' || this.pendingJsonMessages.length === 0) return;
-        const queued = this.pendingJsonMessages;
-        this.pendingJsonMessages = [];
-        for (const payload of queued) {
-            this.rws.send(payload);
-        }
-    }
 
     public decideBindOverride(requestId: string, wallId: string, allow: boolean) {
         this.sendJSON({
