@@ -114,9 +114,11 @@ function AdminAssetsTab() {
     const openPreview = (asset: {
         url: string;
         name: string;
-        mimeType?: string;
-        blurhash?: string;
-        sizes?: number[];
+        mimeType?: string | null;
+        previewUrl?: string | null;
+        size: number;
+        blurhash?: string | null;
+        sizes?: number[] | null;
     }) => {
         if (isFontAsset(asset)) return;
         const isVideo = isVideoAsset(asset);
@@ -124,8 +126,8 @@ function AdminAssetsTab() {
             src: `/api/assets/${asset.url}`,
             name: asset.name,
             isVideo,
-            blurhash: asset.blurhash,
-            sizes: asset.sizes
+            blurhash: asset.blurhash ?? undefined,
+            sizes: asset.sizes ?? undefined
         });
     };
 

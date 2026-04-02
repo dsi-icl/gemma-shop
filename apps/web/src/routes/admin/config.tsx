@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { $adminSendSmtpTest, $adminSetConfig } from '~/server/admin.fns';
 import { adminConfigQueryOptions } from '~/server/admin.queries';
 
-export const Route = createFileRoute('/admin/config' as any)({
+export const Route = createFileRoute('/admin/config')({
     component: AdminConfig,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(adminConfigQueryOptions());

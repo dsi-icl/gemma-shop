@@ -142,7 +142,6 @@ function AdminStats() {
                 <StatCard label="Editors" value={stats.live.editor} />
                 <StatCard label="Wall Nodes" value={stats.live.wall} />
                 <StatCard label="Controllers" value={stats.live.controller} />
-                <StatCard label="Roy Peers" value={stats.live.roy} />
             </div>
 
             <h2 className="mb-2 text-sm font-medium tracking-wider text-muted-foreground uppercase">

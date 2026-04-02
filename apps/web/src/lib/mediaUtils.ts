@@ -5,7 +5,7 @@ export function deriveVideoStillImageFilename(url: string): string | null {
     return base ? `${base}.jpg` : null;
 }
 
-export function isFontAsset(asset: { name: string; mimeType?: string }): boolean {
+export function isFontAsset(asset: { name: string; mimeType?: string | null }): boolean {
     return asset.mimeType === 'font/woff2' || /\.woff2$/i.test(asset.name);
 }
 

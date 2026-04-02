@@ -6,7 +6,6 @@ import QRCode from 'qrcode';
 import { useEffect, useState, useMemo, useRef, type CSSProperties } from 'react';
 
 import { MapWrapper } from '~/components/MapWrapper';
-// import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { toCssFilterString } from '~/lib/layerFilters';
 import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
@@ -627,10 +626,6 @@ function WallApp() {
                     />
                 );
             }
-
-            // if (layer.type === 'graph') {
-            //     return <RoyForceGraph key={layer.numericId} {...commonProps} />;
-            // }
 
             if (layer.type === 'video')
                 return (

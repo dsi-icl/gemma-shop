@@ -28,7 +28,7 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     scopeWatchers: new Map<ScopeId, Set<string>>(),
     wallPeersByScope: new Map<ScopeId, Set<PeerEntry>>(),
     activeVideos: new Map<number, { scopeId: ScopeId; layer: Layer }>(),
-    peerCounts: { editor: 0, wall: 0, controller: 0, gallery: 0, roy: 0 },
+    peerCounts: { editor: 0, wall: 0, controller: 0, gallery: 0 },
     lastPingSeen: new Map<string, number>(),
     scopeCleanupTimers: new Map<ScopeId, ReturnType<typeof setTimeout>>(),
     wallUnbindTimers: new Map<string, ReturnType<typeof setTimeout>>(),
@@ -130,8 +130,7 @@ export type PeerMeta =
       }
     | { specimen: 'wall'; wallId: string; col: number; row: number }
     | { specimen: 'controller'; wallId: string }
-    | { specimen: 'gallery'; wallId?: string }
-    | { specimen: 'roy' };
+    | { specimen: 'gallery'; wallId?: string };
 
 export interface PeerEntry {
     peer: Peer;
@@ -188,7 +187,6 @@ export const peerCounts: {
     wall: number;
     controller: number;
     gallery: number;
-    roy: number;
 } = _hmr.peerCounts;
 
 /** Live wall node count — O(1) read from in-memory index. */
@@ -262,8 +260,6 @@ export function registerPeer(peer: Peer, meta: PeerMeta): PeerEntry {
             allGalleries.add(entry);
             if (meta.wallId) addToIndex(galleriesByWallId, meta.wallId, entry);
             break;
-        case 'roy':
-            break;
     }
 
     peerCounts[meta.specimen]++;
@@ -295,8 +291,6 @@ export function unregisterPeer(peerId: string): PeerMeta | null {
         case 'gallery':
             allGalleries.delete(entry);
             if (meta.wallId) removeFromIndex(galleriesByWallId, meta.wallId, entry);
-            break;
-        case 'roy':
             break;
     }
 
@@ -1165,7 +1159,7 @@ export function reapStalePeers(): number {
 
 export function logPeerCounts() {
     console.log(
-        `[WS] Peers: ${peerCounts.editor} editors, ${peerCounts.wall} walls, ${peerCounts.controller} controllers, ${peerCounts.gallery} galleries, ${peerCounts.roy} roys`
+        `[WS] Peers: ${peerCounts.editor} editors, ${peerCounts.wall} walls, ${peerCounts.controller} controllers, ${peerCounts.gallery} galleries`
     );
 }
 

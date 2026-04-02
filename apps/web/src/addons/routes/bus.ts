@@ -197,22 +197,11 @@ const WS_MUTATION_MESSAGE_TYPES = new Set([
     'video_seek'
 ]);
 
+// TODO Review if authed logic is waranted here
 function getWsRateLimitIdentity(entry: PeerEntry, peer: import('crossws').Peer): string {
-    const meta = entry.meta;
-    const auth = meta.auth;
-    const actorId =
-        auth?.mode === 'user'
-            ? meta.specimen === 'editor'
-                ? (meta.requesterEmail ?? null)
-                : null
-            : null;
-    const deviceId =
-        auth?.mode === 'device-active' || auth?.mode === 'device-pending' ? auth.deviceId : null;
     const ip = getClientIpFromHeaders(peer.request?.headers as Headers | undefined);
 
     return buildRateLimitSubjectKey({
-        actorId,
-        deviceId,
         ip,
         peerId: peer.id
     });
@@ -253,12 +242,9 @@ async function enforceWsRateLimit(
 
     const nextStrikes = (wsRateLimitStrikes.get(peer.id) ?? 0) + 1;
     wsRateLimitStrikes.set(peer.id, nextStrikes);
-    recordDeniedReason('rate_limited');
 
-    const actorId =
-        entry.meta.auth?.mode === 'user' && entry.meta.specimen === 'editor'
-            ? (entry.meta.requesterEmail ?? null)
-            : (entry.meta.auth?.deviceId ?? null);
+    // TODO See if we target more explicit user/identified devices
+    const actorId = peer.id;
     void logAuditDenied({
         action: 'WS_MESSAGE_RATE_LIMITED',
         actorId,
@@ -1344,13 +1330,6 @@ async function handleHello(peer: import('crossws').Peer, data: Record<string, an
         console.log(
             `[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ' (global)'}`
         );
-        logPeerCounts();
-        return;
-    }
-
-    if (parsed.specimen === 'roy') {
-        registerPeer(peer, { specimen: 'roy' });
-        console.log('[WS] Roy client joined');
         logPeerCounts();
         return;
     }

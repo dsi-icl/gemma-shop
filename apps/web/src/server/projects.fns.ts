@@ -50,8 +50,8 @@ export const $listKnownTags = createServerFn({ method: 'GET' })
 export const $listAssets = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ projectId: z.string() }))
     .middleware([authMiddleware])
-    .handler(async ({ context, data }) => {
-        return listAssets(data.projectId, context.user.email);
+    .handler(async ({ data }) => {
+        return listAssets(data.projectId);
     });
 
 export const $getProject = createServerFn({ method: 'GET' })
@@ -145,8 +145,8 @@ export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
 export const $getAuditLogs = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ projectId: z.string() }))
     .middleware([authMiddleware])
-    .handler(async ({ context, data }) => {
-        return getAuditLogs(data.projectId, context.user.email);
+    .handler(async ({ data }) => {
+        return getAuditLogs(data.projectId);
     });
 
 export const $ensureMutableHead = createServerFn({ method: 'POST' })

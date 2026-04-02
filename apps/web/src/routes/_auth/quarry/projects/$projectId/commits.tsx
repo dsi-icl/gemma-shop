@@ -29,9 +29,9 @@ import {
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 
-import type { SerializedCommit } from '~/server/projects';
 import { $promoteBranchHead, $publishCommit } from '~/server/projects.fns';
 import { commitsQueryOptions, projectQueryOptions } from '~/server/projects.queries';
+import { SerializedCommit } from '~/server/serializers/commit.serializer';
 
 /**
  * Sort commits topologically by walking the parentId chain from HEAD,

@@ -143,9 +143,6 @@ export const HelloSchema = z.discriminatedUnion('specimen', [
         requesterEmail: z.email().optional()
     }),
     HelloMessageBaseSchema.extend({
-        specimen: z.literal('roy')
-    }),
-    HelloMessageBaseSchema.extend({
         specimen: z.literal('gallery'),
         wallId: z.string().optional(),
         devicePublicKey: z.string().optional()
@@ -177,10 +174,6 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             commitId: z.string(),
             slideId: z.string(),
             requesterEmail: z.email().optional()
-        }),
-        HelloMessageBaseSchema.extend({
-            type: z.literal('hello'),
-            specimen: z.literal('roy')
         }),
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),

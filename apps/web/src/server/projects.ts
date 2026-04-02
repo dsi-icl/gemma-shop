@@ -1,20 +1,14 @@
 import '@tanstack/react-start/server-only';
-import type {
-    Asset,
-    CreateAssetInput,
-    CreateProjectInput,
-    Project,
-    UpdateProjectInput
-} from '@repo/db/schema';
+import type { CreateAssetInput, CreateProjectInput, UpdateProjectInput } from '@repo/db/schema';
 import { ObjectId } from 'mongodb';
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
-import { serializeForClient } from '~/server/serialization';
 import { serializeAsset } from '~/server/serializers/asset.serializer';
-import { serializeCommit, type SerializedCommit } from '~/server/serializers/commit.serializer';
+import { serializeAudit } from '~/server/serializers/audit.serializer';
+import { serializeCommit } from '~/server/serializers/commit.serializer';
 import { serializeProject } from '~/server/serializers/project.serializer';
 
 const projects = collections.projects;
@@ -46,7 +40,7 @@ export async function listProjects(userEmail: string, includeArchived = false) {
 }
 
 export async function listPublishedProjects() {
-    const projects = await projects
+    const projects = await collections.projects
         .find({ deletedAt: { $exists: false } })
         .sort({ updatedAt: -1 })
         .toArray();
@@ -143,11 +137,9 @@ export async function listKnownTags(userEmail: string): Promise<string[]> {
         .map(([tag]) => tag);
 }
 
-export async function listAssets(projectId: string, userEmail: string) {
+export async function listAssets(projectId: string) {
     const project = await getProject(projectId);
     if (!project) throw new Error('Project not found');
-
-    assertCanView(project, userEmail);
 
     const [projectDocs, publicDocs] = await Promise.all([
         assets
@@ -245,8 +237,6 @@ export async function createAsset(input: CreateAssetInput, userEmail: string) {
     const project = await getProject(input.projectId);
     if (!project) throw new Error('Project not found');
 
-    assertCanEdit(project, userEmail);
-
     const now = new Date().toISOString();
     const doc = {
         ...input,
@@ -272,8 +262,6 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
     const { _id, ...updates } = input;
     const existing = await projects.findOne({ _id: new ObjectId(_id) });
     if (!existing) throw new Error('Project not found');
-
-    assertCanEdit(existing, userEmail);
 
     const result = await projects.findOneAndUpdate(
         { _id: new ObjectId(_id) },
@@ -311,7 +299,6 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
 export async function archiveProject(id: string, userEmail: string) {
     const existing = await projects.findOne({ _id: new ObjectId(id) });
     if (!existing) throw new Error('Project not found');
-    assertCanOwn(existing, userEmail);
 
     await projects.updateOne(
         { _id: new ObjectId(id) },
@@ -344,8 +331,6 @@ export async function deleteAsset(assetId: string, userEmail: string) {
     const project = await getProject(asset.projectId.toString());
     if (!project) throw new Error('Project not found');
 
-    assertCanEdit(project, userEmail);
-
     await assets.updateOne(
         { _id: new ObjectId(assetId) },
         {
@@ -367,7 +352,6 @@ export async function deleteAsset(assetId: string, userEmail: string) {
 export async function restoreProject(id: string, userEmail: string) {
     const existing = await projects.findOne({ _id: new ObjectId(id) });
     if (!existing) throw new Error('Project not found');
-    assertCanOwn(existing, userEmail);
 
     await projects.updateOne(
         { _id: new ObjectId(id) },
@@ -390,7 +374,6 @@ export async function restoreProject(id: string, userEmail: string) {
 export async function publishCommit(projectId: string, commitId: string | null, userEmail: string) {
     const existing = await projects.findOne({ _id: new ObjectId(projectId) });
     if (!existing) throw new Error('Project not found');
-    assertCanEdit(existing, userEmail);
 
     const tags: string[] = existing.tags || [];
     const isPublishing = commitId !== null;
@@ -434,7 +417,6 @@ export async function publishCommit(projectId: string, commitId: string | null, 
 export async function publishCustomRenderProject(projectId: string, userEmail: string) {
     const existing = await projects.findOne({ _id: new ObjectId(projectId) });
     if (!existing) throw new Error('Project not found');
-    assertCanEdit(existing, userEmail);
     if (!existing.customRenderUrl) throw new Error('Project has no custom render URL');
 
     // If already published, no-op
@@ -464,7 +446,6 @@ export async function publishCustomRenderProject(projectId: string, userEmail: s
 export async function ensureMutableHead(projectId: string, userEmail: string): Promise<string> {
     const project = await projects.findOne({ _id: new ObjectId(projectId) });
     if (!project) throw new Error('Project not found');
-    assertCanEdit(project, userEmail);
 
     // Case 1: HEAD exists and is already mutable
     if (project.headCommitId) {
@@ -540,7 +521,6 @@ export async function createBranchHead(
 ): Promise<string> {
     const project = await projects.findOne({ _id: new ObjectId(projectId) });
     if (!project) throw new Error('Project not found');
-    assertCanEdit(project, userEmail);
 
     const source = await commits.findOne({ _id: new ObjectId(sourceCommitId) });
     if (!source) throw new Error('Source commit not found');
@@ -580,7 +560,6 @@ export async function promoteBranchHead(
 ): Promise<void> {
     const project = await projects.findOne({ _id: new ObjectId(projectId) });
     if (!project) throw new Error('Project not found');
-    assertCanEdit(project, userEmail);
 
     const branch = await commits.findOne({ _id: new ObjectId(branchCommitId) });
     if (!branch) throw new Error('Branch commit not found');
@@ -608,59 +587,24 @@ export async function promoteBranchHead(
     });
 }
 
-export interface SerializedAuditLog {
-    _id: string;
-    projectId: string;
-    actorId: string;
-    action: string;
-    changes: Record<string, string | number | boolean | null> | null;
-    createdAt: string;
-}
-
-export async function getAuditLogs(
-    projectId: string,
-    userEmail: string
-): Promise<SerializedAuditLog[]> {
+export async function getAuditLogs(projectId: string) {
     const project = await projects.findOne({ _id: new ObjectId(projectId) });
     if (!project) throw new Error('Project not found');
-    assertCanOwn(project, userEmail);
 
     const docs = await auditLogs
         .find({ projectId: new ObjectId(projectId) })
         .sort({ createdAt: -1 })
         .toArray();
-    return docs.map((d) => ({
-        _id: d._id.toString(),
-        projectId: d.projectId.toString(),
-        actorId: String(d.actorId ?? ''),
-        action: String(d.action ?? ''),
-        changes:
-            (d.changes ? (serializeForClient(d.changes) as SerializedAuditLog['changes']) : null) ??
-            null,
-        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt)
-    }));
+    return docs.map(serializeAudit);
 }
 
-export async function getProjectCommits(projectId: string): Promise<SerializedCommit[]> {
+export async function getProjectCommits(projectId: string) {
     const docs = await collections.commits
         .find({ projectId: new ObjectId(projectId) })
         .sort({ createdAt: -1 })
         .toArray();
     return docs.map((d) => {
-        const slides = (d.content as any)?.slides as Array<{ id: string }> | undefined;
-        return {
-            _id: d._id.toString(),
-            projectId: d.projectId.toString(),
-            parentId: d.parentId?.toString() ?? null,
-            authorId: d.authorId?.toString() ?? null,
-            message: String(d.message ?? ''),
-            isMutableHead: Boolean(d.isMutableHead),
-            isAutoSave: Boolean(d.isAutoSave),
-            firstSlideId: slides?.[0]?.id ?? null,
-            createdAt:
-                d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
-            updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : String(d.updatedAt)
-        };
+        return serializeCommit(d);
     });
 }
 
@@ -768,39 +712,6 @@ export async function deleteSlideFromCommit(commitId: string, slideId: string): 
     );
 
     return true;
-}
-
-export function assertCanView(doc: Record<string, unknown>, userEmail: string) {
-    const collaborators = (doc.collaborators || []) as Array<{
-        email: string;
-        role: string;
-    }>;
-    const isCollaborator = collaborators.some((c) => c.email === userEmail);
-    if (doc.createdBy !== userEmail && !isCollaborator) {
-        throw new Error('You do not have permission to view this project');
-    }
-}
-
-export function assertCanEdit(doc: Record<string, unknown>, userEmail: string) {
-    const collaborators = (doc.collaborators || []) as Array<{
-        email: string;
-        role: string;
-    }>;
-    const collab = collaborators.find((c) => c.email === userEmail);
-    if (!collab || collab.role === 'viewer') {
-        throw new Error('You do not have permission to edit this project');
-    }
-}
-
-export function assertCanOwn(doc: Record<string, unknown>, userEmail: string) {
-    const collaborators = (doc.collaborators || []) as Array<{
-        email: string;
-        role: string;
-    }>;
-    const collab = collaborators.find((c) => c.email === userEmail);
-    if (!collab || collab.role !== 'owner') {
-        throw new Error('You do not have permission to manage this project');
-    }
 }
 
 export async function revokeUploadTokenForActor(token: string, actorEmail: string): Promise<void> {

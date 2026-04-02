@@ -370,26 +370,6 @@ function CommitViewer() {
                                                             />
                                                         );
                                                     }
-                                                    if (layer.type === 'graph') {
-                                                        return (
-                                                            <Rect
-                                                                key={`roy_${layer.numericId}`}
-                                                                x={layer.config.cx}
-                                                                y={layer.config.cy}
-                                                                width={layer.config.width}
-                                                                height={layer.config.height}
-                                                                scaleX={layer.config.scaleX}
-                                                                scaleY={layer.config.scaleY}
-                                                                offsetX={layer.config.width / 2}
-                                                                offsetY={layer.config.height / 2}
-                                                                rotation={layer.config.rotation}
-                                                                fill="#111827"
-                                                                stroke="#374151"
-                                                                strokeWidth={2}
-                                                                listening={false}
-                                                            />
-                                                        );
-                                                    }
                                                     // Fallback placeholder
                                                     return (
                                                         <Rect

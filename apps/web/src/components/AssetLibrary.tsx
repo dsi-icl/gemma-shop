@@ -62,7 +62,15 @@ export function AssetLibrary({
             if (isFontAsset(asset)) fonts.push(asset);
             else media.push(asset);
         }
-        const sorted = [...media, ...fonts];
+        const sorted = [...media, ...fonts].map((asset) => ({
+            _id: asset._id,
+            name: asset.name,
+            url: asset.url,
+            mimeType: asset.mimeType ?? undefined,
+            blurhash: asset.blurhash ?? undefined,
+            sizes: asset.sizes ?? undefined,
+            previewUrl: asset.previewUrl ?? undefined
+        }));
         if (!isPicker) return sorted;
         if (pickerFilter === 'image')
             return sorted.filter(

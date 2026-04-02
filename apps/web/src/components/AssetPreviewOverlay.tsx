@@ -170,8 +170,7 @@ export function AssetPreviewPortal({
         src: string;
         name: string;
         isVideo: boolean;
-        blurhash?: string;
-        sizes?: number[];
+        blurhash?: string | null;
     } | null;
     onClose: () => void;
 }) {
@@ -183,7 +182,7 @@ export function AssetPreviewPortal({
                     src={preview.src}
                     name={preview.name}
                     isVideo={preview.isVideo}
-                    blurhash={preview.blurhash}
+                    blurhash={preview.blurhash ?? undefined}
                     onClose={onClose}
                 />
             )}
@@ -206,6 +205,6 @@ export function downloadAsset(url: string, filename: string) {
         });
 }
 
-export function isVideoAsset(asset: { mimeType?: string; name: string }): boolean {
+export function isVideoAsset(asset: { mimeType?: string | null; name: string }): boolean {
     return asset.mimeType?.startsWith('video/') || /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name);
 }

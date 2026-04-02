@@ -18,8 +18,7 @@ export const Route = createFileRoute('/_auth')({
         if (promotion.promoted) {
             await context.queryClient.invalidateQueries({ queryKey: authQueryOptions().queryKey });
             user = await context.queryClient.fetchQuery({
-                ...authQueryOptions(),
-                revalidateIfStale: true
+                ...authQueryOptions()
             });
         }
 

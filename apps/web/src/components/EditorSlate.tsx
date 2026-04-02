@@ -11,17 +11,14 @@ import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaTextLayer } from '~/components/KonvaTextLayer';
 import { KonvaVideo } from '~/components/KonvaVideo';
 import { KonvaWebLayer } from '~/components/KonvaWebLayer';
-import { RoyStaticRenderer } from '~/components/roygraph/RoyStaticRenderer';
 import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
 import { fitSizeToViewport, MIN_LAYER_DIMENSION } from '~/lib/fitSizeToViewport';
 import { scrubInsecureTusResumeEntries } from '~/lib/tusClient';
-// import { RoyForceGraph } from '~/components/roygraph/RoyForceGraph';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
 import { $createUploadToken } from '~/server/projects.fns';
 
-// import DOPreview from './DOPreview';
 import { SlatePreview } from './SlatePreview';
 
 const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
@@ -1158,15 +1155,6 @@ export function EditorSlate() {
                                         />
                                     );
                                 }
-                                if (layer.type === 'graph') {
-                                    return (
-                                        <RoyStaticRenderer
-                                            key={`roy_${layer.numericId}`}
-                                            layer={layer}
-                                            {...props}
-                                        />
-                                    );
-                                }
                                 if (layer.type === 'map') {
                                     return (
                                         <Rect
@@ -1327,20 +1315,8 @@ export function EditorSlate() {
                             />
                         </KonvaLayer>
                     </Stage>
-                    {/* <RoyForceGraph
-                style={{
-                    display: 'block',
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    visibility: 'hidden'
-                }}
-            /> */}
                 </div>
             </div>
-            {/* {stageInstance.current ? (
-                <DOPreview imageUrl={stageInstance.current.toDataURL()} />
-            ) : null} */}
         </>
     );
 }

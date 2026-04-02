@@ -1,6 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import type { SerializedAuditLog, SerializedCommit, SerializedCommitWithContent } from './projects';
 import {
     $getAuditLogs,
     $getCommit,
@@ -11,6 +10,8 @@ import {
     $listProjects,
     $listPublishedProjects
 } from './projects.fns';
+import { SerializedAuditLog } from './serializers/audit.serializer';
+import { SerializedCommit, SerializedCommitWithContent } from './serializers/commit.serializer';
 
 export const projectsQueryOptions = (includeArchived = false) =>
     queryOptions({

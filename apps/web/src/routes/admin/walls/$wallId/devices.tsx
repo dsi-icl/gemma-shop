@@ -154,7 +154,7 @@ function WallDevicesTab() {
                     queryClient.invalidateQueries({ queryKey: ['admin', 'devices'] }),
                     queryClient.invalidateQueries({ queryKey: ['admin', 'walls'] })
                 ]);
-                pushEvent(`Enrolled ${payload.kind} ${payload.deviceId.slice(0, 8)}...`, true);
+                pushEvent(`Enrolled ${payload.deviceId.slice(0, 8)}...`, true);
                 toast.success(`Device enrolled: ${payload.deviceId.slice(0, 8)}...`);
             } catch (error: any) {
                 pushEvent(

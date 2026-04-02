@@ -21,7 +21,6 @@ export function buildSmtpTransportOptions(smtp: SmtpTransportInput): SMTPTranspo
     return {
         host: smtp.host,
         port: smtp.port,
-        family: 4,
         secure: smtp.secure,
         requireTLS: smtp.requireTLS,
         ignoreTLS: smtp.ignoreTLS,
