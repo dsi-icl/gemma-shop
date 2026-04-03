@@ -96,6 +96,7 @@ function HomePage() {
         const wallsQueryKey = wallsQueryOptions().queryKey;
         const publishedProjectsQueryKey = publishedProjectsQueryOptions().queryKey;
         const triggerSyncedCardClose = (projectId: string | null) => {
+            if (!projectId) return;
             setSyncedCloseProjectId(projectId);
             setSyncedCloseRevision((v) => v + 1);
         };
@@ -226,21 +227,14 @@ function HomePage() {
                             updateCurrentGalleryBoundProject(targetWall.projectId);
                         } else {
                             const previouslyBoundProject = lastGalleryBoundProjectRef.current;
-                            if (previouslyBoundProject) {
+                            if (previouslyBoundProject)
                                 triggerSyncedCardClose(previouslyBoundProject);
-                            } else {
-                                triggerSyncedCardClose(null);
-                            }
                             updateCurrentGalleryBoundProject(null);
                         }
                     } else {
                         handleLiveBindingStatus(wallId, false);
                         const previouslyBoundProject = lastGalleryBoundProjectRef.current;
-                        if (previouslyBoundProject) {
-                            triggerSyncedCardClose(previouslyBoundProject);
-                        } else {
-                            triggerSyncedCardClose(null);
-                        }
+                        if (previouslyBoundProject) triggerSyncedCardClose(previouslyBoundProject);
                         updateCurrentGalleryBoundProject(null);
                     }
                 }
@@ -275,11 +269,7 @@ function HomePage() {
                         updateCurrentGalleryBoundProject(event.projectId);
                     } else if (!event.bound) {
                         const previouslyBoundProject = lastGalleryBoundProjectRef.current;
-                        if (previouslyBoundProject) {
-                            triggerSyncedCardClose(previouslyBoundProject);
-                        } else {
-                            triggerSyncedCardClose(null);
-                        }
+                        if (previouslyBoundProject) triggerSyncedCardClose(previouslyBoundProject);
                         updateCurrentGalleryBoundProject(null);
                     } else if (event.source === 'live') {
                         updateCurrentGalleryBoundProject(null);
@@ -295,11 +285,7 @@ function HomePage() {
                 if (wallId && event.wallId === wallId) {
                     setAutoOpenRevision((v) => v + 1);
                     const previouslyBoundProject = lastGalleryBoundProjectRef.current;
-                    if (previouslyBoundProject) {
-                        triggerSyncedCardClose(previouslyBoundProject);
-                    } else {
-                        triggerSyncedCardClose(null);
-                    }
+                    if (previouslyBoundProject) triggerSyncedCardClose(previouslyBoundProject);
                     updateCurrentGalleryBoundProject(null);
                 }
                 handleLiveBindingStatus(event.wallId, false);
@@ -637,7 +623,6 @@ function HomePage() {
                                                 }
                                                 forceCloseMinimizedSignal={liveSessionStartedSignal}
                                                 forceCloseSignal={
-                                                    syncedCloseProjectId === null ||
                                                     syncedCloseProjectId === project._id
                                                         ? syncedCloseSignal
                                                         : null

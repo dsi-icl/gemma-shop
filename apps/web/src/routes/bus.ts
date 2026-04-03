@@ -1287,12 +1287,11 @@ handlers.set('stage_save', ({ entry, data, scopeId }) => {
     });
 });
 
-handlers.set('bind_wall', ({ data }) => {
+handlers.set('bind_wall', ({ entry, data }) => {
     // Editors should route through request_bind_wall (approval gate).
     // Keep bind_wall for controllers and system/internal callers.
     void (async () => {
-        const currentSource = wallBindingSources.get(data.wallId);
-        const source = currentSource === 'gallery' ? 'gallery' : 'live';
+        const source = entry.meta.specimen === 'gallery' ? 'gallery' : 'live';
         await performLiveBind(data.wallId, data.projectId, data.commitId, data.slideId, source);
     })();
 });
