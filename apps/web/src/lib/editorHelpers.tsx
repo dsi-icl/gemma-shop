@@ -1,6 +1,6 @@
 import { Line } from 'react-konva';
 
-export const getDOGridLines = (width: number, height: number, strokeWidth = 2) => {
+export const getDOGridLines = (width: number, height: number, strokeWidth = 1) => {
     const lines = [];
     for (let i = 1; i < 16; i++)
         lines.push(
