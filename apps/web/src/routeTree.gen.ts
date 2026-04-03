@@ -35,7 +35,6 @@ import { Route as AdminProjectsRouteImport } from './routes/admin/projects'
 import { Route as AdminDevicesRouteImport } from './routes/admin/devices'
 import { Route as AdminConfigRouteImport } from './routes/admin/config'
 import { Route as AdminAssetsRouteImport } from './routes/admin/assets'
-import { Route as GuestPhotosRouteImport } from './routes/_guest/photos'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as GuestBootstrapRouteImport } from './routes/_guest/bootstrap'
 import { Route as AdminWallsIndexRouteImport } from './routes/admin/walls/index'
@@ -189,11 +188,6 @@ const AdminAssetsRoute = AdminAssetsRouteImport.update({
   path: '/assets',
   getParentRoute: () => AdminRouteRoute,
 } as any)
-const GuestPhotosRoute = GuestPhotosRouteImport.update({
-  id: '/photos',
-  path: '/photos',
-  getParentRoute: () => GuestRouteRoute,
-} as any)
 const GuestLoginRoute = GuestLoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -335,7 +329,6 @@ export interface FileRoutesByFullPath {
   '/web-placeholder': typeof WebPlaceholderRoute
   '/bootstrap': typeof GuestBootstrapRoute
   '/login': typeof GuestLoginRoute
-  '/photos': typeof GuestPhotosRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/config': typeof AdminConfigRoute
   '/admin/devices': typeof AdminDevicesRoute
@@ -385,7 +378,6 @@ export interface FileRoutesByTo {
   '/web-placeholder': typeof WebPlaceholderRoute
   '/bootstrap': typeof GuestBootstrapRoute
   '/login': typeof GuestLoginRoute
-  '/photos': typeof GuestPhotosRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/config': typeof AdminConfigRoute
   '/admin/devices': typeof AdminDevicesRoute
@@ -437,7 +429,6 @@ export interface FileRoutesById {
   '/web-placeholder': typeof WebPlaceholderRoute
   '/_guest/bootstrap': typeof GuestBootstrapRoute
   '/_guest/login': typeof GuestLoginRoute
-  '/_guest/photos': typeof GuestPhotosRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/config': typeof AdminConfigRoute
   '/admin/devices': typeof AdminDevicesRoute
@@ -490,7 +481,6 @@ export interface FileRouteTypes {
     | '/web-placeholder'
     | '/bootstrap'
     | '/login'
-    | '/photos'
     | '/admin/assets'
     | '/admin/config'
     | '/admin/devices'
@@ -540,7 +530,6 @@ export interface FileRouteTypes {
     | '/web-placeholder'
     | '/bootstrap'
     | '/login'
-    | '/photos'
     | '/admin/assets'
     | '/admin/config'
     | '/admin/devices'
@@ -591,7 +580,6 @@ export interface FileRouteTypes {
     | '/web-placeholder'
     | '/_guest/bootstrap'
     | '/_guest/login'
-    | '/_guest/photos'
     | '/admin/assets'
     | '/admin/config'
     | '/admin/devices'
@@ -842,13 +830,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/assets'
       preLoaderRoute: typeof AdminAssetsRouteImport
       parentRoute: typeof AdminRouteRoute
-    }
-    '/_guest/photos': {
-      id: '/_guest/photos'
-      path: '/photos'
-      fullPath: '/photos'
-      preLoaderRoute: typeof GuestPhotosRouteImport
-      parentRoute: typeof GuestRouteRoute
     }
     '/_guest/login': {
       id: '/_guest/login'
@@ -1104,13 +1085,11 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 interface GuestRouteRouteChildren {
   GuestBootstrapRoute: typeof GuestBootstrapRoute
   GuestLoginRoute: typeof GuestLoginRoute
-  GuestPhotosRoute: typeof GuestPhotosRoute
 }
 
 const GuestRouteRouteChildren: GuestRouteRouteChildren = {
   GuestBootstrapRoute: GuestBootstrapRoute,
   GuestLoginRoute: GuestLoginRoute,
-  GuestPhotosRoute: GuestPhotosRoute,
 }
 
 const GuestRouteRouteWithChildren = GuestRouteRoute._addFileChildren(
