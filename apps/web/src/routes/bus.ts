@@ -1508,7 +1508,19 @@ handlers.set('request_bind_wall', ({ entry, data }) => {
         const currentScopeId = wallBindings.get(data.wallId);
         const hasConflict = currentScopeId !== undefined && currentScopeId !== targetScopeId;
 
-        if (!hasConflict) {
+        // If the wall is live-bound and the requester is already in the currently-bound
+        // scope (i.e. same user navigating slides — switch_scope is async so their scope
+        // entry still reflects the old slide when this message is processed), let them
+        // re-bind without going through the gallery override flow.
+        const isSameUser =
+            hasConflict &&
+            userEmail !== undefined &&
+            wallBindingSources.get(data.wallId) === 'live' &&
+            [...(editorsByScope.get(currentScopeId!) ?? [])].some(
+                (e) => e.meta.specimen === 'editor' && e.meta.authContext?.user?.email === userEmail
+            );
+
+        if (!hasConflict || isSameUser) {
             const result = await performLiveBind(
                 data.wallId,
                 data.projectId,
