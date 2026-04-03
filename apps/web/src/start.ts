@@ -103,13 +103,12 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
 });
 
 const authContextMiddleware = createMiddleware().server(async ({ next, request, context }) => {
-    const resolved = await resolveRequestAuthContext(request);
+    const { authContext } = await resolveRequestAuthContext(request);
     return next({
         context: {
             nonce: undefined,
             ...(context ?? {}),
-            authContext: resolved.authContext,
-            user: resolved.user
+            authContext
         }
     });
 });

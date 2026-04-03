@@ -125,7 +125,8 @@ export function scopeLabel(id: ScopeId): string {
 
 export type AuthContext = {
     user?: {
-        email?: string;
+        email: string;
+        role: 'admin' | 'user';
     };
     device?: {
         id: string;

@@ -1,4 +1,4 @@
-import { resolveAuthContextFromHeaders } from '@repo/auth/auth-context';
+import { auth } from '@repo/auth/auth';
 
 import { validatePortalToken } from '~/lib/portalTokens';
 import {
@@ -28,10 +28,6 @@ export type RequestAuthContext = {
     portal?: {
         wallId: string;
     };
-};
-
-type ResolveOptions = {
-    requireDeviceAssigned?: boolean;
 };
 
 const DEVICE_CLOCK_SKEW_MS = 60_000;
@@ -115,7 +111,6 @@ async function verifyDeviceSignature(input: {
     nonce: string;
     bodySha256: string | null;
     wallId?: string;
-    requireDeviceAssigned?: boolean;
 }): Promise<RequestAuthContext['device'] | null> {
     const now = Date.now();
     if (Math.abs(now - input.timestamp) > DEVICE_CLOCK_SKEW_MS) {
@@ -169,13 +164,11 @@ async function verifyDeviceSignature(input: {
         {
             publicKey: input.publicKey,
             kind: input.kind,
-            ...(input.requireDeviceAssigned !== false ? { status: 'active' } : {})
+            status: 'active'
         },
         { projection: { assignedWallId: 1, status: 1 } }
     );
     if (!deviceRecord) return null;
-
-    if (input.requireDeviceAssigned !== false && deviceRecord.status !== 'active') return null;
 
     const assignedWallId =
         typeof deviceRecord.assignedWallId === 'string' ? deviceRecord.assignedWallId : undefined;
@@ -193,10 +186,7 @@ async function verifyDeviceSignature(input: {
     };
 }
 
-async function resolveDeviceContext(
-    request: Request,
-    opts?: ResolveOptions
-): Promise<RequestAuthContext['device'] | null> {
+async function resolveDeviceContextFromRequest(request: Request) {
     const kind = normalizeDeviceKind(request.headers.get(DEVICE_HEADER_KIND));
     const publicKey = request.headers.get(DEVICE_HEADER_PUBLIC_KEY)?.trim();
     const signature = request.headers.get(DEVICE_HEADER_SIGNATURE)?.trim();
@@ -230,18 +220,30 @@ async function resolveDeviceContext(
         timestamp,
         nonce,
         bodySha256,
-        wallId: wallId && wallId.length > 0 ? wallId : undefined,
-        requireDeviceAssigned: opts?.requireDeviceAssigned
+        wallId: wallId && wallId.length > 0 ? wallId : undefined
     });
 }
 
-export async function resolveRequestAuthContext(
-    request: Request,
-    opts?: ResolveOptions
-): Promise<{ authContext: RequestAuthContext; user: Record<string, any> | null }> {
-    const [{ authContext: sessionAuthContext, user }, device] = await Promise.all([
-        resolveAuthContextFromHeaders(request.headers),
-        resolveDeviceContext(request, opts)
+export async function resolveAuthContextFromRequest(request: Request) {
+    const session = await auth.api.getSession({
+        headers: request.headers
+    });
+    return {
+        authContext: {
+            user: session?.user
+                ? {
+                      email: session.user.email,
+                      role: session.user.role === 'admin' ? ('admin' as const) : ('user' as const)
+                  }
+                : undefined
+        }
+    };
+}
+
+export async function resolveRequestAuthContext(request: Request) {
+    const [{ authContext: sessionAuthContext }, device] = await Promise.all([
+        resolveAuthContextFromRequest(request),
+        resolveDeviceContextFromRequest(request)
     ]);
 
     const context: RequestAuthContext = {};
@@ -270,7 +272,7 @@ export async function resolveRequestAuthContext(
         context.guest = true;
     }
 
-    return { authContext: context, user };
+    return { authContext: context };
 }
 
 export function hasAuthenticatedActor(authContext: RequestAuthContext): boolean {

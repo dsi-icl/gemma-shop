@@ -81,7 +81,6 @@ import {
     type GSMessage,
     type Layer
 } from '~/lib/types';
-import { resolvePeerUserEmail } from '~/lib/wsAuth';
 import { logAuditDenied } from '~/server/audit';
 import { collections } from '~/server/collections';
 import { ensureDeviceByPublicKey, markDeviceDisconnectedById } from '~/server/devices';
@@ -90,6 +89,7 @@ import {
     checkRateLimit,
     getClientIpFromHeaders
 } from '~/server/rateLimit';
+import { resolveAuthContextFromRequest } from '~/server/requestAuthContext';
 
 // ── Binary opcodes ──────────────────────────────────────────────────────────
 
@@ -163,11 +163,6 @@ type HelloChallengeMessage = Extract<GSMessage, { type: 'hello_challenge' }>;
 interface PendingHelloAuth {
     hello: DeviceHelloMessage;
     nonce: string;
-}
-
-interface ResolvedHelloAuthContext {
-    device?: AuthContext['device'];
-    portal?: AuthContext['portal'];
 }
 
 const pendingHelloAuthByPeer = new Map<string, PendingHelloAuth>();
@@ -677,13 +672,12 @@ async function verifyDeviceSignature(
     }
 }
 
-function registerEditorPeer(
+async function registerEditorPeer(
     peer: Peer,
     scopeInput: {
         projectId: string;
         commitId: string;
         slideId: string;
-        userEmail?: string;
     }
 ) {
     const scopeId = internScope(scopeInput.projectId, scopeInput.commitId, scopeInput.slideId);
@@ -695,6 +689,7 @@ function registerEditorPeer(
     );
 
     const existing = peers.get(peer.id);
+    const { authContext } = await resolveAuthContextFromRequest(peer.request);
     if (existing?.meta.specimen === 'editor') {
         setEditorScope(existing, {
             projectId: scopeInput.projectId,
@@ -711,9 +706,7 @@ function registerEditorPeer(
                 slideId: scopeInput.slideId,
                 scopeId
             },
-            ...(scopeInput.userEmail
-                ? { authContext: { user: { email: scopeInput.userEmail } } }
-                : {})
+            authContext
         });
     }
 
@@ -790,7 +783,7 @@ function registerEditorPeer(
 async function completeHelloRegistration(
     peer: Peer,
     parsed: DeviceHelloMessage,
-    auth: ResolvedHelloAuthContext
+    passedAuthContext: AuthContext
 ) {
     if (parsed.specimen === 'wall') {
         const wallDevice = parsed.devicePublicKey
@@ -804,6 +797,7 @@ async function completeHelloRegistration(
                 type: 'device_enrollment',
                 deviceId: wallDevice.deviceId
             });
+            return;
         }
         const effectiveWallId = wallDevice?.assignedWallId ?? parsed.wallId;
         const intendedWallSlug = parsed.wallId;
@@ -813,14 +807,15 @@ async function completeHelloRegistration(
                   wallId: effectiveWallId,
                   id: wallDevice.deviceId
               }
-            : auth.device
+            : passedAuthContext.device
               ? {
                     kind: 'wall' as const,
                     wallId: effectiveWallId,
-                    id: auth.device.id
+                    id: passedAuthContext.device.id
                 }
               : undefined;
         const authContext: AuthContext = {
+            ...(passedAuthContext.user ? { user: passedAuthContext.user } : {}),
             ...(deviceAuthContext ? { device: deviceAuthContext } : {})
         };
 
@@ -865,10 +860,12 @@ async function completeHelloRegistration(
                     type: 'device_enrollment',
                     deviceId: controllerDevice.deviceId
                 });
+                return;
             }
         }
 
         const authContext: AuthContext = {
+            ...(passedAuthContext.user ? { user: passedAuthContext.user } : {}),
             ...(controllerDevice
                 ? {
                       device: {
@@ -877,16 +874,16 @@ async function completeHelloRegistration(
                           id: controllerDevice.deviceId
                       }
                   }
-                : auth.device
+                : passedAuthContext.device
                   ? {
                         device: {
                             kind: 'controller' as const,
                             wallId: parsed.wallId,
-                            id: auth.device.id
+                            id: passedAuthContext.device.id
                         }
                     }
                   : {}),
-            ...(auth.portal ? { portal: auth.portal } : {})
+            ...(passedAuthContext.portal ? { portal: passedAuthContext.portal } : {})
         };
 
         registerPeer(peer, {
@@ -936,10 +933,12 @@ async function completeHelloRegistration(
                 type: 'device_enrollment',
                 deviceId: galleryDevice.deviceId
             });
+            if (!(passedAuthContext.user?.role === 'admin')) return;
         }
     }
 
     const authContext: AuthContext = {
+        ...(passedAuthContext.user ? { user: passedAuthContext.user } : {}),
         ...(galleryDevice
             ? {
                   device: {
@@ -948,12 +947,12 @@ async function completeHelloRegistration(
                       id: galleryDevice.deviceId
                   }
               }
-            : auth.device
+            : passedAuthContext.device
               ? {
                     device: {
                         kind: 'gallery' as const,
                         ...(parsed.wallId ? { wallId: parsed.wallId } : {}),
-                        id: auth.device.id
+                        id: passedAuthContext.device.id
                     }
                 }
               : {})
@@ -1009,16 +1008,16 @@ async function recomputePeerAuthContexts(input: { email?: string; projectId?: st
     for (const entry of peers.values()) {
         if (entry.meta.specimen !== 'editor') continue;
         const currentEmail = entry.meta.authContext?.user?.email ?? null;
+        const currentRole = entry.meta.authContext?.user?.role ?? null;
         const scopeProjectId = entry.meta.scope?.projectId ?? null;
         if (input.email && currentEmail !== input.email) continue;
         if (input.projectId && scopeProjectId !== input.projectId) continue;
         inspected += 1;
 
-        const resolvedEmail = await resolvePeerUserEmail(entry.peer, {
-            cacheKey: '__busUserEmail',
-            forceRefresh: true
-        });
-        if (!resolvedEmail) {
+        const {
+            authContext: { user }
+        } = await resolveAuthContextFromRequest(entry.peer.request);
+        if (!user) {
             sendJSON(entry.peer, { type: 'auth_denied', reason: 'missing_session' });
             try {
                 entry.peer.close();
@@ -1028,13 +1027,12 @@ async function recomputePeerAuthContexts(input: { email?: string; projectId?: st
             disconnected += 1;
             continue;
         }
-
-        if (resolvedEmail !== currentEmail) {
+        if (user.email !== currentEmail || user.role !== currentRole) {
             entry.meta = {
                 ...entry.meta,
                 authContext: {
                     ...(entry.meta.authContext ?? {}),
-                    user: { email: resolvedEmail }
+                    user
                 }
             };
             refreshed += 1;
@@ -1548,8 +1546,10 @@ async function handleHello(peer: Peer, data: Record<string, any>) {
     clearPendingHelloAuth(peer.id);
 
     if (parsed.specimen === 'editor') {
-        const userEmail = await resolvePeerUserEmail(peer, { cacheKey: '__busUserEmail' });
-        if (!userEmail) {
+        const {
+            authContext: { user }
+        } = await resolveAuthContextFromRequest(peer.request);
+        if (!user) {
             sendJSON(peer, { type: 'auth_denied', reason: 'missing_session' });
             try {
                 peer.close();
@@ -1560,7 +1560,9 @@ async function handleHello(peer: Peer, data: Record<string, any>) {
         }
         registerPeer(peer, {
             specimen: 'editor',
-            authContext: { user: { email: userEmail } }
+            authContext: {
+                user
+            }
         });
         sendJSON(peer, { type: 'hello_authenticated' });
         console.log('[WS] Editor registered (no scope)');
@@ -1582,7 +1584,7 @@ async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
     }
 
     let authenticated = false;
-    const resolvedAuth: ResolvedHelloAuthContext = {};
+    const resolvedAuth: AuthContext = {};
 
     if (parsed.proof.signature && pending.hello.devicePublicKey) {
         const valid = await verifyDeviceSignature(
@@ -1648,6 +1650,13 @@ async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
         return;
     }
 
+    const {
+        authContext: { user }
+    } = await resolveAuthContextFromRequest(peer.request);
+    if (user) {
+        resolvedAuth.user = user;
+    }
+
     clearPendingHelloAuth(peer.id);
     sendJSON(peer, { type: 'hello_authenticated' });
     await completeHelloRegistration(peer, pending.hello, resolvedAuth);
@@ -1672,13 +1681,10 @@ async function handleSwitchScope(peer: Peer, data: Record<string, any>) {
         return;
     }
 
-    const userEmail = existing.meta.authContext?.user?.email;
-
-    registerEditorPeer(peer, {
+    await registerEditorPeer(peer, {
         projectId: parsed.projectId,
         commitId: parsed.commitId,
-        slideId: parsed.slideId,
-        ...(userEmail ? { userEmail } : {})
+        slideId: parsed.slideId
     });
 
     console.log(

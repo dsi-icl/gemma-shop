@@ -16,8 +16,8 @@ import * as Y from 'yjs';
 
 import type { PeerMeta } from '~/lib/busState';
 import type { Layer } from '~/lib/types';
-import { resolvePeerUserEmail } from '~/lib/wsAuth';
 import { collections } from '~/server/collections';
+import { resolveAuthContextFromRequest } from '~/server/requestAuthContext';
 
 const messageSync = 0;
 const messageAwareness = 1;
@@ -454,21 +454,29 @@ class YCrossws {
 
         const openPromise = (async (): Promise<void> => {
             try {
-                const userEmail = await resolvePeerUserEmail(peer, { cacheInPeer: false });
-                if (!userEmail) {
+                const {
+                    authContext: { user }
+                } = await resolveAuthContextFromRequest(peer.request);
+                if (!user) {
                     const latest = getYjsPeerState(peer) ?? existing;
                     setYjsPeerState(peer, {
                         ...latest
                     });
                     throw new Error('unauthenticated');
                 }
+                const userEmail = user.email;
 
                 const latestAuthed = getYjsPeerState(peer) ?? existing;
                 setYjsPeerState(peer, {
                     ...latestAuthed,
                     meta: {
                         specimen: 'editor',
-                        authContext: { user: { email: userEmail } }
+                        authContext: {
+                            user: {
+                                email: userEmail,
+                                role: user.role
+                            }
+                        }
                     }
                 });
 
@@ -712,11 +720,10 @@ class YCrossws {
             if (input.email && currentEmail !== input.email) continue;
             inspected += 1;
 
-            const nextEmail = await resolvePeerUserEmail(peer, {
-                forceRefresh: true,
-                cacheInPeer: false
-            });
-            if (!nextEmail) {
+            const {
+                authContext: { user }
+            } = await resolveAuthContextFromRequest(peer.request);
+            if (!user) {
                 if (state) {
                     setYjsPeerState(peer, {
                         ...state
@@ -730,6 +737,7 @@ class YCrossws {
                 disconnected += 1;
                 continue;
             }
+            const nextEmail = user.email;
 
             if (state) {
                 setYjsPeerState(peer, {
@@ -739,7 +747,10 @@ class YCrossws {
                         ...(state.meta?.scope ? { scope: state.meta.scope } : {}),
                         authContext: {
                             ...(state.meta?.authContext ?? {}),
-                            user: { email: nextEmail }
+                            user: {
+                                email: nextEmail,
+                                role: user.role
+                            }
                         }
                     }
                 });
