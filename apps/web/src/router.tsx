@@ -1,25 +1,18 @@
-import { QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
 import { getGlobalStartContext } from '@tanstack/react-start';
 
 import { DefaultCatchBoundary } from '~/components/DefaultCatchBoundary';
 import { DefaultNotFound } from '~/components/DefaultNotFound';
+import { createAppQueryClient, getBrowserQueryClient } from '~/lib/queryClient';
 
 import { routeTree } from './routeTree.gen';
 import { RootRouteContext } from './types';
 import { getRequest } from './utils/request-tools';
 
-export const queryClient = new QueryClient({
-    defaultOptions: {
-        queries: {
-            refetchOnWindowFocus: false,
-            staleTime: 1000 * 60 * 2 // 2 minutes
-        }
-    }
-});
-
-const getContext = async (): Promise<RootRouteContext> => {
+const getContext = async (
+    queryClient: RootRouteContext['queryClient']
+): Promise<RootRouteContext> => {
     let url;
     let iframed = false;
     try {
@@ -45,11 +38,13 @@ const getContext = async (): Promise<RootRouteContext> => {
 };
 
 export async function getRouter() {
+    const queryClient =
+        typeof window === 'undefined' ? createAppQueryClient() : getBrowserQueryClient();
     const nonce = getGlobalStartContext()?.nonce;
     const router = createRouter({
         routeTree,
         ssr: { nonce },
-        context: await getContext(),
+        context: await getContext(queryClient),
         defaultPreload: 'intent',
         // react-query will handle data fetching & caching
         // https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#passing-all-loader-events-to-an-external-cache

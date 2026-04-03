@@ -10,6 +10,7 @@ import {
 import { projectAssetsQueryOptions } from '../server/projects.queries';
 import { EditorEngine } from './editorEngine';
 import { fitSizeToViewport, MIN_LAYER_DIMENSION } from './fitSizeToViewport';
+import { getBrowserQueryClient } from './queryClient';
 import type { ConnectionStatus } from './reconnectingWs';
 import type { Layer, LayerWithEditorState, Slide } from './types';
 
@@ -1104,10 +1105,9 @@ if (typeof window !== 'undefined') {
         } else if (data.type === 'asset_added') {
             // New asset uploaded (by any editor or mobile) — invalidate React Query cache
             if (data.projectId === store.projectId) {
-                import('~/router').then(({ queryClient }) => {
-                    queryClient.invalidateQueries({
-                        queryKey: projectAssetsQueryOptions(data.projectId).queryKey
-                    });
+                const queryClient = getBrowserQueryClient();
+                queryClient.invalidateQueries({
+                    queryKey: projectAssetsQueryOptions(data.projectId).queryKey
                 });
             }
         } else if (data.type === 'wall_node_count') {
