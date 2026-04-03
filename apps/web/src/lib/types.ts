@@ -92,6 +92,7 @@ const LayerSchema = z.discriminatedUnion('type', [
             proxy: z.boolean().optional(),
             scale: z.number().default(1),
             stillImage: z.string().optional(),
+            stillImageSizes: OptionalSizesSchema,
             blurhash: z.string().optional()
         })
         .extend(LayerBaseSchema.shape),

@@ -1,12 +1,14 @@
 import { lookup } from 'node:dns/promises';
-import { unlink } from 'node:fs/promises';
+import { stat, unlink } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { join } from 'node:path';
 
 import { createFileRoute } from '@tanstack/react-router';
+import { ObjectId } from 'mongodb';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { ASSET_DIR } from '~/lib/serverVariables';
+import { collections } from '~/server/collections';
 import { canEditProject } from '~/server/projectAuthz';
 import {
     buildRateLimitSubjectKey,
@@ -239,6 +241,31 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     // Generate blurhash and variants using the shared pipeline
                     const blurhash = await computeBlurhash(screenshotPath);
                     const sizes = await generateVariants(screenshotPath, baseId);
+
+                    // Upsert an asset record so the serving route can find and auth-check it.
+                    // Web screenshots are keyed by their deterministic baseId+url — a re-capture
+                    // of the same URL overwrites the previous record in place.
+                    const fileSize = (await stat(screenshotPath).catch(() => null))?.size ?? 0;
+                    await collections.assets.findOneAndUpdate(
+                        { url: filename },
+                        {
+                            $set: {
+                                projectId: new ObjectId(projectId),
+                                url: filename,
+                                size: fileSize,
+                                sizes: sizes.length > 0 ? sizes : undefined,
+                                blurhash: blurhash ?? undefined,
+                                mimeType: 'image/png',
+                                updatedAt: new Date().toISOString()
+                            },
+                            $setOnInsert: {
+                                name: `web-screenshot:${url}`,
+                                createdBy: userEmail,
+                                createdAt: new Date().toISOString()
+                            }
+                        },
+                        { upsert: true }
+                    );
 
                     return new Response(JSON.stringify({ filename, baseId, blurhash, sizes }), {
                         status: 200,

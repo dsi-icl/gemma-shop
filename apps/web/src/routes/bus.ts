@@ -250,6 +250,8 @@ function getWsRateLimitIdentity(peer: Peer): string {
 }
 
 function getWsHandshakeRateLimitIdentity(peer: Peer): string {
+    // Handshake limiter intentionally keys by IP to throttle pre-auth reconnect storms.
+    // Tradeoff: peers sharing one NAT/proxy IP can rate-limit each other.
     const ip = getClientIpFromHeaders(peer.request?.headers as Headers | undefined);
     return buildRateLimitSubjectKey({ ip });
 }
