@@ -268,10 +268,6 @@ function isAdminUser(entry: PeerEntry): boolean {
     return entry.meta.authContext?.user?.role === 'admin';
 }
 
-function isGalleryDevice(entry: PeerEntry): boolean {
-    return entry.meta.authContext?.device?.kind === 'gallery';
-}
-
 function isWallDevice(entry: PeerEntry): boolean {
     return entry.meta.authContext?.device?.kind === 'wall';
 }
@@ -318,16 +314,19 @@ function isWsMessageAuthorized(
         return entry.meta.specimen === 'editor';
     }
     if (type === 'bind_override_decision') {
-        return entry.meta.specimen === 'gallery' && (isGalleryDevice(entry) || isAdminUser(entry));
+        return entry.meta.specimen === 'gallery' && isAdminUser(entry);
     }
     if (type === 'bind_wall') {
         if (entry.meta.specimen === 'controller')
-            return isControllerDevice(entry) || isControllerPortal(entry);
-        if (entry.meta.specimen === 'gallery') return isGalleryDevice(entry) || isAdminUser(entry);
+            return isControllerDevice(entry) || isControllerPortal(entry) || isAdminUser(entry);
+        if (entry.meta.specimen === 'gallery') return isAdminUser(entry);
         return isAdminUser(entry);
     }
     if (type === 'unbind_wall' || type === 'reboot') {
-        if (entry.meta.specimen === 'gallery') return isGalleryDevice(entry) || isAdminUser(entry);
+        if (type === 'reboot' && entry.meta.specimen === 'controller') {
+            return isControllerDevice(entry) || isControllerPortal(entry) || isAdminUser(entry);
+        }
+        if (entry.meta.specimen === 'gallery') return isAdminUser(entry);
         return isAdminUser(entry);
     }
 
@@ -1828,6 +1827,11 @@ async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
     if (!authenticated) {
         clearPendingHelloAuth(peer.id);
         console.warn(`[WS] hello_auth failed for peer ${peer.id}`);
+        try {
+            peer.close();
+        } catch {
+            // no-op
+        }
         return;
     }
 

@@ -182,12 +182,15 @@ async function readWithCap(response: Response, maxBytes: number): Promise<string
 }
 
 export default defineEventHandler(async (event) => {
-    await resolveRequestAuthContext(
+    const { authContext } = await resolveRequestAuthContext(
         new Request(toAbsoluteRequestUrl(event), {
             method: event.req.method,
             headers: event.req.headers
         })
     );
+    if (authContext.device?.kind !== 'wall') {
+        return Response.redirect(buildAbsoluteUrl(event, '/web-nonet?l=wall'), 302);
+    }
 
     const { url, check } = getQuery(event);
     const checkOnly = check === '1' || check === 'true';

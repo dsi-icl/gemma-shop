@@ -9,6 +9,8 @@ import { createServerOnlyFn } from '@tanstack/react-start';
 import { ASSET_MIME_TYPES } from '~/lib/assetMime';
 import { ASSET_DIR } from '~/lib/serverVariables';
 import { collections } from '~/server/collections';
+import { canViewProject } from '~/server/projectAuthz';
+import type { AuthContext } from '~/server/requestAuthContext';
 
 function parseVariantFilename(filename: string): { baseId: string; requested: number } | null {
     const m = filename.match(/^(.*)_([0-9]+)\.webp$/i);
@@ -68,6 +70,32 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
         .then((s) => s.isFile())
         .catch(() => false);
     return baseExists ? baseOriginal : null;
+}
+
+async function getAssetRecordForFilename(
+    filename: string
+): Promise<{ projectId?: unknown } | null> {
+    const exact = await collections.assets.findOne(
+        {
+            $or: [{ url: filename }, { previewUrl: filename }]
+        },
+        { projection: { projectId: 1 } }
+    );
+    if (exact) return exact as { projectId?: unknown };
+
+    const parsed = parseVariantFilename(filename);
+    if (!parsed) return null;
+    const escapedBase = escapeRegex(parsed.baseId);
+    const variant = await collections.assets.findOne(
+        {
+            $or: [
+                { url: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } },
+                { previewUrl: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } }
+            ]
+        },
+        { projection: { projectId: 1 } }
+    );
+    return (variant as { projectId?: unknown } | null) ?? null;
 }
 
 const getResponse = createServerOnlyFn(
@@ -182,8 +210,40 @@ const getResponse = createServerOnlyFn(
 export const Route = createFileRoute('/api/assets/$uri')({
     server: {
         handlers: {
-            GET: async ({ request, params }) => {
+            GET: async ({ request, params, context }) => {
                 const { uri } = params ?? {};
+                if (typeof uri !== 'string' || uri.length === 0) {
+                    return new Response('Not Found', { status: 404 });
+                }
+                const requestedFilename = basename(decodeURIComponent(uri));
+                const authContext: AuthContext = ((context ?? {}) as { authContext?: AuthContext })
+                    .authContext ?? { guest: true };
+                const user = authContext.user;
+                const device = authContext.device;
+
+                if (!user && !device) {
+                    return new Response('Unauthorized', { status: 401 });
+                }
+
+                const assetRecord = await getAssetRecordForFilename(requestedFilename);
+                if (!assetRecord) {
+                    return new Response('Not Found', { status: 404 });
+                }
+
+                if (user && user.role !== 'admin') {
+                    const projectId = assetRecord.projectId ? String(assetRecord.projectId) : null;
+                    if (!projectId) {
+                        return new Response('Forbidden', { status: 403 });
+                    }
+                    const allowed = await canViewProject(
+                        { email: user.email, role: user.role },
+                        projectId
+                    );
+                    if (!allowed) {
+                        return new Response('Forbidden', { status: 403 });
+                    }
+                }
+
                 const range = request.headers.get('range');
                 const ifNoneMatch = request.headers.get('if-none-match');
 
