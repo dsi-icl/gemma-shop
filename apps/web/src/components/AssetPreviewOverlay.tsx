@@ -5,6 +5,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Blurhash } from 'react-blurhash';
 import { createPortal } from 'react-dom';
 
+import type { DeviceKind } from '~/lib/deviceIdentity';
+import { signedFetch } from '~/lib/signedFetch';
+
 interface AssetPreviewOverlayProps {
     src: string;
     name: string;
@@ -170,8 +173,7 @@ export function AssetPreviewPortal({
         src: string;
         name: string;
         isVideo: boolean;
-        blurhash?: string;
-        sizes?: number[];
+        blurhash?: string | null;
     } | null;
     onClose: () => void;
 }) {
@@ -183,7 +185,7 @@ export function AssetPreviewPortal({
                     src={preview.src}
                     name={preview.name}
                     isVideo={preview.isVideo}
-                    blurhash={preview.blurhash}
+                    blurhash={preview.blurhash ?? undefined}
                     onClose={onClose}
                 />
             )}
@@ -192,7 +194,26 @@ export function AssetPreviewPortal({
 }
 
 export function downloadAsset(url: string, filename: string) {
-    fetch(url)
+    const inferDeviceSigning = (): { deviceKind: DeviceKind; wallId?: string } | undefined => {
+        if (typeof window === 'undefined') return undefined;
+        const path = window.location.pathname;
+        const params = new URLSearchParams(window.location.search);
+        if (path.startsWith('/wall')) {
+            const wallId = params.get('w')?.trim() ?? undefined;
+            return { deviceKind: 'wall', ...(wallId ? { wallId } : {}) };
+        }
+        if (path.startsWith('/gallery')) {
+            const wallId = params.get('w')?.trim() ?? undefined;
+            return { deviceKind: 'gallery', ...(wallId ? { wallId } : {}) };
+        }
+        if (path.startsWith('/controller')) {
+            const wallId = params.get('w')?.trim() ?? undefined;
+            return { deviceKind: 'controller', ...(wallId ? { wallId } : {}) };
+        }
+        return undefined;
+    };
+
+    signedFetch(url, undefined, inferDeviceSigning())
         .then((res) => res.blob())
         .then((blob) => {
             const blobUrl = URL.createObjectURL(blob);
@@ -206,6 +227,6 @@ export function downloadAsset(url: string, filename: string) {
         });
 }
 
-export function isVideoAsset(asset: { mimeType?: string; name: string }): boolean {
+export function isVideoAsset(asset: { mimeType?: string | null; name: string }): boolean {
     return asset.mimeType?.startsWith('video/') || /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name);
 }

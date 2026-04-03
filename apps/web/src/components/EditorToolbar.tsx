@@ -25,7 +25,6 @@ import {
     WarningCircleIcon,
     XIcon
 } from '@phosphor-icons/react';
-import { useAuth } from '@repo/auth/tanstack/hooks';
 import { Button } from '@repo/ui/components/button';
 import {
     Dialog,
@@ -63,7 +62,6 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
-    const { user } = useAuth();
     // Project header — only changes on project load
     const { projectId, projectName, parentSaveMessage } = useEditorStore(
         useShallow((s) => ({
@@ -238,13 +236,14 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     }, [activeLayer]);
 
     const captureScreenshot = useCallback(async () => {
-        if (!activeLayer || activeLayer.type !== 'web' || !activeLayer.url) return;
+        if (!activeLayer || activeLayer.type !== 'web' || !activeLayer.url || !projectId) return;
         setIsCapturing(true);
         try {
             const res = await fetch('/api/web-screenshot', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    projectId,
                     url: activeLayer.url,
                     width: activeLayer.config.width,
                     height: activeLayer.config.height,
@@ -258,11 +257,12 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 const payload = (await res.json().catch(() => null)) as { error?: string } | null;
                 throw new Error(payload?.error || `Screenshot capture failed (${res.status})`);
             }
-            const { filename, blurhash } = await res.json();
+            const { filename, blurhash, sizes } = await res.json();
 
             const updatedLayer = {
                 ...activeLayer,
                 stillImage: filename,
+                stillImageSizes: Array.isArray(sizes) ? sizes : undefined,
                 blurhash: blurhash ?? undefined
             };
             useEditorStore.getState().upsertLayer(updatedLayer);
@@ -279,7 +279,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         } finally {
             setIsCapturing(false);
         }
-    }, [activeLayer]);
+    }, [activeLayer, projectId]);
 
     const updateActiveLayerFilters = useCallback(
         (updater: (current: LayerFilterState) => LayerFilterState) => {
@@ -313,11 +313,6 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
             });
         }
     };
-
-    useEffect(() => {
-        if (!engine) return;
-        engine.setRequesterEmail(user?.email ?? null);
-    }, [engine, user?.email]);
 
     const handleWallUnbind = () => {
         if (!engine) return;
@@ -369,6 +364,8 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 toast.error('No response in time. The takeover request expired.');
             } else if (result.reason === 'denied') {
                 toast.error('Takeover request declined.');
+            } else if (result.reason === 'unknown_wall') {
+                toast.error('This wall no longer exists.');
             } else {
                 toast.error('Could not complete the takeover request.');
             }

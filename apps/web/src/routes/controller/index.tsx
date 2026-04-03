@@ -19,7 +19,6 @@ import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { ControllerEngine } from '~/lib/controllerEngine';
 import { useControllerStore } from '~/lib/controllerStore';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
-import { wsEnrollmentFallbackEnabled } from '~/lib/runtimeFlags';
 import type { LayerWithEditorState } from '~/lib/types';
 
 const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
@@ -130,17 +129,23 @@ function Controller() {
     const searchStr = useLocation({
         select: (location) => location.searchStr
     });
-    const { wallId, mountLocation } = useMemo(() => {
+    const { wallId, mountLocation, portalToken } = useMemo(() => {
         const params = new URLSearchParams(searchStr);
-        return { wallId: params.get('w'), mountLocation: params.get('l') };
+        return {
+            wallId: params.get('w')?.trim(),
+            mountLocation: params.get('l')?.trim(),
+            portalToken: params.get('_gem_t')?.trim()
+        };
     }, [searchStr]);
 
     const showHideHeadAndFoot = mountLocation === 'gallery';
 
     const engine = useMemo(
         () =>
-            typeof window !== 'undefined' && wallId ? ControllerEngine.getInstance(wallId) : null,
-        [wallId]
+            typeof window !== 'undefined' && wallId
+                ? ControllerEngine.getInstance(wallId, portalToken)
+                : null,
+        [wallId, portalToken]
     );
     const [binding, setBinding] = useState<BindingStatus>({ bound: false });
     const [deviceEnrollmentId, setDeviceEnrollmentId] = useState<string | null>(null);
@@ -193,7 +198,6 @@ function Controller() {
         if (!engine) return;
         return engine.onMessage((data) => {
             if (data.type === 'device_enrollment') {
-                if (!wsEnrollmentFallbackEnabled) return;
                 setDeviceEnrollmentId(data.deviceId);
             }
         });
@@ -206,7 +210,7 @@ function Controller() {
         Promise.resolve()
             .then(async () => {
                 const identity = await getOrCreateDeviceIdentity('controller');
-                const signature = await identity.signDeviceId(deviceId);
+                const signature = await identity.signPayload(deviceId);
                 const payload = JSON.stringify({
                     // schema: 'gem://',
                     // kind: 'wall',
@@ -717,7 +721,7 @@ function Controller() {
             </div>
         );
 
-    if (wsEnrollmentFallbackEnabled && deviceEnrollmentId)
+    if (deviceEnrollmentId)
         return (
             <div
                 className={cn(
@@ -1002,26 +1006,6 @@ function Controller() {
                                                                 rotation={layer.config.rotation}
                                                                 fill="#1f2937"
                                                                 stroke="#334155"
-                                                                strokeWidth={2}
-                                                                listening={false}
-                                                            />
-                                                        );
-                                                    }
-                                                    if (layer.type === 'graph') {
-                                                        return (
-                                                            <Rect
-                                                                key={`roy_${layer.numericId}`}
-                                                                x={layer.config.cx}
-                                                                y={layer.config.cy}
-                                                                width={layer.config.width}
-                                                                height={layer.config.height}
-                                                                scaleX={layer.config.scaleX}
-                                                                scaleY={layer.config.scaleY}
-                                                                offsetX={layer.config.width / 2}
-                                                                offsetY={layer.config.height / 2}
-                                                                rotation={layer.config.rotation}
-                                                                fill="#111827"
-                                                                stroke="#374151"
                                                                 strokeWidth={2}
                                                                 listening={false}
                                                             />

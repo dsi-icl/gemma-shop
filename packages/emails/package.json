@@ -3,7 +3,6 @@
     "version": "0.0.0",
     "private": true,
     "exports": {
-        "./MagicLinkEmail": "./src/MagicLinkEmail.tsx",
         "./OtpEmail": "./src/OtpEmail.tsx"
     },
     "scripts": {
@@ -14,6 +13,7 @@
         "@react-email/components": "catalog:"
     },
     "devDependencies": {
+        "@react-email/preview-server": "catalog:",
         "@repo/tsconfig": "workspace:*",
         "react-email": "catalog:",
         "typescript": "catalog:"

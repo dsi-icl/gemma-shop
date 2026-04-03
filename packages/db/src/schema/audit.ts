@@ -12,3 +12,5 @@ export const AuditLogSchema = z.object({
     changes: z.any(), // e.g., { previousRole: 'viewer', newRole: 'editor' }
     createdAt: z.date().default(() => new Date())
 });
+
+export type AuditLog = z.infer<typeof AuditLogSchema>;

@@ -27,11 +27,12 @@ declare global {
             __BROADCAST_EDITORS__?: (data: GSMessage) => void;
             __BROADCAST_ASSET_ADDED__?: (projectId: string, asset: Record<string, unknown>) => void;
             __BROADCAST_WALL_BINDING_CHANGED__?: (wallId: string) => void;
-            __BROADCAST_PROJECT_PUBLISH_CHANGED__?: (
-                projectId: string,
-                publishedCommitId: string | null
-            ) => void;
+            __BROADCAST_PROJECTS_CHANGED__?: (projectId?: string) => void;
+            __BUS_RECOMPUTE_AUTH_CONTEXT__?: (payload: { email?: string }) => Promise<unknown>;
+            __YJS_RECOMPUTE_AUTH_CONTEXT__?: (payload: { email?: string }) => Promise<unknown>;
+            __DISCONNECT_DEVICE__?: (deviceId: string) => number;
             __REBOOT_WALL__?: (wallId: string, node?: { c: number; r: number }) => number;
+            __REBOOT_DEVICE__?: (deviceId: string) => number;
             __YJS_UPSERT_LAYER__?: (payload: {
                 projectId: string;
                 commitId: string;

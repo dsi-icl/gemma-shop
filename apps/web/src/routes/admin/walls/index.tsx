@@ -8,7 +8,6 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Suspense } from 'react';
 import { toast } from 'sonner';
 
-import { useEditorStore } from '~/lib/editorStore';
 import { $adminCreateWall, $adminUnbindWall } from '~/server/admin.fns';
 import { adminWallBindingMetaQueryOptions, adminWallsQueryOptions } from '~/server/admin.queries';
 
@@ -21,7 +20,6 @@ export const Route = createFileRoute('/admin/walls/')({
 
 function AdminWalls() {
     const { data: walls = [] } = useSuspenseQuery(adminWallsQueryOptions());
-    const liveNodeCounts = useEditorStore((s) => s.wallNodeCounts);
     const navigate = useNavigate();
     const queryClient = useQueryClient();
 
@@ -99,14 +97,16 @@ function AdminWalls() {
                                 <th className="px-4 py-3 text-left font-medium">ID</th>
                                 <th className="px-4 py-3 text-left font-medium">Slug</th>
                                 <th className="px-4 py-3 text-left font-medium">Name</th>
-                                <th className="px-4 py-3 text-left font-medium">Connected Nodes</th>
+                                <th className="px-4 py-3 text-left font-medium">Assigned Nodes</th>
+                                <th className="px-4 py-3 text-left font-medium">Intended Nodes</th>
                                 <th className="px-4 py-3 text-left font-medium">Bound Project</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                            {walls.map((wall: any) => {
-                                const connectedNodes =
-                                    liveNodeCounts[wall.wallId] ?? wall.connectedNodes;
+                            {walls.map((wall) => {
+                                const assignedConnectedNodes = wall.assignedConnectedNodes ?? 0;
+                                const assignedScreenCount = wall.assignedScreenCount ?? 0;
+                                const intendedConnectedNodes = wall.intendedConnectedNodes ?? 0;
                                 return (
                                     <tr
                                         key={wall._id}
@@ -114,14 +114,14 @@ function AdminWalls() {
                                         onClick={() =>
                                             navigate({
                                                 to: '/admin/walls/$wallId',
-                                                params: { wallId: wall._id }
+                                                params: { wallId: wall.wallId }
                                             })
                                         }
                                     >
                                         <td className="px-4 py-3 font-mono text-xs">
                                             <Link
                                                 to="/admin/walls/$wallId"
-                                                params={{ wallId: wall._id }}
+                                                params={{ wallId: wall.wallId }}
                                                 className="underline-offset-2 hover:underline"
                                             >
                                                 {wall._id}
@@ -135,14 +135,36 @@ function AdminWalls() {
                                             <span className="flex items-center gap-1.5">
                                                 <MonitorIcon
                                                     size={14}
-                                                    weight={connectedNodes > 0 ? 'fill' : 'regular'}
+                                                    weight={
+                                                        assignedConnectedNodes > 0
+                                                            ? 'fill'
+                                                            : 'regular'
+                                                    }
                                                     className={
-                                                        connectedNodes > 0
+                                                        assignedConnectedNodes > 0
                                                             ? 'text-green-500'
                                                             : 'text-muted-foreground'
                                                     }
                                                 />
-                                                {connectedNodes}
+                                                {assignedConnectedNodes} of {assignedScreenCount}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className="flex items-center gap-1.5">
+                                                <MonitorIcon
+                                                    size={14}
+                                                    weight={
+                                                        intendedConnectedNodes > 0
+                                                            ? 'fill'
+                                                            : 'regular'
+                                                    }
+                                                    className={
+                                                        intendedConnectedNodes > 0
+                                                            ? 'text-amber-500'
+                                                            : 'text-muted-foreground'
+                                                    }
+                                                />
+                                                {intendedConnectedNodes}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">

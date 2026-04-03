@@ -3,6 +3,7 @@ import { ObjectId, type ChangeStreamDocument } from 'mongodb';
 
 import { makeScopeLabel, type GSMessage, type Layer, type ScopeState } from '~/lib/types';
 import { collections } from '~/server/collections';
+import type { AuthContext } from '~/server/requestAuthContext';
 
 import { revokePortalTokensForScope, revokePortalTokensForWall } from './portalTokens';
 
@@ -19,6 +20,7 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     peers: new Map<string, PeerEntry>(),
     editorsByScope: new Map<ScopeId, Set<PeerEntry>>(),
     wallsByWallId: new Map<string, Set<PeerEntry>>(),
+    wallsByIntendedWallSlug: new Map<string, Set<PeerEntry>>(),
     controllersByWallId: new Map<string, Set<PeerEntry>>(),
     galleriesByWallId: new Map<string, Set<PeerEntry>>(),
     allGalleries: new Set<PeerEntry>(),
@@ -28,7 +30,7 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     scopeWatchers: new Map<ScopeId, Set<string>>(),
     wallPeersByScope: new Map<ScopeId, Set<PeerEntry>>(),
     activeVideos: new Map<number, { scopeId: ScopeId; layer: Layer }>(),
-    peerCounts: { editor: 0, wall: 0, controller: 0, gallery: 0, roy: 0 },
+    peerCounts: { editor: 0, wall: 0, controller: 0, gallery: 0 },
     lastPingSeen: new Map<string, number>(),
     scopeCleanupTimers: new Map<ScopeId, ReturnType<typeof setTimeout>>(),
     wallUnbindTimers: new Map<string, ReturnType<typeof setTimeout>>(),
@@ -36,6 +38,9 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
 };
 if (!_hmr.controllerTransientByWallId) {
     _hmr.controllerTransientByWallId = new Map<string, Map<number, Layer>>();
+}
+if (!_hmr.wallsByIntendedWallSlug) {
+    _hmr.wallsByIntendedWallSlug = new Map<string, Set<PeerEntry>>();
 }
 if (!_hmr.galleriesByWallId) {
     _hmr.galleriesByWallId = new Map<string, Set<PeerEntry>>();
@@ -119,52 +124,47 @@ export function scopeLabel(id: ScopeId): string {
     return scopeIdToKey.get(id) ?? `<unknown:${id}>`;
 }
 
-export type ConnectionAuthMeta = {
-    mode: 'user' | 'device-active' | 'device-pending' | 'public-shim';
-    deviceId?: string;
-    deviceKind?: 'wall' | 'gallery' | 'controller';
-    assignedWallId?: string | null;
-};
-
 export type PeerMeta =
     | {
           specimen: 'editor';
-          projectId: string;
-          commitId: string;
-          slideId: string;
-          scopeId: ScopeId;
-          requesterEmail?: string;
-          auth?: ConnectionAuthMeta;
+          scope?: {
+              projectId: string;
+              commitId: string;
+              slideId: string;
+              scopeId: ScopeId;
+          };
+          authContext?: AuthContext;
       }
     | {
           specimen: 'wall';
           wallId: string;
+          intendedWallSlug?: string;
           col: number;
           row: number;
-          auth?: ConnectionAuthMeta;
+          authContext?: AuthContext;
       }
-    | { specimen: 'controller'; wallId: string; auth?: ConnectionAuthMeta }
-    | { specimen: 'gallery'; wallId?: string; auth?: ConnectionAuthMeta }
-    | { specimen: 'roy'; auth?: ConnectionAuthMeta };
+    | { specimen: 'controller'; wallId: string; authContext?: AuthContext }
+    | { specimen: 'gallery'; wallId?: string; authContext?: AuthContext };
 
 export interface PeerEntry {
     peer: Peer;
     meta: PeerMeta;
 }
 
-// Master peer registry: peerId → PeerEntry
+// Master peer registry: peerId > PeerEntry
 export const peers: Map<string, PeerEntry> = _hmr.peers;
 
-// Editor scope index: scopeId → Set<PeerEntry> — direct refs, no map lookup in broadcast
+// Editor scope index: scopeId > Set<PeerEntry> — direct refs, no map lookup in broadcast
 export const editorsByScope: Map<ScopeId, Set<PeerEntry>> = _hmr.editorsByScope;
 
-// Wall peer index: wallId → Set<PeerEntry>
+// Wall peer index: wallId > Set<PeerEntry>
 export const wallsByWallId: Map<string, Set<PeerEntry>> = _hmr.wallsByWallId;
+export const wallsByIntendedWallSlug: Map<string, Set<PeerEntry>> = _hmr.wallsByIntendedWallSlug;
 
-// Controller index: wallId → Set<PeerEntry>
+// Controller index: wallId > Set<PeerEntry>
 export const controllersByWallId: Map<string, Set<PeerEntry>> = _hmr.controllersByWallId;
 
-// Gallery watcher index: wallId → Set<PeerEntry>
+// Gallery watcher index: wallId > Set<PeerEntry>
 export const galleriesByWallId: Map<string, Set<PeerEntry>> = _hmr.galleriesByWallId;
 
 // Flat set of every gallery entry
@@ -173,15 +173,15 @@ export const allGalleries: Set<PeerEntry> = _hmr.allGalleries;
 // Flat set of every editor entry — for the __BROADCAST_EDITORS__ bridge
 export const allEditors: Set<PeerEntry> = _hmr.allEditors;
 
-// wallId → ScopeId: which content a wall displays
+// wallId > ScopeId: which content a wall displays
 export const wallBindings: Map<string, ScopeId> = _hmr.wallBindings;
 export const wallBindingSources: Map<string, 'live' | 'gallery'> = _hmr.wallBindingSources;
 
-// scopeId → Set<wallId>: reverse index used only for binding cleanup
+// scopeId > Set<wallId>: reverse index used only for binding cleanup
 export const scopeWatchers: Map<ScopeId, Set<string>> = _hmr.scopeWatchers;
 
 /**
- * Flattened broadcast index: scopeId → Set<PeerEntry> of wall peers watching this scope.
+ * Flattened broadcast index: scopeId > Set<PeerEntry> of wall peers watching this scope.
  * Updated on bind/unbind/register/unregister (cold path) so broadcast (hot path) is one loop.
  */
 export const wallPeersByScope: Map<ScopeId, Set<PeerEntry>> = _hmr.wallPeersByScope;
@@ -193,7 +193,7 @@ export const controllerTransientByWallId: Map<
 // Active video registry for the VSYNC loop only playing videos are tracked
 export const activeVideos: Map<number, { scopeId: ScopeId; layer: Layer }> = _hmr.activeVideos;
 
-/** Layer → wall peers whose viewport intersects the layer AABB. Updated on upsert/bind. */
+/** Layer > wall peers whose viewport intersects the layer AABB. Updated on upsert/bind. */
 // export const layerNodes = new Map<number, Set<PeerEntry>>();
 
 /** Running peer counts — O(1) reads instead of iterating all peers */
@@ -202,12 +202,16 @@ export const peerCounts: {
     wall: number;
     controller: number;
     gallery: number;
-    roy: number;
 } = _hmr.peerCounts;
 
 /** Live wall node count — O(1) read from in-memory index. */
 export function getWallNodeCount(wallId: string): number {
     return wallsByWallId.get(wallId)?.size ?? 0;
+}
+
+/** Live wall node count keyed by advertised wall id (w query param). */
+export function getIntendedWallNodeCount(wallId: string): number {
+    return wallsByIntendedWallSlug.get(wallId)?.size ?? 0;
 }
 
 // Binary opcodes
@@ -256,13 +260,18 @@ export function registerPeer(peer: Peer, meta: PeerMeta): PeerEntry {
 
     switch (meta.specimen) {
         case 'editor':
-            addToIndex(editorsByScope, meta.scopeId, entry);
             allEditors.add(entry);
-            cancelScopeCleanup(meta.scopeId);
+            if (meta.scope) {
+                addToIndex(editorsByScope, meta.scope.scopeId, entry);
+                cancelScopeCleanup(meta.scope.scopeId);
+            }
             break;
         case 'wall': {
             cancelWallUnbindGrace(meta.wallId);
             addToIndex(wallsByWallId, meta.wallId, entry);
+            if (meta.intendedWallSlug) {
+                addToIndex(wallsByIntendedWallSlug, meta.intendedWallSlug, entry);
+            }
             const boundScopeId = wallBindings.get(meta.wallId);
             if (boundScopeId !== undefined) {
                 addToIndex(wallPeersByScope, boundScopeId, entry);
@@ -275,8 +284,6 @@ export function registerPeer(peer: Peer, meta: PeerMeta): PeerEntry {
         case 'gallery':
             allGalleries.add(entry);
             if (meta.wallId) addToIndex(galleriesByWallId, meta.wallId, entry);
-            break;
-        case 'roy':
             break;
     }
 
@@ -291,12 +298,17 @@ export function unregisterPeer(peerId: string): PeerMeta | null {
     const { meta } = entry;
     switch (meta.specimen) {
         case 'editor':
-            removeFromIndex(editorsByScope, meta.scopeId, entry);
+            if (meta.scope) {
+                removeFromIndex(editorsByScope, meta.scope.scopeId, entry);
+                scheduleScopeCleanup(meta.scope.scopeId);
+            }
             allEditors.delete(entry);
-            scheduleScopeCleanup(meta.scopeId);
             break;
         case 'wall': {
             removeFromIndex(wallsByWallId, meta.wallId, entry);
+            if (meta.intendedWallSlug) {
+                removeFromIndex(wallsByIntendedWallSlug, meta.intendedWallSlug, entry);
+            }
             const boundScopeId = wallBindings.get(meta.wallId);
             if (boundScopeId !== undefined) {
                 removeFromIndex(wallPeersByScope, boundScopeId, entry);
@@ -309,8 +321,6 @@ export function unregisterPeer(peerId: string): PeerMeta | null {
         case 'gallery':
             allGalleries.delete(entry);
             if (meta.wallId) removeFromIndex(galleriesByWallId, meta.wallId, entry);
-            break;
-        case 'roy':
             break;
     }
 
@@ -385,10 +395,6 @@ export const EMPTY_HYDRATE: string = JSON.stringify({ type: 'hydrate', layers: [
 export function invalidateHydrateCache(scopeId: ScopeId) {
     const scope = scopedState.get(scopeId);
     if (scope) scope.hydrateCache = null;
-}
-
-export function invalidateWallHydrateCache(_scopeId: ScopeId) {
-    // no-op: wall hydrate payloads are generated per wall, on demand
 }
 
 export function getEditorHydratePayload(scopeId: ScopeId): string {
@@ -1132,13 +1138,47 @@ async function executeScopeCleanup(scopeId: ScopeId) {
 export function resolveScopeId(meta: PeerMeta): ScopeId | null {
     switch (meta.specimen) {
         case 'editor':
-            return meta.scopeId;
+            return meta.scope?.scopeId ?? null;
         case 'wall':
         case 'controller':
             return wallBindings.get(meta.wallId) ?? null;
         default:
             return null;
     }
+}
+
+export function setEditorScope(
+    entry: PeerEntry,
+    scope: {
+        projectId: string;
+        commitId: string;
+        slideId: string;
+        scopeId: ScopeId;
+    } | null
+) {
+    if (entry.meta.specimen !== 'editor') return;
+
+    const previousScopeId = entry.meta.scope?.scopeId;
+    if (previousScopeId !== undefined) {
+        removeFromIndex(editorsByScope, previousScopeId, entry);
+        scheduleScopeCleanup(previousScopeId);
+    }
+
+    if (!scope) {
+        entry.meta = {
+            specimen: 'editor',
+            ...(entry.meta.authContext ? { authContext: entry.meta.authContext } : {})
+        };
+        return;
+    }
+
+    entry.meta = {
+        specimen: 'editor',
+        scope,
+        ...(entry.meta.authContext ? { authContext: entry.meta.authContext } : {})
+    };
+    addToIndex(editorsByScope, scope.scopeId, entry);
+    cancelScopeCleanup(scope.scopeId);
 }
 
 const PING_TIMEOUT_MS = 60_000; // Force-close peers with no ping for 60s
@@ -1179,7 +1219,7 @@ export function reapStalePeers(): number {
 
 export function logPeerCounts() {
     console.log(
-        `[WS] Peers: ${peerCounts.editor} editors, ${peerCounts.wall} walls, ${peerCounts.controller} controllers, ${peerCounts.gallery} galleries, ${peerCounts.roy} roys`
+        `[WS] Peers: ${peerCounts.editor} editors, ${peerCounts.wall} walls, ${peerCounts.controller} controllers, ${peerCounts.gallery} galleries`
     );
 }
 
@@ -1216,7 +1256,6 @@ export async function seedScopeFromDb(scopeId: ScopeId): Promise<boolean> {
 
 // DB snapshoting
 export async function buildSlidesSnapshot(
-    scopeId: ScopeId,
     scope: ScopeState,
     headCommitId: ObjectId | string | null
 ): Promise<Array<{ id: string; order: number; layers: Layer[] }>> {
@@ -1271,7 +1310,7 @@ export async function saveScope(
             headId = new ObjectId(project.headCommitId);
         }
 
-        const updatedSlides = await buildSlidesSnapshot(scopeId, scope, headId);
+        const updatedSlides = await buildSlidesSnapshot(scope, headId);
 
         if (isAutoSave) {
             // Update the mutable HEAD in place
@@ -1408,12 +1447,13 @@ function startAssetChangeStream() {
         changeStream.on('change', (change: ChangeStreamDocument) => {
             if (change.operationType === 'insert' && change.fullDocument) {
                 const doc = change.fullDocument;
+                if (doc.hidden) return;
                 broadcastAssetToEditorsByProject(doc.projectId.toString(), {
                     _id: doc._id.toString(),
                     name: doc.name,
                     url: doc.url,
                     size: doc.size,
-                    // Convert null → undefined so JSON.stringify strips them
+                    // Convert null > undefined so JSON.stringify strips them
                     // (Zod z.string().optional() rejects null)
                     mimeType: doc.mimeType ?? undefined,
                     blurhash: doc.blurhash ?? undefined,

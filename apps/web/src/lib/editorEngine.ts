@@ -1,14 +1,11 @@
 'use client';
 
 import { throttle } from '@tanstack/pacer';
+import { toast } from 'sonner';
 
-import { type ConnectionStatus, ReconnectingWebSocket } from './reconnectingWs';
-import { getWebSocketUrl } from './runtimeUrl';
+import { BusClient } from './busClient';
+import { type ConnectionStatus } from './reconnectingWs';
 import { GSMessageSchema, type GSMessage, type Layer } from './types';
-
-const getGemmaBusUrl = (): string => {
-    return getWebSocketUrl('/bus');
-};
 
 type SaveResponseCallback = (data: Extract<GSMessage, { type: 'stage_save_response' }>) => void;
 type ServerMessageCallback = (data: GSMessage) => void;
@@ -32,7 +29,7 @@ type BindOverrideResultCallback = (
 ) => void;
 
 export class EditorEngine {
-    private rws: ReconnectingWebSocket;
+    private bus: BusClient;
     private messageCallbacks = new Set<ServerMessageCallback>();
     private binaryCallbacks = new Set<BinaryMessageCallback>();
     private playbackCallbacks = new Set<PlaybackCallback>();
@@ -49,11 +46,10 @@ export class EditorEngine {
     private currentProjectId: string | null = null;
     private currentCommitId: string | null = null;
     private currentSlideId: string | null = null;
-    private requesterEmail: string | null = null;
 
     private constructor() {
-        this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
-            binaryType: 'arraybuffer',
+        this.bus = new BusClient({
+            auth: { kind: 'editor' },
             onOpen: () => {
                 console.log('Editor Engine: Connected to Server');
                 // Reset clock sync state on every (re)connect
@@ -74,14 +70,35 @@ export class EditorEngine {
             onMessage: (event) => this.handleMessage(event)
         });
 
-        this.rws.onStateChange((status) => {
+        this.bus.onSocketStateChange((status) => {
             this.connectionStatusCallbacks.forEach((cb) => cb(status));
+        });
+        this.bus.onReady(() => {
+            if (!this.currentProjectId || !this.currentCommitId || !this.currentSlideId) return;
+            this.sendJSON({
+                type: 'switch_scope',
+                projectId: this.currentProjectId,
+                commitId: this.currentCommitId,
+                slideId: this.currentSlideId
+            });
+            if (this.boundWallId) {
+                const requestId = this.makeBindRequestId();
+                this.lastBindRequestId = requestId;
+                this.sendJSON({
+                    type: 'request_bind_wall',
+                    requestId,
+                    wallId: this.boundWallId,
+                    projectId: this.currentProjectId,
+                    commitId: this.currentCommitId,
+                    slideId: this.currentSlideId
+                });
+            }
         });
     }
 
     /** Access the underlying WebSocket (changes on each reconnect) */
     public get ws(): WebSocket {
-        return this.rws.ws;
+        return this.bus.ws;
     }
 
     private handleMessage(event: MessageEvent) {
@@ -152,6 +169,11 @@ export class EditorEngine {
                 return;
             }
 
+            if (data.type === 'auth_denied') {
+                toast.error('Session expired. Reconnect after signing in again.');
+                return;
+            }
+
             if (data.type === 'hydrate') {
                 this.bufferedHydration = data;
                 data.layers.forEach((l) => {
@@ -181,7 +203,7 @@ export class EditorEngine {
     public destroy() {
         console.log('Editor Engine: Assassinating ghost instance...');
         if (this.pingTimer) clearTimeout(this.pingTimer);
-        this.rws.destroy();
+        this.bus.destroy();
         this.messageCallbacks.clear();
         this.binaryCallbacks.clear();
         this.playbackCallbacks.clear();
@@ -221,7 +243,7 @@ export class EditorEngine {
             const view = new DataView(buffer);
             view.setUint8(0, 0x08);
             view.setFloat64(1, Date.now(), true);
-            this.rws.send(buffer);
+            this.bus.sendRaw(buffer);
             this.pingTimer = setTimeout(sendPing, 3000);
         };
         sendPing();
@@ -280,17 +302,17 @@ export class EditorEngine {
         // Playback cache is scope-local; avoid cross-scope numericId collisions.
         this.playbackStates.clear();
 
-        this.sendJSON({
-            type: 'hello',
-            specimen: 'editor',
-            projectId,
-            commitId,
-            slideId,
-            ...(this.requesterEmail ? { requesterEmail: this.requesterEmail } : {})
-        });
+        if (this.bus.ready) {
+            this.sendJSON({
+                type: 'switch_scope',
+                projectId,
+                commitId,
+                slideId
+            });
+        }
 
         // Auto-rebind the wall to the new slide when navigating
-        if (this.boundWallId) {
+        if (this.boundWallId && this.bus.ready) {
             const requestId = this.makeBindRequestId();
             this.lastBindRequestId = requestId;
             this.sendJSON({
@@ -375,27 +397,9 @@ export class EditorEngine {
         return this.lastBindRequestId;
     }
 
-    public setRequesterEmail(email: string | null | undefined) {
-        const normalized = email?.trim() ? email.trim() : null;
-        if (this.requesterEmail === normalized) return;
-        this.requesterEmail = normalized;
-
-        // Refresh editor identity on the bus while staying in the same scope.
-        if (this.currentProjectId && this.currentCommitId && this.currentSlideId) {
-            this.sendJSON({
-                type: 'hello',
-                specimen: 'editor',
-                projectId: this.currentProjectId,
-                commitId: this.currentCommitId,
-                slideId: this.currentSlideId,
-                ...(this.requesterEmail ? { requesterEmail: this.requesterEmail } : {})
-            });
-        }
-    }
-
     /** Current connection status */
     public get connectionStatus(): ConnectionStatus {
-        return this.rws.status;
+        return this.bus.status;
     }
 
     private makeBindRequestId(): string {
@@ -408,10 +412,10 @@ export class EditorEngine {
         // Editor upsert_layer for video should never carry playback timeline fields.
         if (data.type === 'upsert_layer' && data.layer.type === 'video') {
             const { playback: _playback, ...layerWithoutPlayback } = data.layer;
-            this.rws.send(JSON.stringify({ ...data, layer: layerWithoutPlayback }));
+            this.bus.sendRaw(JSON.stringify({ ...data, layer: layerWithoutPlayback }));
             return;
         }
-        this.rws.send(JSON.stringify(data));
+        this.bus.sendJSON(data);
     };
 
     public broadcastBinaryMove = throttle(
@@ -437,7 +441,7 @@ export class EditorEngine {
             view.setFloat32(21, scaleX, true);
             view.setFloat32(25, scaleY, true);
             view.setFloat32(29, rotation, true);
-            this.rws.send(buffer);
+            this.bus.sendRaw(buffer);
         },
         { wait: 16 }
     );

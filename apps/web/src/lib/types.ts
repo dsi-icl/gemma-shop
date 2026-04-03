@@ -92,6 +92,7 @@ const LayerSchema = z.discriminatedUnion('type', [
             proxy: z.boolean().optional(),
             scale: z.number().default(1),
             stillImage: z.string().optional(),
+            stillImageSizes: OptionalSizesSchema,
             blurhash: z.string().optional()
         })
         .extend(LayerBaseSchema.shape),
@@ -136,14 +137,7 @@ export const HelloSchema = z.discriminatedUnion('specimen', [
         devicePublicKey: z.string().optional()
     }),
     HelloMessageBaseSchema.extend({
-        specimen: z.literal('editor'),
-        projectId: z.string(),
-        commitId: z.string(),
-        slideId: z.string(),
-        requesterEmail: z.email().optional()
-    }),
-    HelloMessageBaseSchema.extend({
-        specimen: z.literal('roy')
+        specimen: z.literal('editor')
     }),
     HelloMessageBaseSchema.extend({
         specimen: z.literal('gallery'),
@@ -172,15 +166,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         }),
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
-            specimen: z.literal('editor'),
-            projectId: z.string(),
-            commitId: z.string(),
-            slideId: z.string(),
-            requesterEmail: z.email().optional()
-        }),
-        HelloMessageBaseSchema.extend({
-            type: z.literal('hello'),
-            specimen: z.literal('roy')
+            specimen: z.literal('editor')
         }),
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
@@ -189,6 +175,37 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
             devicePublicKey: z.string().optional()
         })
     ]),
+    z.object({
+        type: z.literal('hello_challenge'),
+        nonce: z.string()
+    }),
+    z.object({
+        type: z.literal('hello_auth'),
+        proof: z
+            .object({
+                signature: z.string().optional(),
+                portalToken: z.string().optional()
+            })
+            .refine(
+                (proof) =>
+                    (typeof proof.signature === 'string' && proof.signature.length > 0) ||
+                    (typeof proof.portalToken === 'string' && proof.portalToken.length > 0),
+                { message: 'hello_auth.proof requires at least one auth credential' }
+            )
+    }),
+    z.object({
+        type: z.literal('hello_authenticated')
+    }),
+    z.object({
+        type: z.literal('auth_denied'),
+        reason: z.enum(['missing_session']).optional()
+    }),
+    z.object({
+        type: z.literal('switch_scope'),
+        projectId: z.string(),
+        commitId: z.string(),
+        slideId: z.string()
+    }),
     z.object({
         type: z.literal('hydrate'),
         layers: LayerSchema.array(),
@@ -352,7 +369,9 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         requestId: z.string(),
         wallId: z.string(),
         allow: z.boolean(),
-        reason: z.enum(['approved', 'denied', 'timeout', 'not_required', 'invalid']).optional()
+        reason: z
+            .enum(['approved', 'denied', 'timeout', 'not_required', 'invalid', 'unknown_wall'])
+            .optional()
     }),
     z.object({
         type: z.literal('wall_binding_changed'),
@@ -368,10 +387,8 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         wallId: z.string()
     }),
     z.object({
-        type: z.literal('project_publish_changed'),
-        projectId: z.string(),
-        published: z.boolean(),
-        publishedCommitId: z.string().nullable().optional()
+        type: z.literal('projects_changed'),
+        projectId: z.string().optional()
     }),
     z.object({
         type: z.literal('device_enrollment'),

@@ -1,5 +1,7 @@
 import { defineEventHandler, getQuery, getRequestHost } from 'nitro/h3';
 
+import { resolveRequestAuthContext } from '~/server/requestAuthContext';
+
 const PROXY_ALLOWED_REFERRERS = (process.env.PROXY_ALLOWED_REFERRERS ?? '')
     .split(',')
     .map((v) => v.trim())
@@ -16,6 +18,14 @@ function buildAbsoluteUrl(
     const host = getRequestHost(event, { xForwardedHost: true });
     const proto = event.req.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'http';
     return `${proto}://${host}${path}`;
+}
+
+function toAbsoluteRequestUrl(event: Parameters<typeof getRequestHost>[0]): string {
+    const host = getRequestHost(event, { xForwardedHost: true });
+    const proto = event.req.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'http';
+    const raw = event.req.url || '/proxy';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    return `${proto}://${host}${raw}`;
 }
 
 function isHttpUrl(value: string): boolean {
@@ -172,6 +182,16 @@ async function readWithCap(response: Response, maxBytes: number): Promise<string
 }
 
 export default defineEventHandler(async (event) => {
+    const { authContext } = await resolveRequestAuthContext(
+        new Request(toAbsoluteRequestUrl(event), {
+            method: event.req.method,
+            headers: event.req.headers
+        })
+    );
+    if (authContext.device?.kind !== 'wall') {
+        return Response.redirect(buildAbsoluteUrl(event, '/web-nonet?l=wall'), 302);
+    }
+
     const { url, check } = getQuery(event);
     const checkOnly = check === '1' || check === 'true';
     const rawUrl = typeof url === 'string' ? url : '';

@@ -68,8 +68,8 @@ function AssetsTab() {
         src: string;
         name: string;
         isVideo: boolean;
-        blurhash?: string;
-        sizes?: number[];
+        blurhash?: string | null;
+        sizes?: number[] | null;
     } | null>(null);
 
     const displayedAssets = useMemo(() => {
@@ -98,11 +98,11 @@ function AssetsTab() {
 
     const openPreview = (asset: {
         url: string;
-        previewUrl?: string;
+        previewUrl?: string | null;
         name: string;
-        mimeType?: string;
-        blurhash?: string;
-        sizes?: number[];
+        mimeType?: string | null;
+        blurhash?: string | null;
+        sizes?: number[] | null;
     }) => {
         if (isFontAsset(asset)) return;
         const isVideo = isVideoAsset(asset);

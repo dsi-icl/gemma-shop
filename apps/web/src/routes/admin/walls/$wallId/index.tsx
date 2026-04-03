@@ -1,10 +1,17 @@
 import { Button } from '@repo/ui/components/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogTitle
+} from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { useForm } from '@tanstack/react-form';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { $adminDeleteWall, $adminUpdateWallMetadata } from '~/server/admin.fns';
@@ -19,7 +26,8 @@ function WallInfoTab() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { data: wall } = useSuspenseQuery(adminWallQueryOptions(wallId));
-    const wallSlug = useMemo(() => String((wall as any).wallId ?? ''), [wall]);
+    const wallSlug = useMemo(() => String(wall.wallId ?? ''), [wall.wallId]);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
     const metadataMutation = useMutation({
         mutationFn: async (name: string) =>
@@ -39,7 +47,7 @@ function WallInfoTab() {
 
     const form = useForm({
         defaultValues: {
-            name: (wall as any).name ?? (wall as any).wallId ?? ''
+            name: wall.name ?? wall.wallId
         },
         onSubmit: async ({ value }) => {
             await metadataMutation.mutateAsync(value.name);
@@ -84,19 +92,37 @@ function WallInfoTab() {
                 <Button
                     variant="destructive"
                     disabled={deleteMutation.isPending}
-                    onClick={() => {
-                        if (
-                            window.confirm(
-                                `Delete wall "${wallSlug || wallId}" and unassign all its devices?`
-                            )
-                        ) {
-                            deleteMutation.mutate();
-                        }
-                    }}
+                    onClick={() => setDeleteDialogOpen(true)}
                 >
                     Delete Wall
                 </Button>
             </div>
+
+            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <DialogContent className="w-80 p-5">
+                    <DialogTitle>Delete wall</DialogTitle>
+                    <DialogDescription className="mt-1">
+                        {`Delete wall "${wallSlug || wallId}" and unassign all its devices?`}
+                    </DialogDescription>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <DialogClose>
+                            <Button variant="outline" size="sm">
+                                Cancel
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={deleteMutation.isPending}
+                            onClick={() => {
+                                deleteMutation.mutate();
+                            }}
+                        >
+                            {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

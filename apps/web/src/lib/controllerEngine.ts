@@ -1,13 +1,7 @@
 'use client';
 
-import { getOrCreateDeviceIdentity, type DeviceIdentity } from './deviceIdentity';
-import { ReconnectingWebSocket } from './reconnectingWs';
-import { getWebSocketUrl } from './runtimeUrl';
+import { BusClient } from './busClient';
 import { GSMessageSchema, type GSMessage } from './types';
-
-const getGemmaBusUrl = (): string => {
-    return getWebSocketUrl('/bus');
-};
 
 type BindingStatus = {
     bound: boolean;
@@ -52,17 +46,15 @@ type SnapshotCallback = (snapshot: ControllerSnapshot) => void;
 const TEMP_BOUND_SLIDE_ID = '__bound-current__';
 
 export class ControllerEngine {
-    private rws: ReconnectingWebSocket;
+    private bus: BusClient;
     public wallId: string;
-    public devicePublicKey: string | null = null;
-    private deviceIdentityPromise: Promise<DeviceIdentity>;
+    public portalToken: string | null;
     private bindingCallbacks = new Set<BindingCallback>();
     private hydrateCallbacks = new Set<HydrateCallback>();
     private slidesUpdatedCallbacks = new Set<SlidesUpdatedCallback>();
     private messageCallbacks = new Set<ServerMessageCallback>();
     private snapshotCallbacks = new Set<SnapshotCallback>();
     private lastBindSignature: string | null = null;
-    private pendingJsonMessages: string[] = [];
 
     private reconciledBinding: BindingStatus = { bound: false };
     private hydratedSlideId: string | null = null;
@@ -74,34 +66,18 @@ export class ControllerEngine {
     private emitScheduled = false;
     private lastSnapshotSignature: string | null = null;
 
-    private constructor(wallId: string) {
+    private constructor(wallId: string, portalToken: string | null = null) {
         this.wallId = wallId;
-        this.deviceIdentityPromise = getOrCreateDeviceIdentity('controller').then((identity) => {
-            this.devicePublicKey = identity.publicKey;
-            return identity;
-        });
-        this.rws = new ReconnectingWebSocket(getGemmaBusUrl(), {
-            binaryType: 'arraybuffer',
-            onOpen: async () => {
+        this.portalToken = portalToken;
+        this.bus = new BusClient({
+            auth: {
+                kind: 'controller',
+                wallId: this.wallId,
+                portalToken: this.portalToken
+            },
+            onOpen: () => {
                 console.log('Controller Engine: Connected to Server');
                 this.lastBindSignature = null;
-                let devicePublicKey: string | undefined;
-                try {
-                    const identity = await this.deviceIdentityPromise;
-                    devicePublicKey = identity.publicKey;
-                } catch (error) {
-                    console.warn(
-                        'Controller Engine: device identity unavailable, continuing without device key',
-                        error
-                    );
-                }
-                this.sendJSON({
-                    type: 'hello',
-                    specimen: 'controller',
-                    wallId: this.wallId,
-                    ...(devicePublicKey ? { devicePublicKey } : {})
-                });
-                this.flushPendingMessages();
             },
             onMessage: (event) => {
                 if (typeof event.data !== 'string') return;
@@ -112,7 +88,7 @@ export class ControllerEngine {
         });
 
         // On disconnect: notify UI that binding state is unknown
-        this.rws.onStateChange((status) => {
+        this.bus.onSocketStateChange((status) => {
             if (status === 'reconnecting' || status === 'disconnected') {
                 this.reconciledBinding = { bound: false };
                 this.bindingCallbacks.forEach((cb) => cb({ bound: false }));
@@ -121,21 +97,24 @@ export class ControllerEngine {
         });
     }
 
-    public static getInstance(wallId: string): ControllerEngine {
+    public static getInstance(wallId: string, portalToken: string | null = null): ControllerEngine {
         if (typeof window === 'undefined') {
             throw new Error('ControllerEngine can only be used in the browser');
         }
-        if (!window.__CONTROLLER_ENGINE__ || window.__CONTROLLER_ENGINE__.wallId !== wallId) {
+        if (
+            !window.__CONTROLLER_ENGINE__ ||
+            window.__CONTROLLER_ENGINE__.wallId !== wallId ||
+            window.__CONTROLLER_ENGINE__.portalToken !== portalToken
+        ) {
             window.__CONTROLLER_ENGINE__?.destroy();
-            window.__CONTROLLER_ENGINE__ = new ControllerEngine(wallId);
+            window.__CONTROLLER_ENGINE__ = new ControllerEngine(wallId, portalToken);
         }
         return window.__CONTROLLER_ENGINE__;
     }
 
     public destroy() {
         console.log('Controller Engine: Assassinating ghost instance...');
-        this.rws.destroy();
-        this.pendingJsonMessages = [];
+        this.bus.destroy();
         this.bindingCallbacks.clear();
         this.hydrateCallbacks.clear();
         this.slidesUpdatedCallbacks.clear();
@@ -144,41 +123,8 @@ export class ControllerEngine {
     }
 
     public sendJSON = (data: GSMessage) => {
-        const payload = JSON.stringify(data);
-        if (this.rws.status === 'connected') {
-            this.rws.send(payload);
-            return;
-        }
-
-        // Control-plane reliability: preserve intent issued before socket open
-        // (e.g. first reboot click on gallery card).
-        if (data.type === 'reboot') {
-            const hasQueuedReboot = this.pendingJsonMessages.some((msg) => {
-                try {
-                    const parsed = JSON.parse(msg) as { type?: string };
-                    return parsed.type === 'reboot';
-                } catch {
-                    return false;
-                }
-            });
-            if (hasQueuedReboot) return;
-        }
-
-        this.pendingJsonMessages.push(payload);
-        // Safety guard: keep queue bounded during long disconnects.
-        if (this.pendingJsonMessages.length > 50) {
-            this.pendingJsonMessages = this.pendingJsonMessages.slice(-50);
-        }
+        this.bus.sendJSON(data);
     };
-
-    private flushPendingMessages() {
-        if (this.rws.status !== 'connected' || this.pendingJsonMessages.length === 0) return;
-        const queued = this.pendingJsonMessages;
-        this.pendingJsonMessages = [];
-        for (const payload of queued) {
-            this.rws.send(payload);
-        }
-    }
 
     /** Navigate the bound wall to a different slide */
     public bindSlide(projectId: string, commitId: string, slideId: string) {
@@ -231,6 +177,11 @@ export class ControllerEngine {
     }
 
     private reconcileMessage(data: GSMessage) {
+        if (data.type === 'reboot') {
+            window.location.reload();
+            return;
+        }
+
         if (data.type === 'wall_binding_status') {
             this.reconciledBinding = {
                 bound: data.bound,

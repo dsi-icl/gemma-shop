@@ -2,12 +2,11 @@ import '@tanstack/react-start/server-only';
 import { render } from '@react-email/render';
 import { db } from '@repo/db';
 import { getSmtpConfig } from '@repo/db/config';
-import { MagicLinkEmail } from '@repo/emails/MagicLinkEmail';
 import { OtpEmail } from '@repo/emails/OtpEmail';
 import { env, splitCsv } from '@repo/env';
 import { mongodbAdapter } from 'better-auth/adapters/mongodb';
 import { betterAuth } from 'better-auth/minimal';
-import { admin, emailOTP, magicLink, testUtils } from 'better-auth/plugins';
+import { admin, emailOTP, testUtils } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 
 import { createSmtpTransport } from './smtp';
@@ -117,17 +116,6 @@ export const auth = betterAuth({
         tanstackStartCookies(),
         admin(),
         ...(env.NODE_ENV === 'test' ? [testUtils()] : []),
-        magicLink({
-            sendMagicLink: async ({ email, token, url }) => {
-                const html = await render(MagicLinkEmail({ url }));
-                await sendAuthEmail({
-                    to: email,
-                    subject: 'Sign in to Gemma Shop',
-                    html,
-                    fallbackLog: `Magic Link to ${email} : (${token}) : ${url}`
-                });
-            }
-        }),
         emailOTP({
             sendVerificationOTP: async ({ email, otp, type }) => {
                 const html = await render(OtpEmail({ otp }));

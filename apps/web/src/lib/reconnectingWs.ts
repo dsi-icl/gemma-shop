@@ -43,7 +43,7 @@ export class ReconnectingWebSocket {
         return this._status;
     }
 
-    onStateChange(cb: StatusCallback): () => void {
+    onSocketStateChange(cb: StatusCallback): () => void {
         this.statusCallbacks.add(cb);
         return () => {
             this.statusCallbacks.delete(cb);

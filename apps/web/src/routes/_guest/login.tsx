@@ -44,21 +44,6 @@ function LoginForm() {
         setView(next);
     };
 
-    const { mutate: sendMagicLink, isPending: isMagicLinkPending } = useMutation({
-        mutationFn: async (addr: string) =>
-            await authClient.signIn.magicLink(
-                { email: addr, callbackURL: '/quarry' },
-                {
-                    onError: ({ error }) => {
-                        toast.error(error.message || 'An error occurred while sending the link.');
-                    },
-                    onSuccess: () => {
-                        navigateTo('magic-link-sent');
-                    }
-                }
-            )
-    });
-
     const { mutate: sendOtp, isPending: isOtpSendPending } = useMutation({
         mutationFn: async (addr: string) =>
             await authClient.emailOtp.sendVerificationOtp(
@@ -74,7 +59,7 @@ function LoginForm() {
             )
     });
 
-    const isSending = isMagicLinkPending || isOtpSendPending;
+    const isSending = isOtpSendPending;
 
     const goBack = () => {
         setDirection(-1);
@@ -109,19 +94,7 @@ function LoginForm() {
                                 Signing in as <strong>{email}</strong>
                             </p>
                             <div className="flex w-full flex-col gap-4">
-                                {/* <Button
-                                    className="w-full"
-                                    size="lg"
-                                    disabled={isSending}
-                                    onClick={() => sendMagicLink(email)}
-                                >
-                                    {isMagicLinkPending && (
-                                        <CircleNotchIcon className="animate-spin" />
-                                    )}
-                                    Send magic link
-                                </Button> */}
                                 <Button
-                                    // variant="outline"
                                     className="w-full"
                                     size="lg"
                                     disabled={isSending}

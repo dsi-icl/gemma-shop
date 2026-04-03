@@ -3,20 +3,22 @@ import { createHash } from 'node:crypto';
 import { createHeadlessEditor } from '@lexical/headless';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { createBinding, syncLexicalUpdateToYjs, syncYjsChangesToLexical } from '@lexical/yjs';
-import { auth } from '@repo/auth/auth';
-import type * as crossws from 'crossws';
+import { createFileRoute } from '@tanstack/react-router';
+import { defineHooks, type Message, type Peer } from 'crossws';
 import { Window } from 'happy-dom';
 import { $createParagraphNode, $getRoot } from 'lexical';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import { Binary, ObjectId } from 'mongodb';
-import { defineWebSocketHandler } from 'nitro/h3';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 
+import type { PeerMeta } from '~/lib/busState';
 import type { Layer } from '~/lib/types';
 import { collections } from '~/server/collections';
+import { canEditProject } from '~/server/projectAuthz';
+import { resolveAuthContextFromRequest } from '~/server/requestAuthContext';
 
 const messageSync = 0;
 const messageAwareness = 1;
@@ -48,6 +50,16 @@ type BridgePayload = {
     fallbackLayer?: TextLayer;
 };
 
+type EditorPeerMeta = Extract<PeerMeta, { specimen: 'editor' }>;
+const YJS_OPEN_WAIT_TIMEOUT_MS = 5_000;
+type YjsPeerState = {
+    meta?: EditorPeerMeta;
+    openReady?: boolean;
+    openPromise?: Promise<void>;
+    doc?: SharedDoc;
+    scope?: DocScope;
+};
+
 interface Persistence {
     bindState: (scope: string, doc: SharedDoc) => Promise<boolean>;
     writeState: (scope: string, doc: SharedDoc) => Promise<void>;
@@ -73,6 +85,7 @@ type NoopProvider = {
 };
 
 const lexicalWindow = new Window();
+const YJS_PEER_STATE_KEY = '__yjsState';
 
 function debugLog(...args: unknown[]) {
     if (YJS_DEBUG) console.log('[YJS]', ...args);
@@ -80,6 +93,42 @@ function debugLog(...args: unknown[]) {
 
 function sha1(input: string): string {
     return createHash('sha1').update(input).digest('hex');
+}
+
+function getYjsPeerState(peer: Peer): YjsPeerState | null {
+    const state = (peer as any)[YJS_PEER_STATE_KEY];
+    if (!state || typeof state !== 'object') return null;
+    return state as YjsPeerState;
+}
+
+function setYjsPeerState(peer: Peer, state: YjsPeerState) {
+    (peer as any)[YJS_PEER_STATE_KEY] = state;
+}
+
+function clearYjsPeerState(peer: Peer) {
+    delete (peer as any)[YJS_PEER_STATE_KEY];
+}
+
+async function waitForOpenCompletion(
+    peer: Peer,
+    timeoutMs = YJS_OPEN_WAIT_TIMEOUT_MS
+): Promise<boolean> {
+    const state = getYjsPeerState(peer);
+    if (!state) return false;
+    if (state.openReady) return true;
+    if (!state.openPromise) return false;
+
+    const timeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('open_timeout')), timeoutMs);
+    });
+
+    try {
+        await Promise.race([state.openPromise, timeout]);
+    } catch {
+        return false;
+    }
+
+    return getYjsPeerState(peer)?.openReady === true;
 }
 
 function withLexicalDomGlobals<T>(fn: () => T): T {
@@ -124,7 +173,7 @@ function createNoopProvider(): NoopProvider {
     };
 }
 
-function getDocName(peer: crossws.Peer): string {
+function getDocName(peer: Peer): string {
     const rawUrl = peer.request?.url;
     if (!rawUrl) throw new Error('Peer URL missing');
     const url = new URL(rawUrl);
@@ -150,48 +199,6 @@ function parseScope(docName: string): DocScope {
         throw new Error(`Invalid numeric layerId in docName: ${docName}`);
     }
     return { projectId, commitId, slideId, layerId };
-}
-
-function canUserEditProject(
-    project: { collaborators?: Array<{ email?: string; role?: string }> },
-    userEmail: string
-): boolean {
-    const collaborators = Array.isArray(project.collaborators) ? project.collaborators : [];
-    const collab = collaborators.find((c) => c.email === userEmail);
-    if (!collab) return false;
-    return collab.role !== 'viewer';
-}
-
-async function requireProjectEditor(peer: crossws.Peer, scope: DocScope, docName: string) {
-    const cache = ((peer as any)._ycauthScopes ??= new Set<string>()) as Set<string>;
-    if (cache.has(docName)) return;
-
-    const headers = peer.request?.headers;
-    if (!headers) {
-        throw new Error('YJS auth denied: missing request headers');
-    }
-
-    const session = await auth.api.getSession({ headers });
-    const userEmail = session?.user?.email;
-    if (!userEmail) {
-        throw new Error('YJS auth denied: missing user session');
-    }
-
-    const project = await collections.projects.findOne(
-        { _id: new ObjectId(scope.projectId), deletedAt: { $exists: false } },
-        { projection: { collaborators: 1 } }
-    );
-    if (!project) {
-        throw new Error(`YJS auth denied: project ${scope.projectId} not found`);
-    }
-
-    if (!canUserEditProject(project as any, userEmail)) {
-        throw new Error(
-            `YJS auth denied: user ${userEmail} is not ProjectEditor for ${scope.projectId}`
-        );
-    }
-
-    cache.add(docName);
 }
 
 function binaryToUint8Array(data: unknown): Uint8Array | null {
@@ -368,7 +375,7 @@ class SharedDoc extends Y.Doc {
     yc: YCrossws;
     scope: DocScope;
     awareness: awarenessProtocol.Awareness;
-    peerIds: Map<crossws.Peer, Set<number>> = new Map();
+    peerIds: Map<Peer, Set<number>> = new Map();
     dirty = false;
     syncTimer: ReturnType<typeof setInterval> | null = null;
     flushPromise: Promise<void> | null = null;
@@ -402,7 +409,7 @@ class SharedDoc extends Y.Doc {
         this.syncTimer = null;
     }
 
-    onAwarenessUpdate(changes: AwarenessChanges, peer?: crossws.Peer) {
+    onAwarenessUpdate(changes: AwarenessChanges, peer?: Peer) {
         if (peer) {
             const peerControlledIDs = this.peerIds.get(peer);
             if (peerControlledIDs !== undefined) {
@@ -431,38 +438,126 @@ class YCrossws {
     persistence: Persistence;
     docs: Map<string, SharedDoc> = new Map();
     initializing: Map<string, Promise<SharedDoc>> = new Map();
+    peers: Set<Peer> = new Set();
 
     constructor() {
         this.persistence = new MongoYDocPersistence();
     }
 
-    async onOpen(peer: crossws.Peer) {
-        try {
-            const doc = await this.getDoc(peer);
-            const encoder = encoding.createEncoder();
-            encoding.writeVarUint(encoder, messageSync);
-            syncProtocol.writeSyncStep1(encoder, doc);
-            peer.send(encoding.toUint8Array(encoder));
+    async onOpen(peer: Peer) {
+        const existing = getYjsPeerState(peer) ?? ({} satisfies YjsPeerState);
+        if (!getYjsPeerState(peer)) setYjsPeerState(peer, existing);
 
-            const awarenessStates = doc.awareness.getStates();
-            if (awarenessStates.size > 0) {
-                const awarenessEncoder = encoding.createEncoder();
-                encoding.writeVarUint(awarenessEncoder, messageAwareness);
-                encoding.writeVarUint8Array(
-                    awarenessEncoder,
-                    awarenessProtocol.encodeAwarenessUpdate(doc.awareness, [
-                        ...awarenessStates.keys()
-                    ])
+        if (existing.openReady) return;
+        if (existing.openPromise) {
+            await existing.openPromise;
+            return;
+        }
+
+        const openPromise = (async (): Promise<void> => {
+            try {
+                const {
+                    authContext: { user }
+                } = await resolveAuthContextFromRequest(peer.request);
+                if (!user) {
+                    const latest = getYjsPeerState(peer) ?? existing;
+                    setYjsPeerState(peer, {
+                        ...latest
+                    });
+                    throw new Error('unauthenticated');
+                }
+                const userEmail = user.email;
+                const docName = getDocName(peer);
+                const scope = parseScope(docName);
+                const canEdit = await canEditProject(
+                    { email: userEmail, role: user.role },
+                    scope.projectId
                 );
-                peer.send(encoding.toUint8Array(awarenessEncoder));
+                if (!canEdit) {
+                    throw new Error('forbidden');
+                }
+
+                const latestAuthed = getYjsPeerState(peer) ?? existing;
+                setYjsPeerState(peer, {
+                    ...latestAuthed,
+                    meta: {
+                        specimen: 'editor',
+                        authContext: {
+                            user: {
+                                email: userEmail,
+                                role: user.role
+                            }
+                        }
+                    },
+                    scope
+                });
+
+                this.peers.add(peer);
+
+                const doc = await this.getDoc(peer);
+                const encoder = encoding.createEncoder();
+                encoding.writeVarUint(encoder, messageSync);
+                syncProtocol.writeSyncStep1(encoder, doc);
+                peer.send(encoding.toUint8Array(encoder));
+
+                const awarenessStates = doc.awareness.getStates();
+                if (awarenessStates.size > 0) {
+                    const awarenessEncoder = encoding.createEncoder();
+                    encoding.writeVarUint(awarenessEncoder, messageAwareness);
+                    encoding.writeVarUint8Array(
+                        awarenessEncoder,
+                        awarenessProtocol.encodeAwarenessUpdate(doc.awareness, [
+                            ...awarenessStates.keys()
+                        ])
+                    );
+                    peer.send(encoding.toUint8Array(awarenessEncoder));
+                }
+                const latest = getYjsPeerState(peer) ?? existing;
+                setYjsPeerState(peer, {
+                    ...latest,
+                    openReady: true,
+                    openPromise: undefined
+                });
+            } catch (error) {
+                const latest = getYjsPeerState(peer) ?? existing;
+                setYjsPeerState(peer, {
+                    ...latest,
+                    openReady: false,
+                    openPromise: undefined
+                });
+                throw error;
             }
+        })();
+
+        setYjsPeerState(peer, {
+            ...(getYjsPeerState(peer) ?? existing),
+            openReady: false,
+            openPromise
+        });
+
+        try {
+            await openPromise;
         } catch (error) {
-            console.error('[YJS] Failed to open peer:', error);
+            const message = error instanceof Error ? error.message : String(error);
+            if (message === 'unauthenticated') {
+                console.warn(`[YJS] Rejecting unauthenticated peer ${peer.id}`);
+            } else if (message === 'forbidden') {
+                console.warn(`[YJS] Rejecting unauthorized peer ${peer.id}`);
+            } else {
+                console.error('[YJS] Failed to open peer:', error);
+            }
             peer.close();
         }
     }
 
-    async onMessage(peer: crossws.Peer, message: crossws.Message) {
+    async onMessage(peer: Peer, message: Message) {
+        const ready = await waitForOpenCompletion(peer);
+        if (!ready) {
+            console.warn(`[YJS] Message from unknown peer ${peer.id}`);
+            peer.close();
+            return;
+        }
+
         let doc: SharedDoc;
         try {
             doc = await this.getDoc(peer);
@@ -502,8 +597,11 @@ class YCrossws {
         }
     }
 
-    async onClose(peer: crossws.Peer) {
-        const doc = (peer as any)._ycdoc as SharedDoc | undefined;
+    async onClose(peer: Peer) {
+        this.peers.delete(peer);
+        const state = getYjsPeerState(peer);
+        const doc = state?.doc;
+        clearYjsPeerState(peer);
         if (!doc) return;
         if (!doc.peerIds.has(peer)) return;
 
@@ -522,7 +620,7 @@ class YCrossws {
         }
     }
 
-    onDocUpdate(update: Uint8Array, _peer: crossws.Peer, doc: Y.Doc, _transaction: Y.Transaction) {
+    onDocUpdate(update: Uint8Array, _peer: Peer, doc: Y.Doc, _transaction: Y.Transaction) {
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, messageSync);
         syncProtocol.writeUpdate(encoder, update);
@@ -597,12 +695,15 @@ class YCrossws {
         }
     }
 
-    async getDoc(peer: crossws.Peer): Promise<SharedDoc> {
-        if ((peer as any)._ycdoc) return (peer as any)._ycdoc;
+    async getDoc(peer: Peer): Promise<SharedDoc> {
+        const state = getYjsPeerState(peer);
+        const email = state?.meta?.authContext?.user?.email;
+        if (!state || typeof email !== 'string' || email.length === 0) {
+            throw new Error('Missing authenticated YJS peer state');
+        }
+        if (state.doc) return state.doc;
 
         const docName = getDocName(peer);
-        const scope = parseScope(docName);
-        await requireProjectEditor(peer, scope, docName);
         let doc = this.docs.get(docName);
         if (!doc) {
             let pending = this.initializing.get(docName);
@@ -618,46 +719,113 @@ class YCrossws {
         }
 
         if (!doc.peerIds.has(peer)) doc.peerIds.set(peer, new Set());
-        (peer as any)._ycdoc = doc;
+        setYjsPeerState(peer, { ...state, doc });
         return doc;
     }
 
-    revalidateProject(projectId: string): number {
-        let closed = 0;
-        for (const doc of this.docs.values()) {
-            if (doc.scope.projectId !== projectId) continue;
-            for (const peer of doc.peerIds.keys()) {
+    async recomputePeerAuthContexts(input: { email?: string } = {}) {
+        let inspected = 0;
+        let refreshed = 0;
+        let disconnected = 0;
+
+        for (const peer of this.peers) {
+            const state = getYjsPeerState(peer);
+            const currentEmail = state?.meta?.authContext?.user?.email ?? null;
+            if (input.email && currentEmail !== input.email) continue;
+            inspected += 1;
+
+            const {
+                authContext: { user }
+            } = await resolveAuthContextFromRequest(peer.request);
+            if (!user) {
+                if (state) {
+                    setYjsPeerState(peer, {
+                        ...state
+                    });
+                }
                 try {
                     peer.close();
-                    closed += 1;
                 } catch {
                     // no-op
                 }
+                disconnected += 1;
+                continue;
+            }
+            const nextEmail = user.email;
+            const scopeProjectId = state?.scope?.projectId ?? null;
+            if (scopeProjectId) {
+                const allowed = await canEditProject(
+                    { email: nextEmail, role: user.role },
+                    scopeProjectId
+                );
+                if (!allowed) {
+                    try {
+                        peer.close();
+                    } catch {
+                        // no-op
+                    }
+                    disconnected += 1;
+                    continue;
+                }
+            }
+
+            if (state) {
+                setYjsPeerState(peer, {
+                    ...state,
+                    meta: {
+                        specimen: 'editor',
+                        ...(state.meta?.scope ? { scope: state.meta.scope } : {}),
+                        authContext: {
+                            ...(state.meta?.authContext ?? {}),
+                            user: {
+                                email: nextEmail,
+                                role: user.role
+                            }
+                        }
+                    }
+                });
+            }
+
+            if (nextEmail !== currentEmail) {
+                refreshed += 1;
             }
         }
-        return closed;
+
+        return { inspected, refreshed, disconnected };
     }
 }
 
-function createHandler(yc: YCrossws) {
-    const hooks: Partial<crossws.Hooks> = {
-        async open(peer) {
-            await yc.onOpen(peer);
-        },
-        async message(peer, message) {
-            await yc.onMessage(peer, message);
-        },
-        async close(peer) {
-            await yc.onClose(peer);
-        }
-    };
-    return { hooks: hooks as crossws.Hooks };
-}
+const yc = new YCrossws();
+const hooks = defineHooks({
+    async open(peer) {
+        await yc.onOpen(peer);
+    },
+    async message(peer, message) {
+        await yc.onMessage(peer, message);
+    },
+    async close(peer) {
+        await yc.onClose(peer);
+    }
+});
 
-const yCrossws = new YCrossws();
-
-(process as any).__YJS_REVALIDATE_PROJECT__ = (projectId: string) => {
-    return yCrossws.revalidateProject(projectId);
+(process as any).__YJS_RECOMPUTE_AUTH_CONTEXT__ = async (input?: { email?: string }) => {
+    return yc.recomputePeerAuthContexts(input ?? {});
 };
 
-export default defineWebSocketHandler(createHandler(yCrossws).hooks);
+export const Route = createFileRoute('/yjs/$')({
+    server: {
+        handlers: {
+            GET: async () => {
+                // HTTP fallback response: this endpoint is a websocket upgrade target.
+                return Object.assign(
+                    new Response('WebSocket upgrade is required.', {
+                        status: 426
+                    }),
+                    {
+                        crossws: hooks
+                    }
+                );
+            }
+        }
+    }
+});

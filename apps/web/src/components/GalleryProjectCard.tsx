@@ -5,10 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
-import { ControllerEngine } from '~/lib/controllerEngine';
 import { GalleryEngine } from '~/lib/galleryEngine';
+import { createSignedServerFnFetch } from '~/lib/signedFetch';
 import { $issueControllerPortalToken } from '~/server/portal.fns';
-import { $bindWall } from '~/server/walls.fns';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
 interface GalleryProjectCardProps {
@@ -60,13 +59,13 @@ export function GalleryProjectCard({
             }
 
             try {
-                await $bindWall({
-                    data: {
-                        wallId,
-                        projectId: project._id,
-                        commitId: project.publishedCommitId,
-                        slideId: 'default'
-                    }
+                const engine = GalleryEngine.getInstance(presetWallId);
+                engine.sendJSON({
+                    type: 'bind_wall',
+                    wallId,
+                    projectId: project._id,
+                    commitId: project.publishedCommitId,
+                    slideId: 'default'
                 });
                 toast.success('Project loaded on wall');
                 return true;
@@ -75,19 +74,22 @@ export function GalleryProjectCard({
                 return false;
             }
         },
-        [project._id, project.publishedCommitId]
+        [presetWallId, project._id, project.publishedCommitId]
     );
 
-    const handleWallRebootRequest = useCallback(async (wallId: string) => {
-        try {
-            const engine = ControllerEngine.getInstance(wallId);
-            engine.sendJSON({ type: 'reboot' });
-            return true;
-        } catch (e: any) {
-            toast.error(e?.message ?? 'Could not refresh wall screens');
-            return false;
-        }
-    }, []);
+    const handleWallRebootRequest = useCallback(
+        async (_wallId: string) => {
+            try {
+                const engine = GalleryEngine.getInstance(presetWallId);
+                engine.sendJSON({ type: 'reboot' });
+                return true;
+            } catch (e: any) {
+                toast.error(e?.message ?? 'Could not refresh wall screens');
+                return false;
+            }
+        },
+        [presetWallId]
+    );
 
     const handleWallUnbindRequest = useCallback(
         async (wallId: string) => {
@@ -105,7 +107,13 @@ export function GalleryProjectCard({
 
     const handleControllerTokenRequest = useCallback(async (wallId: string) => {
         try {
-            const result = await $issueControllerPortalToken({ data: { wallId } });
+            const result = await $issueControllerPortalToken({
+                data: { wallId },
+                fetch: createSignedServerFnFetch({
+                    deviceKind: 'gallery',
+                    wallId
+                })
+            });
             return result.token;
         } catch (e: any) {
             toast.error(e?.message ?? 'Could not initialize controller API token');

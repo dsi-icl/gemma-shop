@@ -1,14 +1,19 @@
 import '@tanstack/react-start/server-only';
+import { auth } from '@repo/auth/auth';
 import { createSmtpTransport } from '@repo/auth/smtp';
 import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
+import { getRequest } from '@tanstack/react-start/server';
 import { ObjectId } from 'mongodb';
 
 import {
     getBusRuntimeTelemetry,
+    getIntendedWallNodeCount,
+    getWallNodeCount,
     hydrateWallNodes,
     notifyControllers,
     peerCounts,
-    unbindWall
+    unbindWall,
+    wallsByWallId
 } from '~/lib/busState';
 import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
@@ -26,24 +31,59 @@ let prevBusSample: {
     outgoingTotal: number;
 } | null = null;
 
+type UserDoc = {
+    _id?: ObjectId;
+    id?: string;
+    email?: string;
+    [key: string]: unknown;
+};
+
+type SessionDoc = {
+    userId?: string | ObjectId;
+};
+
+type DeviceDoc = {
+    _id?: ObjectId;
+    [key: string]: unknown;
+};
+
+type WallDoc = {
+    _id: ObjectId;
+    wallId: string;
+    [key: string]: unknown;
+};
+
 function escapeRegex(input: string): string {
     return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-async function findWallByIdentifier(identifier: string) {
+function toWallDoc(raw: unknown): WallDoc | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const wallIdValue = Reflect.get(raw, 'wallId');
+    const wallId = typeof wallIdValue === 'string' ? wallIdValue : null;
+    if (!wallId) return null;
+    const rawId = Reflect.get(raw, '_id');
+    if (!(rawId instanceof ObjectId)) return null;
+    return { ...raw, wallId, _id: rawId };
+}
+
+async function findWallById(identifier: string) {
     const normalized = identifier.trim();
     if (!normalized) return null;
 
-    const exact = await collections.walls.findOne({ wallId: normalized });
+    const exactRaw = await collections.walls.findOne({ wallId: normalized });
+    const exact = toWallDoc(exactRaw);
     if (exact) return exact;
 
-    const whitespaceTolerant = await collections.walls.findOne({
+    const whitespaceTolerantRaw = await collections.walls.findOne({
         wallId: { $regex: `^\\s*${escapeRegex(normalized)}\\s*$`, $options: 'i' }
     });
+    const whitespaceTolerant = toWallDoc(whitespaceTolerantRaw);
     if (whitespaceTolerant) return whitespaceTolerant;
 
     if (ObjectId.isValid(normalized)) {
-        const byId = await collections.walls.findOne({ _id: new ObjectId(normalized) });
+        const byIdRaw = await collections.walls.findOne({ _id: new ObjectId(normalized) });
+        const byId = toWallDoc(byIdRaw);
         if (byId) return byId;
     }
 
@@ -55,16 +95,16 @@ export async function adminListUsers() {
     const sessions = collections.sessions;
 
     const [docs, activeSessions] = await Promise.all([
-        users.find().sort({ createdAt: -1 }).limit(500).toArray(),
+        users.find<UserDoc>({}).sort({ createdAt: -1 }).limit(500).toArray(),
         sessions
-            .find({ expiresAt: { $gt: new Date() } })
+            .find<SessionDoc>({ expiresAt: { $gt: new Date() } })
             .project({ userId: 1 })
             .toArray()
     ]);
 
-    const activeUserIds = new Set(activeSessions.map((s: any) => String(s.userId)));
+    const activeUserIds = new Set(activeSessions.map((s) => String(s.userId)));
 
-    return docs.map((doc: any) => {
+    return docs.map((doc) => {
         const id = String(doc.id ?? doc._id?.toHexString?.() ?? doc._id);
         return serializeForClient({
             ...doc,
@@ -78,7 +118,7 @@ export async function adminListUsers() {
 export async function adminListProjects() {
     const projects = collections.projects;
     const docs = await projects.find().sort({ updatedAt: -1 }).toArray();
-    return docs.map((doc) => serializeProject(doc as Record<string, unknown>));
+    return docs.map(serializeProject);
 }
 
 export async function adminGetStats() {
@@ -89,12 +129,14 @@ export async function adminGetStats() {
         collections.assets.countDocuments({ deletedAt: { $exists: false } })
     ]);
     const wallDocs = await collections.walls
-        .find()
-        .project({ wallId: 1, connectedNodes: 1 })
+        .find<Record<string, unknown>>({})
+        .project({ wallId: 1 })
         .toArray();
     const wallSummary: Record<string, number> = {};
-    for (const wall of wallDocs as any[]) {
-        wallSummary[String(wall.wallId)] = Number(wall.connectedNodes ?? 0);
+    for (const wall of wallDocs) {
+        const wallId = typeof wall.wallId === 'string' ? wall.wallId : '';
+        if (!wallId) continue;
+        wallSummary[wallId] = getWallNodeCount(wallId);
     }
 
     const mem = process.memoryUsage();
@@ -142,10 +184,88 @@ export async function adminGetStats() {
 
 export async function adminListWalls() {
     const walls = collections.walls;
-    const docs = await walls.find().sort({ lastSeen: -1 }).toArray();
+    const connectedDeviceIdsByWallId = new Map<string, Set<string>>();
+    const allConnectedDeviceIds = new Set<string>();
+    for (const [wallId, wallPeers] of wallsByWallId) {
+        let perWall = connectedDeviceIdsByWallId.get(wallId);
+        if (!perWall) {
+            perWall = new Set<string>();
+            connectedDeviceIdsByWallId.set(wallId, perWall);
+        }
+        for (const entry of wallPeers) {
+            if (entry.meta.specimen !== 'wall') continue;
+            const deviceId = entry.meta.authContext?.device?.id;
+            if (typeof deviceId === 'string' && deviceId.length > 0) {
+                perWall.add(deviceId);
+                allConnectedDeviceIds.add(deviceId);
+            }
+        }
+    }
+
+    const [docsRaw, wallDeviceCounts, connectedAssignedDevices] = await Promise.all([
+        walls.find({}).sort({ lastSeen: -1 }).toArray(),
+        collections.devices
+            .aggregate<{ _id: string; total: number }>([
+                {
+                    $match: {
+                        kind: 'wall',
+                        assignedWallId: { $type: 'string', $ne: null },
+                        status: { $ne: 'revoked' }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$assignedWallId',
+                        total: { $sum: 1 }
+                    }
+                }
+            ])
+            .toArray(),
+        allConnectedDeviceIds.size > 0
+            ? collections.devices
+                  .find<{
+                      deviceId?: string;
+                      assignedWallId?: string | null;
+                  }>({
+                      deviceId: { $in: Array.from(allConnectedDeviceIds) },
+                      kind: 'wall',
+                      assignedWallId: { $type: 'string', $ne: null },
+                      status: { $ne: 'revoked' }
+                  })
+                  .project({ deviceId: 1, assignedWallId: 1 })
+                  .toArray()
+            : Promise.resolve([])
+    ]);
+    const docs = docsRaw.map(serializeWall);
+    const assignedStatsByWallId = new Map(
+        wallDeviceCounts.map((entry) => [
+            String(entry._id),
+            {
+                total: Number(entry.total ?? 0)
+            }
+        ])
+    );
+    const assignedWallIdByDeviceId = new Map<string, string>();
+    for (const doc of connectedAssignedDevices) {
+        const deviceId = typeof doc.deviceId === 'string' ? doc.deviceId : null;
+        const assignedWallId = typeof doc.assignedWallId === 'string' ? doc.assignedWallId : null;
+        if (!deviceId || !assignedWallId) continue;
+        assignedWallIdByDeviceId.set(deviceId, assignedWallId);
+    }
     return docs.map((doc) => ({
-        ...serializeWall(doc as any),
-        connectedNodes: Number((doc as any).connectedNodes ?? 0)
+        ...doc,
+        assignedConnectedNodes: (() => {
+            const wallId = String(doc.wallId ?? '');
+            const connectedForWall = connectedDeviceIdsByWallId.get(wallId);
+            if (!connectedForWall || connectedForWall.size === 0) return 0;
+            let total = 0;
+            for (const deviceId of connectedForWall) {
+                if (assignedWallIdByDeviceId.get(deviceId) === wallId) total += 1;
+            }
+            return total;
+        })(),
+        assignedScreenCount: assignedStatsByWallId.get(String(doc.wallId ?? ''))?.total ?? 0,
+        intendedConnectedNodes: getIntendedWallNodeCount(String(doc.wallId ?? ''))
     }));
 }
 
@@ -160,14 +280,13 @@ export async function adminCreateWall(input: { wallId: string; name?: string | n
     const doc = {
         wallId,
         name: input.name?.trim() || wallId,
-        connectedNodes: 0,
         lastSeen: now,
         boundProjectId: null,
         boundCommitId: null,
         boundSlideId: null,
         boundSource: null,
-        site: null as string | null,
-        notes: null as string | null,
+        site: null,
+        notes: null,
         createdAt: now,
         updatedAt: now
     };
@@ -178,17 +297,18 @@ export async function adminCreateWall(input: { wallId: string; name?: string | n
         resourceId: wallId,
         changes: { name: doc.name }
     });
-    return serializeWall({ ...doc, _id: result.insertedId } as any);
+    return serializeWall({ ...doc, _id: result.insertedId });
 }
 
 export async function adminGetWall(wallId: string) {
     const targetWallId = wallId.trim();
     if (!targetWallId) throw new Error('Wall ID is required');
-    const doc = await findWallByIdentifier(targetWallId);
+    const doc = await findWallById(targetWallId);
     if (!doc) throw new Error('Wall not found');
+    const serialized = serializeWall(doc);
     return {
-        ...serializeWall(doc as any),
-        connectedNodes: Number(doc.connectedNodes ?? 0)
+        wallId: String(serialized.wallId ?? targetWallId),
+        name: serialized.name ? String(serialized.name) : null
     };
 }
 
@@ -197,7 +317,7 @@ export async function adminUpdateWallMetadata(input: {
     name?: string | null;
     site?: string | null;
     notes?: string | null;
-}) {
+}): Promise<{ ok: true }> {
     const wallId = input.wallId.trim();
     if (!wallId) throw new Error('Wall ID is required');
     const update = {
@@ -207,14 +327,15 @@ export async function adminUpdateWallMetadata(input: {
         updatedAt: new Date().toISOString()
     };
 
-    const existing = await findWallByIdentifier(wallId);
+    const existing = await findWallById(wallId);
     if (!existing) throw new Error('Wall not found');
 
-    const result = await collections.walls.findOneAndUpdate(
+    const resultRaw = await collections.walls.findOneAndUpdate(
         { _id: existing._id },
         { $set: update },
         { returnDocument: 'after' }
     );
+    const result = toWallDoc(resultRaw);
     if (!result) throw new Error('Wall not found');
     await logAuditSuccess({
         action: 'WALL_UPDATED',
@@ -222,16 +343,13 @@ export async function adminUpdateWallMetadata(input: {
         resourceId: String(existing.wallId ?? wallId),
         changes: update
     });
-    return {
-        ...serializeWall(result as any),
-        connectedNodes: Number(result.connectedNodes ?? 0)
-    };
+    return { ok: true };
 }
 
 export async function adminDeleteWall(wallId: string) {
     const targetWallId = wallId.trim();
     if (!targetWallId) throw new Error('Wall ID is required');
-    const existing = await findWallByIdentifier(targetWallId);
+    const existing = await findWallById(targetWallId);
     if (!existing) throw new Error('Wall not found');
     const resolvedWallId = String(existing.wallId ?? targetWallId).trim();
 
@@ -265,14 +383,14 @@ export async function adminDeleteWall(wallId: string) {
 export async function adminListDevicesForWall(wallId: string) {
     const targetWallId = wallId.trim();
     if (!targetWallId) throw new Error('Wall ID is required');
-    const existing = await findWallByIdentifier(targetWallId);
+    const existing = await findWallById(targetWallId);
     if (!existing) throw new Error('Wall not found');
     const resolvedWallId = String(existing.wallId ?? targetWallId).trim();
     const docs = await collections.devices
-        .find({ assignedWallId: resolvedWallId })
+        .find<DeviceDoc>({ assignedWallId: resolvedWallId })
         .sort({ updatedAt: -1 })
         .toArray();
-    return docs.map((doc: any) =>
+    return docs.map((doc) =>
         serializeForClient({
             ...doc,
             _id: doc._id?.toHexString?.() ?? null
@@ -309,9 +427,18 @@ export async function adminGetWallBindingMeta(input: {
                 { _id: new ObjectId(boundCommitId) },
                 { projection: { 'content.slides.id': 1, 'content.slides.name': 1 } }
             );
-            const slides = (commit?.content?.slides as Array<{ id?: string; name?: string }>) ?? [];
-            const slide = slides.find((s) => s.id === boundSlideId);
-            slideName = slide?.name ? String(slide.name) : null;
+            const rawSlides = commit?.content?.slides;
+            if (Array.isArray(rawSlides)) {
+                const slide = rawSlides.find(
+                    (entry) =>
+                        entry &&
+                        typeof entry === 'object' &&
+                        Reflect.get(entry, 'id') === boundSlideId
+                );
+                const maybeName = slide ? Reflect.get(slide, 'name') : null;
+                slideName =
+                    typeof maybeName === 'string' && maybeName.length > 0 ? maybeName : null;
+            }
         } catch {
             // Keep null fallback when IDs are malformed or commit does not exist.
         }
@@ -357,14 +484,105 @@ export async function adminDevicesEnrollBySignature(input: {
     wallId: string;
     assignedBy: string;
 }) {
-    const enrolled = await adminEnrollDeviceBySignature(input);
-    process.__REBOOT_WALL__?.(input.wallId);
+    const wall = await findWallById(input.wallId);
+    if (!wall) throw new Error('Wall not found');
+    const resolvedWallId = String(wall.wallId ?? input.wallId).trim();
+    const enrolled = await adminEnrollDeviceBySignature({
+        ...input,
+        wallId: resolvedWallId
+    });
+    process.__REBOOT_DEVICE__?.(enrolled.deviceId);
     return enrolled;
+}
+
+export async function adminDeleteDevice(input: { deviceId: string; deletedBy: string }) {
+    const deviceId = input.deviceId.trim();
+    if (!deviceId) throw new Error('Device ID is required');
+
+    const existing = await collections.devices.findOne({ deviceId }, { projection: { _id: 1 } });
+    if (!existing) throw new Error('Device not found');
+
+    await collections.devices.deleteOne({ _id: existing._id });
+    await logAuditSuccess({
+        action: 'DEVICE_DELETED',
+        actorId: input.deletedBy,
+        resourceType: 'device',
+        resourceId: deviceId
+    });
+    // Guarantee disconnection of any live WS peers authenticated with this device.
+    process.__DISCONNECT_DEVICE__?.(deviceId);
+
+    return { ok: true };
+}
+
+export async function adminRecomputeBusAuthContext(input: { email?: string }) {
+    const payload = {
+        ...(input.email ? { email: input.email } : {})
+    };
+
+    const [busSettled, yjsSettled] = await Promise.allSettled([
+        process.__BUS_RECOMPUTE_AUTH_CONTEXT__?.(payload),
+        process.__YJS_RECOMPUTE_AUTH_CONTEXT__?.(payload)
+    ]);
+
+    if (busSettled.status === 'rejected') {
+        console.warn('[Admin] BUS auth-context recompute failed', busSettled.reason);
+    }
+    if (yjsSettled.status === 'rejected') {
+        console.warn('[Admin] YJS auth-context recompute failed', yjsSettled.reason);
+    }
+
+    return {
+        bus: busSettled.status === 'fulfilled' ? busSettled.value : null,
+        yjs: yjsSettled.status === 'fulfilled' ? yjsSettled.value : null
+    };
+}
+
+export async function adminSetUserBanStatus(input: {
+    userId: string;
+    banned: boolean;
+    actorEmail: string;
+}) {
+    const userId = input.userId.trim();
+    if (!userId) throw new Error('User ID is required');
+
+    const users = collections.users;
+
+    const user = await users.findOne({ id: userId }, { projection: { email: 1, id: 1 } });
+    if (!user) throw new Error('User not found');
+    if (user.email === input.actorEmail)
+        throw new Error('You cannot modify your own account status');
+
+    const headers = getRequest().headers;
+
+    if (input.banned) {
+        await auth.api.banUser({
+            headers,
+            body: { userId }
+        });
+    } else {
+        await auth.api.unbanUser({
+            headers,
+            body: { userId }
+        });
+    }
+
+    if (typeof user.email === 'string' && user.email.length > 0) {
+        await adminRecomputeBusAuthContext({ email: user.email });
+    }
+
+    await logAuditSuccess({
+        action: input.banned ? 'ADMIN_USER_BANNED' : 'ADMIN_USER_UNBANNED',
+        actorId: input.actorEmail,
+        resourceType: 'user',
+        resourceId: userId,
+        changes: { banned: input.banned }
+    });
 }
 
 export async function adminListPublicAssets() {
     const docs = await collections.assets
-        .find({ public: true, deletedAt: { $exists: false } })
+        .find({ public: true, deletedAt: { $exists: false }, hidden: { $ne: true } })
         .sort({ createdAt: -1 })
         .toArray();
     return docs.map(serializeAsset);
@@ -510,5 +728,5 @@ export async function adminSendSmtpTest(input: { to: string }) {
         html: '<p>This is a test email from Gemma Shop admin configuration.</p>'
     });
 
-    return { ok: true as const };
+    return { ok: true };
 }

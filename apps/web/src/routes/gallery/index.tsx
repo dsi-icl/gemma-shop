@@ -12,7 +12,6 @@ import { toast } from 'sonner';
 import { GalleryProjectCard } from '~/components/GalleryProjectCard';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { GalleryEngine } from '~/lib/galleryEngine';
-import { wsEnrollmentFallbackEnabled } from '~/lib/runtimeFlags';
 import { publishedProjectsQueryOptions } from '~/server/projects.queries';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
@@ -81,8 +80,7 @@ function HomePage() {
         return params.has('enroll');
     }, [searchStr]);
 
-    const galleryEnrollmentGateActive =
-        wsEnrollmentFallbackEnabled && enrollmentModeEnabled && Boolean(deviceEnrollmentId);
+    const galleryEnrollmentGateActive = enrollmentModeEnabled && Boolean(deviceEnrollmentId);
 
     const galleryEngine = useMemo(
         () => (typeof window !== 'undefined' ? GalleryEngine.getInstance(wallId) : null),
@@ -98,6 +96,7 @@ function HomePage() {
         const wallsQueryKey = wallsQueryOptions().queryKey;
         const publishedProjectsQueryKey = publishedProjectsQueryOptions().queryKey;
         const triggerSyncedCardClose = (projectId: string | null) => {
+            if (!projectId) return;
             setSyncedCloseProjectId(projectId);
             setSyncedCloseRevision((v) => v + 1);
         };
@@ -188,7 +187,7 @@ function HomePage() {
 
         const unsubs = [
             galleryEngine.onMessage((data) => {
-                if (!wsEnrollmentFallbackEnabled || !enrollmentModeEnabled) return;
+                if (!enrollmentModeEnabled) return;
                 if (data.type === 'device_enrollment') {
                     setDeviceEnrollmentId(data.deviceId);
                 }
@@ -228,36 +227,19 @@ function HomePage() {
                             updateCurrentGalleryBoundProject(targetWall.projectId);
                         } else {
                             const previouslyBoundProject = lastGalleryBoundProjectRef.current;
-                            if (previouslyBoundProject) {
+                            if (previouslyBoundProject)
                                 triggerSyncedCardClose(previouslyBoundProject);
-                            } else {
-                                triggerSyncedCardClose(null);
-                            }
                             updateCurrentGalleryBoundProject(null);
                         }
                     } else {
                         handleLiveBindingStatus(wallId, false);
                         const previouslyBoundProject = lastGalleryBoundProjectRef.current;
-                        if (previouslyBoundProject) {
-                            triggerSyncedCardClose(previouslyBoundProject);
-                        } else {
-                            triggerSyncedCardClose(null);
-                        }
+                        if (previouslyBoundProject) triggerSyncedCardClose(previouslyBoundProject);
                         updateCurrentGalleryBoundProject(null);
                     }
                 }
             }),
-            galleryEngine.onProjectPublishChanged((event) => {
-                if (!event.published) {
-                    queryClient.setQueryData<ProjectWithId[]>(
-                        publishedProjectsQueryKey,
-                        (current) =>
-                            (Array.isArray(current) ? current : []).filter(
-                                (project) => project._id !== event.projectId
-                            )
-                    );
-                }
-
+            galleryEngine.onProjectsChanged(() => {
                 void queryClient.invalidateQueries({
                     queryKey: publishedProjectsQueryKey
                 });
@@ -277,11 +259,7 @@ function HomePage() {
                         updateCurrentGalleryBoundProject(event.projectId);
                     } else if (!event.bound) {
                         const previouslyBoundProject = lastGalleryBoundProjectRef.current;
-                        if (previouslyBoundProject) {
-                            triggerSyncedCardClose(previouslyBoundProject);
-                        } else {
-                            triggerSyncedCardClose(null);
-                        }
+                        if (previouslyBoundProject) triggerSyncedCardClose(previouslyBoundProject);
                         updateCurrentGalleryBoundProject(null);
                     } else if (event.source === 'live') {
                         updateCurrentGalleryBoundProject(null);
@@ -297,11 +275,7 @@ function HomePage() {
                 if (wallId && event.wallId === wallId) {
                     setAutoOpenRevision((v) => v + 1);
                     const previouslyBoundProject = lastGalleryBoundProjectRef.current;
-                    if (previouslyBoundProject) {
-                        triggerSyncedCardClose(previouslyBoundProject);
-                    } else {
-                        triggerSyncedCardClose(null);
-                    }
+                    if (previouslyBoundProject) triggerSyncedCardClose(previouslyBoundProject);
                     updateCurrentGalleryBoundProject(null);
                 }
                 handleLiveBindingStatus(event.wallId, false);
@@ -318,7 +292,9 @@ function HomePage() {
                     toast.message(
                         result.reason === 'timeout'
                             ? 'The takeover request expired.'
-                            : 'Takeover request declined.'
+                            : result.reason === 'unknown_wall'
+                              ? 'This wall no longer exists.'
+                              : 'Takeover request declined.'
                     );
                 }
             })
@@ -330,12 +306,12 @@ function HomePage() {
 
     useEffect(() => {
         const deviceId = deviceEnrollmentId?.trim();
-        if (!wsEnrollmentFallbackEnabled || !enrollmentModeEnabled || !deviceId) return;
+        if (!enrollmentModeEnabled || !deviceId) return;
         let cancelled = false;
         Promise.resolve()
             .then(async () => {
                 const identity = await getOrCreateDeviceIdentity('gallery');
-                const signature = await identity.signDeviceId(deviceId);
+                const signature = await identity.signPayload(deviceId);
                 const payload = JSON.stringify({
                     // schema: 'gem://',
                     // kind: 'wall',
@@ -422,7 +398,7 @@ function HomePage() {
                 name: p.name,
                 author: p.authorOrganisation,
                 description: p.description,
-                tags: p.tags.filter((t) => t !== 'public'),
+                tags: p.tags,
                 publishedCommitId: p.publishedCommitId,
                 customControlUrl: (p as { customControlUrl?: string }).customControlUrl,
                 imageUrl: p.heroImages[0] ?? '',
@@ -637,7 +613,6 @@ function HomePage() {
                                                 }
                                                 forceCloseMinimizedSignal={liveSessionStartedSignal}
                                                 forceCloseSignal={
-                                                    syncedCloseProjectId === null ||
                                                     syncedCloseProjectId === project._id
                                                         ? syncedCloseSignal
                                                         : null

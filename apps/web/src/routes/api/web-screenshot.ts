@@ -1,26 +1,25 @@
+import { randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
-import { unlink } from 'node:fs/promises';
+import { stat, unlink } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { join } from 'node:path';
 
-import { auth } from '@repo/auth/auth';
 import { createFileRoute } from '@tanstack/react-router';
+import { ObjectId } from 'mongodb';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { ASSET_DIR } from '~/lib/serverVariables';
+import { collections } from '~/server/collections';
+import { canEditProject } from '~/server/projectAuthz';
 import {
     buildRateLimitSubjectKey,
     checkRateLimit,
     getClientIpFromHeaders
 } from '~/server/rateLimit';
+import type { AuthContext } from '~/server/requestAuthContext';
 
-function urlToBaseId(url: string): string {
-    // Deterministic short id from URL for filenames
-    let hash = 0;
-    for (let i = 0; i < url.length; i++) {
-        hash = ((hash << 5) - hash + url.charCodeAt(i)) | 0;
-    }
-    return `web_${(hash >>> 0).toString(36)}`;
+function generateBaseId(): string {
+    return `webshot_${randomBytes(64).toString('hex').slice(0, 32)}`;
 }
 
 async function cleanupPreviousFiles(baseId: string): Promise<void> {
@@ -97,13 +96,17 @@ async function assertScreenshotTargetSafe(rawUrl: string) {
 export const Route = createFileRoute('/api/web-screenshot')({
     server: {
         handlers: {
-            POST: async ({ request }: { request: Request }) => {
-                const session = await auth.api.getSession({ headers: request.headers });
-                const internalToken = request.headers.get('x-internal-screenshot-token');
-                const isInternal =
-                    Boolean(process.env.SCREENSHOT_INTERNAL_TOKEN) &&
-                    internalToken === process.env.SCREENSHOT_INTERNAL_TOKEN;
-                if (!session && !isInternal) {
+            POST: async ({ request, context }: { request: Request; context?: unknown }) => {
+                const upstream = (context ?? {}) as {
+                    authContext?: AuthContext;
+                    user?: Record<string, any> | null;
+                };
+                const authContext: AuthContext = upstream.authContext ?? { guest: true };
+                const userEmail =
+                    typeof authContext.user?.email === 'string' && authContext.user.email.length > 0
+                        ? authContext.user.email
+                        : null;
+                if (!userEmail) {
                     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                         status: 401,
                         headers: { 'Content-Type': 'application/json' }
@@ -112,7 +115,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
 
                 const requesterIp = getClientIpFromHeaders(request.headers);
                 const subjectKey = buildRateLimitSubjectKey({
-                    actorId: session?.user?.email ?? null,
+                    actorId: userEmail,
                     ip: requesterIp
                 });
                 const rateLimit = checkRateLimit({
@@ -130,6 +133,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
 
                 let body: {
                     url: string;
+                    projectId: string;
                     width: number;
                     height: number;
                     scale?: number;
@@ -145,13 +149,24 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     });
                 }
 
-                const { url, width, height, scale = 1 } = body;
+                const { url, projectId, width, height, scale = 1 } = body;
 
-                if (!url || !width || !height) {
+                if (!url || !projectId || !width || !height) {
                     return new Response(
-                        JSON.stringify({ error: 'url, width, and height are required' }),
+                        JSON.stringify({ error: 'projectId, url, width, and height are required' }),
                         { status: 400, headers: { 'Content-Type': 'application/json' } }
                     );
+                }
+
+                const canEdit = await canEditProject(
+                    { email: userEmail, role: authContext.user?.role },
+                    projectId
+                );
+                if (!canEdit) {
+                    return new Response(JSON.stringify({ error: 'Access denied' }), {
+                        status: 403,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
                 }
                 if (
                     !Number.isFinite(width) ||
@@ -185,12 +200,15 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     );
                 }
 
-                // Clean up previous screenshot files if provided
+                // Clean up previous screenshot files and DB record if provided
                 if (body.previousBaseId) {
-                    await cleanupPreviousFiles(body.previousBaseId);
+                    await Promise.all([
+                        cleanupPreviousFiles(body.previousBaseId),
+                        collections.assets.deleteOne({ url: `${body.previousBaseId}.png` })
+                    ]);
                 }
 
-                const baseId = urlToBaseId(url);
+                const baseId = generateBaseId();
                 const filename = `${baseId}.png`;
                 const screenshotPath = join(ASSET_DIR, filename);
 
@@ -222,6 +240,22 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     // Generate blurhash and variants using the shared pipeline
                     const blurhash = await computeBlurhash(screenshotPath);
                     const sizes = await generateVariants(screenshotPath, baseId);
+
+                    // Insert a hidden asset record so the serving route can auth-check it
+                    // without the record appearing in asset library listings.
+                    const fileSize = (await stat(screenshotPath).catch(() => null))?.size ?? 0;
+                    await collections.assets.insertOne({
+                        projectId: new ObjectId(projectId),
+                        url: filename,
+                        size: fileSize,
+                        sizes: sizes.length > 0 ? sizes : undefined,
+                        blurhash: blurhash ?? undefined,
+                        mimeType: 'image/png',
+                        hidden: true,
+                        name: `web-screenshot:${url}`,
+                        createdBy: userEmail,
+                        createdAt: new Date().toISOString()
+                    });
 
                     return new Response(JSON.stringify({ filename, baseId, blurhash, sizes }), {
                         status: 200,
