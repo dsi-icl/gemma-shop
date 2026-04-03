@@ -83,6 +83,7 @@ import {
 import { logAuditDenied } from '~/server/audit';
 import { collections } from '~/server/collections';
 import { ensureDeviceByPublicKey, markDeviceDisconnectedById } from '~/server/devices';
+import { canEditProject, canViewProject } from '~/server/projectAuthz';
 import {
     buildRateLimitSubjectKey,
     checkRateLimit,
@@ -214,6 +215,29 @@ const WS_MUTATION_MESSAGE_TYPES = new Set([
     'video_seek'
 ]);
 
+const VIEW_PROJECT_MESSAGE_TYPES = new Set([
+    'rehydrate_please',
+    'seed_scope',
+    'video_play',
+    'video_pause',
+    'video_seek'
+]);
+
+const EDIT_PROJECT_MESSAGE_TYPES = new Set([
+    'clear_stage',
+    'upsert_layer',
+    'delete_layer',
+    'update_slides',
+    'stage_dirty',
+    'stage_save',
+    'request_bind_wall'
+]);
+
+const editorProjectPermissions = new Map<
+    string,
+    { projectId: string; canView: boolean; canEdit: boolean }
+>();
+
 // TODO Review if authed logic is waranted here
 function getWsRateLimitIdentity(peer: Peer): string {
     const ip = getClientIpFromHeaders(peer.request?.headers as Headers | undefined);
@@ -238,6 +262,108 @@ function getEntryProjectId(entry: PeerEntry): string | null {
         return scope?.projectId ?? null;
     }
     return null;
+}
+
+function isAdminUser(entry: PeerEntry): boolean {
+    return entry.meta.authContext?.user?.role === 'admin';
+}
+
+function isGalleryDevice(entry: PeerEntry): boolean {
+    return entry.meta.authContext?.device?.kind === 'gallery';
+}
+
+function isWallDevice(entry: PeerEntry): boolean {
+    return entry.meta.authContext?.device?.kind === 'wall';
+}
+
+function isControllerDevice(entry: PeerEntry): boolean {
+    return entry.meta.authContext?.device?.kind === 'controller';
+}
+
+function isControllerPortal(entry: PeerEntry): boolean {
+    return Boolean(entry.meta.authContext?.portal?.wallId);
+}
+
+function hasAnyAuthenticatedActor(entry: PeerEntry): boolean {
+    return Boolean(
+        entry.meta.authContext?.user ||
+        entry.meta.authContext?.device ||
+        entry.meta.authContext?.portal
+    );
+}
+
+function getScopeProjectId(scopeId: number | null): string | null {
+    if (scopeId === null) return null;
+    return scopedState.get(scopeId)?.projectId ?? null;
+}
+
+function getCachedEditorPermission(
+    entry: PeerEntry,
+    projectId: string
+): { canView: boolean; canEdit: boolean } | null {
+    if (entry.meta.specimen !== 'editor') return null;
+    const cached = editorProjectPermissions.get(entry.peer.id);
+    if (!cached || cached.projectId !== projectId) return null;
+    return { canView: cached.canView, canEdit: cached.canEdit };
+}
+
+function isWsMessageAuthorized(
+    entry: PeerEntry,
+    data: Record<string, any>,
+    scopeId: number | null
+): boolean {
+    const type = data.type;
+
+    if (type === 'leave_scope') {
+        return entry.meta.specimen === 'editor';
+    }
+    if (type === 'bind_override_decision') {
+        return entry.meta.specimen === 'gallery' && (isGalleryDevice(entry) || isAdminUser(entry));
+    }
+    if (type === 'bind_wall') {
+        if (entry.meta.specimen === 'controller')
+            return isControllerDevice(entry) || isControllerPortal(entry);
+        if (entry.meta.specimen === 'gallery') return isGalleryDevice(entry) || isAdminUser(entry);
+        return isAdminUser(entry);
+    }
+    if (type === 'unbind_wall' || type === 'reboot') {
+        if (entry.meta.specimen === 'gallery') return isGalleryDevice(entry) || isAdminUser(entry);
+        return isAdminUser(entry);
+    }
+
+    const payloadProjectId = typeof data.projectId === 'string' ? data.projectId : null;
+    const scopeProjectId = getScopeProjectId(scopeId);
+    const projectId = payloadProjectId ?? scopeProjectId;
+
+    if (EDIT_PROJECT_MESSAGE_TYPES.has(type)) {
+        if (
+            (type === 'upsert_layer' || type === 'delete_layer') &&
+            data.origin === 'controller:add_line_layer'
+        ) {
+            return (
+                entry.meta.specimen === 'controller' &&
+                (isControllerDevice(entry) || isControllerPortal(entry))
+            );
+        }
+
+        if (entry.meta.specimen !== 'editor' || !projectId) return false;
+        const perms = getCachedEditorPermission(entry, projectId);
+        return Boolean(perms?.canEdit);
+    }
+
+    if (VIEW_PROJECT_MESSAGE_TYPES.has(type)) {
+        if (entry.meta.specimen === 'controller') {
+            return isControllerDevice(entry) || isControllerPortal(entry);
+        }
+        if (entry.meta.specimen === 'wall') {
+            return isWallDevice(entry);
+        }
+        if (entry.meta.specimen !== 'editor' || !projectId) return false;
+        const perms = getCachedEditorPermission(entry, projectId);
+        return Boolean(perms?.canView);
+    }
+
+    return true;
 }
 
 async function enforceWsRateLimit(
@@ -676,7 +802,40 @@ async function registerEditorPeer(
         commitId: string;
         slideId: string;
     }
-) {
+): Promise<boolean> {
+    const { authContext } = await resolveAuthContextFromRequest(peer.request);
+    const userActor = authContext.user
+        ? { email: authContext.user.email, role: authContext.user.role }
+        : null;
+    if (!userActor) {
+        sendJSON(peer, { type: 'auth_denied', reason: 'missing_session' });
+        try {
+            peer.close();
+        } catch {
+            // no-op
+        }
+        return false;
+    }
+
+    const [canView, canEdit] = await Promise.all([
+        canViewProject(userActor, scopeInput.projectId),
+        canEditProject(userActor, scopeInput.projectId)
+    ]);
+    if (!canView) {
+        sendJSON(peer, { type: 'auth_denied' });
+        try {
+            peer.close();
+        } catch {
+            // no-op
+        }
+        return false;
+    }
+    editorProjectPermissions.set(peer.id, {
+        projectId: scopeInput.projectId,
+        canView,
+        canEdit
+    });
+
     const scopeId = internScope(scopeInput.projectId, scopeInput.commitId, scopeInput.slideId);
     const scope = getOrCreateScope(
         scopeId,
@@ -686,7 +845,6 @@ async function registerEditorPeer(
     );
 
     const existing = peers.get(peer.id);
-    const { authContext } = await resolveAuthContextFromRequest(peer.request);
     if (existing?.meta.specimen === 'editor') {
         setEditorScope(existing, {
             projectId: scopeInput.projectId,
@@ -775,6 +933,7 @@ async function registerEditorPeer(
             );
         }
     }
+    return true;
 }
 
 async function completeHelloRegistration(
@@ -1015,6 +1174,7 @@ async function recomputePeerAuthContexts(input: { email?: string; projectId?: st
             authContext: { user }
         } = await resolveAuthContextFromRequest(entry.peer.request);
         if (!user) {
+            editorProjectPermissions.delete(entry.peer.id);
             sendJSON(entry.peer, { type: 'auth_denied', reason: 'missing_session' });
             try {
                 entry.peer.close();
@@ -1023,6 +1183,29 @@ async function recomputePeerAuthContexts(input: { email?: string; projectId?: st
             }
             disconnected += 1;
             continue;
+        }
+        if (scopeProjectId) {
+            const actor = { email: user.email, role: user.role };
+            const [canView, canEdit] = await Promise.all([
+                canViewProject(actor, scopeProjectId),
+                canEditProject(actor, scopeProjectId)
+            ]);
+            if (!canView) {
+                editorProjectPermissions.delete(entry.peer.id);
+                sendJSON(entry.peer, { type: 'auth_denied' });
+                try {
+                    entry.peer.close();
+                } catch {
+                    // no-op
+                }
+                disconnected += 1;
+                continue;
+            }
+            editorProjectPermissions.set(entry.peer.id, {
+                projectId: scopeProjectId,
+                canView,
+                canEdit
+            });
         }
         if (user.email !== currentEmail || user.role !== currentRole) {
             entry.meta = {
@@ -1540,6 +1723,7 @@ async function handleHello(peer: Peer, data: Record<string, any>) {
     // Re-registration: clean up old state first
     const existing = peers.get(peer.id);
     if (existing) unregisterPeer(peer.id);
+    editorProjectPermissions.delete(peer.id);
     clearPendingHelloAuth(peer.id);
 
     if (parsed.specimen === 'editor') {
@@ -1678,11 +1862,12 @@ async function handleSwitchScope(peer: Peer, data: Record<string, any>) {
         return;
     }
 
-    await registerEditorPeer(peer, {
+    const registered = await registerEditorPeer(peer, {
         projectId: parsed.projectId,
         commitId: parsed.commitId,
         slideId: parsed.slideId
     });
+    if (!registered) return;
 
     console.log(
         `[WS] Editor switched scope=${makeScopeLabel(parsed.projectId, parsed.commitId, parsed.slideId)}`
@@ -1696,9 +1881,12 @@ function handleBinary(peer: Peer, rawData: ArrayBuffer) {
     markIncomingBinary();
     const view = new DataView(rawData);
     const opcode = view.getUint8(0);
+    const senderEntry = peers.get(peer.id);
+    if (!senderEntry) return;
 
     // Clock Ping > Pong (pre-allocated buffer, zero alloc)
     if (opcode === OP.CLOCK_PING) {
+        if (!hasAnyAuthenticatedActor(senderEntry)) return;
         touchPing(peer.id);
         const t0 = view.getFloat64(1, true);
         const t1 = Date.now();
@@ -1713,11 +1901,26 @@ function handleBinary(peer: Peer, rawData: ArrayBuffer) {
 
     // Spatial Move — scoped relay with AABB filtering for walls
     if (opcode === OP.SPATIAL_MOVE) {
-        const senderEntry = peers.get(peer.id);
-        if (!senderEntry) return;
-
         const senderScopeId = resolveScopeId(senderEntry.meta);
         if (senderScopeId === null) return;
+        const projectId = getScopeProjectId(senderScopeId);
+        if (!projectId) return;
+
+        let allowed = false;
+        if (senderEntry.meta.specimen === 'controller') {
+            allowed = isControllerDevice(senderEntry) || isControllerPortal(senderEntry);
+        } else if (senderEntry.meta.specimen === 'wall') {
+            allowed = isWallDevice(senderEntry);
+        } else if (senderEntry.meta.specimen === 'editor') {
+            const perms = getCachedEditorPermission(senderEntry, projectId);
+            allowed = Boolean(perms?.canEdit);
+        }
+        if (!allowed) {
+            console.warn(
+                `[WS] Unauthorized binary SPATIAL_MOVE from peer ${peer.id} (${senderEntry.meta.specimen})`
+            );
+            return;
+        }
 
         // Relay to editors (direct PeerEntry iteration, no map lookups per recipient)
         const editorEntries = editorsByScope.get(senderScopeId);
@@ -1755,6 +1958,7 @@ const hooks = defineHooks({
 
     close(peer) {
         wsRateLimitStrikes.delete(peer.id);
+        editorProjectPermissions.delete(peer.id);
         clearPendingHelloAuth(peer.id);
         // Cancel pending override requests from disconnected requester.
         for (const [requestId, pending] of pendingBindOverrides) {
@@ -1873,13 +2077,20 @@ const hooks = defineHooks({
 
                 const handler = handlers.get(data.type);
                 if (handler) {
+                    const scopeId = resolveScopeId(entry.meta);
+                    if (!isWsMessageAuthorized(entry, data, scopeId)) {
+                        console.warn(
+                            `[WS] Unauthorized message ${data.type} from peer ${peer.id} (${entry.meta.specimen})`
+                        );
+                        return;
+                    }
                     void enforceWsRateLimit(peer, data.type, { entry }).then((allowed) => {
                         if (!allowed) return;
                         try {
                             handler({
                                 entry,
                                 data,
-                                scopeId: resolveScopeId(entry.meta),
+                                scopeId,
                                 rawText
                             });
                         } catch (handlerError) {
@@ -1948,13 +2159,20 @@ const hooks = defineHooks({
 
                 const handler = handlers.get(data.type);
                 if (handler) {
+                    const scopeId = resolveScopeId(entry.meta);
+                    if (!isWsMessageAuthorized(entry, data, scopeId)) {
+                        console.warn(
+                            `[WS] Unauthorized message ${data.type} from peer ${peer.id} (${entry.meta.specimen})`
+                        );
+                        return;
+                    }
                     void enforceWsRateLimit(peer, data.type, { entry }).then((allowed) => {
                         if (!allowed) return;
                         try {
                             handler({
                                 entry,
                                 data,
-                                scopeId: resolveScopeId(entry.meta),
+                                scopeId,
                                 rawText: raw
                             });
                         } catch (handlerError) {

@@ -17,6 +17,7 @@ import * as Y from 'yjs';
 import type { PeerMeta } from '~/lib/busState';
 import type { Layer } from '~/lib/types';
 import { collections } from '~/server/collections';
+import { canEditProject } from '~/server/projectAuthz';
 import { resolveAuthContextFromRequest } from '~/server/requestAuthContext';
 
 const messageSync = 0;
@@ -56,6 +57,7 @@ type YjsPeerState = {
     openReady?: boolean;
     openPromise?: Promise<void>;
     doc?: SharedDoc;
+    scope?: DocScope;
 };
 
 interface Persistence {
@@ -465,6 +467,15 @@ class YCrossws {
                     throw new Error('unauthenticated');
                 }
                 const userEmail = user.email;
+                const docName = getDocName(peer);
+                const scope = parseScope(docName);
+                const canEdit = await canEditProject(
+                    { email: userEmail, role: user.role },
+                    scope.projectId
+                );
+                if (!canEdit) {
+                    throw new Error('forbidden');
+                }
 
                 const latestAuthed = getYjsPeerState(peer) ?? existing;
                 setYjsPeerState(peer, {
@@ -477,7 +488,8 @@ class YCrossws {
                                 role: user.role
                             }
                         }
-                    }
+                    },
+                    scope
                 });
 
                 this.peers.add(peer);
@@ -529,6 +541,8 @@ class YCrossws {
             const message = error instanceof Error ? error.message : String(error);
             if (message === 'unauthenticated') {
                 console.warn(`[YJS] Rejecting unauthenticated peer ${peer.id}`);
+            } else if (message === 'forbidden') {
+                console.warn(`[YJS] Rejecting unauthorized peer ${peer.id}`);
             } else {
                 console.error('[YJS] Failed to open peer:', error);
             }
@@ -738,6 +752,22 @@ class YCrossws {
                 continue;
             }
             const nextEmail = user.email;
+            const scopeProjectId = state?.scope?.projectId ?? null;
+            if (scopeProjectId) {
+                const allowed = await canEditProject(
+                    { email: nextEmail, role: user.role },
+                    scopeProjectId
+                );
+                if (!allowed) {
+                    try {
+                        peer.close();
+                    } catch {
+                        // no-op
+                    }
+                    disconnected += 1;
+                    continue;
+                }
+            }
 
             if (state) {
                 setYjsPeerState(peer, {
