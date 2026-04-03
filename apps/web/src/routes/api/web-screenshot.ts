@@ -242,9 +242,8 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     const blurhash = await computeBlurhash(screenshotPath);
                     const sizes = await generateVariants(screenshotPath, baseId);
 
-                    // Upsert an asset record so the serving route can find and auth-check it.
-                    // Web screenshots are keyed by their deterministic baseId+url — a re-capture
-                    // of the same URL overwrites the previous record in place.
+                    // Upsert a hidden asset record so the serving route can auth-check it
+                    // without the record appearing in asset library listings.
                     const fileSize = (await stat(screenshotPath).catch(() => null))?.size ?? 0;
                     await collections.assets.findOneAndUpdate(
                         { url: filename },
@@ -256,6 +255,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
                                 sizes: sizes.length > 0 ? sizes : undefined,
                                 blurhash: blurhash ?? undefined,
                                 mimeType: 'image/png',
+                                hidden: true,
                                 updatedAt: new Date().toISOString()
                             },
                             $setOnInsert: {

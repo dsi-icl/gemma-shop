@@ -1447,6 +1447,7 @@ function startAssetChangeStream() {
         changeStream.on('change', (change: ChangeStreamDocument) => {
             if (change.operationType === 'insert' && change.fullDocument) {
                 const doc = change.fullDocument;
+                if (doc.hidden) return;
                 broadcastAssetToEditorsByProject(doc.projectId.toString(), {
                     _id: doc._id.toString(),
                     name: doc.name,

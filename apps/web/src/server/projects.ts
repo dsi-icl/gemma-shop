@@ -138,11 +138,15 @@ export async function listAssets(projectId: string) {
 
     const [projectDocs, publicDocs] = await Promise.all([
         assets
-            .find({ projectId: new ObjectId(projectId), deletedAt: { $exists: false } })
+            .find({
+                projectId: new ObjectId(projectId),
+                deletedAt: { $exists: false },
+                hidden: { $ne: true }
+            })
             .sort({ createdAt: -1 })
             .toArray(),
         assets
-            .find({ public: true, deletedAt: { $exists: false } })
+            .find({ public: true, deletedAt: { $exists: false }, hidden: { $ne: true } })
             .sort({ createdAt: -1 })
             .toArray()
     ]);

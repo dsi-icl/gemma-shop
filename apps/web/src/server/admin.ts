@@ -582,7 +582,7 @@ export async function adminSetUserBanStatus(input: {
 
 export async function adminListPublicAssets() {
     const docs = await collections.assets
-        .find({ public: true, deletedAt: { $exists: false } })
+        .find({ public: true, deletedAt: { $exists: false }, hidden: { $ne: true } })
         .sort({ createdAt: -1 })
         .toArray();
     return docs.map(serializeAsset);
