@@ -368,7 +368,9 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         requestId: z.string(),
         wallId: z.string(),
         allow: z.boolean(),
-        reason: z.enum(['approved', 'denied', 'timeout', 'not_required', 'invalid']).optional()
+        reason: z
+            .enum(['approved', 'denied', 'timeout', 'not_required', 'invalid', 'unknown_wall'])
+            .optional()
     }),
     z.object({
         type: z.literal('wall_binding_changed'),

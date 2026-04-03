@@ -362,6 +362,8 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 toast.error('No response in time. The takeover request expired.');
             } else if (result.reason === 'denied') {
                 toast.error('Takeover request declined.');
+            } else if (result.reason === 'unknown_wall') {
+                toast.error('This wall no longer exists.');
             } else {
                 toast.error('Could not complete the takeover request.');
             }

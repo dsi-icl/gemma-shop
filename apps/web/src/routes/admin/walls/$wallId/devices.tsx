@@ -1,12 +1,18 @@
 import { Button } from '@repo/ui/components/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
-import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogTitle
+} from '@repo/ui/components/dialog';
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { Scanner, type IDetectedBarcode } from '@yudiel/react-qr-scanner';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { $adminDevicesEnrollBySignature } from '~/server/admin.fns';
+import { $adminDeleteDevice, $adminDevicesEnrollBySignature } from '~/server/admin.fns';
 import { adminDevicesForWallQueryOptions, adminDevicesQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/walls/$wallId/devices')({
@@ -19,6 +25,7 @@ function WallDevicesTab() {
     const { data: devices = [] } = useSuspenseQuery(adminDevicesForWallQueryOptions(wallId));
     const { data: allDevices = [] } = useQuery(adminDevicesQueryOptions());
     const [scanDialogOpen, setScanDialogOpen] = useState(false);
+    const [deleteTargetDeviceId, setDeleteTargetDeviceId] = useState<string | null>(null);
     const [scanStatus, setScanStatus] = useState<string>('Ready to scan');
     const [cameraPermission, setCameraPermission] = useState<
         'unknown' | 'prompt' | 'granted' | 'denied'
@@ -167,6 +174,24 @@ function WallDevicesTab() {
         }
     };
 
+    const deleteDeviceMutation = useMutation({
+        mutationFn: async (deviceId: string) => $adminDeleteDevice({ data: { deviceId } }),
+        onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({
+                    queryKey: adminDevicesForWallQueryOptions(wallId).queryKey
+                }),
+                queryClient.invalidateQueries({ queryKey: adminDevicesQueryOptions().queryKey }),
+                queryClient.invalidateQueries({ queryKey: ['admin', 'walls'] })
+            ]);
+            toast.success('Device deleted');
+            setDeleteTargetDeviceId(null);
+        },
+        onError: (error: any) => {
+            toast.error(error?.message ?? 'Failed to delete device');
+        }
+    });
+
     return (
         <div className="space-y-4">
             <div className="flex justify-end">
@@ -185,7 +210,7 @@ function WallDevicesTab() {
                                 <th className="px-4 py-3 text-left font-medium">Kind</th>
                                 <th className="px-4 py-3 text-left font-medium">Status</th>
                                 <th className="px-4 py-3 text-left font-medium">Last Seen</th>
-                                <th className="px-4 py-3 text-left font-medium">Updated</th>
+                                <th className="px-4 py-3 text-left font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -199,8 +224,15 @@ function WallDevicesTab() {
                                     <td className="px-4 py-3 text-xs text-muted-foreground">
                                         {device.lastSeenAt ?? '—'}
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                                        {device.updatedAt ?? '—'}
+                                    <td className="px-4 py-3">
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            disabled={deleteDeviceMutation.isPending}
+                                            onClick={() => setDeleteTargetDeviceId(device.deviceId)}
+                                        >
+                                            Delete
+                                        </Button>
                                     </td>
                                 </tr>
                             ))}
@@ -301,6 +333,39 @@ function WallDevicesTab() {
                     <div className="mt-4 flex justify-end">
                         <Button variant="outline" onClick={() => setScanDialogOpen(false)}>
                             Done
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={deleteTargetDeviceId !== null}
+                onOpenChange={(open) => {
+                    if (!open) setDeleteTargetDeviceId(null);
+                }}
+            >
+                <DialogContent className="w-80 p-5">
+                    <DialogTitle>Delete device</DialogTitle>
+                    <DialogDescription className="mt-1">
+                        {`Delete device "${deleteTargetDeviceId ?? ''}" permanently?`}
+                    </DialogDescription>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <DialogClose>
+                            <Button variant="outline" size="sm">
+                                Cancel
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={deleteDeviceMutation.isPending}
+                            onClick={() => {
+                                if (deleteTargetDeviceId) {
+                                    deleteDeviceMutation.mutate(deleteTargetDeviceId);
+                                }
+                            }}
+                        >
+                            {deleteDeviceMutation.isPending ? 'Deleting...' : 'Delete'}
                         </Button>
                     </div>
                 </DialogContent>

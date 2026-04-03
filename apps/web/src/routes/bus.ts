@@ -84,7 +84,7 @@ import {
 import { resolvePeerUserEmail } from '~/lib/wsAuth';
 import { logAuditDenied } from '~/server/audit';
 import { collections } from '~/server/collections';
-import { ensureDeviceByPublicKey } from '~/server/devices';
+import { ensureDeviceByPublicKey, markDeviceDisconnectedById } from '~/server/devices';
 import {
     buildRateLimitSubjectKey,
     checkRateLimit,
@@ -305,7 +305,7 @@ async function performLiveBind(
 ): Promise<{ ok: boolean; resolvedSlideId?: string; error?: string }> {
     try {
         cancelWallUnbindGrace(wallId);
-        const [resolvedSlideId, project] = await Promise.all([
+        const [resolvedSlideId, project, wallExists] = await Promise.all([
             resolveBoundSlideId(projectId, commitId, requestedSlideId),
             collections.projects.findOne(
                 { _id: new ObjectId(projectId) },
@@ -316,8 +316,12 @@ async function performLiveBind(
                         customRenderProxy: 1
                     }
                 }
-            )
+            ),
+            collections.walls.findOne({ wallId }, { projection: { _id: 1 } })
         ]);
+        if (!wallExists) {
+            return { ok: false, error: 'unknown_wall' };
+        }
         if (!resolvedSlideId) {
             return { ok: false, error: 'invalid_slide' };
         }
@@ -366,14 +370,8 @@ async function performLiveBind(
                     boundSlideId: resolvedSlideId,
                     boundSource: source,
                     updatedAt: new Date().toISOString()
-                },
-                $setOnInsert: {
-                    wallId,
-                    name: wallId,
-                    createdAt: new Date().toISOString()
                 }
-            },
-            { upsert: true }
+            }
         );
 
         broadcastWallBindingToEditors(wallId);
@@ -430,34 +428,6 @@ function broadcastWallNodeCountToEditors(wallId: string) {
     for (const entry of allEditors) {
         entry.peer.send(payload);
     }
-}
-
-function syncWallNodeCountToDb(wallId: string) {
-    const connectedNodes = getWallNodeCount(wallId);
-    const hasLiveBinding = wallBindings.has(wallId);
-    void collections.walls.updateOne(
-        { wallId },
-        {
-            $set: {
-                connectedNodes,
-                lastSeen: new Date().toISOString(),
-                ...(!hasLiveBinding
-                    ? {
-                          boundProjectId: null,
-                          boundCommitId: null,
-                          boundSlideId: null,
-                          boundSource: null
-                      }
-                    : {})
-            },
-            $setOnInsert: {
-                wallId,
-                name: wallId,
-                createdAt: new Date().toISOString()
-            }
-        },
-        { upsert: true }
-    );
 }
 
 async function resolveBoundSlideId(
@@ -751,12 +721,14 @@ function registerEditorPeer(
         // Fresh scope — auto-seed from DB so the editor gets layers immediately
         seedScopeFromDb(scopeId).then(() => {
             peer.send(getEditorHydratePayload(scopeId));
-            for (const wallId of wallsByWallId.keys()) {
+            const allWallIds = new Set<string>(wallsByWallId.keys());
+            for (const wallId of allWallIds) {
+                const assignedConnectedNodes = getWallNodeCount(wallId);
                 peer.send(
                     JSON.stringify({
                         type: 'wall_node_count',
                         wallId,
-                        connectedNodes: getWallNodeCount(wallId)
+                        connectedNodes: assignedConnectedNodes
                     } satisfies GSMessage)
                 );
                 const boundScope = wallBindings.get(wallId);
@@ -782,12 +754,14 @@ function registerEditorPeer(
         });
     } else {
         peer.send(getEditorHydratePayload(scopeId));
-        for (const wallId of wallsByWallId.keys()) {
+        const allWallIds = new Set<string>(wallsByWallId.keys());
+        for (const wallId of allWallIds) {
+            const assignedConnectedNodes = getWallNodeCount(wallId);
             peer.send(
                 JSON.stringify({
                     type: 'wall_node_count',
                     wallId,
-                    connectedNodes: getWallNodeCount(wallId)
+                    connectedNodes: assignedConnectedNodes
                 } satisfies GSMessage)
             );
             const boundScope = wallBindings.get(wallId);
@@ -832,20 +806,28 @@ async function completeHelloRegistration(
             });
         }
         const effectiveWallId = wallDevice?.assignedWallId ?? parsed.wallId;
+        const intendedWallSlug = parsed.wallId;
+        const deviceAuthContext = wallDevice
+            ? {
+                  kind: 'wall' as const,
+                  wallId: effectiveWallId,
+                  id: wallDevice.deviceId
+              }
+            : auth.device
+              ? {
+                    kind: 'wall' as const,
+                    wallId: effectiveWallId,
+                    id: auth.device.id
+                }
+              : undefined;
         const authContext: AuthContext = {
-            ...(auth.device
-                ? {
-                      device: {
-                          kind: 'wall',
-                          wallId: effectiveWallId
-                      }
-                  }
-                : {})
+            ...(deviceAuthContext ? { device: deviceAuthContext } : {})
         };
 
         registerPeer(peer, {
             specimen: 'wall',
             wallId: effectiveWallId,
+            intendedWallSlug,
             col: parsed.col,
             row: parsed.row,
             authContext
@@ -862,7 +844,6 @@ async function completeHelloRegistration(
         broadcastWallNodeCountToEditors(effectiveWallId);
         broadcastWallBindingToEditors(effectiveWallId);
         broadcastWallBindingToGalleries(effectiveWallId);
-        syncWallNodeCountToDb(effectiveWallId);
 
         console.log(
             `[WS] Wall joined wallId=${effectiveWallId} ` +
@@ -873,8 +854,9 @@ async function completeHelloRegistration(
     }
 
     if (parsed.specimen === 'controller') {
+        let controllerDevice: Awaited<ReturnType<typeof ensureDeviceByPublicKey>> | null = null;
         if (parsed.devicePublicKey) {
-            const controllerDevice = await ensureDeviceByPublicKey({
+            controllerDevice = await ensureDeviceByPublicKey({
                 publicKey: parsed.devicePublicKey,
                 kind: 'controller'
             });
@@ -887,7 +869,23 @@ async function completeHelloRegistration(
         }
 
         const authContext: AuthContext = {
-            ...(auth.device ? { device: auth.device } : {}),
+            ...(controllerDevice
+                ? {
+                      device: {
+                          kind: 'controller' as const,
+                          wallId: parsed.wallId,
+                          id: controllerDevice.deviceId
+                      }
+                  }
+                : auth.device
+                  ? {
+                        device: {
+                            kind: 'controller' as const,
+                            wallId: parsed.wallId,
+                            id: auth.device.id
+                        }
+                    }
+                  : {}),
             ...(auth.portal ? { portal: auth.portal } : {})
         };
 
@@ -927,8 +925,9 @@ async function completeHelloRegistration(
         return;
     }
 
+    let galleryDevice: Awaited<ReturnType<typeof ensureDeviceByPublicKey>> | null = null;
     if (parsed.devicePublicKey) {
-        const galleryDevice = await ensureDeviceByPublicKey({
+        galleryDevice = await ensureDeviceByPublicKey({
             publicKey: parsed.devicePublicKey,
             kind: 'gallery'
         });
@@ -941,7 +940,23 @@ async function completeHelloRegistration(
     }
 
     const authContext: AuthContext = {
-        ...(auth.device ? { device: auth.device } : {})
+        ...(galleryDevice
+            ? {
+                  device: {
+                      kind: 'gallery' as const,
+                      ...(parsed.wallId ? { wallId: parsed.wallId } : {}),
+                      id: galleryDevice.deviceId
+                  }
+              }
+            : auth.device
+              ? {
+                    device: {
+                        kind: 'gallery' as const,
+                        ...(parsed.wallId ? { wallId: parsed.wallId } : {}),
+                        id: auth.device.id
+                    }
+                }
+              : {})
     };
 
     registerPeer(peer, {
@@ -1329,7 +1344,11 @@ handlers.set('request_bind_wall', ({ entry, data }) => {
                 requestId: data.requestId,
                 wallId: data.wallId,
                 allow: result.ok,
-                reason: result.ok ? 'not_required' : 'invalid'
+                reason: result.ok
+                    ? 'not_required'
+                    : result.error === 'unknown_wall'
+                      ? 'unknown_wall'
+                      : 'invalid'
             });
             return;
         }
@@ -1348,7 +1367,11 @@ handlers.set('request_bind_wall', ({ entry, data }) => {
                 requestId: data.requestId,
                 wallId: data.wallId,
                 allow: result.ok,
-                reason: result.ok ? 'not_required' : 'invalid'
+                reason: result.ok
+                    ? 'not_required'
+                    : result.error === 'unknown_wall'
+                      ? 'unknown_wall'
+                      : 'invalid'
             });
             return;
         }
@@ -1430,7 +1453,11 @@ handlers.set('bind_override_decision', ({ entry, data }) => {
             requestId: pending.requestId,
             wallId: pending.wallId,
             allow: result.ok,
-            reason: result.ok ? 'approved' : 'invalid'
+            reason: result.ok
+                ? 'approved'
+                : result.error === 'unknown_wall'
+                  ? 'unknown_wall'
+                  : 'invalid'
         });
     })();
 });
@@ -1565,19 +1592,32 @@ async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
             parsed.proof.signature
         );
         if (valid) {
+            const kind: 'wall' | 'controller' | 'gallery' =
+                pending.hello.specimen === 'wall'
+                    ? 'wall'
+                    : pending.hello.specimen === 'controller'
+                      ? 'controller'
+                      : 'gallery';
+            const ensuredDevice = await ensureDeviceByPublicKey({
+                publicKey: pending.hello.devicePublicKey,
+                kind
+            });
             authenticated = true;
             if (pending.hello.specimen === 'wall') {
                 resolvedAuth.device = {
+                    id: ensuredDevice.deviceId,
                     kind: 'wall',
                     wallId: pending.hello.wallId
                 };
             } else if (pending.hello.specimen === 'controller') {
                 resolvedAuth.device = {
+                    id: ensuredDevice.deviceId,
                     kind: 'controller',
                     wallId: pending.hello.wallId
                 };
             } else {
                 resolvedAuth.device = {
+                    id: ensuredDevice.deviceId,
                     kind: 'gallery',
                     ...(pending.hello.wallId ? { wallId: pending.hello.wallId } : {})
                 };
@@ -1721,6 +1761,10 @@ const hooks = defineHooks({
         }
 
         const meta = unregisterPeer(peer.id);
+        const disconnectedDeviceId = meta?.authContext?.device?.id;
+        if (typeof disconnectedDeviceId === 'string') {
+            void markDeviceDisconnectedById(disconnectedDeviceId);
+        }
         if (meta?.specimen === 'editor' && meta.scope?.scopeId !== undefined) {
             handleEditorScopeVacated(meta.scope.scopeId);
         }
@@ -1757,7 +1801,6 @@ const hooks = defineHooks({
             broadcastWallNodeCountToEditors(meta.wallId);
             broadcastWallBindingToEditors(meta.wallId);
             broadcastWallBindingToGalleries(meta.wallId);
-            syncWallNodeCountToDb(meta.wallId);
         }
         logPeerCounts();
     },
@@ -1977,6 +2020,25 @@ export const Route = createFileRoute('/bus')({
     broadcastProjectPublishChanged(projectId, publishedCommitId);
 };
 
+// Bridge for admin device revocation: guarantee immediate socket disconnection
+// for all peers authenticated as the deleted device id.
+(process as any).__DISCONNECT_DEVICE__ = (deviceId: string) => {
+    const normalized = deviceId.trim();
+    if (!normalized) return 0;
+    let closed = 0;
+    for (const entry of peers.values()) {
+        const peerDeviceId = entry.meta.authContext?.device?.id;
+        if (peerDeviceId !== normalized) continue;
+        try {
+            entry.peer.close();
+            closed += 1;
+        } catch {
+            // no-op
+        }
+    }
+    return closed;
+};
+
 (process as any).__BUS_RECOMPUTE_AUTH_CONTEXT__ = async (input?: {
     email?: string;
     projectId?: string;
@@ -1992,6 +2054,20 @@ export const Route = createFileRoute('/bus')({
     for (const entry of peersForWall) {
         if (entry.meta.specimen !== 'wall') continue;
         if (node && (entry.meta.col !== node.c || entry.meta.row !== node.r)) continue;
+        entry.peer.send(payload);
+        sent += 1;
+    }
+    return sent;
+};
+
+(process as any).__REBOOT_DEVICE__ = (deviceId: string) => {
+    const normalized = deviceId.trim();
+    if (!normalized) return 0;
+    const payload = JSON.stringify({ type: 'reboot' } satisfies GSMessage);
+    let sent = 0;
+    for (const entry of peers.values()) {
+        const peerDeviceId = entry.meta.authContext?.device?.id;
+        if (peerDeviceId !== normalized) continue;
         entry.peer.send(payload);
         sent += 1;
     }

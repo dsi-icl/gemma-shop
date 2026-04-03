@@ -177,6 +177,11 @@ export class ControllerEngine {
     }
 
     private reconcileMessage(data: GSMessage) {
+        if (data.type === 'reboot') {
+            window.location.reload();
+            return;
+        }
+
         if (data.type === 'wall_binding_status') {
             this.reconciledBinding = {
                 bound: data.bound,

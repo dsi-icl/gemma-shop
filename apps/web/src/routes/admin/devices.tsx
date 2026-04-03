@@ -1,7 +1,18 @@
-import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import { Button } from '@repo/ui/components/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogTitle
+} from '@repo/ui/components/dialog';
+import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
-import { adminDevicesQueryOptions, adminWallsQueryOptions } from '~/server/admin.queries';
+import { $adminDeleteDevice } from '~/server/admin.fns';
+import { adminDevicesQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/devices')({
     component: AdminDevices,
@@ -12,7 +23,22 @@ export const Route = createFileRoute('/admin/devices')({
 
 function AdminDevices() {
     const { data: devices = [] } = useSuspenseQuery(adminDevicesQueryOptions());
-    const { data: walls = [] } = useQuery(adminWallsQueryOptions());
+    const queryClient = useQueryClient();
+    const [deleteTargetDeviceId, setDeleteTargetDeviceId] = useState<string | null>(null);
+    const deleteDeviceMutation = useMutation({
+        mutationFn: async (deviceId: string) => $adminDeleteDevice({ data: { deviceId } }),
+        onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: adminDevicesQueryOptions().queryKey }),
+                queryClient.invalidateQueries({ queryKey: ['admin', 'walls'] })
+            ]);
+            toast.success('Device deleted');
+            setDeleteTargetDeviceId(null);
+        },
+        onError: (error: any) => {
+            toast.error(error?.message ?? 'Failed to delete device');
+        }
+    });
 
     return (
         <div className="space-y-6">
@@ -30,7 +56,7 @@ function AdminDevices() {
                                 <th className="px-4 py-3 text-left font-medium">Status</th>
                                 <th className="px-4 py-3 text-left font-medium">Assigned Wall</th>
                                 <th className="px-4 py-3 text-left font-medium">Last Seen</th>
-                                <th className="px-4 py-3 text-left font-medium">Updated</th>
+                                <th className="px-4 py-3 text-left font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -44,11 +70,7 @@ function AdminDevices() {
                                     <td className="px-4 py-3">
                                         {device.assignedWallId ? (
                                             (() => {
-                                                const wall = (walls as Array<any>).find(
-                                                    (entry) =>
-                                                        entry.wallId === device.assignedWallId
-                                                );
-                                                const wallId = wall?._id ?? device.assignedWallId;
+                                                const wallId = device.assignedWallId;
                                                 return (
                                                     <Link
                                                         to="/admin/walls/$wallId"
@@ -66,8 +88,15 @@ function AdminDevices() {
                                     <td className="px-4 py-3 text-xs text-muted-foreground">
                                         {device.lastSeenAt ?? '—'}
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                                        {device.updatedAt ?? '—'}
+                                    <td className="px-4 py-3">
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            disabled={deleteDeviceMutation.isPending}
+                                            onClick={() => setDeleteTargetDeviceId(device.deviceId)}
+                                        >
+                                            Delete
+                                        </Button>
                                     </td>
                                 </tr>
                             ))}
@@ -75,6 +104,39 @@ function AdminDevices() {
                     </table>
                 </div>
             )}
+
+            <Dialog
+                open={deleteTargetDeviceId !== null}
+                onOpenChange={(open) => {
+                    if (!open) setDeleteTargetDeviceId(null);
+                }}
+            >
+                <DialogContent className="w-80 p-5">
+                    <DialogTitle>Delete device</DialogTitle>
+                    <DialogDescription className="mt-1">
+                        {`Delete device "${deleteTargetDeviceId ?? ''}" permanently?`}
+                    </DialogDescription>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <DialogClose>
+                            <Button variant="outline" size="sm">
+                                Cancel
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={deleteDeviceMutation.isPending}
+                            onClick={() => {
+                                if (deleteTargetDeviceId) {
+                                    deleteDeviceMutation.mutate(deleteTargetDeviceId);
+                                }
+                            }}
+                        >
+                            {deleteDeviceMutation.isPending ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -6,6 +6,7 @@ import {
     adminCreateWall,
     adminDeleteWall,
     adminDevicesEnrollBySignature,
+    adminDeleteDevice,
     adminDevicesList,
     adminGetWall,
     adminListDevicesForWall,
@@ -160,6 +161,20 @@ export const $adminDevicesEnrollBySignature = createServerFn({ method: 'POST' })
             kind: data.kind,
             wallId: data.wallId,
             assignedBy: context.user.email
+        })
+    );
+
+export const $adminDeleteDevice = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            deviceId: z.string()
+        })
+    )
+    .handler(async ({ data, context }) =>
+        adminDeleteDevice({
+            deviceId: data.deviceId,
+            deletedBy: context.user.email
         })
     );
 

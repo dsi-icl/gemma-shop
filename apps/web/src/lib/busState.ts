@@ -19,6 +19,7 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
     peers: new Map<string, PeerEntry>(),
     editorsByScope: new Map<ScopeId, Set<PeerEntry>>(),
     wallsByWallId: new Map<string, Set<PeerEntry>>(),
+    wallsByIntendedWallSlug: new Map<string, Set<PeerEntry>>(),
     controllersByWallId: new Map<string, Set<PeerEntry>>(),
     galleriesByWallId: new Map<string, Set<PeerEntry>>(),
     allGalleries: new Set<PeerEntry>(),
@@ -36,6 +37,9 @@ const _hmr = (process as any).__BUS_HMR__ ?? {
 };
 if (!_hmr.controllerTransientByWallId) {
     _hmr.controllerTransientByWallId = new Map<string, Map<number, Layer>>();
+}
+if (!_hmr.wallsByIntendedWallSlug) {
+    _hmr.wallsByIntendedWallSlug = new Map<string, Set<PeerEntry>>();
 }
 if (!_hmr.galleriesByWallId) {
     _hmr.galleriesByWallId = new Map<string, Set<PeerEntry>>();
@@ -124,6 +128,7 @@ export type AuthContext = {
         email?: string;
     };
     device?: {
+        id: string;
         kind: 'wall' | 'controller' | 'gallery';
         wallId?: string;
     };
@@ -143,7 +148,14 @@ export type PeerMeta =
           };
           authContext?: AuthContext;
       }
-    | { specimen: 'wall'; wallId: string; col: number; row: number; authContext?: AuthContext }
+    | {
+          specimen: 'wall';
+          wallId: string;
+          intendedWallSlug?: string;
+          col: number;
+          row: number;
+          authContext?: AuthContext;
+      }
     | { specimen: 'controller'; wallId: string; authContext?: AuthContext }
     | { specimen: 'gallery'; wallId?: string; authContext?: AuthContext };
 
@@ -160,6 +172,7 @@ export const editorsByScope: Map<ScopeId, Set<PeerEntry>> = _hmr.editorsByScope;
 
 // Wall peer index: wallId → Set<PeerEntry>
 export const wallsByWallId: Map<string, Set<PeerEntry>> = _hmr.wallsByWallId;
+export const wallsByIntendedWallSlug: Map<string, Set<PeerEntry>> = _hmr.wallsByIntendedWallSlug;
 
 // Controller index: wallId → Set<PeerEntry>
 export const controllersByWallId: Map<string, Set<PeerEntry>> = _hmr.controllersByWallId;
@@ -207,6 +220,11 @@ export const peerCounts: {
 /** Live wall node count — O(1) read from in-memory index. */
 export function getWallNodeCount(wallId: string): number {
     return wallsByWallId.get(wallId)?.size ?? 0;
+}
+
+/** Live wall node count keyed by advertised wall id (w query param). */
+export function getIntendedWallNodeCount(wallId: string): number {
+    return wallsByIntendedWallSlug.get(wallId)?.size ?? 0;
 }
 
 // Binary opcodes
@@ -264,6 +282,9 @@ export function registerPeer(peer: Peer, meta: PeerMeta): PeerEntry {
         case 'wall': {
             cancelWallUnbindGrace(meta.wallId);
             addToIndex(wallsByWallId, meta.wallId, entry);
+            if (meta.intendedWallSlug) {
+                addToIndex(wallsByIntendedWallSlug, meta.intendedWallSlug, entry);
+            }
             const boundScopeId = wallBindings.get(meta.wallId);
             if (boundScopeId !== undefined) {
                 addToIndex(wallPeersByScope, boundScopeId, entry);
@@ -298,6 +319,9 @@ export function unregisterPeer(peerId: string): PeerMeta | null {
             break;
         case 'wall': {
             removeFromIndex(wallsByWallId, meta.wallId, entry);
+            if (meta.intendedWallSlug) {
+                removeFromIndex(wallsByIntendedWallSlug, meta.intendedWallSlug, entry);
+            }
             const boundScopeId = wallBindings.get(meta.wallId);
             if (boundScopeId !== undefined) {
                 removeFromIndex(wallPeersByScope, boundScopeId, entry);

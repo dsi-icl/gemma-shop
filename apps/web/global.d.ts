@@ -31,7 +31,11 @@ declare global {
                 projectId: string,
                 publishedCommitId: string | null
             ) => void;
+            __BUS_RECOMPUTE_AUTH_CONTEXT__?: (payload: { email?: string }) => Promise<unknown>;
+            __YJS_RECOMPUTE_AUTH_CONTEXT__?: (payload: { email?: string }) => Promise<unknown>;
+            __DISCONNECT_DEVICE__?: (deviceId: string) => number;
             __REBOOT_WALL__?: (wallId: string, node?: { c: number; r: number }) => number;
+            __REBOOT_DEVICE__?: (deviceId: string) => number;
             __YJS_UPSERT_LAYER__?: (payload: {
                 projectId: string;
                 commitId: string;

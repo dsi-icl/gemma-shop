@@ -44,6 +44,11 @@ export class GalleryEngine {
                 const data = GSMessageSchema.parse(JSON.parse(event.data));
                 this.messageCallbacks.forEach((cb) => cb(data));
 
+                if (data.type === 'reboot') {
+                    window.location.reload();
+                    return;
+                }
+
                 if (data.type === 'gallery_state') {
                     this.galleryStateCallbacks.forEach((cb) => cb(data));
                     return;

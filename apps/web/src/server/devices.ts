@@ -59,7 +59,6 @@ export async function ensureDeviceByPublicKey(input: {
             { _id: existing._id },
             {
                 $set: {
-                    kind: input.kind,
                     lastSeenAt: now,
                     updatedAt: now
                 }
@@ -73,7 +72,6 @@ export async function ensureDeviceByPublicKey(input: {
         });
         return serializeDevice({
             ...existing,
-            kind: input.kind,
             lastSeenAt: now,
             updatedAt: now
         });
@@ -164,4 +162,19 @@ export async function adminEnrollDeviceBySignature(input: {
 export async function adminListDevices() {
     const docs = await devices.find().sort({ updatedAt: -1 }).toArray();
     return docs.map(serializeDevice);
+}
+
+export async function markDeviceDisconnectedById(deviceId: string) {
+    const normalized = deviceId.trim();
+    if (!normalized) return;
+    const now = new Date().toISOString();
+    await devices.updateOne(
+        { deviceId: normalized },
+        {
+            $set: {
+                lastSeenAt: now,
+                updatedAt: now
+            }
+        }
+    );
 }

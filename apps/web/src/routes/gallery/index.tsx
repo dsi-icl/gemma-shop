@@ -316,7 +316,9 @@ function HomePage() {
                     toast.message(
                         result.reason === 'timeout'
                             ? 'The takeover request expired.'
-                            : 'Takeover request declined.'
+                            : result.reason === 'unknown_wall'
+                              ? 'This wall no longer exists.'
+                              : 'Takeover request declined.'
                     );
                 }
             })
