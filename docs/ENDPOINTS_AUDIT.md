@@ -1,263 +1,177 @@
 # Endpoints Audit
 
-Last reviewed: 2026-04-02 10:32
+Last reviewed: 2026-04-03
 
-Scope for this audit:
+This is a fresh, full endpoint inventory across REST, ServerFn, and WebSocket surfaces.
 
-- REST-style HTTP endpoints in `apps/web/src/routes/api/*` and Nitro addon HTTP routes.
-- TanStack server function endpoints (`createServerFn`) under `apps/web/src/server/*.fns.ts`.
-- WebSocket endpoints in Nitro addon routes.
+Column meanings:
 
-Usage labeling:
-
-- `Active (in-repo)` means there is at least one in-repo caller/reference beyond the endpoint definition.
-- `Active (external)` means the endpoint is intentionally consumed by external clients outside this repository.
-- `No active usage found` means no in-repo caller was found (endpoint may still be used by external clients/manual tooling).
+- `Has authContext`: whether request/connection-level auth context is derived and available.
+- `Device-signing policy`: current requirement/status for HTTP device signatures.
+- `Access control policy`: gates currently enforced (authentication only, not full authorization review).
+- `Comments`: usage notes, known limitations, and follow-up flags.
 
 ## REST Endpoints
 
-| Endpoint                     | File                                          | Access-control gates observed                                                                                                                                                                                                                                                                               | Usage status      | Usage evidence                                                                                                                     |
-| ---------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --- |
-| `GET/POST /api/auth/$`       | `apps/web/src/routes/api/auth/$.ts`           | Delegates to `auth.handler(request)` from Better Auth. Effective gates are configured in `packages/auth/src/auth.ts` (trusted origins, allowed hosts, session/cookie checks, auth plugins).                                                                                                                 | Active (in-repo)  | `authClient` in `packages/auth/src/auth-client.ts` with app login/logout usage in guest/admin/header components.                   |     |
-| `GET /api/assets/$uri`       | `apps/web/src/routes/api/assets/$uri.ts`      | No auth gate. Public asset serving endpoint with path sanitization (`basename`) and range/caching behavior.                                                                                                                                                                                                 | Active (in-repo)  | Many `/api/assets/...` consumers in app/UI components.                                                                             |     |
-| `ANY /api/uploads/$`         | `apps/web/src/routes/api/uploads/$.ts`        | Upload finalize enforces `uploadToken` presence + validity (`validateUploadToken`), finalize rate limit (`checkRateLimit`), and media type/magic-byte validation before asset write/DB insert.                                                                                                              | Active (in-repo)  | Upload endpoints used in `EditorSlate.tsx`, `UploadDialog.tsx`, `routes/upload/$projectId.tsx`.                                    |     |
-| `POST /api/web-screenshot`   | `apps/web/src/routes/api/web-screenshot.ts`   | Requires either valid user session (`auth.api.getSession`) **or** matching `x-internal-screenshot-token`; includes per-subject rate limit and SSRF protections (protocol/host/IP/allowlist checks).                                                                                                         | Active (in-repo)  | Called by `apps/web/src/components/EditorToolbar.tsx`.                                                                             |
-| `POST /api/report-csp`       | `apps/web/src/routes/api/report-csp.ts`       | No auth gate; accepts CSP report payloads and logs summaries.                                                                                                                                                                                                                                               | Active (in-repo)  | Report URL configured in `apps/web/src/start.ts`; smoke test posts to it.                                                          |
-| `POST /api/portal/v1/reboot` | `apps/web/src/routes/api/portal/v1/reboot.ts` | Requires bearer token (`Authorization` or `_gem_t`) validated by `validatePortalToken`; token wall-scope match check; current wall binding consistency check; optional node target validation.                                                                                                              | Active (external) | External client flow (for example control links/tokenized controller access) targets this API; no local in-repo fetch is expected. |
-| `GET /proxy` (Nitro addon)   | `apps/web/src/addons/routes/proxy.ts`         | Referrer/origin allowlist gate (`PROXY_ALLOWED_REFERRERS` + host-derived defaults), optional missing-referrer policy, upstream timeout/size cap, and framing-policy pre-check (`X-Frame-Options`/CSP frame-ancestors). **Not covered by TanStack `start.ts` middleware because it is a Nitro addon route.** | Active (in-repo)  | Used by wall route iframe checks/loads in `apps/web/src/routes/wall/index.tsx`.                                                    |
+| Endpoint                     | File                                          | Has authContext                                           | Device-signing policy                           | Access control policy                                                                  | Comments                                                                                       |
+| ---------------------------- | --------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `GET/POST /api/auth/$`       | `apps/web/src/routes/api/auth/$.ts`           | Yes (upstream in `start.ts`)                              | Not required                                    | Delegated to Better Auth handler                                                       | Active (in-repo). Auth provider endpoint.                                                      |
+| `GET /api/assets/$uri`       | `apps/web/src/routes/api/assets/$uri.ts`      | Yes (upstream in `start.ts`)                              | Optional at caller level; not required by route | Public asset stream; no actor check in route                                           | Active (in-repo). For private-asset policy, future authorization pass still needed.            |
+| `ANY /api/uploads/$`         | `apps/web/src/routes/api/uploads/$.ts`        | Yes (upstream in `start.ts`)                              | Not required (token-based flow)                 | Requires valid upload token; finalize rate limit; media/magic-byte checks              | Active (in-repo). Upload token store currently in-memory/unsigned (known limitation).          |
+| `POST /api/web-screenshot`   | `apps/web/src/routes/api/web-screenshot.ts`   | Yes (consumed from context)                               | Not accepted for auth at this endpoint          | Requires `authContext.user.email` (session user), plus rate limit and SSRF protections | Active (in-repo). User-session only by current policy.                                         |
+| `POST /api/report-csp`       | `apps/web/src/routes/api/report-csp.ts`       | Yes (upstream in `start.ts`)                              | Not required                                    | Public CSP report sink                                                                 | Active (in-repo via CSP reporting config).                                                     |
+| `POST /api/portal/v1/reboot` | `apps/web/src/routes/api/portal/v1/reboot.ts` | Yes (upstream in `start.ts`)                              | Not used here; bearer token flow instead        | Requires valid portal token; token wall binding consistency checks                     | Active (external API). Intentionally externally consumed.                                      |
+| `GET /proxy` (addon route)   | `apps/web/src/addons/routes/proxy.ts`         | Yes (resolved in handler via `resolveRequestAuthContext`) | Caller-dependent; wall flow signs request       | Origin/referrer allowlist policy; no actor enforcement yet                             | Active (in-repo). Not under `start.ts` middleware tree; keep tracked for route-tree migration. |
 
-## TanStack Server Function Endpoints
+## ServerFn Endpoints
 
 ### `apps/web/src/server/projects.fns.ts`
 
-| Server function endpoint      | Access-control gates observed                                                                                  | Usage status     |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `$listProjects`               | `authMiddleware` (authenticated user required).                                                                | Active (in-repo) |
-| `$listPublishedProjects`      | No auth middleware (public).                                                                                   | Active (in-repo) |
-| `$listKnownTags`              | `authMiddleware`.                                                                                              | Active (in-repo) |
-| `$listAssets`                 | `authMiddleware`; no explicit project-membership check in handler path.                                        | Active (in-repo) |
-| `$getProject`                 | `authMiddleware` + explicit owner/collaborator check in handler.                                               | Active (in-repo) |
-| `$getCommit`                  | `authMiddleware` + project owner/collaborator check in handler.                                                | Active (in-repo) |
-| `$createProject`              | `authMiddleware`.                                                                                              | Active (in-repo) |
-| `$updateProject`              | `authMiddleware`; no explicit owner/collaborator gate in handler path.                                         | Active (in-repo) |
-| `$archiveProject`             | `authMiddleware`; no explicit owner/collaborator gate in handler path.                                         | Active (in-repo) |
-| `$deleteAsset`                | `authMiddleware`; no explicit owner/collaborator gate in handler path.                                         | Active (in-repo) |
-| `$restoreProject`             | `authMiddleware`; no explicit owner/collaborator gate in handler path.                                         | Active (in-repo) |
-| `$publishCommit`              | `authMiddleware`; no explicit owner/collaborator gate in handler path.                                         | Active (in-repo) |
-| `$publishCustomRenderProject` | `authMiddleware`; no explicit owner/collaborator gate in handler path.                                         | Active (in-repo) |
-| `$getAuditLogs`               | `authMiddleware`; no explicit project-membership gate in handler path.                                         | Active (in-repo) |
-| `$ensureMutableHead`          | `authMiddleware`; no explicit owner/collaborator gate in handler path.                                         | Active (in-repo) |
-| `$getProjectCommits`          | `authMiddleware`; no explicit project-membership gate in handler path.                                         | Active (in-repo) |
-| `$createBranchHead`           | `authMiddleware`; no explicit owner/collaborator gate in handler path.                                         | Active (in-repo) |
-| `$promoteBranchHead`          | `authMiddleware`; no explicit owner/collaborator gate in handler path.                                         | Active (in-repo) |
-| `$copySlideInCommit`          | `authMiddleware`; no explicit actor/project membership gate in handler path.                                   | Active (in-repo) |
-| `$deleteSlideFromCommit`      | `authMiddleware`; no explicit actor/project membership gate in handler path.                                   | Active (in-repo) |
-| `$createUploadToken`          | `authMiddleware`.                                                                                              | Active (in-repo) |
-| `$revokeUploadToken`          | `authMiddleware` + token-level authorization check (`owner/admin/token owner`) in `revokeUploadTokenForActor`. | Active (in-repo) |
-| `$validateUploadToken`        | No auth middleware (token validation endpoint).                                                                | Active (in-repo) |
+| Endpoint                      | Has authContext | Device-signing policy | Access control policy                                  | Comments                                          |
+| ----------------------------- | --------------- | --------------------- | ------------------------------------------------------ | ------------------------------------------------- |
+| `$listProjects`               | Yes             | Not required          | `authMiddleware` (session user required)               | Active (in-repo).                                 |
+| `$listPublishedProjects`      | Yes             | Not required          | Public (no auth middleware)                            | Active (in-repo). Guest/public listing by design. |
+| `$listKnownTags`              | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$listAssets`                 | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$getProject`                 | Yes             | Not required          | `authMiddleware` + collaborator/owner check in handler | Active (in-repo).                                 |
+| `$getCommit`                  | Yes             | Not required          | `authMiddleware` + collaborator/owner check in handler | Active (in-repo).                                 |
+| `$createProject`              | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$updateProject`              | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$archiveProject`             | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$deleteAsset`                | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$restoreProject`             | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$publishCommit`              | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$publishCustomRenderProject` | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$getAuditLogs`               | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$ensureMutableHead`          | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$getProjectCommits`          | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$createBranchHead`           | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$promoteBranchHead`          | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$copySlideInCommit`          | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$deleteSlideFromCommit`      | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$createUploadToken`          | Yes             | Not required          | `authMiddleware`                                       | Active (in-repo).                                 |
+| `$revokeUploadToken`          | Yes             | Not required          | `authMiddleware` + actor-aware revoke check in service | Active (in-repo).                                 |
+| `$validateUploadToken`        | Yes             | Not required          | Public (token validation endpoint)                     | Active (in-repo).                                 |
 
 ### `apps/web/src/server/admin.fns.ts`
 
-All endpoints in this file use `adminMiddleware` (authenticated user with `role === 'admin'`):
-
-- `$adminListUsers` - Active (in-repo)
-- `$adminListProjects` - Active (in-repo)
-- `$adminGetStats` - Active (in-repo)
-- `$adminListWalls` - Active (in-repo)
-- `$adminListPublicAssets` - Active (in-repo)
-- `$adminDeletePublicAsset` - Active (in-repo)
-- `$adminUnbindWall` - Active (in-repo)
-- `$adminCreateWall` - Active (in-repo)
-- `$adminGetWall` - Active (in-repo)
-- `$adminUpdateWallMetadata` - Active (in-repo)
-- `$adminDeleteWall` - Active (in-repo)
-- `$adminGetUploadToken` - Active (in-repo)
-- `$adminGetWallBindingMeta` - Active (in-repo)
-- `$adminListConfig` - Active (in-repo)
-- `$adminSetConfig` - Active (in-repo)
-- `$adminSendSmtpTest` - Active (in-repo)
-- `$adminDevicesList` - Active (in-repo)
-- `$adminDevicesForWall` - Active (in-repo)
-- `$adminDevicesEnrollBySignature` - Active (in-repo)
+| Endpoint                         | Has authContext | Device-signing policy | Access control policy | Comments          |
+| -------------------------------- | --------------- | --------------------- | --------------------- | ----------------- |
+| `$adminListUsers`                | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminListProjects`             | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminGetStats`                 | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminListWalls`                | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminListPublicAssets`         | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminDeletePublicAsset`        | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminUnbindWall`               | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminCreateWall`               | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminGetWall`                  | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminUpdateWallMetadata`       | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminDeleteWall`               | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminGetUploadToken`           | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminGetWallBindingMeta`       | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminListConfig`               | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminSetConfig`                | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminSendSmtpTest`             | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminDevicesList`              | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminDevicesForWall`           | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminDevicesEnrollBySignature` | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
+| `$adminSetUserBanStatus`         | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
 
 ### `apps/web/src/server/walls.fns.ts`
 
-| Server function endpoint | Access-control gates observed                    | Usage status     |
-| ------------------------ | ------------------------------------------------ | ---------------- |
-| `$listWalls`             | `adminMiddleware` (admin user session required). | Active (in-repo) |
-| `$bindWall`              | No auth/admin middleware.                        | Active (in-repo) |
+| Endpoint     | Has authContext | Device-signing policy | Access control policy | Comments          |
+| ------------ | --------------- | --------------------- | --------------------- | ----------------- |
+| `$listWalls` | Yes             | Not required          | `adminMiddleware`     | Active (in-repo). |
 
 ### `apps/web/src/server/portal.fns.ts`
 
-| Server function endpoint      | Access-control gates observed                                                                          | Usage status     |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------- |
-| `$issueControllerPortalToken` | No auth/admin middleware; requires wall currently bound (`wallBindings` lookup) before token issuance. | Active (in-repo) |
+| Endpoint                      | Has authContext | Device-signing policy                                             | Access control policy                                                                                      | Comments                                                                         |
+| ----------------------------- | --------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `$issueControllerPortalToken` | Yes             | Recommended/used by gallery caller; not hard-required by endpoint | `actorAuthContextMiddleware` (any authenticated actor from derived context) + wall must currently be bound | Active (in-repo). This is still the bridge for external `/api/portal/v1/reboot`. |
 
 ### `apps/web/src/server/bootstrap.fns.ts`
 
-| Server function endpoint            | Access-control gates observed                                                                          | Usage status     |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------- |
-| `$bootstrapStatus`                  | No auth middleware; bootstrap-state based flow control in service layer.                               | Active (in-repo) |
-| `$requestBootstrapSetupCodeDisplay` | No auth middleware; bootstrap incomplete check.                                                        | Active (in-repo) |
-| `$verifyBootstrapSetupCode`         | No auth middleware; setup-code hash+expiry validation.                                                 | Active (in-repo) |
-| `$submitBootstrapAdminAndSmtp`      | No auth middleware; requires verified setup-code phase and validates SMTP/admin inputs + OTP dispatch. | Active (in-repo) |
-| `$verifyBootstrapOtpAndFinalize`    | No auth middleware; requires pending OTP state + expiry/hash validation.                               | Active (in-repo) |
-| `$finalizeFirstAdminForCurrentUser` | `freshAuthMiddleware` + bootstrap completion + email claim + "no admin exists yet" checks.             | Active (in-repo) |
+| Endpoint                            | Has authContext | Device-signing policy | Access control policy                               | Comments          |
+| ----------------------------------- | --------------- | --------------------- | --------------------------------------------------- | ----------------- |
+| `$bootstrapStatus`                  | Yes             | Not required          | Public bootstrap state endpoint                     | Active (in-repo). |
+| `$requestBootstrapSetupCodeDisplay` | Yes             | Not required          | Public bootstrap phase endpoint                     | Active (in-repo). |
+| `$verifyBootstrapSetupCode`         | Yes             | Not required          | Public bootstrap phase endpoint                     | Active (in-repo). |
+| `$submitBootstrapAdminAndSmtp`      | Yes             | Not required          | Public bootstrap phase endpoint                     | Active (in-repo). |
+| `$verifyBootstrapOtpAndFinalize`    | Yes             | Not required          | Public bootstrap phase endpoint                     | Active (in-repo). |
+| `$finalizeFirstAdminForCurrentUser` | Yes             | Not required          | `freshAuthMiddleware` + bootstrap completion checks | Active (in-repo). |
 
 ## WebSocket Endpoints
 
-| Endpoint                        | File                                      | Access-control gates observed                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Usage status     | Usage evidence                                                                                           |
-| ------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------- |
-| `WS /bus` (Nitro addon route)   | `apps/web/src/addons/routes/bus.ts`       | Handshake payload Zod validation (`HelloSchema`); role/specimen-based behavior (editor/wall/controller/gallery); mutation message rate-limiting + strike disconnects; bind override approval gate (editor requests can require gallery approval); some message handlers enforce specimen checks (e.g., `request_bind_wall` editor-only, `bind_override_decision` gallery-only, controller transient layer ops controller-only); device enrollment flow via `ensureDeviceByPublicKey`. | Active (in-repo) | Used by `EditorEngine`, `WallEngine`, `ControllerEngine`, `GalleryEngine` via `getWebSocketUrl('/bus')`. |
-| `WS /yjs/*` (Nitro addon route) | `apps/web/src/addons/routes/yjs/[...].ts` | Path/doc-name parsing and strict scope validation (`projectId`, `commitId`, `slideId`, `layerId` format + DB layer existence); no user/session middleware gate observed.                                                                                                                                                                                                                                                                                                              | Active (in-repo) | Used by Lexical provider in `apps/web/src/components/editor/providers.ts` via `getWebSocketUrl('/yjs')`. |
+### `WS /bus` (`apps/web/src/routes/bus.ts`)
 
-## Authentication And Enrollment Modalities (Security Hardening Prep)
+| Message type              | Direction     | Has authContext                                              | Device-signing policy                                                   | Access control policy                                                             | Comments                                   |
+| ------------------------- | ------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------ |
+| `hello`                   | C->S          | Editor: derived from session; device peers pending challenge | Required for device peers through challenge flow when using device auth | Editor requires session; wall/controller/gallery proceed to challenge             | Active. Entry point for peer registration. |
+| `hello_challenge`         | S->C          | N/A (challenge stage)                                        | Server nonce challenge                                                  | Sent to wall/controller/gallery after `hello`                                     | Active.                                    |
+| `hello_auth`              | C->S          | Completes peer auth context for device/portal paths          | Device signature and/or controller portal token                         | Signature validated for devicePublicKey path; portal token allowed for controller | Active.                                    |
+| `hello_authenticated`     | S->C          | Yes                                                          | N/A                                                                     | Sent after successful hello auth/registration                                     | Active.                                    |
+| `auth_denied`             | S->C          | N/A                                                          | N/A                                                                     | Sent when editor session missing (or recompute invalidates)                       | Active.                                    |
+| `switch_scope`            | C->S          | Yes (editor peer required)                                   | Not used at message level                                               | Editor-only enforced in handler                                                   | Active.                                    |
+| `rehydrate_please`        | C->S          | Yes (registered peer required)                               | Not used at message level                                               | Behavior depends on registered specimen                                           | Active.                                    |
+| `hydrate`                 | S->C          | Yes (peer scoped)                                            | N/A                                                                     | Snapshot payload for editor/wall/controller scope state                           | Active.                                    |
+| `upsert_layer`            | C<->S         | Yes                                                          | Not used at message level                                               | Registered peer required; transient path restricted to controller origin          | Active.                                    |
+| `delete_layer`            | C<->S         | Yes                                                          | Not used at message level                                               | Registered peer required; transient delete path restricted to controller origin   | Active.                                    |
+| `seed_scope`              | C->S          | Yes                                                          | Not used at message level                                               | Registered peer required                                                          | Active.                                    |
+| `clear_stage`             | C->S          | Yes                                                          | Not used at message level                                               | Registered peer required                                                          | Active.                                    |
+| `update_slides`           | C->S          | Yes                                                          | Not used at message level                                               | Registered peer required; persists and fanouts                                    | Active.                                    |
+| `slides_updated`          | S->C          | Yes                                                          | N/A                                                                     | Broadcast to editors/controllers on commit updates                                | Active.                                    |
+| `stage_dirty`             | C->S          | Yes                                                          | Not used at message level                                               | Registered peer required                                                          | Active.                                    |
+| `stage_save`              | C->S          | Yes                                                          | Not used at message level                                               | Registered peer required; async save + response                                   | Active.                                    |
+| `stage_save_response`     | S->C          | Yes                                                          | N/A                                                                     | Save result to requester and peer set                                             | Active.                                    |
+| `leave_scope`             | C->S          | Yes                                                          | Not used at message level                                               | Editor-only effect (unscopes editor peer)                                         | Active.                                    |
+| `bind_wall`               | C->S          | Yes                                                          | Not used at message level                                               | Accepted for controllers/system path; editor flow should use `request_bind_wall`  | Active.                                    |
+| `request_bind_wall`       | C->S          | Yes                                                          | Not used at message level                                               | Editor-only; may trigger gallery override flow                                    | Active.                                    |
+| `bind_override_requested` | S->C          | Yes                                                          | N/A                                                                     | Sent to gallery approvers for conflict resolution                                 | Active.                                    |
+| `bind_override_decision`  | C->S          | Yes                                                          | Not used at message level                                               | Gallery-only and wallId-scoped check enforced                                     | Active.                                    |
+| `bind_override_result`    | S->C          | Yes                                                          | N/A                                                                     | Result to requester/galleries (`approved/denied/timeout/...`)                     | Active.                                    |
+| `unbind_wall`             | C->S          | Yes                                                          | Not used at message level                                               | Registered peer required                                                          | Active.                                    |
+| `wall_binding_status`     | S->C          | Yes                                                          | N/A                                                                     | Broadcast/snapshot to editor/controller                                           | Active.                                    |
+| `wall_binding_changed`    | S->C          | Yes                                                          | N/A                                                                     | Broadcast to galleries/editors on binding changes                                 | Active.                                    |
+| `wall_unbound`            | S->C          | Yes                                                          | N/A                                                                     | Gallery-facing unbind event                                                       | Active.                                    |
+| `wall_node_count`         | S->C          | Yes                                                          | N/A                                                                     | Editor-facing wall connection counts                                              | Active.                                    |
+| `gallery_state`           | S->C          | Yes                                                          | N/A                                                                     | Gallery state snapshot (walls + published projects)                               | Active.                                    |
+| `project_publish_changed` | S->C          | Yes                                                          | N/A                                                                     | Publish/unpublish fanout                                                          | Active.                                    |
+| `asset_added`             | S->C          | Yes                                                          | N/A                                                                     | Upload bridge fanout to editors by project                                        | Active.                                    |
+| `device_enrollment`       | S->C          | Yes                                                          | N/A                                                                     | Enrollment hint for pending device records                                        | Active.                                    |
+| `video_play`              | C->S          | Yes                                                          | Not used at message level                                               | Registered peer required; playback ordering guards                                | Active.                                    |
+| `video_pause`             | C->S          | Yes                                                          | Not used at message level                                               | Registered peer required; playback ordering guards                                | Active.                                    |
+| `video_seek`              | C->S          | Yes                                                          | Not used at message level                                               | Registered peer required; playback ordering guards                                | Active.                                    |
+| `video_sync`              | S->C          | Yes                                                          | N/A                                                                     | Playback synchronization fanout                                                   | Active.                                    |
+| `reboot`                  | C->S and S->C | Yes                                                          | Not used at message level                                               | Reboot relayed to wall peers in scope/wall bridge calls                           | Active.                                    |
+| `rate_limited`            | S->C          | Yes                                                          | N/A                                                                     | WS mutation rate-limit response/strike path                                       | Active.                                    |
+| `ping` / `pong`           | C<->S         | Yes                                                          | N/A                                                                     | JSON clock messages; binary clock opcode path also exists                         | Active.                                    |
 
-### Current modalities in code
+Notes for `/bus`:
 
-User session modality:
+- WS mutation rate limiting is enforced for state-changing message types.
+- `authContext` is stored in `PeerMeta` after registration and used for recompute/disconnect flows.
+- `requesterEmail` for bind override is server-derived from peer auth context (not trusted client payload).
 
-- Used by TanStack server function middleware (`authMiddleware`, `freshAuthMiddleware`, `adminMiddleware`) via `packages/auth/src/tanstack/middleware.ts` and `_getUser` in `packages/auth/src/tanstack/functions.ts`.
-- Used by REST `/api/web-screenshot` session check (`auth.api.getSession(...)`).
+### `WS /yjs/$` (`apps/web/src/routes/yjs/$.ts`)
 
-Device identity and enrollment modality:
+| Message type                       | Direction | Has authContext                                       | Device-signing policy | Access control policy                                                                                      | Comments |
+| ---------------------------------- | --------- | ----------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------- | -------- |
+| `sync` (Yjs message type `0`)      | C<->S     | Yes (peer open must resolve authenticated user email) | Not used              | On `open`, unauthenticated peers are closed; `onMessage` waits for open completion and closes if not ready | Active.  |
+| `awareness` (Yjs message type `1`) | C<->S     | Yes (same as above)                                   | Not used              | Same authenticated-open gate as sync messages                                                              | Active.  |
 
-- Device keys are generated client-side and stored in localStorage via `getOrCreateDeviceIdentity(...)` in `apps/web/src/lib/deviceIdentity.ts`.
-- WS hello for wall/controller/gallery may send `devicePublicKey` (`HelloSchema` in `apps/web/src/lib/types.ts`).
-- Server upserts/loads device by public key (`ensureDeviceByPublicKey(...)` in `apps/web/src/server/devices.ts`), initially `pending`.
-- Admin enrollment flow verifies signature over `deviceId` (`adminEnrollDeviceBySignature(...)`) and marks device `active` with `assignedWallId`.
-- Device enrollment QR payload (`did`, `sig`) is produced on wall/gallery/controller routes and consumed by admin wall-devices scanner.
+Notes for `/yjs/$`:
 
-Token modality:
+- Peer state stores editor-shaped meta with `authContext.user.email`.
+- Scope/doc parsing and text-layer existence checks are enforced before doc hydration.
 
-- Upload token: `/api/uploads/$` and `$validateUploadToken` path.
-- Portal bearer token: `/api/portal/v1/reboot` via `validatePortalToken`.
+## Current Gaps To Track (Authentication Derivation Scope)
 
-### Important observations for hardening
+- `GET /proxy` resolves auth context but does not yet enforce actor-based gate; currently relies on origin/referrer policy.
+- `GET /api/assets/$uri` has auth context available but route currently behaves as public stream endpoint.
+- HTTP device-signing is available in the shared resolver/signing contract, but enforcement remains endpoint-by-endpoint (not globally mandatory).
 
-- WS `/bus` currently validates hello shape and specimen, but does not create a unified principal/auth context object per connection.
-- Device proof-of-possession is verified at enrollment time, but not re-verified during subsequent WS hello/connect requests.
-- For device hello paths, pending devices still connect and are registered (with enrollment notification), so "identified" and "authorized" are not consistently separated.
-- Editor WS identity currently relies on optional `requesterEmail` sent by client hello rather than server-bound session-derived identity.
+## No Active Usage Findings
 
-### Proposed unified auth context mechanism
-
-Create one server-side auth context resolver and use it consistently across REST handlers, server functions, and WS connections.
-Use a composite model where user/device/token credentials can coexist, each with independent verification state.
-
-Target type (conceptual):
-
-```ts
-type CredentialState<T> =
-    | { present: false }
-    | { present: true; verified: false; reason: string }
-    | { present: true; verified: true; value: T };
-
-export type AuthContext = {
-    transport: 'http' | 'ws';
-    credentials: {
-        user: CredentialState<{
-            userId: string;
-            email: string;
-            role: 'admin' | 'user';
-        }>;
-        device: CredentialState<{
-            deviceId: string;
-            kind: 'wall' | 'gallery' | 'controller';
-            status: 'pending' | 'active' | 'revoked';
-            assignedWallId: string | null;
-            publicKey: string;
-        }>;
-        token: CredentialState<{
-            type: 'upload' | 'portal';
-            subjectId: string;
-        }>;
-    };
-    authModes: Array<'user' | 'device' | 'token'>; // verified only
-    requestId: string;
-    ip: string | null;
-    userAgent: string | null;
-};
-```
-
-Resolver surface (one module):
-
-- `resolveAuthContextFromRequest(request: Request): Promise<AuthContext>`
-- `authenticateWsHello(peer, helloAuth): Promise<AuthContext>` (verification first, then context)
-
-Policy helpers (one module):
-
-- `requireUser(ctx)`
-- `requireAdmin(ctx)`
-- `requireActiveDevice(ctx, kind?, wallId?)`
-- `requireTokenType(ctx, tokenType)`
-- `requireAny(ctx, ['user', 'device' | 'token'])`
-- `requireAll(ctx, ['user', 'device' | 'token'])`
-
-### WS-specific hardening design
-
-For `/bus` hello, move from "shape-only hello" to "challenge + signature verification + authorization".
-
-Signature verification must happen before trusting device identity.
-
-Proposed flow:
-
-1. `open`: server emits one-time challenge (`nonce`, `issuedAt`, short TTL) bound to `peer.id`.
-2. client sends `hello_auth` including `specimen`, `deviceId`, `devicePublicKey`, `nonce`, `ts`, `sig`.
-3. server `authenticateWsHello(...)`:
-    - validates schema;
-    - verifies challenge match, single-use, TTL, and replay constraints;
-    - loads device record;
-    - verifies device/public-key consistency;
-    - verifies signature over canonical payload;
-    - resolves optional user session from handshake headers.
-4. server builds composite `AuthContext` and evaluates policy gates.
-5. only authorized peers proceed to `registerPeer(...)`.
-
-Policy outcomes:
-
-- `revoked` device: reject.
-- `pending` device: enrollment-only capabilities or reject (explicit policy).
-- `active` device: enforce assigned-wall constraints and device kind.
-- editor identity and sensitive actions should not trust client-provided `requesterEmail`; prefer server-derived session identity.
-
-### Recommended implementation slices
-
-1. Add `auth/context.ts` and `auth/policy.ts` in `apps/web/src/server/`.
-2. Integrate context into TanStack middleware and REST handlers first (non-WS path).
-3. Add WS challenge issuance and `authenticateWsHello(...)` for `/bus`, then gate `registerPeer` by policy.
-4. Replace editor hello `requesterEmail` trust path with server-derived user identity where available.
-5. Add audit logging fields from `AuthContext.credentials` consistently across endpoints.
-
-### Audit impact summary
-
-- This change does not alter endpoint inventory.
-- It changes how access-control gates are evaluated internally, making user/device/token semantics explicit and composable across transports.
-
-## Route Pipeline Coverage Notes
-
-- apps/web/src/addons/routes/proxy.ts is outside the TanStack route tree, so it does not inherit apps/web/src/start.ts middleware.
-- Follow-up action: move /proxy under apps/web/src/routes/\* so it inherits the shared request pipeline by default.
-
-## Authentication Derivation And Device-Signing Matrix (Current Policy)
-
-This matrix is the decision baseline to avoid re-litigating resolved points.
-
-| Surface        | Endpoint / Call                                     | AuthContext derivation                                                                    | Device-signing policy                                                | Current status                      |
-| -------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------- |
-| REST route     | `POST /api/web-screenshot`                          | Upstream TanStack `start.ts` middleware (`resolveRequestAuthContext`)                     | **No** (user session only)                                           | Implemented                         |
-| REST route     | `GET /proxy` (Nitro addon)                          | Direct call in route handler (`resolveRequestAuthContext`)                                | **Yes** for wall/controller/gallery callers                          | Implemented                         |
-| REST callsite  | `fetch('/proxy?check=1&url=...')` from wall route   | Signed client fetch (`signedFetch`)                                                       | **Yes** (`deviceKind: 'wall'`)                                       | Implemented                         |
-| REST callsite  | Asset binary downloads via `downloadAsset(...)`     | Upstream route derivation (`/api/assets/$uri`) + signed client fetch when on device pages | **Yes** on `/wall`, `/gallery`, `/controller`; no on user-only pages | Implemented                         |
-| ServerFn       | `$issueControllerPortalToken`                       | Upstream `start.ts` auth context + `actorAuthContextMiddleware`                           | **Yes** when called from gallery UI                                  | Implemented                         |
-| ServerFn       | `$listPublishedProjects`                            | Upstream `start.ts` auth context                                                          | **No** (user session dependent policy)                               | Pending policy is no device-signing |
-| ServerFn       | `$listWalls`                                        | Upstream `start.ts` auth context + `adminMiddleware`                                      | **No** (admin user session only)                                     | Implemented                         |
-| ServerFn group | `admin.fns.ts` endpoints                            | Upstream `start.ts` auth context + `adminMiddleware`                                      | **No** (admin user session only)                                     | Implemented                         |
-| ServerFn group | `projects.fns.ts` editor/quarry mutations and reads | Upstream `start.ts` auth context + auth/admin middleware where applicable                 | **No** (user session driven)                                         | Implemented                         |
-| ServerFn group | `bootstrap.fns.ts`                                  | Upstream `start.ts` auth context; guest/public bootstrap except finalize step             | **No**                                                               | Implemented                         |
-
-### ServerFn `.client()` rollout stance
-
-- `.client()` can standardize browser-side header injection for ServerFn calls where device-signing is required.
-- `.client()` does **not** cover server-side execution paths (SSR/loader server execution), which must rely on server-side auth context/session.
-- Current required scope is narrow and already covered without global `.client()` rollout (notably `$issueControllerPortalToken`).
+- No endpoint in this inventory is currently marked `No active usage found`.
+- `/api/portal/v1/reboot` is intentionally classified as `Active (external)`.
