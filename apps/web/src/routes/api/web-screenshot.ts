@@ -7,12 +7,13 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { ASSET_DIR } from '~/lib/serverVariables';
+import { canEditProject } from '~/server/projectAuthz';
 import {
     buildRateLimitSubjectKey,
     checkRateLimit,
     getClientIpFromHeaders
 } from '~/server/rateLimit';
-import type { RequestAuthContext } from '~/server/requestAuthContext';
+import type { AuthContext } from '~/server/requestAuthContext';
 
 function urlToBaseId(url: string): string {
     // Deterministic short id from URL for filenames
@@ -99,10 +100,10 @@ export const Route = createFileRoute('/api/web-screenshot')({
         handlers: {
             POST: async ({ request, context }: { request: Request; context?: unknown }) => {
                 const upstream = (context ?? {}) as {
-                    authContext?: RequestAuthContext;
+                    authContext?: AuthContext;
                     user?: Record<string, any> | null;
                 };
-                const authContext: RequestAuthContext = upstream.authContext ?? { guest: true };
+                const authContext: AuthContext = upstream.authContext ?? { guest: true };
                 const userEmail =
                     typeof authContext.user?.email === 'string' && authContext.user.email.length > 0
                         ? authContext.user.email
@@ -134,6 +135,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
 
                 let body: {
                     url: string;
+                    projectId: string;
                     width: number;
                     height: number;
                     scale?: number;
@@ -149,13 +151,24 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     });
                 }
 
-                const { url, width, height, scale = 1 } = body;
+                const { url, projectId, width, height, scale = 1 } = body;
 
-                if (!url || !width || !height) {
+                if (!url || !projectId || !width || !height) {
                     return new Response(
-                        JSON.stringify({ error: 'url, width, and height are required' }),
+                        JSON.stringify({ error: 'projectId, url, width, and height are required' }),
                         { status: 400, headers: { 'Content-Type': 'application/json' } }
                     );
+                }
+
+                const canEdit = await canEditProject(
+                    { email: userEmail, role: authContext.user?.role },
+                    projectId
+                );
+                if (!canEdit) {
+                    return new Response(JSON.stringify({ error: 'Access denied' }), {
+                        status: 403,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
                 }
                 if (
                     !Number.isFinite(width) ||

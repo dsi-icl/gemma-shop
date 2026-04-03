@@ -236,13 +236,14 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     }, [activeLayer]);
 
     const captureScreenshot = useCallback(async () => {
-        if (!activeLayer || activeLayer.type !== 'web' || !activeLayer.url) return;
+        if (!activeLayer || activeLayer.type !== 'web' || !activeLayer.url || !projectId) return;
         setIsCapturing(true);
         try {
             const res = await fetch('/api/web-screenshot', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    projectId,
                     url: activeLayer.url,
                     width: activeLayer.config.width,
                     height: activeLayer.config.height,
@@ -277,7 +278,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         } finally {
             setIsCapturing(false);
         }
-    }, [activeLayer]);
+    }, [activeLayer, projectId]);
 
     const updateActiveLayerFilters = useCallback(
         (updater: (current: LayerFilterState) => LayerFilterState) => {
