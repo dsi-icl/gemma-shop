@@ -1,3 +1,5 @@
+import type { AuditLogDocument } from '@repo/db/documents';
+
 import { serializeForClient, toScalarString, toIdString } from '~/server/serialization';
 
 export interface SerializedAuditLog {
@@ -9,7 +11,7 @@ export interface SerializedAuditLog {
     createdAt: string;
 }
 
-export function serializeAudit(doc: Record<string, unknown>): SerializedAuditLog {
+export function serializeAudit(doc: AuditLogDocument): SerializedAuditLog {
     return serializeForClient({
         _id: toIdString(doc._id),
         projectId: toIdString(doc.projectId),

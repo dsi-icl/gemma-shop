@@ -31,59 +31,24 @@ let prevBusSample: {
     outgoingTotal: number;
 } | null = null;
 
-type UserDoc = {
-    _id?: ObjectId;
-    id?: string;
-    email?: string;
-    [key: string]: unknown;
-};
-
-type SessionDoc = {
-    userId?: string | ObjectId;
-};
-
-type DeviceDoc = {
-    _id?: ObjectId;
-    [key: string]: unknown;
-};
-
-type WallDoc = {
-    _id: ObjectId;
-    wallId: string;
-    [key: string]: unknown;
-};
-
 function escapeRegex(input: string): string {
     return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function toWallDoc(raw: unknown): WallDoc | null {
-    if (!raw || typeof raw !== 'object') return null;
-    const wallIdValue = Reflect.get(raw, 'wallId');
-    const wallId = typeof wallIdValue === 'string' ? wallIdValue : null;
-    if (!wallId) return null;
-    const rawId = Reflect.get(raw, '_id');
-    if (!(rawId instanceof ObjectId)) return null;
-    return { ...raw, wallId, _id: rawId };
 }
 
 async function findWallById(identifier: string) {
     const normalized = identifier.trim();
     if (!normalized) return null;
 
-    const exactRaw = await collections.walls.findOne({ wallId: normalized });
-    const exact = toWallDoc(exactRaw);
+    const exact = await collections.walls.findOne({ wallId: normalized });
     if (exact) return exact;
 
-    const whitespaceTolerantRaw = await collections.walls.findOne({
+    const whitespaceTolerant = await collections.walls.findOne({
         wallId: { $regex: `^\\s*${escapeRegex(normalized)}\\s*$`, $options: 'i' }
     });
-    const whitespaceTolerant = toWallDoc(whitespaceTolerantRaw);
     if (whitespaceTolerant) return whitespaceTolerant;
 
     if (ObjectId.isValid(normalized)) {
-        const byIdRaw = await collections.walls.findOne({ _id: new ObjectId(normalized) });
-        const byId = toWallDoc(byIdRaw);
+        const byId = await collections.walls.findOne({ _id: new ObjectId(normalized) });
         if (byId) return byId;
     }
 
@@ -95,9 +60,9 @@ export async function adminListUsers() {
     const sessions = collections.sessions;
 
     const [docs, activeSessions] = await Promise.all([
-        users.find<UserDoc>({}).sort({ createdAt: -1 }).limit(500).toArray(),
+        users.find({}).sort({ createdAt: -1 }).limit(500).toArray(),
         sessions
-            .find<SessionDoc>({ expiresAt: { $gt: new Date() } })
+            .find({ expiresAt: { $gt: new Date() } })
             .project({ userId: 1 })
             .toArray()
     ]);
@@ -128,10 +93,7 @@ export async function adminGetStats() {
         collections.commits.countDocuments(),
         collections.assets.countDocuments({ deletedAt: { $exists: false } })
     ]);
-    const wallDocs = await collections.walls
-        .find<Record<string, unknown>>({})
-        .project({ wallId: 1 })
-        .toArray();
+    const wallDocs = await collections.walls.find({}).project({ wallId: 1 }).toArray();
     const wallSummary: Record<string, number> = {};
     for (const wall of wallDocs) {
         const wallId = typeof wall.wallId === 'string' ? wall.wallId : '';
@@ -330,12 +292,11 @@ export async function adminUpdateWallMetadata(input: {
     const existing = await findWallById(wallId);
     if (!existing) throw new Error('Wall not found');
 
-    const resultRaw = await collections.walls.findOneAndUpdate(
+    const result = await collections.walls.findOneAndUpdate(
         { _id: existing._id },
         { $set: update },
         { returnDocument: 'after' }
     );
-    const result = toWallDoc(resultRaw);
     if (!result) throw new Error('Wall not found');
     await logAuditSuccess({
         action: 'WALL_UPDATED',
@@ -387,7 +348,7 @@ export async function adminListDevicesForWall(wallId: string) {
     if (!existing) throw new Error('Wall not found');
     const resolvedWallId = String(existing.wallId ?? targetWallId).trim();
     const docs = await collections.devices
-        .find<DeviceDoc>({ assignedWallId: resolvedWallId })
+        .find({ assignedWallId: resolvedWallId })
         .sort({ updatedAt: -1 })
         .toArray();
     return docs.map((doc) =>

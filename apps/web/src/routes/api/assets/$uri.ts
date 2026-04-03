@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { basename, join, extname } from 'path';
 
+import type { AssetDocument } from '@repo/db/documents';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerOnlyFn } from '@tanstack/react-start';
 
@@ -44,7 +45,7 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
     const { baseId, requested } = parsed;
     const escapedBase = escapeRegex(baseId);
 
-    const assetMeta = (await collections.assets.findOne(
+    const assetMeta = await collections.assets.findOne(
         {
             $or: [
                 { url: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } },
@@ -52,7 +53,7 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
             ]
         },
         { projection: { url: 1, previewUrl: 1, sizes: 1 } }
-    )) as { url?: string; previewUrl?: string; sizes?: unknown[] } | null;
+    );
     if (!assetMeta) return null;
 
     const sizes = Array.from(
@@ -87,19 +88,19 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
 
 async function getAssetRecordForFilename(
     filename: string
-): Promise<{ projectId?: unknown } | null> {
+): Promise<Pick<AssetDocument, 'projectId'> | null> {
     const exact = await collections.assets.findOne(
         {
             $or: [{ url: filename }, { previewUrl: filename }]
         },
         { projection: { projectId: 1 } }
     );
-    if (exact) return exact as { projectId?: unknown };
+    if (exact) return exact;
 
     const parsed = parseVariantFilename(filename);
     if (!parsed) return null;
     const escapedBase = escapeRegex(parsed.baseId);
-    const variant = await collections.assets.findOne(
+    return await collections.assets.findOne(
         {
             $or: [
                 { url: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } },
@@ -108,7 +109,6 @@ async function getAssetRecordForFilename(
         },
         { projection: { projectId: 1 } }
     );
-    return (variant as { projectId?: unknown } | null) ?? null;
 }
 
 const getResponse = createServerOnlyFn(

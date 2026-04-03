@@ -1,4 +1,5 @@
 import '@tanstack/react-start/server-only';
+import type { ProjectDocument } from '@repo/db/documents';
 import { ObjectId } from 'mongodb';
 
 import { validateUploadToken } from '~/lib/uploadTokens';
@@ -17,15 +18,20 @@ function isAdmin(role: string | null | undefined): boolean {
     return role === 'admin';
 }
 
-function hasProjectMembership(project: any, email: string): boolean {
+function hasProjectMembership(
+    project: Pick<ProjectDocument, 'createdBy' | 'collaborators'>,
+    email: string
+): boolean {
     if (project.createdBy === email) return true;
-    const collaborators = Array.isArray(project.collaborators) ? project.collaborators : [];
-    return collaborators.some((c: any) => c?.email === email);
+    return project.collaborators.some((c) => c?.email === email);
 }
 
-function hasCollaboratorRole(project: any, email: string, roles: string[]): boolean {
-    const collaborators = Array.isArray(project.collaborators) ? project.collaborators : [];
-    return collaborators.some((c: any) => c?.email === email && roles.includes(c?.role));
+function hasCollaboratorRole(
+    project: Pick<ProjectDocument, 'collaborators'>,
+    email: string,
+    roles: string[]
+): boolean {
+    return project.collaborators.some((c) => c?.email === email && roles.includes(c?.role));
 }
 
 export async function canViewProject(actor: Actor, projectId: string): Promise<boolean> {
