@@ -1,31 +1,20 @@
 import { createMiddleware } from '@tanstack/react-start';
 
-import { hasAuthenticatedActor, type RequestAuthContext } from './requestAuthContext';
+import { hasAuthenticatedActor, type AuthContext } from './requestAuthContext';
 
 export const actorAuthContextMiddleware = createMiddleware().server(async ({ next, context }) => {
-    const upstream = (context ?? {}) as {
-        authContext?: RequestAuthContext;
-        user?: Record<string, any> | null;
-    };
-    const resolved = {
-        authContext: upstream.authContext ?? { guest: true },
-        user: upstream.user ?? null
+    const authContext = (context as { authContext?: AuthContext } | undefined)?.authContext ?? {
+        guest: true
     };
 
-    if (!hasAuthenticatedActor(resolved.authContext)) {
+    if (!hasAuthenticatedActor(authContext)) {
         throw new Error('Unauthorized');
     }
 
     return next({
         context: {
             ...(context ?? {}),
-            authContext: resolved.authContext,
-            user: resolved.user
+            authContext
         }
     });
 });
-
-export function getAuthContextEmail(authContext: RequestAuthContext | undefined): string | null {
-    const email = authContext?.user?.email;
-    return typeof email === 'string' && email.length > 0 ? email : null;
-}

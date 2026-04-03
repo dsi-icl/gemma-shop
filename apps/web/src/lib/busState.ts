@@ -3,6 +3,7 @@ import { ObjectId, type ChangeStreamDocument } from 'mongodb';
 
 import { makeScopeLabel, type GSMessage, type Layer, type ScopeState } from '~/lib/types';
 import { collections } from '~/server/collections';
+import type { AuthContext } from '~/server/requestAuthContext';
 
 import { revokePortalTokensForScope, revokePortalTokensForWall } from './portalTokens';
 
@@ -122,21 +123,6 @@ export function internScope(projectId: string, commitId: string, slideId: string
 export function scopeLabel(id: ScopeId): string {
     return scopeIdToKey.get(id) ?? `<unknown:${id}>`;
 }
-
-export type AuthContext = {
-    user?: {
-        email: string;
-        role: 'admin' | 'user';
-    };
-    device?: {
-        id: string;
-        kind: 'wall' | 'controller' | 'gallery';
-        wallId?: string;
-    };
-    portal?: {
-        wallId: string;
-    };
-};
 
 export type PeerMeta =
     | {

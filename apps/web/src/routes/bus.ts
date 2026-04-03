@@ -70,7 +70,6 @@ import {
     // layerNodes,
     // canSendNonCritical,
     EMPTY_HYDRATE,
-    type AuthContext,
     type PeerEntry
 } from '~/lib/busState';
 import { validatePortalToken } from '~/lib/portalTokens';
@@ -89,7 +88,7 @@ import {
     checkRateLimit,
     getClientIpFromHeaders
 } from '~/server/rateLimit';
-import { resolveAuthContextFromRequest } from '~/server/requestAuthContext';
+import { resolveAuthContextFromRequest, type AuthContext } from '~/server/requestAuthContext';
 
 // ── Binary opcodes ──────────────────────────────────────────────────────────
 

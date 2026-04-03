@@ -14,15 +14,15 @@ import {
 } from '~/lib/requestSignatureContract';
 import { collections } from '~/server/collections';
 
-type DeviceKind = 'wall' | 'controller' | 'gallery';
-
-export type RequestAuthContext = {
-    guest?: true;
+export type AuthContext = {
+    guest?: boolean;
     user?: {
         email: string;
+        role: 'admin' | 'user';
     };
     device?: {
-        kind: DeviceKind;
+        id: string;
+        kind: 'wall' | 'controller' | 'gallery';
         wallId?: string;
     };
     portal?: {
@@ -70,7 +70,9 @@ function toArrayBufferView(input: Uint8Array): Uint8Array<ArrayBuffer> {
     return out;
 }
 
-function normalizeDeviceKind(raw: string | null): DeviceKind | null {
+function normalizeDeviceKind(
+    raw: string | null
+): NonNullable<AuthContext['device']>['kind'] | null {
     if (raw === 'wall' || raw === 'controller' || raw === 'gallery') return raw;
     return null;
 }
@@ -104,14 +106,14 @@ function registerNonce(publicKey: string, nonce: string, now: number): boolean {
 
 async function verifyDeviceSignature(input: {
     request: Request;
-    kind: DeviceKind;
+    kind: NonNullable<AuthContext['device']>['kind'];
     publicKey: string;
     signature: string;
     timestamp: number;
     nonce: string;
     bodySha256: string | null;
     wallId?: string;
-}): Promise<RequestAuthContext['device'] | null> {
+}): Promise<AuthContext['device'] | null> {
     const now = Date.now();
     if (Math.abs(now - input.timestamp) > DEVICE_CLOCK_SKEW_MS) {
         return null;
@@ -177,6 +179,7 @@ async function verifyDeviceSignature(input: {
     }
 
     return {
+        id: String(deviceRecord._id),
         kind: input.kind,
         ...(assignedWallId
             ? { wallId: assignedWallId }
@@ -195,12 +198,11 @@ async function resolveDeviceContextFromRequest(request: Request) {
     const wallId = request.headers.get(DEVICE_HEADER_WALL_ID)?.trim();
     const bodySha256Raw = request.headers.get(DEVICE_HEADER_BODY_HASH)?.trim() ?? '';
 
-    if (!kind || !publicKey || !signature || !timestampRaw || !nonce) {
-        return null;
-    }
+    const authContext: AuthContext = {};
+    if (!kind || !publicKey || !signature || !timestampRaw || !nonce) return { authContext };
 
     const timestamp = Number(timestampRaw);
-    if (!Number.isFinite(timestamp) || !Number.isInteger(timestamp)) return null;
+    if (!Number.isFinite(timestamp) || !Number.isInteger(timestamp)) return { authContext };
 
     const bodySha256 =
         bodySha256Raw.length === 0
@@ -208,20 +210,23 @@ async function resolveDeviceContextFromRequest(request: Request) {
             : DEVICE_BODY_HASH_PATTERN.test(bodySha256Raw)
               ? bodySha256Raw
               : null;
-    if (bodySha256Raw.length > 0 && !bodySha256) {
-        return null;
-    }
+    if (bodySha256Raw.length > 0 && !bodySha256) return { authContext };
 
-    return verifyDeviceSignature({
-        request,
-        kind,
-        publicKey,
-        signature,
-        timestamp,
-        nonce,
-        bodySha256,
-        wallId: wallId && wallId.length > 0 ? wallId : undefined
-    });
+    authContext.device =
+        (await verifyDeviceSignature({
+            request,
+            kind,
+            publicKey,
+            signature,
+            timestamp,
+            nonce,
+            bodySha256,
+            wallId: wallId && wallId.length > 0 ? wallId : undefined
+        })) ?? undefined;
+
+    return {
+        authContext
+    };
 }
 
 export async function resolveAuthContextFromRequest(request: Request) {
@@ -241,21 +246,16 @@ export async function resolveAuthContextFromRequest(request: Request) {
 }
 
 export async function resolveRequestAuthContext(request: Request) {
-    const [{ authContext: sessionAuthContext }, device] = await Promise.all([
-        resolveAuthContextFromRequest(request),
-        resolveDeviceContextFromRequest(request)
-    ]);
+    const [{ authContext: sessionAuthContext }, { authContext: deviceAuthContext }] =
+        await Promise.all([
+            resolveAuthContextFromRequest(request),
+            resolveDeviceContextFromRequest(request)
+        ]);
 
-    const context: RequestAuthContext = {};
-
-    const userEmail = sessionAuthContext.user?.email;
-    if (typeof userEmail === 'string' && userEmail.length > 0) {
-        context.user = { email: userEmail };
-    }
-
-    if (device) {
-        context.device = device;
-    }
+    const authContext: AuthContext = {
+        user: sessionAuthContext.user,
+        device: deviceAuthContext.device
+    };
 
     const pathname = new URL(request.url).pathname;
     if (pathname.startsWith('/api/portal/')) {
@@ -263,18 +263,18 @@ export async function resolveRequestAuthContext(request: Request) {
         if (token) {
             const validated = validatePortalToken(token);
             if (validated) {
-                context.portal = { wallId: validated.wallId };
+                authContext.portal = { wallId: validated.wallId };
             }
         }
     }
 
-    if (!context.user && !context.device && !context.portal) {
-        context.guest = true;
+    if (!authContext.user && !authContext.device && !authContext.portal) {
+        authContext.guest = true;
     }
 
-    return { authContext: context };
+    return { authContext };
 }
 
-export function hasAuthenticatedActor(authContext: RequestAuthContext): boolean {
+export function hasAuthenticatedActor(authContext: AuthContext): boolean {
     return Boolean(authContext.user || authContext.device || authContext.portal);
 }
