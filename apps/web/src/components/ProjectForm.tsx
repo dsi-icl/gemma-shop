@@ -209,7 +209,7 @@ export function ProjectForm({
                     >
                         {(field) => (
                             <div className="grid gap-2">
-                                <Label htmlFor={field.name}>Name *</Label>
+                                <Label htmlFor={field.name}>Name / Full Title *</Label>
                                 <Input
                                     id={field.name}
                                     value={field.state.value}
@@ -257,10 +257,15 @@ export function ProjectForm({
                         )}
                     </form.Field>
 
-                    <form.Field name="description">
+                    <form.Field
+                        name="description"
+                        validators={{
+                            onChange: z.string().min(1, 'Description is required.')
+                        }}
+                    >
                         {(field) => (
                             <div className="grid gap-2">
-                                <Label htmlFor={field.name}>Description</Label>
+                                <Label htmlFor={field.name}>Description *</Label>
                                 <Textarea
                                     id={field.name}
                                     value={field.state.value}
@@ -272,6 +277,11 @@ export function ProjectForm({
                                     placeholder="Describe your project..."
                                     rows={4}
                                 />
+                                {field.state.meta.errors ? (
+                                    <em className="text-xs text-red-500">
+                                        {field.state.meta.errors.map((e) => e?.message).join(', ')}
+                                    </em>
+                                ) : null}
                             </div>
                         )}
                     </form.Field>
