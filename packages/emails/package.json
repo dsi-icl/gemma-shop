@@ -13,6 +13,7 @@
         "@react-email/components": "catalog:"
     },
     "devDependencies": {
+        "@react-email/preview-server": "catalog:",
         "@repo/tsconfig": "workspace:*",
         "react-email": "catalog:",
         "typescript": "catalog:"
