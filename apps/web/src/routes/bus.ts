@@ -1700,7 +1700,7 @@ function handleBinary(peer: Peer, rawData: ArrayBuffer) {
     const view = new DataView(rawData);
     const opcode = view.getUint8(0);
 
-    // Clock Ping → Pong (pre-allocated buffer, zero alloc)
+    // Clock Ping > Pong (pre-allocated buffer, zero alloc)
     if (opcode === OP.CLOCK_PING) {
         touchPing(peer.id);
         const t0 = view.getFloat64(1, true);

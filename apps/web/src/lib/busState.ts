@@ -165,20 +165,20 @@ export interface PeerEntry {
     meta: PeerMeta;
 }
 
-// Master peer registry: peerId → PeerEntry
+// Master peer registry: peerId > PeerEntry
 export const peers: Map<string, PeerEntry> = _hmr.peers;
 
-// Editor scope index: scopeId → Set<PeerEntry> — direct refs, no map lookup in broadcast
+// Editor scope index: scopeId > Set<PeerEntry> — direct refs, no map lookup in broadcast
 export const editorsByScope: Map<ScopeId, Set<PeerEntry>> = _hmr.editorsByScope;
 
-// Wall peer index: wallId → Set<PeerEntry>
+// Wall peer index: wallId > Set<PeerEntry>
 export const wallsByWallId: Map<string, Set<PeerEntry>> = _hmr.wallsByWallId;
 export const wallsByIntendedWallSlug: Map<string, Set<PeerEntry>> = _hmr.wallsByIntendedWallSlug;
 
-// Controller index: wallId → Set<PeerEntry>
+// Controller index: wallId > Set<PeerEntry>
 export const controllersByWallId: Map<string, Set<PeerEntry>> = _hmr.controllersByWallId;
 
-// Gallery watcher index: wallId → Set<PeerEntry>
+// Gallery watcher index: wallId > Set<PeerEntry>
 export const galleriesByWallId: Map<string, Set<PeerEntry>> = _hmr.galleriesByWallId;
 
 // Flat set of every gallery entry
@@ -187,15 +187,15 @@ export const allGalleries: Set<PeerEntry> = _hmr.allGalleries;
 // Flat set of every editor entry — for the __BROADCAST_EDITORS__ bridge
 export const allEditors: Set<PeerEntry> = _hmr.allEditors;
 
-// wallId → ScopeId: which content a wall displays
+// wallId > ScopeId: which content a wall displays
 export const wallBindings: Map<string, ScopeId> = _hmr.wallBindings;
 export const wallBindingSources: Map<string, 'live' | 'gallery'> = _hmr.wallBindingSources;
 
-// scopeId → Set<wallId>: reverse index used only for binding cleanup
+// scopeId > Set<wallId>: reverse index used only for binding cleanup
 export const scopeWatchers: Map<ScopeId, Set<string>> = _hmr.scopeWatchers;
 
 /**
- * Flattened broadcast index: scopeId → Set<PeerEntry> of wall peers watching this scope.
+ * Flattened broadcast index: scopeId > Set<PeerEntry> of wall peers watching this scope.
  * Updated on bind/unbind/register/unregister (cold path) so broadcast (hot path) is one loop.
  */
 export const wallPeersByScope: Map<ScopeId, Set<PeerEntry>> = _hmr.wallPeersByScope;
@@ -207,7 +207,7 @@ export const controllerTransientByWallId: Map<
 // Active video registry for the VSYNC loop only playing videos are tracked
 export const activeVideos: Map<number, { scopeId: ScopeId; layer: Layer }> = _hmr.activeVideos;
 
-/** Layer → wall peers whose viewport intersects the layer AABB. Updated on upsert/bind. */
+/** Layer > wall peers whose viewport intersects the layer AABB. Updated on upsert/bind. */
 // export const layerNodes = new Map<number, Set<PeerEntry>>();
 
 /** Running peer counts — O(1) reads instead of iterating all peers */
@@ -1466,7 +1466,7 @@ function startAssetChangeStream() {
                     name: doc.name,
                     url: doc.url,
                     size: doc.size,
-                    // Convert null → undefined so JSON.stringify strips them
+                    // Convert null > undefined so JSON.stringify strips them
                     // (Zod z.string().optional() rejects null)
                     mimeType: doc.mimeType ?? undefined,
                     blurhash: doc.blurhash ?? undefined,
