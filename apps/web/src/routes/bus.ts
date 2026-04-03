@@ -217,7 +217,6 @@ const WS_MUTATION_MESSAGE_TYPES = new Set([
 
 const VIEW_PROJECT_MESSAGE_TYPES = new Set([
     'rehydrate_please',
-    'seed_scope',
     'video_play',
     'video_pause',
     'video_seek'
@@ -227,6 +226,7 @@ const EDIT_PROJECT_MESSAGE_TYPES = new Set([
     'clear_stage',
     'upsert_layer',
     'delete_layer',
+    'seed_scope',
     'update_slides',
     'stage_dirty',
     'stage_save',
@@ -237,6 +237,7 @@ const editorProjectPermissions = new Map<
     string,
     { projectId: string; canView: boolean; canEdit: boolean }
 >();
+const WS_HANDSHAKE_MESSAGE_TYPES = new Set(['hello', 'hello_auth']);
 
 // TODO Review if authed logic is waranted here
 function getWsRateLimitIdentity(peer: Peer): string {
@@ -246,6 +247,11 @@ function getWsRateLimitIdentity(peer: Peer): string {
         ip,
         peerId: peer.id
     });
+}
+
+function getWsHandshakeRateLimitIdentity(peer: Peer): string {
+    const ip = getClientIpFromHeaders(peer.request?.headers as Headers | undefined);
+    return buildRateLimitSubjectKey({ ip });
 }
 
 function getEntryProjectId(entry: PeerEntry): string | null {
@@ -411,6 +417,27 @@ async function enforceWsRateLimit(
         } catch {
             // no-op
         }
+    }
+    return false;
+}
+
+function enforceWsHandshakeRateLimit(peer: Peer, messageType: string): boolean {
+    if (!WS_HANDSHAKE_MESSAGE_TYPES.has(messageType)) return true;
+    const result = checkRateLimit({
+        subjectKey: getWsHandshakeRateLimitIdentity(peer)
+    });
+    if (result.allowed) return true;
+    peer.send(
+        JSON.stringify({
+            type: 'rate_limited',
+            messageType,
+            retryAfterMs: result.retryAfterMs
+        })
+    );
+    try {
+        peer.close();
+    } catch {
+        // no-op
     }
     return false;
 }
@@ -2066,12 +2093,14 @@ const hooks = defineHooks({
 
                 // Hello: full Zod validation (cold path, once per connection)
                 if (data.type === 'hello') {
+                    if (!enforceWsHandshakeRateLimit(peer, data.type)) return;
                     void handleHello(peer, data).catch((err) => {
                         console.error(`[WS] Hello handler failed for peer ${peer.id}:`, err);
                     });
                     return;
                 }
                 if (data.type === 'hello_auth') {
+                    if (!enforceWsHandshakeRateLimit(peer, data.type)) return;
                     void handleHelloAuth(peer, data).catch((err) => {
                         console.error(`[WS] Hello auth handler failed for peer ${peer.id}:`, err);
                     });
@@ -2149,12 +2178,14 @@ const hooks = defineHooks({
                 }
 
                 if (data.type === 'hello') {
+                    if (!enforceWsHandshakeRateLimit(peer, data.type)) return;
                     void handleHello(peer, data).catch((err) => {
                         console.error(`[WS] Hello handler failed for peer ${peer.id}:`, err);
                     });
                     return;
                 }
                 if (data.type === 'hello_auth') {
+                    if (!enforceWsHandshakeRateLimit(peer, data.type)) return;
                     void handleHelloAuth(peer, data).catch((err) => {
                         console.error(`[WS] Hello auth handler failed for peer ${peer.id}:`, err);
                     });

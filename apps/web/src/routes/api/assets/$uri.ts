@@ -24,6 +24,19 @@ function escapeRegex(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function normalizeProjectId(value: unknown): string | null {
+    if (typeof value === 'string' && value.length > 0) return value;
+    if (
+        value &&
+        typeof value === 'object' &&
+        'toHexString' in value &&
+        typeof (value as { toHexString?: unknown }).toHexString === 'function'
+    ) {
+        return (value as { toHexString: () => string }).toHexString();
+    }
+    return null;
+}
+
 async function chooseVariantFallbackFilename(requestedFilename: string): Promise<string | null> {
     const parsed = parseVariantFilename(requestedFilename);
     if (!parsed) return null;
@@ -231,16 +244,16 @@ export const Route = createFileRoute('/api/assets/$uri')({
                 }
 
                 if (user && user.role !== 'admin') {
-                    const projectId = assetRecord.projectId ? String(assetRecord.projectId) : null;
+                    const projectId = normalizeProjectId(assetRecord.projectId);
                     if (!projectId) {
-                        return new Response('Forbidden', { status: 403 });
+                        return new Response('Not Found', { status: 404 });
                     }
                     const allowed = await canViewProject(
                         { email: user.email, role: user.role },
                         projectId
                     );
                     if (!allowed) {
-                        return new Response('Forbidden', { status: 403 });
+                        return new Response('Not Found', { status: 404 });
                     }
                 }
 
