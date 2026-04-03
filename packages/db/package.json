@@ -6,7 +6,8 @@
     "exports": {
         ".": "./src/index.ts",
         "./config": "./src/config.ts",
-        "./schema": "./src/schema/index.ts"
+        "./schema": "./src/schema/index.ts",
+        "./documents": "./src/documents.ts"
     },
     "dependencies": {
         "@repo/env": "workspace:*",

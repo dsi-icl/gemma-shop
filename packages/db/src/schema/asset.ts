@@ -14,6 +14,7 @@ export const AssetSchema = z.object({
     previewUrl: z.string().nullish(),
     sizes: z.array(z.number()).nullish(),
     public: z.boolean().nullish().default(false),
+    hidden: z.boolean().optional(),
     deletedAt: z.iso.datetime().nullish(),
     deletedBy: z.string().nullish(),
     createdAt: z.iso.datetime(),
