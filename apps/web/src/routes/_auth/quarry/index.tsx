@@ -139,7 +139,7 @@ function QuarryIndex() {
                                 Archived
                             </Badge>
                         )}
-                        {info.row.original.publishedCommitId && (
+                        {info.row.original.visibility === 'public' && (
                             <Badge variant="default" className="text-xs">
                                 Public
                             </Badge>
