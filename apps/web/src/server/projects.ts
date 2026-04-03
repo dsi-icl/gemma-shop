@@ -48,12 +48,7 @@ export async function listPublishedProjects() {
     const visibleProjects = projects.filter((doc: any) => {
         const visibility = doc.visibility === 'public' ? 'public' : 'private';
         const hasPublishedCommit = Boolean(doc.publishedCommitId);
-        if (visibility === 'public' && hasPublishedCommit) return true;
-        const tags = Array.isArray(doc.tags) ? doc.tags : [];
-        const hasPublicTag = tags.some(
-            (tag: unknown) => typeof tag === 'string' && tag === 'public'
-        );
-        return hasPublishedCommit || hasPublicTag;
+        return visibility === 'public' && hasPublishedCommit;
     });
 
     const serialized = visibleProjects.map(serializeProject);
@@ -127,7 +122,7 @@ export async function listKnownTags(userEmail: string): Promise<string[]> {
         for (const raw of tags) {
             if (typeof raw !== 'string') continue;
             const tag = raw.trim().toLowerCase();
-            if (!tag || tag === 'public') continue;
+            if (!tag) continue;
             usage.set(tag, (usage.get(tag) ?? 0) + 1);
         }
     }
@@ -316,14 +311,7 @@ export async function publishCommit(projectId: string, commitId: string | null, 
     const existing = await projects.findOne({ _id: new ObjectId(projectId) });
     if (!existing) throw new Error('Project not found');
 
-    const tags: string[] = existing.tags || [];
     const isPublishing = commitId !== null;
-
-    const updatedTags = isPublishing
-        ? tags.includes('public')
-            ? tags
-            : [...tags, 'public']
-        : tags.filter((t: string) => t !== 'public');
 
     await projects.updateOne(
         { _id: new ObjectId(projectId) },
@@ -331,7 +319,6 @@ export async function publishCommit(projectId: string, commitId: string | null, 
             $set: {
                 publishedCommitId: commitId,
                 visibility: isPublishing ? 'public' : 'private',
-                tags: updatedTags,
                 updatedAt: new Date().toISOString()
             }
         }

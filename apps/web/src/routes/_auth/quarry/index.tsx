@@ -157,7 +157,6 @@ function QuarryIndex() {
                 <div className="flex flex-wrap gap-1">
                     {info
                         .getValue()
-                        .filter((t) => t !== 'public')
                         .slice(0, 3)
                         .map((tag) => (
                             <Badge key={tag} variant="outline" className="text-xs">

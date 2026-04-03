@@ -408,7 +408,7 @@ function HomePage() {
                 name: p.name,
                 author: p.authorOrganisation,
                 description: p.description,
-                tags: p.tags.filter((t) => t !== 'public'),
+                tags: p.tags,
                 publishedCommitId: p.publishedCommitId,
                 customControlUrl: (p as { customControlUrl?: string }).customControlUrl,
                 imageUrl: p.heroImages[0] ?? '',

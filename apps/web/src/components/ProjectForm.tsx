@@ -293,6 +293,29 @@ export function ProjectForm({
                         )}
                     </form.Field>
 
+                    <form.Field name="visibility">
+                        {(field) => (
+                            <div className="grid gap-2">
+                                <Label htmlFor={field.name}>Visibility</Label>
+                                <select
+                                    id={field.name}
+                                    value={field.state.value}
+                                    onBlur={field.handleBlur}
+                                    onChange={(e) => {
+                                        field.handleChange(
+                                            e.target.value === 'public' ? 'public' : 'private'
+                                        );
+                                        scheduleAutoSave();
+                                    }}
+                                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                >
+                                    <option value="private">Private</option>
+                                    <option value="public">Public</option>
+                                </select>
+                            </div>
+                        )}
+                    </form.Field>
+
                     <form.Field
                         name="customControlUrl"
                         validators={{
