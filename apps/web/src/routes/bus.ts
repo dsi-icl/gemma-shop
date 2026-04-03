@@ -544,12 +544,10 @@ function broadcastWallBindingToGalleries(wallId: string) {
     }
 }
 
-function broadcastProjectPublishChanged(projectId: string, publishedCommitId: string | null) {
+function broadcastProjectsChanged(projectId?: string) {
     const payload = JSON.stringify({
-        type: 'project_publish_changed',
-        projectId,
-        published: Boolean(publishedCommitId),
-        publishedCommitId
+        type: 'projects_changed',
+        ...(projectId ? { projectId } : {})
     } satisfies GSMessage);
     for (const entry of allGalleries) {
         entry.peer.send(payload);
@@ -2016,12 +2014,9 @@ export const Route = createFileRoute('/bus')({
     broadcastWallBindingToGalleries(wallId);
 };
 
-// Bridge for publish/unpublish mutations performed via server functions
-(process as any).__BROADCAST_PROJECT_PUBLISH_CHANGED__ = (
-    projectId: string,
-    publishedCommitId: string | null
-) => {
-    broadcastProjectPublishChanged(projectId, publishedCommitId);
+// Bridge for server-side project mutations to refresh gallery listings.
+(process as any).__BROADCAST_PROJECTS_CHANGED__ = (projectId?: string) => {
+    broadcastProjectsChanged(projectId);
 };
 
 // Bridge for admin device revocation: guarantee immediate socket disconnection

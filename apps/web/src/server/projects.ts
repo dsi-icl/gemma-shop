@@ -191,6 +191,7 @@ export async function createProject(input: CreateProjectInput, userEmail: string
         changes: { name: input.name }
     });
 
+    process.__BROADCAST_PROJECTS_CHANGED__?.(result.insertedId.toHexString());
     return serializeProject({ ...doc, _id: result.insertedId });
 }
 
@@ -229,6 +230,7 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
         );
     }
 
+    process.__BROADCAST_PROJECTS_CHANGED__?.(_id);
     return serializeProject(result);
 }
 
@@ -255,6 +257,8 @@ export async function archiveProject(id: string, userEmail: string) {
         resourceId: id,
         changes: { deletedAt: true }
     });
+
+    process.__BROADCAST_PROJECTS_CHANGED__?.(id);
 }
 
 export async function deleteAsset(assetId: string, userEmail: string) {
@@ -305,6 +309,8 @@ export async function restoreProject(id: string, userEmail: string) {
         resourceId: id,
         changes: { deletedAt: false }
     });
+
+    process.__BROADCAST_PROJECTS_CHANGED__?.(id);
 }
 
 export async function publishCommit(projectId: string, commitId: string | null, userEmail: string) {
@@ -333,7 +339,7 @@ export async function publishCommit(projectId: string, commitId: string | null, 
         changes: { publishedCommitId: commitId }
     });
 
-    process.__BROADCAST_PROJECT_PUBLISH_CHANGED__?.(projectId, commitId);
+    process.__BROADCAST_PROJECTS_CHANGED__?.(projectId);
 
     return isPublishing;
 }

@@ -6,14 +6,14 @@ import { GSMessageSchema, type GSMessage } from './types';
 type GalleryState = Extract<GSMessage, { type: 'gallery_state' }>;
 type WallBindingChanged = Extract<GSMessage, { type: 'wall_binding_changed' }>;
 type WallUnbound = Extract<GSMessage, { type: 'wall_unbound' }>;
-type ProjectPublishChanged = Extract<GSMessage, { type: 'project_publish_changed' }>;
+type ProjectsChanged = Extract<GSMessage, { type: 'projects_changed' }>;
 type BindOverrideRequested = Extract<GSMessage, { type: 'bind_override_requested' }>;
 type BindOverrideResult = Extract<GSMessage, { type: 'bind_override_result' }>;
 type ServerMessageCallback = (data: GSMessage) => void;
 
 type WallBindingChangedCallback = (data: WallBindingChanged) => void;
 type WallUnboundCallback = (data: WallUnbound) => void;
-type ProjectPublishChangedCallback = (data: ProjectPublishChanged) => void;
+type ProjectsChangedCallback = (data: ProjectsChanged) => void;
 type BindOverrideRequestedCallback = (data: BindOverrideRequested) => void;
 type BindOverrideResultCallback = (data: BindOverrideResult) => void;
 type GalleryStateCallback = (state: GalleryState) => void;
@@ -24,7 +24,7 @@ export class GalleryEngine {
     private messageCallbacks = new Set<ServerMessageCallback>();
     private wallBindingChangedCallbacks = new Set<WallBindingChangedCallback>();
     private wallUnboundCallbacks = new Set<WallUnboundCallback>();
-    private projectPublishChangedCallbacks = new Set<ProjectPublishChangedCallback>();
+    private projectsChangedCallbacks = new Set<ProjectsChangedCallback>();
     private bindOverrideRequestedCallbacks = new Set<BindOverrideRequestedCallback>();
     private bindOverrideResultCallbacks = new Set<BindOverrideResultCallback>();
     private galleryStateCallbacks = new Set<GalleryStateCallback>();
@@ -64,8 +64,8 @@ export class GalleryEngine {
                     return;
                 }
 
-                if (data.type === 'project_publish_changed') {
-                    this.projectPublishChangedCallbacks.forEach((cb) => cb(data));
+                if (data.type === 'projects_changed') {
+                    this.projectsChangedCallbacks.forEach((cb) => cb(data));
                     return;
                 }
 
@@ -98,7 +98,7 @@ export class GalleryEngine {
         this.messageCallbacks.clear();
         this.wallBindingChangedCallbacks.clear();
         this.wallUnboundCallbacks.clear();
-        this.projectPublishChangedCallbacks.clear();
+        this.projectsChangedCallbacks.clear();
         this.bindOverrideRequestedCallbacks.clear();
         this.bindOverrideResultCallbacks.clear();
         this.galleryStateCallbacks.clear();
@@ -139,9 +139,9 @@ export class GalleryEngine {
         return () => this.wallUnboundCallbacks.delete(cb);
     }
 
-    public onProjectPublishChanged(cb: ProjectPublishChangedCallback) {
-        this.projectPublishChangedCallbacks.add(cb);
-        return () => this.projectPublishChangedCallbacks.delete(cb);
+    public onProjectsChanged(cb: ProjectsChangedCallback) {
+        this.projectsChangedCallbacks.add(cb);
+        return () => this.projectsChangedCallbacks.delete(cb);
     }
 
     public onBindOverrideRequested(cb: BindOverrideRequestedCallback) {

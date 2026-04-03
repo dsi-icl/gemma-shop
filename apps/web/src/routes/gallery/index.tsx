@@ -239,17 +239,7 @@ function HomePage() {
                     }
                 }
             }),
-            galleryEngine.onProjectPublishChanged((event) => {
-                if (!event.published) {
-                    queryClient.setQueryData<ProjectWithId[]>(
-                        publishedProjectsQueryKey,
-                        (current) =>
-                            (Array.isArray(current) ? current : []).filter(
-                                (project) => project._id !== event.projectId
-                            )
-                    );
-                }
-
+            galleryEngine.onProjectsChanged(() => {
                 void queryClient.invalidateQueries({
                     queryKey: publishedProjectsQueryKey
                 });

@@ -386,10 +386,8 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         wallId: z.string()
     }),
     z.object({
-        type: z.literal('project_publish_changed'),
-        projectId: z.string(),
-        published: z.boolean(),
-        publishedCommitId: z.string().nullable().optional()
+        type: z.literal('projects_changed'),
+        projectId: z.string().optional()
     }),
     z.object({
         type: z.literal('device_enrollment'),
