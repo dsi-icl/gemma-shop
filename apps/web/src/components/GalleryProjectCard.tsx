@@ -6,6 +6,7 @@ import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
 import { GalleryEngine } from '~/lib/galleryEngine';
+import { createSignedServerFnFetch } from '~/lib/signedFetch';
 import { $issueControllerPortalToken } from '~/server/portal.fns';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
@@ -106,7 +107,13 @@ export function GalleryProjectCard({
 
     const handleControllerTokenRequest = useCallback(async (wallId: string) => {
         try {
-            const result = await $issueControllerPortalToken({ data: { wallId } });
+            const result = await $issueControllerPortalToken({
+                data: { wallId },
+                fetch: createSignedServerFnFetch({
+                    deviceKind: 'gallery',
+                    wallId
+                })
+            });
             return result.token;
         } catch (e: any) {
             toast.error(e?.message ?? 'Could not initialize controller API token');

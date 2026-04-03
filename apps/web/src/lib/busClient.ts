@@ -225,7 +225,7 @@ export class BusClient {
                 : null);
         if (identity) {
             try {
-                proof.signature = await identity.signDeviceId(challenge.nonce);
+                proof.signature = await identity.signPayload(challenge.nonce);
             } catch (error) {
                 console.warn('[BusClient] Failed to sign hello challenge', error);
             }

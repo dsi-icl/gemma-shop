@@ -1,6 +1,17 @@
 import { resolveAuthContextFromHeaders } from '@repo/auth/auth-context';
 
 import { validatePortalToken } from '~/lib/portalTokens';
+import {
+    DEVICE_BODY_HASH_PATTERN,
+    DEVICE_HEADER_BODY_HASH,
+    DEVICE_HEADER_KIND,
+    DEVICE_HEADER_NONCE,
+    DEVICE_HEADER_PUBLIC_KEY,
+    DEVICE_HEADER_SIGNATURE,
+    DEVICE_HEADER_TIMESTAMP,
+    DEVICE_HEADER_WALL_ID,
+    buildCanonicalDeviceSignaturePayload
+} from '~/lib/requestSignatureContract';
 import { collections } from '~/server/collections';
 
 type DeviceKind = 'wall' | 'controller' | 'gallery';
@@ -22,13 +33,6 @@ export type RequestAuthContext = {
 type ResolveOptions = {
     requireDeviceAssigned?: boolean;
 };
-
-const DEVICE_HEADER_KIND = 'x-gemma-device-kind';
-const DEVICE_HEADER_PUBLIC_KEY = 'x-gemma-device-public-key';
-const DEVICE_HEADER_SIGNATURE = 'x-gemma-device-signature';
-const DEVICE_HEADER_TIMESTAMP = 'x-gemma-device-timestamp';
-const DEVICE_HEADER_NONCE = 'x-gemma-device-nonce';
-const DEVICE_HEADER_WALL_ID = 'x-gemma-device-wall-id';
 
 const DEVICE_CLOCK_SKEW_MS = 60_000;
 const NONCE_TTL_MS = 5 * 60_000;
@@ -75,11 +79,6 @@ function normalizeDeviceKind(raw: string | null): DeviceKind | null {
     return null;
 }
 
-function buildDeviceSignaturePayload(request: Request, timestamp: number, nonce: string): string {
-    const url = new URL(request.url);
-    return `${request.method.toUpperCase()}\n${url.pathname}\n${timestamp}\n${nonce}`;
-}
-
 function cleanupExpiredNonces(now: number) {
     for (const [key, nonces] of _hmr.byPublicKey) {
         for (const [nonce, seenAt] of nonces) {
@@ -114,6 +113,7 @@ async function verifyDeviceSignature(input: {
     signature: string;
     timestamp: number;
     nonce: string;
+    bodySha256: string | null;
     wallId?: string;
     requireDeviceAssigned?: boolean;
 }): Promise<RequestAuthContext['device'] | null> {
@@ -146,7 +146,14 @@ async function verifyDeviceSignature(input: {
         hash: 'SHA-256'
     };
 
-    const payload = buildDeviceSignaturePayload(input.request, input.timestamp, input.nonce);
+    const requestUrl = new URL(input.request.url);
+    const payload = buildCanonicalDeviceSignaturePayload(
+        requestUrl,
+        input.request.method,
+        input.timestamp,
+        input.nonce,
+        input.bodySha256
+    );
     const payloadBytes = new TextEncoder().encode(payload);
     const signatureBytes = toArrayBufferView(base64ToBytes(input.signature));
 
@@ -196,13 +203,24 @@ async function resolveDeviceContext(
     const timestampRaw = request.headers.get(DEVICE_HEADER_TIMESTAMP)?.trim();
     const nonce = request.headers.get(DEVICE_HEADER_NONCE)?.trim();
     const wallId = request.headers.get(DEVICE_HEADER_WALL_ID)?.trim();
+    const bodySha256Raw = request.headers.get(DEVICE_HEADER_BODY_HASH)?.trim() ?? '';
 
     if (!kind || !publicKey || !signature || !timestampRaw || !nonce) {
         return null;
     }
 
     const timestamp = Number(timestampRaw);
-    if (!Number.isFinite(timestamp)) return null;
+    if (!Number.isFinite(timestamp) || !Number.isInteger(timestamp)) return null;
+
+    const bodySha256 =
+        bodySha256Raw.length === 0
+            ? null
+            : DEVICE_BODY_HASH_PATTERN.test(bodySha256Raw)
+              ? bodySha256Raw
+              : null;
+    if (bodySha256Raw.length > 0 && !bodySha256) {
+        return null;
+    }
 
     return verifyDeviceSignature({
         request,
@@ -211,6 +229,7 @@ async function resolveDeviceContext(
         signature,
         timestamp,
         nonce,
+        bodySha256,
         wallId: wallId && wallId.length > 0 ? wallId : undefined,
         requireDeviceAssigned: opts?.requireDeviceAssigned
     });

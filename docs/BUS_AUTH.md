@@ -173,3 +173,43 @@ Ban/unban flow now triggers recompute on the server path:
 
 1. Revisit gallery reboot routing behavior and decide explicit product behavior for unscoped gallery sessions.
 2. Consider future cleanup of process-level bridges (`__BUS_RECOMPUTE_AUTH_CONTEXT__`) if a dedicated event bus/server hook mechanism is introduced.
+
+## REST And ServerFn Device Signature Contract
+
+Current canonical request signature payload for HTTP auth-context derivation (`apps/web/src/server/requestAuthContext.ts`):
+
+1. `METHOD` (uppercased)
+2. `PATHNAME`
+3. canonical query string (sorted key/value pairs)
+4. `TIMESTAMP` (epoch ms)
+5. `NONCE`
+6. optional `BODY_SHA256` (base64url)
+
+Headers expected:
+
+1. `x-gemma-device-kind`
+2. `x-gemma-device-public-key`
+3. `x-gemma-device-timestamp`
+4. `x-gemma-device-nonce`
+5. `x-gemma-device-signature`
+6. optional `x-gemma-device-body-sha256`
+7. optional `x-gemma-device-wall-id`
+
+Replay and freshness controls:
+
+1. Nonce cache per public key (TTL)
+2. Timestamp skew window enforcement
+3. Signature verification against provided public key
+4. DB lookup for enrolled device status
+
+Client-side implementation surface:
+
+1. Shared signer: `apps/web/src/lib/requestSigning.ts`
+2. Shared fetch wrapper: `apps/web/src/lib/signedFetch.ts`
+3. Device identity signing API: `apps/web/src/lib/deviceIdentity.ts` (`signPayload`)
+
+Initial rollout wiring completed:
+
+1. Nitro addon route `/proxy` now derives auth context directly (outside TanStack pipeline).
+2. Wall route frameability probe (`/proxy?check=1`) now uses `signedFetch(..., { deviceKind: 'wall' })`.
+3. Gallery server function call `$issueControllerPortalToken` now injects signed fetch via server-fn `fetch` option.

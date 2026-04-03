@@ -333,7 +333,7 @@ function HomePage() {
         Promise.resolve()
             .then(async () => {
                 const identity = await getOrCreateDeviceIdentity('gallery');
-                const signature = await identity.signDeviceId(deviceId);
+                const signature = await identity.signPayload(deviceId);
                 const payload = JSON.stringify({
                     // schema: 'gem://',
                     // kind: 'wall',

@@ -4,7 +4,7 @@ export type DeviceKind = 'wall' | 'gallery' | 'controller';
 
 export interface DeviceIdentity {
     publicKey: string;
-    signDeviceId: (deviceId: string) => Promise<string>;
+    signPayload: (payload: string) => Promise<string>;
 }
 
 const ALGO: EcKeyImportParams & EcdsaParams = {
@@ -82,14 +82,15 @@ export function getOrCreateDeviceIdentity(kind: DeviceKind): Promise<DeviceIdent
         const stored = await loadOrCreateStoredIdentity(kind);
         const privateKey = await crypto.subtle.importKey('jwk', stored.priv, ALGO, false, ['sign']);
         const publicKeyRaw = JSON.stringify(stored.pub);
+        const signPayload = async (payload: string) => {
+            const data = new TextEncoder().encode(payload);
+            const sig = await crypto.subtle.sign(ALGO, privateKey, data);
+            return toBase64Url(new Uint8Array(sig));
+        };
 
         return {
             publicKey: publicKeyRaw,
-            signDeviceId: async (deviceId: string) => {
-                const data = new TextEncoder().encode(deviceId);
-                const sig = await crypto.subtle.sign(ALGO, privateKey, data);
-                return toBase64Url(new Uint8Array(sig));
-            }
+            signPayload
         };
     })();
 

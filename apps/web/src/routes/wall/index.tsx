@@ -8,6 +8,7 @@ import { useEffect, useState, useMemo, useRef, type CSSProperties } from 'react'
 import { MapWrapper } from '~/components/MapWrapper';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { toCssFilterString } from '~/lib/layerFilters';
+import { signedFetch } from '~/lib/signedFetch';
 import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
 import type { LayerWithWallComponentState } from '~/lib/types';
 import { WallEngine, type Viewport } from '~/lib/wallEngine';
@@ -389,7 +390,7 @@ function WallApp() {
         Promise.resolve()
             .then(async () => {
                 const identity = await getOrCreateDeviceIdentity('wall');
-                const signature = await identity.signDeviceId(deviceId);
+                const signature = await identity.signPayload(deviceId);
                 const payload = JSON.stringify({
                     // schema: 'gem://',
                     // kind: 'wall',
@@ -445,7 +446,11 @@ function WallApp() {
 
         let cancelled = false;
         for (const url of urlsToCheck) {
-            fetch(`/proxy?check=1&url=${encodeURIComponent(url)}`)
+            signedFetch(
+                `/proxy?check=1&url=${encodeURIComponent(url)}`,
+                undefined,
+                wallId ? { deviceKind: 'wall', wallId } : undefined
+            )
                 .then((res) => res.json())
                 .then((data: { ok?: boolean; reason?: string; fallback?: string }) => {
                     if (cancelled) return;

@@ -12,7 +12,7 @@ import {
     checkRateLimit,
     getClientIpFromHeaders
 } from '~/server/rateLimit';
-import { hasAuthenticatedActor, type RequestAuthContext } from '~/server/requestAuthContext';
+import type { RequestAuthContext } from '~/server/requestAuthContext';
 
 function urlToBaseId(url: string): string {
     // Deterministic short id from URL for filenames
@@ -103,7 +103,11 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     user?: Record<string, any> | null;
                 };
                 const authContext: RequestAuthContext = upstream.authContext ?? { guest: true };
-                if (!hasAuthenticatedActor(authContext)) {
+                const userEmail =
+                    typeof authContext.user?.email === 'string' && authContext.user.email.length > 0
+                        ? authContext.user.email
+                        : null;
+                if (!userEmail) {
                     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                         status: 401,
                         headers: { 'Content-Type': 'application/json' }
@@ -112,7 +116,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
 
                 const requesterIp = getClientIpFromHeaders(request.headers);
                 const subjectKey = buildRateLimitSubjectKey({
-                    actorId: authContext.user?.email ?? null,
+                    actorId: userEmail,
                     ip: requesterIp
                 });
                 const rateLimit = checkRateLimit({

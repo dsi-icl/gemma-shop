@@ -82,10 +82,10 @@ All endpoints in this file use `adminMiddleware` (authenticated user with `role 
 
 ### `apps/web/src/server/walls.fns.ts`
 
-| Server function endpoint | Access-control gates observed | Usage status     |
-| ------------------------ | ----------------------------- | ---------------- |
-| `$listWalls`             | No auth/admin middleware.     | Active (in-repo) |
-| `$bindWall`              | No auth/admin middleware.     | Active (in-repo) |
+| Server function endpoint | Access-control gates observed                    | Usage status     |
+| ------------------------ | ------------------------------------------------ | ---------------- |
+| `$listWalls`             | `adminMiddleware` (admin user session required). | Active (in-repo) |
+| `$bindWall`              | No auth/admin middleware.                        | Active (in-repo) |
 
 ### `apps/web/src/server/portal.fns.ts`
 
@@ -238,3 +238,26 @@ Policy outcomes:
 
 - apps/web/src/addons/routes/proxy.ts is outside the TanStack route tree, so it does not inherit apps/web/src/start.ts middleware.
 - Follow-up action: move /proxy under apps/web/src/routes/\* so it inherits the shared request pipeline by default.
+
+## Authentication Derivation And Device-Signing Matrix (Current Policy)
+
+This matrix is the decision baseline to avoid re-litigating resolved points.
+
+| Surface        | Endpoint / Call                                     | AuthContext derivation                                                                    | Device-signing policy                                                | Current status                      |
+| -------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------- |
+| REST route     | `POST /api/web-screenshot`                          | Upstream TanStack `start.ts` middleware (`resolveRequestAuthContext`)                     | **No** (user session only)                                           | Implemented                         |
+| REST route     | `GET /proxy` (Nitro addon)                          | Direct call in route handler (`resolveRequestAuthContext`)                                | **Yes** for wall/controller/gallery callers                          | Implemented                         |
+| REST callsite  | `fetch('/proxy?check=1&url=...')` from wall route   | Signed client fetch (`signedFetch`)                                                       | **Yes** (`deviceKind: 'wall'`)                                       | Implemented                         |
+| REST callsite  | Asset binary downloads via `downloadAsset(...)`     | Upstream route derivation (`/api/assets/$uri`) + signed client fetch when on device pages | **Yes** on `/wall`, `/gallery`, `/controller`; no on user-only pages | Implemented                         |
+| ServerFn       | `$issueControllerPortalToken`                       | Upstream `start.ts` auth context + `actorAuthContextMiddleware`                           | **Yes** when called from gallery UI                                  | Implemented                         |
+| ServerFn       | `$listPublishedProjects`                            | Upstream `start.ts` auth context                                                          | **No** (user session dependent policy)                               | Pending policy is no device-signing |
+| ServerFn       | `$listWalls`                                        | Upstream `start.ts` auth context + `adminMiddleware`                                      | **No** (admin user session only)                                     | Implemented                         |
+| ServerFn group | `admin.fns.ts` endpoints                            | Upstream `start.ts` auth context + `adminMiddleware`                                      | **No** (admin user session only)                                     | Implemented                         |
+| ServerFn group | `projects.fns.ts` editor/quarry mutations and reads | Upstream `start.ts` auth context + auth/admin middleware where applicable                 | **No** (user session driven)                                         | Implemented                         |
+| ServerFn group | `bootstrap.fns.ts`                                  | Upstream `start.ts` auth context; guest/public bootstrap except finalize step             | **No**                                                               | Implemented                         |
+
+### ServerFn `.client()` rollout stance
+
+- `.client()` can standardize browser-side header injection for ServerFn calls where device-signing is required.
+- `.client()` does **not** cover server-side execution paths (SSR/loader server execution), which must rely on server-side auth context/session.
+- Current required scope is narrow and already covered without global `.client()` rollout (notably `$issueControllerPortalToken`).
