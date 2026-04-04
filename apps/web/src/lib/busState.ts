@@ -1266,7 +1266,8 @@ export async function buildSlidesSnapshot(
         if (headCommit?.content?.slides) {
             existingSlides = headCommit.content.slides.map((s, i) => ({
                 ...s,
-                name: s.name ?? `Slide ${i + 1}`
+                name: s.name ?? `Slide ${i + 1}`,
+                layers: s.layers as Layer[]
             }));
         }
     }

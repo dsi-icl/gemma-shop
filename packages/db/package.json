@@ -7,7 +7,8 @@
         ".": "./src/index.ts",
         "./config": "./src/config.ts",
         "./schema": "./src/schema/index.ts",
-        "./documents": "./src/documents.ts"
+        "./documents": "./src/documents.ts",
+        "./collections": "./src/collections/index.ts"
     },
     "dependencies": {
         "@repo/env": "workspace:*",
