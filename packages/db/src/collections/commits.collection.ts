@@ -2,11 +2,19 @@ import '@tanstack/react-start/server-only';
 import type { Db, ObjectId } from 'mongodb';
 
 import type { CommitDocument } from '../documents';
-import { BaseCollection } from './_base';
+import { type MigrationMap, toEpoch, BaseCollection } from './_base';
 
 export class CommitsCollection extends BaseCollection<CommitDocument> {
     readonly collectionName = 'commits';
-    protected readonly epochFields = [] as const;
+    readonly currentVersion = 1;
+
+    protected readonly migrations: MigrationMap = {
+        0: (doc) => ({
+            ...doc,
+            createdAt: toEpoch(doc.createdAt ?? Date.now()),
+            ...(doc.updatedAt != null ? { updatedAt: toEpoch(doc.updatedAt) } : {})
+        })
+    };
 
     constructor(db: Db) {
         super(db.collection(CommitsCollection.prototype.collectionName));

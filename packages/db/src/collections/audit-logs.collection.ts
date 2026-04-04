@@ -2,11 +2,18 @@ import '@tanstack/react-start/server-only';
 import type { Db, ObjectId } from 'mongodb';
 
 import type { AuditLogDocument } from '../documents';
-import { BaseCollection } from './_base';
+import { type MigrationMap, toEpoch, BaseCollection } from './_base';
 
 export class AuditLogsCollection extends BaseCollection<AuditLogDocument> {
     readonly collectionName = 'audit_logs';
-    protected readonly epochFields = [] as const;
+    readonly currentVersion = 1;
+
+    protected readonly migrations: MigrationMap = {
+        0: (doc) => ({
+            ...doc,
+            createdAt: toEpoch(doc.createdAt ?? Date.now())
+        })
+    };
 
     constructor(db: Db) {
         super(db.collection(AuditLogsCollection.prototype.collectionName));
@@ -21,10 +28,16 @@ export class AuditLogsCollection extends BaseCollection<AuditLogDocument> {
      * Audit logs are append-only — no updates or soft-deletes.
      * Override insert to skip the `updatedAt` stamp that the base would add.
      */
-    async insertLog(data: Omit<AuditLogDocument, '_id' | 'createdAt'>): Promise<AuditLogDocument> {
+    async insertLog(
+        data: Omit<AuditLogDocument, '_id' | 'createdAt' | '_version'>
+    ): Promise<AuditLogDocument> {
         const { ObjectId: OID } = await import('mongodb');
-        const now = Date.now();
-        const doc = { _id: new OID(), createdAt: now, ...data };
+        const doc = {
+            _id: new OID(),
+            createdAt: Date.now(),
+            _version: this.currentVersion,
+            ...data
+        };
         await this.raw.insertOne(doc);
         return this.fromDB(doc);
     }

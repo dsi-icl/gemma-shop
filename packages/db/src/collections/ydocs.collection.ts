@@ -2,11 +2,19 @@ import '@tanstack/react-start/server-only';
 import type { Db } from 'mongodb';
 
 import type { YDocDocument } from '../documents';
-import { BaseCollection } from './_base';
+import { type MigrationMap, toEpoch, BaseCollection } from './_base';
 
 export class YDocsCollection extends BaseCollection<YDocDocument> {
     readonly collectionName = 'ydocs';
-    protected readonly epochFields = [] as const;
+    readonly currentVersion = 1;
+
+    protected readonly migrations: MigrationMap = {
+        0: (doc) => ({
+            ...doc,
+            createdAt: toEpoch(doc.createdAt ?? Date.now()),
+            updatedAt: toEpoch(doc.updatedAt ?? Date.now())
+        })
+    };
 
     constructor(db: Db) {
         super(db.collection(YDocsCollection.prototype.collectionName));

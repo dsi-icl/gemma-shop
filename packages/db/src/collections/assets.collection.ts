@@ -2,11 +2,20 @@ import '@tanstack/react-start/server-only';
 import type { Db, ObjectId } from 'mongodb';
 
 import type { AssetDocument } from '../documents';
-import { BaseCollection } from './_base';
+import { type MigrationMap, toEpoch, BaseCollection } from './_base';
 
 export class AssetsCollection extends BaseCollection<AssetDocument> {
     readonly collectionName = 'assets';
-    protected readonly epochFields = ['deletedAt', 'updatedAt'] as const;
+    readonly currentVersion = 1;
+
+    protected readonly migrations: MigrationMap = {
+        0: (doc) => ({
+            ...doc,
+            createdAt: toEpoch(doc.createdAt ?? Date.now()),
+            ...(doc.updatedAt != null ? { updatedAt: toEpoch(doc.updatedAt) } : {}),
+            ...(doc.deletedAt != null ? { deletedAt: toEpoch(doc.deletedAt) } : {})
+        })
+    };
 
     constructor(db: Db) {
         super(db.collection(AssetsCollection.prototype.collectionName));
