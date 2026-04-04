@@ -1,5 +1,14 @@
 import '@tanstack/react-start/server-only';
-import type { Collection, Document, Filter, FindOptions, ObjectId, UpdateFilter } from 'mongodb';
+import type {
+    ChangeStream,
+    ChangeStreamOptions,
+    Collection,
+    Document,
+    Filter,
+    FindOptions,
+    ObjectId,
+    UpdateFilter
+} from 'mongodb';
 import { ObjectId as OID } from 'mongodb';
 
 /** Converts any legacy timestamp format (Date, ISO string, epoch number) to epoch ms. */
@@ -25,6 +34,8 @@ export type MigrationMap = Record<number, MigrationFn>;
 /** Minimum shape every app-owned document must satisfy. */
 export interface BaseDoc {
     _id: ObjectId;
+    /** String representation of `_id`. Synthesised by `fromDB` — never stored in MongoDB. */
+    id: string;
     createdAt: number;
     /** Internal schema version. Managed by the collection layer — do not set manually. */
     _version?: number;
@@ -33,13 +44,18 @@ export interface BaseDoc {
 /**
  * Fields excluded from insert input — generated automatically by the collection layer.
  */
-type InsertData<TDoc extends BaseDoc> = Omit<TDoc, '_id' | 'createdAt' | 'updatedAt' | '_version'>;
+type InsertData<TDoc extends BaseDoc> = Omit<
+    TDoc,
+    '_id' | 'id' | 'createdAt' | 'updatedAt' | '_version'
+>;
 
 /**
- * Fields excluded from update $set — `_id`, `createdAt`, and `_version` are immutable
+ * Fields excluded from update $set — `_id`, `id`, `createdAt`, and `_version` are immutable
  * after insert (the layer always writes the current version on every update).
  */
-type UpdateData<TDoc extends BaseDoc> = Partial<Omit<TDoc, '_id' | 'createdAt' | '_version'>>;
+type UpdateData<TDoc extends BaseDoc> = Partial<
+    Omit<TDoc, '_id' | 'id' | 'createdAt' | '_version'>
+>;
 
 /**
  * Abstract base for all app-owned MongoDB collections.
@@ -103,7 +119,11 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
                 .catch(() => {});
         }
 
-        return { ...current, _version: version } as unknown as TDoc;
+        return {
+            ...current,
+            _version: version,
+            id: (current._id as OID).toHexString()
+        } as unknown as TDoc;
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────
@@ -192,9 +212,19 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
     }
 
     /**
-     * Escape hatch: returns the underlying raw Collection<Document>.
-     * Use only for complex aggregations or bulk operations that the base API doesn't cover.
-     * Remember to call `fromDB` on any documents you read back.
+     * Open a MongoDB change stream on this collection.
+     * Use for real-time notifications; the caller owns the lifecycle.
+     */
+    watch(pipeline: Document[] = [], options?: ChangeStreamOptions): ChangeStream<Document> {
+        return this.raw.watch(pipeline, options);
+    }
+
+    /**
+     * @deprecated Escape hatch to the raw MongoDB collection.
+     * Add a typed method to the subclass instead of using this.
+     * Remaining legitimate uses: index management, aggregation pipelines,
+     * and dot-notation `$set` paths that TypeScript cannot express through
+     * the typed `update()` helper.
      */
     get collection(): Collection<Document> {
         return this.raw;

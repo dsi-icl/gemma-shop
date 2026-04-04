@@ -39,6 +39,7 @@ export interface SessionDocument {
 
 export interface ProjectDocument {
     _id: ObjectId;
+    id: string;
     name: string;
     authorOrganisation: string;
     description: string;
@@ -61,6 +62,7 @@ export interface ProjectDocument {
 
 export interface CommitDocument {
     _id: ObjectId;
+    id: string;
     projectId: ObjectId;
     parentId: ObjectId | null;
     authorId: ObjectId;
@@ -81,6 +83,7 @@ export interface CommitDocument {
 
 export interface AssetDocument {
     _id: ObjectId;
+    id: string;
     projectId: ObjectId;
     name: string;
     url: string;
@@ -101,6 +104,7 @@ export interface AssetDocument {
 
 export interface WallDocument {
     _id: ObjectId;
+    id: string;
     wallId: string;
     name: string;
     connectedNodes?: number;
@@ -117,6 +121,7 @@ export interface WallDocument {
 
 export interface DeviceDocument {
     _id: ObjectId;
+    id: string;
     deviceId: string;
     publicKey: string;
     kind: DeviceKind;
@@ -133,6 +138,7 @@ export interface DeviceDocument {
 
 export interface YDocDocument {
     _id: ObjectId;
+    id: string;
     scope: string;
     data: Binary;
     createdAt: number;
@@ -141,6 +147,7 @@ export interface YDocDocument {
 
 export interface AuditLogDocument {
     _id: ObjectId;
+    id: string;
     projectId: ObjectId | null;
     actorId: string | null;
     action: string;

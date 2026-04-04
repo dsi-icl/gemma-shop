@@ -30,7 +30,7 @@ function HistoryTab() {
             <div className="space-y-3">
                 {logs.map((log) => (
                     <div
-                        key={log._id}
+                        key={log.id}
                         className="flex items-start gap-3 rounded-xl border p-4 text-sm"
                     >
                         <ClockIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />

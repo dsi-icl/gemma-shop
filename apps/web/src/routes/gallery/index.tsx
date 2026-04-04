@@ -22,7 +22,7 @@ export const Route = createFileRoute('/gallery/')({
     }
 });
 
-type ProjectWithId = Project & { _id: string; publishedCommitId?: string | null };
+type ProjectWithId = Project & { id: string; publishedCommitId?: string | null };
 type WallListEntry = {
     wallId: string;
     name: string;
@@ -394,7 +394,7 @@ function HomePage() {
     const projectsData: ProjectWithId[] = useMemo(
         () =>
             publishedProjects.map((p) => ({
-                _id: p._id,
+                id: p.id,
                 name: p.name,
                 author: p.authorOrganisation,
                 description: p.description,
@@ -589,7 +589,7 @@ function HomePage() {
                                 <AnimatePresence mode="popLayout">
                                     {filteredProjects.map((project) => (
                                         <motion.div
-                                            key={project._id}
+                                            key={project.id}
                                             layout
                                             initial={{ opacity: 0, scale: 0.95 }}
                                             animate={{ opacity: 1, scale: 1 }}
@@ -604,7 +604,7 @@ function HomePage() {
                                                 project={project}
                                                 allowWallActions={!enrollmentModeEnabled}
                                                 autoOpenSignal={
-                                                    autoOpenProjectId === project._id
+                                                    autoOpenProjectId === project.id
                                                         ? autoOpenSignal
                                                         : null
                                                 }
@@ -613,7 +613,7 @@ function HomePage() {
                                                 }
                                                 forceCloseMinimizedSignal={liveSessionStartedSignal}
                                                 forceCloseSignal={
-                                                    syncedCloseProjectId === project._id
+                                                    syncedCloseProjectId === project.id
                                                         ? syncedCloseSignal
                                                         : null
                                                 }

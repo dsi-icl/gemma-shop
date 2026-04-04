@@ -1,4 +1,8 @@
 const ALLOWED_FILE_SUFFIX = '/apps/web/src/server/collections.ts';
+// The collection layer itself is the canonical place for db.collection() calls.
+const ALLOWED_COLLECTION_LAYER_SEGMENT = '/packages/db/src/collections/';
+// Test seed scripts may use raw db.collection() to insert fixtures with deterministic IDs.
+const ALLOWED_SEED_SUFFIX = '/tooling/testing/seed.mjs';
 const ALLOWED_AUDIT_FILE_SUFFIX = '/apps/web/src/server/audit.ts';
 
 function normalizePath(filePath) {
@@ -7,7 +11,11 @@ function normalizePath(filePath) {
 
 function isAllowedFile(filePath) {
     const normalized = normalizePath(filePath);
-    return normalized.endsWith(ALLOWED_FILE_SUFFIX);
+    return (
+        normalized.endsWith(ALLOWED_FILE_SUFFIX) ||
+        normalized.includes(ALLOWED_COLLECTION_LAYER_SEGMENT) ||
+        normalized.endsWith(ALLOWED_SEED_SUFFIX)
+    );
 }
 
 function isAllowedAuditFile(filePath) {

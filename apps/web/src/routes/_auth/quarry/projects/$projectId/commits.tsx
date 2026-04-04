@@ -39,15 +39,15 @@ import { SerializedCommit } from '~/server/serializers/commit.serializer';
  */
 function topoSort(commits: SerializedCommit[], headCommitId: string | null): SerializedCommit[] {
     if (commits.length === 0) return [];
-    const byId = new Map(commits.map((c) => [c._id, c]));
+    const byId = new Map(commits.map((c) => [c.id, c]));
     const sorted: SerializedCommit[] = [];
     const visited = new Set<string>();
 
     // Walk a chain from a starting commit
     const walkChain = (start: SerializedCommit | undefined) => {
         let current = start;
-        while (current && !visited.has(current._id)) {
-            visited.add(current._id);
+        while (current && !visited.has(current.id)) {
+            visited.add(current.id);
             sorted.push(current);
             current = current.parentId ? byId.get(current.parentId) : undefined;
         }
@@ -59,14 +59,14 @@ function topoSort(commits: SerializedCommit[], headCommitId: string | null): Ser
 
     // 2. Walk from other mutable branch heads
     for (const c of commits) {
-        if (c.isMutableHead && !visited.has(c._id)) {
+        if (c.isMutableHead && !visited.has(c.id)) {
             walkChain(c);
         }
     }
 
     // 3. Append any orphan commits not reachable from any head
     for (const c of commits) {
-        if (!visited.has(c._id)) sorted.push(c);
+        if (!visited.has(c.id)) sorted.push(c);
     }
 
     return sorted;
@@ -227,14 +227,14 @@ function CommitsTab() {
                     </TableHeader>
                     <TableBody>
                         {sorted.map((commit, idx) => {
-                            const isPublished = commit._id === project.publishedCommitId;
+                            const isPublished = commit.id === project.publishedCommitId;
                             let displayDate = '-';
                             const commitDate = parseDateInput(commit.updatedAt ?? commit.createdAt);
                             if (commitDate) {
                                 displayDate = formatRelativeDate(commitDate);
                             }
                             return (
-                                <TableRow key={commit._id}>
+                                <TableRow key={commit.id}>
                                     <TableCell className="h-12 w-6 px-0 py-0!">
                                         <CommitGraphNode
                                             isFirst={idx === 0}
@@ -254,7 +254,7 @@ function CommitsTab() {
                                             </Badge>
                                         )}
                                         {commit.isMutableHead &&
-                                            commit._id !== project.headCommitId && (
+                                            commit.id !== project.headCommitId && (
                                                 <Badge variant="outline" className="text-xs">
                                                     <GitBranchIcon /> Branch
                                                 </Badge>
@@ -267,7 +267,7 @@ function CommitsTab() {
                                                     to="/quarry/view/$projectId/$commitId"
                                                     params={{
                                                         projectId,
-                                                        commitId: commit._id
+                                                        commitId: commit.id
                                                     }}
                                                 />
                                             }
@@ -278,12 +278,12 @@ function CommitsTab() {
                                             <EyeIcon /> View
                                         </Button>
                                         {commit.isMutableHead &&
-                                            commit._id !== project.headCommitId && (
+                                            commit.id !== project.headCommitId && (
                                                 <Button
                                                     variant="outline"
                                                     size="xs"
                                                     onClick={() =>
-                                                        promoteMutation.mutate(commit._id)
+                                                        promoteMutation.mutate(commit.id)
                                                     }
                                                     disabled={promoteMutation.isPending}
                                                 >
@@ -303,7 +303,7 @@ function CommitsTab() {
                                             <Button
                                                 variant="outline"
                                                 size="xs"
-                                                onClick={() => publishMutation.mutate(commit._id)}
+                                                onClick={() => publishMutation.mutate(commit.id)}
                                                 disabled={publishMutation.isPending}
                                             >
                                                 <GlobeIcon /> Publish
@@ -316,7 +316,7 @@ function CommitsTab() {
                                                         to="/quarry/editor/$projectId/$commitId/$slideId"
                                                         params={{
                                                             projectId,
-                                                            commitId: commit._id,
+                                                            commitId: commit.id,
                                                             slideId: commit.firstSlideId
                                                         }}
                                                     />

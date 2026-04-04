@@ -31,7 +31,7 @@ function WallList({ onSelect }: { onSelect: (wallId: string) => void }) {
                 const connectedNodes = liveNodeCounts[wall.wallId] ?? wall.connectedNodes;
                 return (
                     <button
-                        key={wall._id}
+                        key={wall.id}
                         onClick={() => onSelect(wall.wallId)}
                         className="flex cursor-pointer items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
                     >

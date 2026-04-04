@@ -203,7 +203,7 @@ function QuarryIndex() {
                                 <DropdownMenuItem
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        unpublishMutation.mutate(project._id);
+                                        unpublishMutation.mutate(project.id);
                                     }}
                                 >
                                     <GlobeXIcon /> Unpublish
@@ -218,7 +218,7 @@ function QuarryIndex() {
                                 <DropdownMenuItem
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        restoreMutation.mutate(project._id);
+                                        restoreMutation.mutate(project.id);
                                     }}
                                 >
                                     <ArrowCounterClockwiseIcon />
@@ -229,7 +229,7 @@ function QuarryIndex() {
                                     variant="destructive"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        archiveMutation.mutate(project._id);
+                                        archiveMutation.mutate(project.id);
                                     }}
                                 >
                                     <ArchiveIcon />
@@ -342,7 +342,7 @@ function QuarryIndex() {
                                             onClick={() =>
                                                 navigate({
                                                     to: '/quarry/projects/$projectId',
-                                                    params: { projectId: row.original._id }
+                                                    params: { projectId: row.original.id }
                                                 })
                                             }
                                         >

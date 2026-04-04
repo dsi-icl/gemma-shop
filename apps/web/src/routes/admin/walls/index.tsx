@@ -109,7 +109,7 @@ function AdminWalls() {
                                 const intendedConnectedNodes = wall.intendedConnectedNodes ?? 0;
                                 return (
                                     <tr
-                                        key={wall._id}
+                                        key={wall.id}
                                         className="cursor-pointer hover:bg-muted/30"
                                         onClick={() =>
                                             navigate({
@@ -124,7 +124,7 @@ function AdminWalls() {
                                                 params={{ wallId: wall.wallId }}
                                                 className="underline-offset-2 hover:underline"
                                             >
-                                                {wall._id}
+                                                {wall.id}
                                             </Link>
                                         </td>
                                         <td className="px-4 py-3 font-mono text-xs">

@@ -9,7 +9,7 @@ import { createServerOnlyFn } from '@tanstack/react-start';
 
 import { ASSET_MIME_TYPES } from '~/lib/assetMime';
 import { ASSET_DIR } from '~/lib/serverVariables';
-import { collections } from '~/server/collections';
+import { dbCol } from '~/server/collections';
 import { canViewProject } from '~/server/projectAuthz';
 import type { AuthContext } from '~/server/requestAuthContext';
 
@@ -45,15 +45,12 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
     const { baseId, requested } = parsed;
     const escapedBase = escapeRegex(baseId);
 
-    const assetMeta = await collections.assets.findOne(
-        {
-            $or: [
-                { url: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } },
-                { previewUrl: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } }
-            ]
-        },
-        { projection: { url: 1, previewUrl: 1, sizes: 1 } }
-    );
+    const assetMeta = await dbCol.assets.findOne({
+        $or: [
+            { url: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } },
+            { previewUrl: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } }
+        ]
+    });
     if (!assetMeta) return null;
 
     const sizes = Array.from(
@@ -86,29 +83,21 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
     return baseExists ? baseOriginal : null;
 }
 
-async function getAssetRecordForFilename(
-    filename: string
-): Promise<Pick<AssetDocument, 'projectId'> | null> {
-    const exact = await collections.assets.findOne(
-        {
-            $or: [{ url: filename }, { previewUrl: filename }]
-        },
-        { projection: { projectId: 1 } }
-    );
+async function getAssetRecordForFilename(filename: string): Promise<AssetDocument | null> {
+    const exact = await dbCol.assets.findOne({
+        $or: [{ url: filename }, { previewUrl: filename }]
+    });
     if (exact) return exact;
 
     const parsed = parseVariantFilename(filename);
     if (!parsed) return null;
     const escapedBase = escapeRegex(parsed.baseId);
-    return await collections.assets.findOne(
-        {
-            $or: [
-                { url: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } },
-                { previewUrl: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } }
-            ]
-        },
-        { projection: { projectId: 1 } }
-    );
+    return dbCol.assets.findOne({
+        $or: [
+            { url: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } },
+            { previewUrl: { $regex: `^${escapedBase}\\.[^.]+$`, $options: 'i' } }
+        ]
+    });
 }
 
 const getResponse = createServerOnlyFn(

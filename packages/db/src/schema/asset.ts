@@ -4,7 +4,7 @@ const oid = z.string();
 
 // TODO Revise nullish() due to mongo so that coalescing is less verbose down the line
 export const AssetSchema = z.object({
-    _id: oid,
+    id: oid,
     projectId: oid,
     name: z.string(),
     url: z.string(),

@@ -19,7 +19,7 @@ export const ProjectVisibility = z.enum(['public', 'private']);
 export type ProjectVisibility = z.infer<typeof ProjectVisibility>;
 
 export const ProjectSchema = z.object({
-    _id: oid,
+    id: oid,
     name: z.string().min(1, 'Name is required'),
     authorOrganisation: z.string().min(1, 'Author/Organisation is required'),
     description: z.string().default(''),
@@ -59,7 +59,7 @@ export const CreateProjectInput = z.object({
 export type CreateProjectInput = z.infer<typeof CreateProjectInput>;
 
 export const UpdateProjectInput = z.object({
-    _id: z.string(),
+    id: z.string(),
     name: z.string().min(1, 'Name is required').optional(),
     authorOrganisation: z.string().min(1, 'Author/Organisation is required').optional(),
     description: z.string().optional(),

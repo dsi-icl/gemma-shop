@@ -3,7 +3,7 @@ import type { CommitDocument } from '@repo/db/documents';
 import { epochToISO, serializeForClient, toIdString, toScalarString } from '~/server/serialization';
 
 export interface SerializedCommit {
-    _id: string;
+    id: string;
     projectId: string;
     parentId: string | null;
     authorId: string | null;
@@ -28,7 +28,7 @@ export interface SerializedCommitWithContent extends SerializedCommit {
 
 export function serializeCommit(doc: CommitDocument): SerializedCommitWithContent {
     return serializeForClient({
-        _id: toIdString(doc._id),
+        id: doc.id,
         projectId: toIdString(doc.projectId),
         parentId: doc.parentId ? toIdString(doc.parentId) : null,
         authorId: doc.authorId ? toIdString(doc.authorId) : null,

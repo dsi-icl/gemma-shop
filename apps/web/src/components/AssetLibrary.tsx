@@ -36,7 +36,7 @@ interface AssetLibraryProps {
 }
 
 export type AssetLibraryAsset = {
-    _id: string;
+    id: string;
     name: string;
     url: string;
     mimeType?: string;
@@ -63,7 +63,7 @@ export function AssetLibrary({
             else media.push(asset);
         }
         const sorted = [...media, ...fonts].map((asset) => ({
-            _id: asset._id,
+            id: asset.id,
             name: asset.name,
             url: asset.url,
             mimeType: asset.mimeType ?? undefined,
@@ -100,7 +100,7 @@ export function AssetLibrary({
                 await onDeleteAsset(asset);
                 return;
             }
-            await $deleteAsset({ data: { id: asset._id } });
+            await $deleteAsset({ data: { id: asset.id } });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
@@ -113,7 +113,7 @@ export function AssetLibrary({
     });
 
     const handleDeleteClick = useCallback((asset: AssetLibraryAsset) => {
-        setDeleteTarget({ id: asset._id, name: asset.name, asset });
+        setDeleteTarget({ id: asset.id, name: asset.name, asset });
     }, []);
 
     const handleUploadComplete = useCallback(() => {
@@ -274,7 +274,7 @@ export function AssetLibrary({
                                 if (isFont) {
                                     return (
                                         <div
-                                            key={asset._id}
+                                            key={asset.id}
                                             className="bg-checkerboard group relative max-w-25 cursor-default overflow-hidden rounded-md border border-border bg-background opacity-90"
                                             title={asset.name}
                                             tabIndex={idx}
@@ -286,7 +286,7 @@ export function AssetLibrary({
 
                                 return (
                                     <div
-                                        key={asset._id}
+                                        key={asset.id}
                                         onClick={() => {
                                             onSelectAsset?.(asset);
                                         }}

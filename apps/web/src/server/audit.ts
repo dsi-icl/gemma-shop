@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb';
 
-import { collections } from '~/server/collections';
+import { dbCol } from '~/server/collections';
 import { serializeForClient } from '~/server/serialization';
 
 export type AuditOutcome = 'success' | 'denied' | 'failure' | 'error';
@@ -26,8 +26,7 @@ function toObjectIdOrNull(value: string | ObjectId | null | undefined): ObjectId
 export async function logAudit(input: AuditLogInput): Promise<void> {
     try {
         const projectId = toObjectIdOrNull(input.projectId);
-        await collections.auditLogs.insertOne({
-            _id: new ObjectId(),
+        await dbCol.auditLogs.insertLog({
             projectId,
             actorId: input.actorId ?? null,
             action: input.action,
@@ -36,8 +35,7 @@ export async function logAudit(input: AuditLogInput): Promise<void> {
             resourceId: input.resourceId ?? null,
             reasonCode: input.reasonCode ?? null,
             changes: input.changes ? serializeForClient(input.changes) : null,
-            error: input.error ?? null,
-            createdAt: Date.now()
+            error: input.error ?? null
         });
     } catch (error) {
         // Audit logging must not break business flows.

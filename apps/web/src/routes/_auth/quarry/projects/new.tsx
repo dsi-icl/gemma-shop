@@ -23,7 +23,7 @@ function NewProject() {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
             navigate({
                 to: '/quarry/projects/$projectId',
-                params: { projectId: project._id }
+                params: { projectId: project.id }
             });
         },
         onError: (e) => toast.error(e.message)

@@ -258,7 +258,7 @@ function AdminAssetsTab() {
                             <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => deleteAssetMutation.mutate(asset._id)}
+                                onClick={() => deleteAssetMutation.mutate(asset.id)}
                                 disabled={deleteAssetMutation.isPending}
                                 title="Delete"
                             >
@@ -404,9 +404,9 @@ function AdminAssetsTab() {
 
             {view === 'list-preview' && displayedAssets.length > 0 && (
                 <div className="flex flex-col gap-2">
-                    {displayedAssets.map((asset: any) => (
+                    {displayedAssets.map((asset: Asset) => (
                         <div
-                            key={asset._id}
+                            key={asset.id}
                             className="flex items-center gap-3 rounded-lg border p-2"
                         >
                             {isFontAsset(asset) ? (
@@ -415,8 +415,8 @@ function AdminAssetsTab() {
                                 <div className="group relative h-16 w-16 overflow-hidden rounded-md">
                                     <ProjectImage
                                         src={asset.previewUrl ?? asset.url}
-                                        blurhash={asset.blurhash}
-                                        sizes={asset.sizes}
+                                        blurhash={asset.blurhash ?? undefined}
+                                        sizes={asset.sizes ?? undefined}
                                         alt={asset.name}
                                         className="h-16 w-16 rounded-md"
                                         imgClassName="cursor-pointer object-cover"
@@ -446,7 +446,7 @@ function AdminAssetsTab() {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                deleteAssetMutation.mutate(asset._id);
+                                                deleteAssetMutation.mutate(asset.id);
                                             }}
                                             className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
                                             title="Delete"
@@ -483,7 +483,7 @@ function AdminAssetsTab() {
                                 <Button
                                     variant="ghost"
                                     size="icon-sm"
-                                    onClick={() => deleteAssetMutation.mutate(asset._id)}
+                                    onClick={() => deleteAssetMutation.mutate(asset.id)}
                                     disabled={deleteAssetMutation.isPending}
                                     title="Delete"
                                 >
@@ -497,8 +497,8 @@ function AdminAssetsTab() {
 
             {view === 'grid' && displayedAssets.length > 0 && (
                 <div className="grid grid-cols-4 gap-2">
-                    {displayedAssets.map((asset: any) => (
-                        <div key={asset._id} className="group relative">
+                    {displayedAssets.map((asset: Asset) => (
+                        <div key={asset.id} className="group relative">
                             {isFontAsset(asset) ? (
                                 <FontPlaceholder
                                     name={asset.name}
@@ -507,8 +507,8 @@ function AdminAssetsTab() {
                             ) : (
                                 <ProjectImage
                                     src={asset.previewUrl ?? asset.url}
-                                    blurhash={asset.blurhash}
-                                    sizes={asset.sizes}
+                                    blurhash={asset.blurhash ?? undefined}
+                                    sizes={asset.sizes ?? undefined}
                                     alt={asset.name}
                                     className="aspect-square w-full rounded-lg"
                                     imgClassName="cursor-pointer object-cover"
@@ -546,7 +546,7 @@ function AdminAssetsTab() {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                deleteAssetMutation.mutate(asset._id);
+                                                deleteAssetMutation.mutate(asset.id);
                                             }}
                                             className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
                                             title="Delete"

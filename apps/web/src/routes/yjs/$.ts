@@ -16,7 +16,7 @@ import * as Y from 'yjs';
 
 import type { PeerMeta } from '~/lib/busState';
 import type { Layer } from '~/lib/types';
-import { collections } from '~/server/collections';
+import { dbCol } from '~/server/collections';
 import { canEditProject } from '~/server/projectAuthz';
 import { resolveAuthContextFromRequest } from '~/server/requestAuthContext';
 
@@ -304,11 +304,13 @@ async function applyHtmlToDoc(doc: Y.Doc, html: string, docName: string) {
 }
 
 async function loadTextLayer(scope: DocScope): Promise<TextLayer> {
-    const commit = await collections.commits.findOne({
-        _id: new ObjectId(scope.commitId),
-        projectId: new ObjectId(scope.projectId)
-    });
-    if (!commit?.content?.slides || !Array.isArray(commit.content.slides)) {
+    const commit = await dbCol.commits.findById(scope.commitId);
+    if (
+        !commit ||
+        String(commit.projectId) !== scope.projectId ||
+        !commit.content?.slides ||
+        !Array.isArray(commit.content.slides)
+    ) {
         throw new Error(`Commit not found or invalid content for ${scope.commitId}`);
     }
 
@@ -326,12 +328,11 @@ async function loadTextLayer(scope: DocScope): Promise<TextLayer> {
 
 class MongoYDocPersistence implements Persistence {
     provider: unknown = null;
-    private collection = collections.ydocs;
     private indexReady: Promise<void>;
 
     constructor() {
-        this.indexReady = this.collection
-            .createIndex({ scope: 1 }, { unique: true, name: 'scope_unique' })
+        this.indexReady = dbCol.ydocs
+            .ensureScopeIndex()
             .then(() => {
                 debugLog('ydocs.scope unique index ensured');
             })
@@ -342,9 +343,10 @@ class MongoYDocPersistence implements Persistence {
 
     async bindState(scope: string, doc: SharedDoc): Promise<boolean> {
         await this.indexReady;
-        const existing = await this.collection.findOne({ scope }, { projection: { data: 1 } });
-        if (!existing) return false;
-        const update = binaryToUint8Array(existing.data);
+        // Use a projection to avoid fetching the full document (data binary can be large).
+        const data = await dbCol.ydocs.findDataByScope(scope);
+        if (!data) return false;
+        const update = binaryToUint8Array(data);
         if (!update || update.byteLength === 0) return false;
         Y.applyUpdate(doc, update);
         return true;
@@ -353,20 +355,7 @@ class MongoYDocPersistence implements Persistence {
     async writeState(scope: string, doc: SharedDoc): Promise<void> {
         await this.indexReady;
         const update = Y.encodeStateAsUpdate(doc);
-        await this.collection.updateOne(
-            { scope },
-            {
-                $set: {
-                    scope,
-                    data: new Binary(Buffer.from(update)),
-                    updatedAt: Date.now()
-                },
-                $setOnInsert: {
-                    createdAt: Date.now()
-                }
-            },
-            { upsert: true }
-        );
+        await dbCol.ydocs.upsertByScope(scope, new Binary(Buffer.from(update)));
     }
 }
 

@@ -3,7 +3,7 @@ import type { AuditLogDocument } from '@repo/db/documents';
 import { epochToISO, serializeForClient, toIdString, toScalarString } from '~/server/serialization';
 
 export interface SerializedAuditLog {
-    _id: string;
+    id: string;
     projectId: string;
     actorId: string;
     action: string;
@@ -13,7 +13,7 @@ export interface SerializedAuditLog {
 
 export function serializeAudit(doc: AuditLogDocument): SerializedAuditLog {
     return serializeForClient({
-        _id: toIdString(doc._id),
+        id: doc.id,
         projectId: toIdString(doc.projectId),
         actorId: toScalarString(doc.actorId),
         action: toScalarString(doc.action),

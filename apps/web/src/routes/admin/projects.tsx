@@ -28,7 +28,7 @@ function AdminProjects() {
                     </thead>
                     <tbody className="divide-y divide-border">
                         {projects.map((project: any) => (
-                            <tr key={project._id} className="hover:bg-muted/30">
+                            <tr key={project.id} className="hover:bg-muted/30">
                                 <td className="px-4 py-3 font-medium">{project.name}</td>
                                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                                     {project.createdBy}

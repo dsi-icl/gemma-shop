@@ -1,20 +1,16 @@
 import '@tanstack/react-start/server-only';
+import type { CommitDocument } from '@repo/db/documents';
 import type { CreateProjectInput, UpdateProjectInput } from '@repo/db/schema';
 import { ObjectId } from 'mongodb';
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 import { logAuditSuccess } from '~/server/audit';
-import { collections } from '~/server/collections';
+import { dbCol, collections } from '~/server/collections';
 import { serializeAsset } from '~/server/serializers/asset.serializer';
 import { serializeAudit } from '~/server/serializers/audit.serializer';
 import { serializeCommit } from '~/server/serializers/commit.serializer';
 import { serializeProject } from '~/server/serializers/project.serializer';
-
-const projects = collections.projects;
-const auditLogs = collections.auditLogs;
-const assets = collections.assets;
-const commits = collections.commits;
 
 function normalizeAssetFilename(value: unknown): string | null {
     if (typeof value !== 'string' || value.length === 0) return null;
@@ -35,21 +31,19 @@ export async function listProjects(userEmail: string, includeArchived = false) {
     if (!includeArchived) {
         filter.deletedAt = { $exists: false };
     }
-    const docs = await projects.find(filter).sort({ updatedAt: -1 }).toArray();
-    return docs.map(serializeProject);
+    const projects = await dbCol.projects.find(filter, { sort: { updatedAt: -1 } });
+    return projects.map(serializeProject);
 }
 
 export async function listPublishedProjects() {
-    const projects = await collections.projects
-        .find({ deletedAt: { $exists: false } })
-        .sort({ updatedAt: -1 })
-        .toArray();
+    const projectDocs = await dbCol.projects.find(
+        { deletedAt: { $exists: false } },
+        { sort: { updatedAt: -1 } }
+    );
 
-    const visibleProjects = projects.filter((doc: any) => {
-        const visibility = doc.visibility === 'public' ? 'public' : 'private';
-        const hasPublishedCommit = Boolean(doc.publishedCommitId);
-        return visibility === 'public' && hasPublishedCommit;
-    });
+    const visibleProjects = projectDocs.filter(
+        (project) => project.visibility === 'public' && Boolean(project.publishedCommitId)
+    );
 
     const serialized = visibleProjects.map(serializeProject);
     const heroFilenames = Array.from(
@@ -62,19 +56,9 @@ export async function listPublishedProjects() {
 
     if (heroFilenames.length === 0) return serialized;
 
-    const heroAssets = await assets
-        .find({ url: { $in: heroFilenames }, deletedAt: { $exists: false } })
-        .project({ url: 1, blurhash: 1, sizes: 1 })
-        .toArray();
+    const heroAssets = await dbCol.assets.findBlurhashMetaByUrls(heroFilenames);
 
-    const heroMetaByFilename = new Map<
-        string,
-        {
-            blurhash?: string;
-            sizes?: number[];
-        }
-    >();
-
+    const heroMetaByFilename = new Map<string, { blurhash?: string; sizes?: number[] }>();
     for (const asset of heroAssets) {
         const filename = normalizeAssetFilename(asset.url);
         if (!filename) continue;
@@ -91,11 +75,7 @@ export async function listPublishedProjects() {
             .map((src) => {
                 const filename = normalizeAssetFilename(src);
                 const meta = filename ? heroMetaByFilename.get(filename) : undefined;
-                return {
-                    src,
-                    blurhash: meta?.blurhash,
-                    sizes: meta?.sizes
-                };
+                return { src, blurhash: meta?.blurhash, sizes: meta?.sizes };
             })
             .filter((entry) => Boolean(entry.src));
         const firstHeroMeta = heroImageMeta[0];
@@ -109,17 +89,12 @@ export async function listPublishedProjects() {
 }
 
 export async function listKnownTags(userEmail: string): Promise<string[]> {
-    const docs = await projects
-        .find({
-            $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }]
-        })
-        .project({ tags: 1 })
-        .toArray();
+    const tagArrays = await dbCol.projects.findTagsByUser(userEmail);
 
     const usage = new Map<string, number>();
-    for (const doc of docs) {
-        const tags = Array.isArray(doc.tags) ? doc.tags : [];
-        for (const raw of tags) {
+    for (const tags of tagArrays) {
+        const tagList = Array.isArray(tags) ? tags : [];
+        for (const raw of tagList) {
             if (typeof raw !== 'string') continue;
             const tag = raw.trim().toLowerCase();
             if (!tag) continue;
@@ -137,93 +112,76 @@ export async function listAssets(projectId: string) {
     if (!project) throw new Error('Project not found');
 
     const [projectDocs, publicDocs] = await Promise.all([
-        assets
-            .find({
-                projectId: new ObjectId(projectId),
-                deletedAt: { $exists: false },
-                hidden: { $ne: true }
-            })
-            .sort({ createdAt: -1 })
-            .toArray(),
-        assets
-            .find({ public: true, deletedAt: { $exists: false }, hidden: { $ne: true } })
-            .sort({ createdAt: -1 })
-            .toArray()
+        dbCol.assets.findByProject(projectId, false, { sort: { createdAt: -1 } }),
+        dbCol.assets.findPublic(false, { sort: { createdAt: -1 } })
     ]);
 
     const projectAssets = projectDocs.map(serializeAsset);
-    const projectIds = new Set(projectAssets.map((a) => a._id));
-    const publicAssets = publicDocs
-        .filter((d) => !projectIds.has(d._id.toHexString()))
-        .map(serializeAsset);
+    const projectIds = new Set(projectAssets.map((a) => a.id));
+    const publicAssets = publicDocs.filter((d) => !projectIds.has(d.id)).map(serializeAsset);
 
     return [...projectAssets, ...publicAssets];
 }
 
 export async function getProject(id: string) {
-    const doc = await projects.findOne({ _id: new ObjectId(id) });
-    if (!doc) return null;
-    return serializeProject(doc);
+    const project = await dbCol.projects.findById(id);
+    if (!project) return null;
+    return serializeProject(project);
 }
 
 export async function getCommit(id: string) {
-    const doc = await commits.findOne({ _id: new ObjectId(id) });
-    if (!doc) return null;
-    return serializeCommit(doc);
+    const commit = await dbCol.commits.findById(id);
+    if (!commit) return null;
+    return serializeCommit(commit);
 }
 
 export async function createProject(input: CreateProjectInput, userEmail: string) {
-    const now = Date.now();
-    const doc = {
+    const created = await dbCol.projects.insert({
         ...input,
         collaborators: [{ email: userEmail, role: 'owner' as const }, ...input.collaborators],
         visibility: input.visibility ?? 'private',
         headCommitId: null,
         publishedCommitId: null,
-        createdBy: userEmail,
-        createdAt: now,
-        updatedAt: now
-    };
-    const result = await projects.insertOne({ _id: new ObjectId(), ...doc });
+        createdBy: userEmail
+    });
 
     await logAuditSuccess({
         action: 'PROJECT_CREATED',
         actorId: userEmail,
-        projectId: result.insertedId,
+        projectId: created.id,
         resourceType: 'project',
-        resourceId: result.insertedId.toHexString(),
+        resourceId: created.id,
         changes: { name: input.name }
     });
 
-    process.__BROADCAST_PROJECTS_CHANGED__?.(result.insertedId.toHexString());
-    return serializeProject({ ...doc, _id: result.insertedId });
+    process.__BROADCAST_PROJECTS_CHANGED__?.(created.id);
+    return serializeProject(created);
 }
 
 export async function updateProject(input: UpdateProjectInput, userEmail: string) {
-    const { _id, publishedCommitId: rawPublishedCommitId, ...updates } = input;
-    const existing = await projects.findOne({ _id: new ObjectId(_id) });
+    const { id: projectId, publishedCommitId: rawPublishedCommitId, ...updates } = input;
+    const existing = await dbCol.projects.findById(projectId);
     if (!existing) throw new Error('Project not found');
 
-    const setFields: Record<string, unknown> = { ...updates, updatedAt: Date.now() };
-    if (rawPublishedCommitId !== undefined) {
-        setFields.publishedCommitId = rawPublishedCommitId
-            ? new ObjectId(rawPublishedCommitId)
-            : null;
-    }
-
-    const result = await projects.findOneAndUpdate(
-        { _id: new ObjectId(_id) },
-        { $set: setFields },
-        { returnDocument: 'after' }
-    );
+    // Apply general field updates
+    const result = await dbCol.projects.update(projectId, updates as any);
     if (!result) throw new Error('Update failed');
+
+    // Handle publishedCommitId separately via typed method (avoids raw ObjectId construction)
+    if (rawPublishedCommitId !== undefined) {
+        await dbCol.projects.setPublishedCommit(
+            projectId,
+            rawPublishedCommitId ?? null,
+            rawPublishedCommitId ? 'public' : (updates.visibility ?? existing.visibility)
+        );
+    }
 
     await logAuditSuccess({
         action: 'PROJECT_UPDATED',
         actorId: userEmail,
-        projectId: _id,
+        projectId,
         resourceType: 'project',
-        resourceId: _id,
+        resourceId: projectId,
         changes: { ...updates, publishedCommitId: rawPublishedCommitId } as Record<string, unknown>
     });
 
@@ -234,31 +192,25 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
         'customRenderProxy' in updates
     ) {
         updateProjectCustomRenderSettings(
-            _id,
+            projectId,
             updates.customRenderUrl ?? existing.customRenderUrl ?? undefined,
             updates.customRenderCompat,
             updates.customRenderProxy
         );
     }
 
-    process.__BROADCAST_PROJECTS_CHANGED__?.(_id);
-    return serializeProject(result);
+    process.__BROADCAST_PROJECTS_CHANGED__?.(projectId);
+    // Re-fetch to get the latest state after both updates
+    const updated = await dbCol.projects.findById(projectId);
+    if (!updated) throw new Error('Project not found after update');
+    return serializeProject(updated);
 }
 
 export async function archiveProject(id: string, userEmail: string) {
-    const existing = await projects.findOne({ _id: new ObjectId(id) });
+    const existing = await dbCol.projects.findById(id);
     if (!existing) throw new Error('Project not found');
 
-    await projects.updateOne(
-        { _id: new ObjectId(id) },
-        {
-            $set: {
-                deletedAt: Date.now(),
-                deletedBy: userEmail,
-                updatedAt: Date.now()
-            }
-        }
-    );
+    await dbCol.projects.softDelete(id, userEmail);
 
     await logAuditSuccess({
         action: 'PROJECT_ARCHIVED',
@@ -273,24 +225,13 @@ export async function archiveProject(id: string, userEmail: string) {
 }
 
 export async function deleteAsset(assetId: string, userEmail: string) {
-    const asset = await assets.findOne({
-        _id: new ObjectId(assetId),
-        deletedAt: { $exists: false }
-    });
-    if (!asset) throw new Error('Asset not found');
+    const asset = await dbCol.assets.findById(assetId);
+    if (!asset || asset.deletedAt) throw new Error('Asset not found');
 
     const project = await getProject(asset.projectId.toString());
     if (!project) throw new Error('Project not found');
 
-    await assets.updateOne(
-        { _id: new ObjectId(assetId) },
-        {
-            $set: {
-                deletedAt: Date.now(),
-                deletedBy: userEmail
-            }
-        }
-    );
+    await dbCol.assets.softDelete(assetId, userEmail);
     await logAuditSuccess({
         action: 'ASSET_DELETED',
         actorId: userEmail,
@@ -301,16 +242,13 @@ export async function deleteAsset(assetId: string, userEmail: string) {
 }
 
 export async function restoreProject(id: string, userEmail: string) {
-    const existing = await projects.findOne({ _id: new ObjectId(id) });
+    const existing = await dbCol.projects.findById(id);
     if (!existing) throw new Error('Project not found');
 
-    await projects.updateOne(
-        { _id: new ObjectId(id) },
-        {
-            $set: { updatedAt: Date.now() },
-            $unset: { deletedAt: '', deletedBy: '' }
-        }
-    );
+    await dbCol.projects.updateRaw(id, {
+        $set: { updatedAt: Date.now(), _version: dbCol.projects.currentVersion },
+        $unset: { deletedAt: '', deletedBy: '' }
+    });
 
     await logAuditSuccess({
         action: 'PROJECT_RESTORED',
@@ -325,21 +263,15 @@ export async function restoreProject(id: string, userEmail: string) {
 }
 
 export async function publishCommit(projectId: string, commitId: string | null, userEmail: string) {
-    const existing = await projects.findOne({ _id: new ObjectId(projectId) });
+    const existing = await dbCol.projects.findById(projectId);
     if (!existing) throw new Error('Project not found');
 
     const isPublishing = commitId !== null;
 
-    await projects.updateOne(
-        { _id: new ObjectId(projectId) },
-        {
-            $set: {
-                publishedCommitId: commitId ? new ObjectId(commitId) : null,
-                visibility: isPublishing ? 'public' : 'private',
-                updatedAt: Date.now()
-            }
-        }
-    );
+    await dbCol.projects.update(projectId, {
+        publishedCommitId: commitId ? new ObjectId(commitId) : null,
+        visibility: isPublishing ? 'public' : 'private'
+    } as any);
 
     await logAuditSuccess({
         action: commitId ? 'PROJECT_PUBLISHED' : 'PROJECT_UNPUBLISHED',
@@ -360,7 +292,7 @@ export async function publishCommit(projectId: string, commitId: string | null, 
  * and marking it as the published commit. If already published, this is a no-op.
  */
 export async function publishCustomRenderProject(projectId: string, userEmail: string) {
-    const existing = await projects.findOne({ _id: new ObjectId(projectId) });
+    const existing = await dbCol.projects.findById(projectId);
     if (!existing) throw new Error('Project not found');
     if (!existing.customRenderUrl) throw new Error('Project has no custom render URL');
 
@@ -368,21 +300,17 @@ export async function publishCustomRenderProject(projectId: string, userEmail: s
     if (existing.publishedCommitId) return true;
 
     const sentinelSlideId = new ObjectId().toHexString();
-    const sentinel = {
-        _id: new ObjectId(),
+    const sentinel = await dbCol.commits.insert({
         projectId: new ObjectId(projectId),
         parentId: null,
         authorId: new ObjectId(),
         message: 'Published (custom render)',
         content: { slides: [{ id: sentinelSlideId, order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
-        isMutableHead: false,
-        createdAt: Date.now()
-    };
-    const result = await commits.insertOne(sentinel);
-    const sentinelId = result.insertedId.toHexString();
+        isMutableHead: false
+    });
 
-    return publishCommit(projectId, sentinelId, userEmail);
+    return publishCommit(projectId, sentinel.id, userEmail);
 }
 
 /**
@@ -390,71 +318,59 @@ export async function publishCustomRenderProject(projectId: string, userEmail: s
  * legacy immutable heads. Returns the stable HEAD commit ID.
  */
 export async function ensureMutableHead(projectId: string, userEmail: string): Promise<string> {
-    const project = await projects.findOne({ _id: new ObjectId(projectId) });
+    const project = await dbCol.projects.findById(projectId);
     if (!project) throw new Error('Project not found');
 
     // Case 1: HEAD exists and is already mutable
     if (project.headCommitId) {
-        const head = await commits.findOne({ _id: new ObjectId(project.headCommitId) });
+        const head = await dbCol.commits.findById(project.headCommitId);
         if (head?.isMutableHead) {
             return project.headCommitId.toString();
         }
 
         // Case 2: HEAD exists but is immutable (legacy) — create mutable HEAD on top
-        const newHead = {
-            _id: new ObjectId(),
+        const newHead = await dbCol.commits.insert({
             projectId: new ObjectId(projectId),
             parentId: new ObjectId(project.headCommitId),
             authorId: new ObjectId(),
             message: 'HEAD',
             content: head?.content ?? { slides: [] },
             isAutoSave: false,
-            isMutableHead: true,
-            createdAt: Date.now()
-        };
-        const result = await commits.insertOne(newHead);
-        await projects.updateOne(
-            { _id: new ObjectId(projectId) },
-            { $set: { headCommitId: result.insertedId, updatedAt: Date.now() } }
-        );
+            isMutableHead: true
+        });
+        await dbCol.projects.setHeadCommit(projectId, newHead.id);
         await logAuditSuccess({
             action: 'MUTABLE_HEAD_ENSURED',
             actorId: userEmail,
             projectId,
             resourceType: 'commit',
-            resourceId: result.insertedId.toHexString(),
+            resourceId: newHead.id,
             changes: { source: 'legacy-head-migration' }
         });
-        return result.insertedId.toHexString();
+        return newHead.id;
     }
 
     // Case 3: No HEAD at all — create fresh mutable HEAD with a default slide
     const defaultSlideId = new ObjectId().toHexString();
-    const newHead = {
-        _id: new ObjectId(),
+    const newHead = await dbCol.commits.insert({
         projectId: new ObjectId(projectId),
         parentId: null,
         authorId: new ObjectId(),
         message: 'HEAD',
         content: { slides: [{ id: defaultSlideId, order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
-        isMutableHead: true,
-        createdAt: Date.now()
-    };
-    const result = await commits.insertOne(newHead);
-    await projects.updateOne(
-        { _id: new ObjectId(projectId) },
-        { $set: { headCommitId: result.insertedId, updatedAt: Date.now() } }
-    );
+        isMutableHead: true
+    });
+    await dbCol.projects.setHeadCommit(projectId, newHead.id);
     await logAuditSuccess({
         action: 'MUTABLE_HEAD_ENSURED',
         actorId: userEmail,
         projectId,
         resourceType: 'commit',
-        resourceId: result.insertedId.toHexString(),
+        resourceId: newHead.id,
         changes: { source: 'head-created' }
     });
-    return result.insertedId.toHexString();
+    return newHead.id;
 }
 
 /**
@@ -467,35 +383,32 @@ export async function createBranchHead(
     sourceCommitId: string,
     userEmail: string
 ): Promise<string> {
-    const project = await projects.findOne({ _id: new ObjectId(projectId) });
+    const project = await dbCol.projects.findById(projectId);
     if (!project) throw new Error('Project not found');
 
-    const source = await commits.findOne({ _id: new ObjectId(sourceCommitId) });
+    const source = await dbCol.commits.findById(sourceCommitId);
     if (!source) throw new Error('Source commit not found');
     if (source.projectId.toString() !== projectId)
         throw new Error('Commit does not belong to project');
 
-    const branchHead = {
-        _id: new ObjectId(),
+    const branchHead = await dbCol.commits.insert({
         projectId: new ObjectId(projectId),
         parentId: new ObjectId(sourceCommitId),
         authorId: new ObjectId(),
         message: 'HEAD',
         content: source.content ?? { slides: [] },
         isAutoSave: false,
-        isMutableHead: true,
-        createdAt: Date.now()
-    };
-    const result = await commits.insertOne(branchHead);
+        isMutableHead: true
+    });
     await logAuditSuccess({
         action: 'BRANCH_HEAD_CREATED',
         actorId: userEmail,
         projectId,
         resourceType: 'commit',
-        resourceId: result.insertedId.toHexString(),
+        resourceId: branchHead.id,
         changes: { sourceCommitId }
     });
-    return result.insertedId.toHexString();
+    return branchHead.id;
 }
 
 /**
@@ -507,24 +420,18 @@ export async function promoteBranchHead(
     branchCommitId: string,
     userEmail: string
 ): Promise<void> {
-    const project = await projects.findOne({ _id: new ObjectId(projectId) });
+    const project = await dbCol.projects.findById(projectId);
     if (!project) throw new Error('Project not found');
 
-    const branch = await commits.findOne({ _id: new ObjectId(branchCommitId) });
+    const branch = await dbCol.commits.findById(branchCommitId);
     if (!branch) throw new Error('Branch commit not found');
     if (!branch.isMutableHead) throw new Error('Can only promote a mutable branch head');
     if (branch.projectId.toString() !== projectId)
         throw new Error('Commit does not belong to project');
 
-    await projects.updateOne(
-        { _id: new ObjectId(projectId) },
-        {
-            $set: {
-                headCommitId: new ObjectId(branchCommitId),
-                updatedAt: Date.now()
-            }
-        }
-    );
+    await dbCol.projects.update(projectId, {
+        headCommitId: new ObjectId(branchCommitId)
+    } as any);
 
     await logAuditSuccess({
         action: 'BRANCH_PROMOTED',
@@ -537,24 +444,16 @@ export async function promoteBranchHead(
 }
 
 export async function getAuditLogs(projectId: string) {
-    const project = await projects.findOne({ _id: new ObjectId(projectId) });
+    const project = await dbCol.projects.findById(projectId);
     if (!project) throw new Error('Project not found');
 
-    const docs = await auditLogs
-        .find({ projectId: new ObjectId(projectId) })
-        .sort({ createdAt: -1 })
-        .toArray();
-    return docs.map(serializeAudit);
+    const auditLogs = await dbCol.auditLogs.findByProject(projectId, { sort: { createdAt: -1 } });
+    return auditLogs.map(serializeAudit);
 }
 
 export async function getProjectCommits(projectId: string) {
-    const docs = await collections.commits
-        .find({ projectId: new ObjectId(projectId) })
-        .sort({ createdAt: -1 })
-        .toArray();
-    return docs.map((d) => {
-        return serializeCommit(d);
-    });
+    const commits = await dbCol.commits.findByProject(projectId, { sort: { createdAt: -1 } });
+    return commits.map(serializeCommit);
 }
 
 /**
@@ -567,7 +466,7 @@ export async function copySlideInCommit(
     newSlideId: string,
     newSlideName: string
 ): Promise<void> {
-    const commit = await commits.findOne({ _id: new ObjectId(commitId) });
+    const commit = await dbCol.commits.findById(commitId);
     if (!commit?.content?.slides) throw new Error('Commit not found');
 
     const slides = commit.content.slides as Array<{
@@ -627,9 +526,9 @@ export async function copySlideInCommit(
         .sort((a, b) => a.order - b.order)
         .map((s, i) => ({ ...s, order: i }));
 
-    await commits.updateOne(
-        { _id: new ObjectId(commitId) },
-        { $set: { 'content.slides': updatedSlides, updatedAt: Date.now() } }
+    await dbCol.commits.updateSlides(
+        commitId,
+        updatedSlides as CommitDocument['content']['slides']
     );
 }
 
@@ -638,7 +537,7 @@ export async function copySlideInCommit(
  * Returns false if it's the last slide (must keep at least one).
  */
 export async function deleteSlideFromCommit(commitId: string, slideId: string): Promise<boolean> {
-    const commit = await commits.findOne({ _id: new ObjectId(commitId) });
+    const commit = await dbCol.commits.findById(commitId);
     if (!commit?.content?.slides) throw new Error('Commit not found');
 
     const slides = commit.content.slides as Array<{
@@ -655,9 +554,9 @@ export async function deleteSlideFromCommit(commitId: string, slideId: string): 
         .sort((a, b) => a.order - b.order)
         .map((s, i) => ({ ...s, order: i }));
 
-    await commits.updateOne(
-        { _id: new ObjectId(commitId) },
-        { $set: { 'content.slides': updatedSlides, updatedAt: Date.now() } }
+    await dbCol.commits.updateSlides(
+        commitId,
+        updatedSlides as CommitDocument['content']['slides']
     );
 
     return true;

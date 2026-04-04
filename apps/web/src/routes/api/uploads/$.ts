@@ -19,7 +19,7 @@ import { jobSignalBus } from '~/lib/jobs/signalBus';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
 import { logAuditSuccess } from '~/server/audit';
-import { collections } from '~/server/collections';
+import { dbCol } from '~/server/collections';
 import {
     buildRateLimitSubjectKey,
     checkRateLimit,
@@ -249,8 +249,7 @@ const tusServer = new Server({
                     0;
 
                 const isPublicAsset = projectId === PUBLIC_ASSET_PROJECT_ID;
-                const insertResult = await collections.assets.insertOne({
-                    _id: new ObjectId(),
+                const created = await dbCol.assets.insert({
                     projectId: new ObjectId(projectId),
                     name: originalName,
                     url: assetFilename,
@@ -260,15 +259,14 @@ const tusServer = new Server({
                     previewUrl: previewFilename ?? undefined,
                     sizes: sizes.length > 0 ? sizes : undefined,
                     public: isPublicAsset,
-                    createdBy: userEmail,
-                    createdAt: Date.now()
+                    createdBy: userEmail
                 });
                 await logAuditSuccess({
                     action: 'UPLOAD_FINALIZED',
                     actorId: userEmail,
                     projectId,
                     resourceType: 'asset',
-                    resourceId: insertResult.insertedId.toHexString(),
+                    resourceId: created.id,
                     changes: {
                         name: originalName,
                         url: assetFilename,
@@ -283,7 +281,7 @@ const tusServer = new Server({
                 );
                 if (process.__BROADCAST_ASSET_ADDED__) {
                     process.__BROADCAST_ASSET_ADDED__(projectId, {
-                        _id: insertResult.insertedId.toString(),
+                        id: created.id,
                         name: originalName,
                         url: assetFilename,
                         size: fileSize,
@@ -291,7 +289,7 @@ const tusServer = new Server({
                         blurhash: blurhash ?? undefined,
                         previewUrl: previewFilename ?? undefined,
                         sizes: sizes.length > 0 ? sizes : undefined,
-                        createdAt: Date.now(),
+                        createdAt: String(Date.now()),
                         createdBy: userEmail
                     });
                 }

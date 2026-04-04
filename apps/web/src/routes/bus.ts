@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto';
 
 import { createFileRoute } from '@tanstack/react-router';
 import { defineHooks, type Peer } from 'crossws';
-import { ObjectId } from 'mongodb';
 
 import {
     peers,
@@ -81,7 +80,7 @@ import {
     type Layer
 } from '~/lib/types';
 import { logAuditDenied } from '~/server/audit';
-import { collections } from '~/server/collections';
+import { dbCol } from '~/server/collections';
 import { ensureDeviceByPublicKey, markDeviceDisconnectedById } from '~/server/devices';
 import { canEditProject, canViewProject } from '~/server/projectAuthz';
 import {
@@ -459,17 +458,8 @@ async function performLiveBind(
         cancelWallUnbindGrace(wallId);
         const [resolvedSlideId, project, wallExists] = await Promise.all([
             resolveBoundSlideId(projectId, commitId, requestedSlideId),
-            collections.projects.findOne(
-                { _id: new ObjectId(projectId) },
-                {
-                    projection: {
-                        customRenderUrl: 1,
-                        customRenderCompat: 1,
-                        customRenderProxy: 1
-                    }
-                }
-            ),
-            collections.walls.findOne({ wallId }, { projection: { _id: 1 } })
+            dbCol.projects.findById(projectId),
+            dbCol.walls.findOne({ wallId })
         ]);
         if (!wallExists) {
             return { ok: false, error: 'unknown_wall' };
@@ -513,18 +503,12 @@ async function performLiveBind(
             );
         }
 
-        await collections.walls.updateOne(
-            { wallId },
-            {
-                $set: {
-                    boundProjectId: projectId,
-                    boundCommitId: commitId,
-                    boundSlideId: resolvedSlideId,
-                    boundSource: source,
-                    updatedAt: Date.now()
-                }
-            }
-        );
+        await dbCol.walls.updateByWallId(wallId, {
+            boundProjectId: projectId,
+            boundCommitId: commitId,
+            boundSlideId: resolvedSlideId,
+            boundSource: source
+        });
 
         broadcastWallBindingToEditors(wallId);
         broadcastWallBindingToGalleries(wallId);
@@ -587,16 +571,13 @@ async function resolveBoundSlideId(
     commitId: string,
     requestedSlideId: string
 ): Promise<string | null> {
-    let commit: any = null;
+    let commit: Awaited<ReturnType<typeof dbCol.commits.findById>> = null;
     try {
-        commit = await collections.commits.findOne(
-            { _id: new ObjectId(commitId), projectId: new ObjectId(projectId) },
-            { projection: { 'content.slides.id': 1 } }
-        );
+        commit = await dbCol.commits.findById(commitId);
     } catch {
         return null;
     }
-    if (!commit) return null;
+    if (!commit || String(commit.projectId) !== projectId) return null;
     const slides = (commit.content?.slides as Array<{ id?: string }>) ?? [];
     if (slides.some((s) => s.id === requestedSlideId)) return requestedSlideId;
     return slides[0]?.id ?? null;
@@ -606,10 +587,7 @@ async function getSlidesMetadata(
     commitId: string
 ): Promise<Array<{ id: string; order: number; name: string }>> {
     try {
-        const commit = await collections.commits.findOne(
-            { _id: new ObjectId(commitId) },
-            { projection: { 'content.slides': 1 } }
-        );
+        const commit = await dbCol.commits.findById(commitId);
         const slides =
             (commit?.content?.slides as Array<{
                 id?: string;
@@ -741,16 +719,7 @@ async function sendGalleryStateSnapshot(peer: Peer, wallId?: string) {
 
     let publishedProjects: Array<{ projectId: string; publishedCommitId: string | null }> = [];
     try {
-        const docs = await collections.projects
-            .find(
-                { publishedCommitId: { $ne: null }, deletedAt: { $exists: false } },
-                { projection: { _id: 1, publishedCommitId: 1 } }
-            )
-            .toArray();
-        publishedProjects = docs.map((doc: any) => ({
-            projectId: String(doc._id),
-            publishedCommitId: doc.publishedCommitId ? String(doc.publishedCommitId) : null
-        }));
+        publishedProjects = await dbCol.projects.findPublishedCommitRefs();
     } catch (error) {
         console.warn('[WS] gallery_state: failed to read published projects snapshot', error);
     }
@@ -1171,18 +1140,12 @@ function handleEditorScopeVacated(scopeId: number) {
             JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
         );
         notifyControllers(wallId, false);
-        void collections.walls.updateOne(
-            { wallId },
-            {
-                $set: {
-                    boundProjectId: null,
-                    boundCommitId: null,
-                    boundSlideId: null,
-                    boundSource: null,
-                    updatedAt: Date.now()
-                }
-            }
-        );
+        void dbCol.walls.updateByWallId(wallId, {
+            boundProjectId: null,
+            boundCommitId: null,
+            boundSlideId: null,
+            boundSource: null
+        });
         broadcastWallBindingToEditors(wallId);
         broadcastWallBindingToGalleries(wallId);
     }
@@ -1692,18 +1655,12 @@ handlers.set('unbind_wall', ({ data }) => {
         JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
     );
     notifyControllers(data.wallId, false);
-    void collections.walls.updateOne(
-        { wallId: data.wallId },
-        {
-            $set: {
-                boundProjectId: null,
-                boundCommitId: null,
-                boundSlideId: null,
-                boundSource: null,
-                updatedAt: Date.now()
-            }
-        }
-    );
+    void dbCol.walls.updateByWallId(data.wallId, {
+        boundProjectId: null,
+        boundCommitId: null,
+        boundSlideId: null,
+        boundSource: null
+    });
     broadcastWallBindingToEditors(data.wallId);
     broadcastWallBindingToGalleries(data.wallId);
     broadcastWallNodeCountToEditors(data.wallId);
@@ -2036,18 +1993,12 @@ const hooks = defineHooks({
                         JSON.stringify({ type: 'hydrate', layers: [] } satisfies GSMessage)
                     );
                     notifyControllers(meta.wallId, false);
-                    void collections.walls.updateOne(
-                        { wallId: meta.wallId },
-                        {
-                            $set: {
-                                boundProjectId: null,
-                                boundCommitId: null,
-                                boundSlideId: null,
-                                boundSource: null,
-                                updatedAt: Date.now()
-                            }
-                        }
-                    );
+                    void dbCol.walls.updateByWallId(meta.wallId, {
+                        boundProjectId: null,
+                        boundCommitId: null,
+                        boundSlideId: null,
+                        boundSource: null
+                    });
                     broadcastWallBindingToEditors(meta.wallId);
                     broadcastWallBindingToGalleries(meta.wallId);
                     broadcastWallNodeCountToEditors(meta.wallId);

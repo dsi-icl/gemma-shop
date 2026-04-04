@@ -152,7 +152,7 @@ export function AssetLibraryPanel({
                 store.removeLayer(layer.numericId);
             }
         }
-        await $deleteAsset({ data: { id: asset._id } });
+        await $deleteAsset({ data: { id: asset.id } });
     }, []);
 
     const toggleCollapse = () => {

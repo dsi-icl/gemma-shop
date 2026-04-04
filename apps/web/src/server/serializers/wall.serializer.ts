@@ -6,7 +6,7 @@ import { epochToISO, serializeForClient } from '~/server/serialization';
 export function serializeWall(doc: WallDocument): Wall {
     return serializeForClient({
         ...doc,
-        _id: doc._id.toHexString(),
+        id: doc.id,
         createdAt: epochToISO(doc.createdAt),
         lastSeen: epochToISO(doc.lastSeen)
     } as Wall);

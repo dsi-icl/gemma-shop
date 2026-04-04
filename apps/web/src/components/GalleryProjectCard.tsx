@@ -12,7 +12,7 @@ import { wallsQueryOptions } from '~/server/walls.queries';
 
 interface GalleryProjectCardProps {
     project: Project & {
-        _id: string;
+        id: string;
         publishedCommitId?: string | null;
     };
     autoOpenSignal?: string | number | null;
@@ -63,7 +63,7 @@ export function GalleryProjectCard({
                 engine.sendJSON({
                     type: 'bind_wall',
                     wallId,
-                    projectId: project._id,
+                    projectId: project.id,
                     commitId: project.publishedCommitId,
                     slideId: 'default'
                 });
@@ -74,7 +74,7 @@ export function GalleryProjectCard({
                 return false;
             }
         },
-        [presetWallId, project._id, project.publishedCommitId]
+        [presetWallId, project.id, project.publishedCommitId]
     );
 
     const handleWallRebootRequest = useCallback(

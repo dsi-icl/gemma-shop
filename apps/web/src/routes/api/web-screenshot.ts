@@ -9,7 +9,7 @@ import { ObjectId } from 'mongodb';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { ASSET_DIR } from '~/lib/serverVariables';
-import { collections } from '~/server/collections';
+import { dbCol } from '~/server/collections';
 import { canEditProject } from '~/server/projectAuthz';
 import {
     buildRateLimitSubjectKey,
@@ -204,7 +204,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
                 if (body.previousBaseId) {
                     await Promise.all([
                         cleanupPreviousFiles(body.previousBaseId),
-                        collections.assets.deleteOne({ url: `${body.previousBaseId}.png` })
+                        dbCol.assets.hardDeleteByUrl(`${body.previousBaseId}.png`)
                     ]);
                 }
 
@@ -244,8 +244,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     // Insert a hidden asset record so the serving route can auth-check it
                     // without the record appearing in asset library listings.
                     const fileSize = (await stat(screenshotPath).catch(() => null))?.size ?? 0;
-                    await collections.assets.insertOne({
-                        _id: new ObjectId(),
+                    await dbCol.assets.insert({
                         projectId: new ObjectId(projectId),
                         url: filename,
                         size: fileSize,
@@ -254,8 +253,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
                         mimeType: 'image/png',
                         hidden: true,
                         name: `web-screenshot:${url}`,
-                        createdBy: userEmail,
-                        createdAt: Date.now()
+                        createdBy: userEmail
                     });
 
                     return new Response(JSON.stringify({ filename, baseId, blurhash, sizes }), {

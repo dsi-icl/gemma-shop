@@ -3,7 +3,7 @@ import { z } from 'zod';
 const oid = z.string();
 
 export const WallSchema = z.object({
-    _id: oid,
+    id: oid,
     wallId: z.string(),
     name: z.string(),
     connectedNodes: z.number().default(0),

@@ -243,7 +243,7 @@ function AssetsTab() {
                                 variant="ghost"
                                 size="icon-sm"
                                 onClick={() =>
-                                    deleteAssetMutation.mutate({ data: { id: asset._id } })
+                                    deleteAssetMutation.mutate({ data: { id: asset.id } })
                                 }
                                 disabled={deleteAssetMutation.isPending}
                                 title="Delete"
@@ -392,7 +392,7 @@ function AssetsTab() {
                 <div className="flex flex-col gap-2">
                     {displayedAssets.map((asset) => (
                         <div
-                            key={asset._id}
+                            key={asset.id}
                             className="flex items-center gap-3 rounded-lg border p-2"
                         >
                             {isFontAsset(asset) ? (
@@ -433,7 +433,7 @@ function AssetsTab() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 deleteAssetMutation.mutate({
-                                                    data: { id: asset._id }
+                                                    data: { id: asset.id }
                                                 });
                                             }}
                                             className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
@@ -472,7 +472,7 @@ function AssetsTab() {
                                     variant="ghost"
                                     size="icon-sm"
                                     onClick={() =>
-                                        deleteAssetMutation.mutate({ data: { id: asset._id } })
+                                        deleteAssetMutation.mutate({ data: { id: asset.id } })
                                     }
                                     disabled={deleteAssetMutation.isPending}
                                     title="Delete"
@@ -488,7 +488,7 @@ function AssetsTab() {
             {view === 'grid' && displayedAssets.length > 0 && (
                 <div className="grid grid-cols-4 gap-2">
                     {displayedAssets.map((asset) => (
-                        <div key={asset._id} className="group relative">
+                        <div key={asset.id} className="group relative">
                             {isFontAsset(asset) ? (
                                 <FontPlaceholder
                                     name={asset.name}
@@ -537,7 +537,7 @@ function AssetsTab() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 deleteAssetMutation.mutate({
-                                                    data: { id: asset._id }
+                                                    data: { id: asset.id }
                                                 });
                                             }}
                                             className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"

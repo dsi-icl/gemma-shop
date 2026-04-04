@@ -307,7 +307,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
         type: z.literal('asset_added'),
         projectId: z.string(),
         asset: z.object({
-            _id: z.string(),
+            id: z.string(),
             name: z.string(),
             url: z.string(),
             size: z.number(),

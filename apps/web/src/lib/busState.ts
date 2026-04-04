@@ -1,8 +1,9 @@
+import type { CommitDocument } from '@repo/db/documents';
 import type { Peer } from 'crossws';
 import { ObjectId, type ChangeStreamDocument } from 'mongodb';
 
 import { makeScopeLabel, type GSMessage, type Layer, type ScopeState } from '~/lib/types';
-import { collections } from '~/server/collections';
+import { dbCol } from '~/server/collections';
 import type { AuthContext } from '~/server/requestAuthContext';
 
 import { revokePortalTokensForScope, revokePortalTokensForWall } from './portalTokens';
@@ -384,7 +385,7 @@ export function deleteYDocForLayer(scopeId: ScopeId, numericId: number) {
     if (!scope) return;
 
     const ydocScope = `${scope.projectId}_${scope.commitId}_${scope.slideId}_${numericId}`;
-    void collections.ydocs.deleteOne({ scope: ydocScope }).catch((err: unknown) => {
+    void dbCol.ydocs.deleteByScope(ydocScope).catch((err: unknown) => {
         console.error(`[Bus] Failed to delete ydoc for ${ydocScope}:`, err);
     });
 }
@@ -1232,7 +1233,7 @@ export async function seedScopeFromDb(scopeId: ScopeId): Promise<boolean> {
     if (!scope || scope.layers.size > 0) return false;
 
     try {
-        const commit = await collections.commits.findOne({ _id: new ObjectId(scope.commitId) });
+        const commit = await dbCol.commits.findById(scope.commitId);
         if (!commit?.content?.slides) return false;
 
         const slide = (commit.content.slides as Array<{ id: string; layers: any[] }>).find(
@@ -1262,7 +1263,7 @@ export async function buildSlidesSnapshot(
     let existingSlides: Array<{ id: string; order: number; name: string; layers: Layer[] }> = [];
 
     if (headCommitId) {
-        const headCommit = await collections.commits.findOne({ _id: new ObjectId(headCommitId) });
+        const headCommit = await dbCol.commits.findById(headCommitId);
         if (headCommit?.content?.slides) {
             existingSlides = headCommit.content.slides.map((s, i) => ({
                 ...s,
@@ -1302,67 +1303,48 @@ export async function saveScope(
     const scope = scopedState.get(scopeId);
     if (!scope) return { success: false, error: 'Scope not found' };
 
-    const projectId = new ObjectId(scope.projectId);
-
     try {
         // Resolve the mutable HEAD commit ID — prefer scope.commitId, fall back to project lookup
-        let headId: ObjectId;
+        let headId: string;
         if (scope.commitId) {
-            headId = new ObjectId(scope.commitId);
+            headId = scope.commitId;
         } else {
-            const project = await collections.projects.findOne({ _id: projectId });
+            const project = await dbCol.projects.findById(scope.projectId);
             if (!project?.headCommitId) return { success: false, error: 'No HEAD commit' };
-            headId = new ObjectId(project.headCommitId);
+            headId = String(project.headCommitId);
         }
 
         const updatedSlides = await buildSlidesSnapshot(scope, headId);
 
         if (isAutoSave) {
             // Update the mutable HEAD in place
-            await collections.commits.updateOne(
-                { _id: headId },
-                {
-                    $set: {
-                        message,
-                        content: { slides: updatedSlides },
-                        updatedAt: Date.now()
-                    }
-                }
-            );
+            await dbCol.commits.update(headId, {
+                message,
+                content: { slides: updatedSlides as CommitDocument['content']['slides'] }
+            });
 
             scope.dirty = false;
             return { success: true };
         }
 
         // Manual save: create immutable snapshot, then pointer-swap HEAD's parentId
-        const snapshot = {
-            _id: new ObjectId(),
-            projectId,
-            parentId: null as ObjectId | null,
+        // Preserve HEAD's current parentId chain on the snapshot
+        const currentHead = await dbCol.commits.findById(headId);
+        const snapshot = await dbCol.commits.insert({
+            projectId: new ObjectId(scope.projectId),
+            parentId: currentHead?.parentId ?? null,
             authorId: new ObjectId(), // TODO: session user
             message,
             content: { slides: updatedSlides },
             isAutoSave: false,
-            isMutableHead: false,
-            createdAt: Date.now()
-        };
-
-        // Preserve HEAD's current parentId chain on the snapshot
-        const currentHead = await collections.commits.findOne({ _id: headId });
-        if (currentHead?.parentId) {
-            snapshot.parentId = new ObjectId(currentHead.parentId);
-        }
-
-        const result = await collections.commits.insertOne(snapshot);
+            isMutableHead: false
+        });
 
         // Pointer swap: HEAD now points at the snapshot
-        await collections.commits.updateOne(
-            { _id: headId },
-            { $set: { parentId: result.insertedId } }
-        );
+        await dbCol.commits.setParent(headId, snapshot.id);
 
         scope.dirty = false;
-        return { success: true, commitId: result.insertedId.toHexString() };
+        return { success: true, commitId: snapshot.id };
     } catch (err) {
         console.error(`[Bus] saveScope failed for ${scopeLabel(scopeId)}:`, err);
         return { success: false, error: String(err) };
@@ -1378,7 +1360,7 @@ export async function persistSlideMetadata(
     slides: Array<{ id: string; order: number; name: string }>
 ): Promise<boolean> {
     try {
-        const commit = await collections.commits.findOne({ _id: new ObjectId(commitId) });
+        const commit = await dbCol.commits.findById(commitId);
         if (!commit?.content?.slides) return false;
 
         const existingSlides: Array<{
@@ -1411,9 +1393,9 @@ export async function persistSlideMetadata(
         // Sort by order
         updatedSlides.sort((a, b) => a.order - b.order);
 
-        await collections.commits.updateOne(
-            { _id: new ObjectId(commitId) },
-            { $set: { 'content.slides': updatedSlides, updatedAt: Date.now() } }
+        await dbCol.commits.updateSlides(
+            commitId,
+            updatedSlides as CommitDocument['content']['slides']
         );
 
         return true;
@@ -1450,26 +1432,26 @@ export function broadcastAssetToEditorsByProject(
 
 function startAssetChangeStream() {
     try {
-        const changeStream = collections.assets.watch([{ $match: { operationType: 'insert' } }], {
+        const changeStream = dbCol.assets.watch([{ $match: { operationType: 'insert' } }], {
             fullDocument: 'updateLookup'
         });
 
         changeStream.on('change', (change: ChangeStreamDocument) => {
             if (change.operationType === 'insert' && change.fullDocument) {
-                const doc = change.fullDocument;
-                if (doc.hidden) return;
-                broadcastAssetToEditorsByProject(doc.projectId.toString(), {
-                    _id: doc._id.toString(),
-                    name: doc.name,
-                    url: doc.url,
-                    size: doc.size,
+                const rawAsset = change.fullDocument;
+                if (rawAsset.hidden) return;
+                broadcastAssetToEditorsByProject(String(rawAsset.projectId), {
+                    id: String(rawAsset._id),
+                    name: rawAsset.name,
+                    url: rawAsset.url,
+                    size: rawAsset.size,
                     // Convert null > undefined so JSON.stringify strips them
                     // (Zod z.string().optional() rejects null)
-                    mimeType: doc.mimeType ?? undefined,
-                    blurhash: doc.blurhash ?? undefined,
-                    previewUrl: doc.previewUrl ?? undefined,
-                    createdAt: String(doc.createdAt),
-                    createdBy: String(doc.createdBy)
+                    mimeType: rawAsset.mimeType ?? undefined,
+                    blurhash: rawAsset.blurhash ?? undefined,
+                    previewUrl: rawAsset.previewUrl ?? undefined,
+                    createdAt: String(rawAsset.createdAt),
+                    createdBy: String(rawAsset.createdBy)
                 });
             }
         });

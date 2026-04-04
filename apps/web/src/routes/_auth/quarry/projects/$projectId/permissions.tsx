@@ -41,7 +41,7 @@ function PermissionsTab() {
 
     const mutation = useMutation({
         mutationFn: (newCollaborators: Collaborator[]) =>
-            $updateProject({ data: { _id: projectId, collaborators: newCollaborators } }),
+            $updateProject({ data: { id: projectId, collaborators: newCollaborators } }),
         onSuccess: () => {
             toast.success('Permissions updated');
             queryClient.invalidateQueries({ queryKey: ['projects'] });

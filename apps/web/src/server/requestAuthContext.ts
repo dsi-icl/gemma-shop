@@ -12,7 +12,7 @@ import {
     DEVICE_HEADER_WALL_ID,
     buildCanonicalDeviceSignaturePayload
 } from '~/lib/requestSignatureContract';
-import { collections } from '~/server/collections';
+import { dbCol } from '~/server/collections';
 
 export type AuthContext = {
     guest?: boolean;
@@ -162,14 +162,11 @@ async function verifyDeviceSignature(input: {
         return null;
     }
 
-    const deviceRecord = await collections.devices.findOne(
-        {
-            publicKey: input.publicKey,
-            kind: input.kind,
-            status: 'active'
-        },
-        { projection: { assignedWallId: 1, status: 1 } }
-    );
+    const deviceRecord = await dbCol.devices.findOne({
+        publicKey: input.publicKey,
+        kind: input.kind,
+        status: 'active'
+    });
     if (!deviceRecord) return null;
 
     const assignedWallId =
@@ -179,7 +176,7 @@ async function verifyDeviceSignature(input: {
     }
 
     return {
-        id: String(deviceRecord._id),
+        id: deviceRecord.id,
         kind: input.kind,
         ...(assignedWallId
             ? { wallId: assignedWallId }

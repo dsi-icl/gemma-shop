@@ -39,7 +39,7 @@ function InfoTab() {
                     customRenderUrl: project.customRenderUrl ?? '',
                     collaborators: project.collaborators
                 }}
-                onSubmit={(data) => mutation.mutate({ ...data, _id: projectId })}
+                onSubmit={(data) => mutation.mutate({ ...data, id: projectId })}
                 isSubmitting={mutation.isPending}
                 submitLabel="Save changes"
                 autoSave

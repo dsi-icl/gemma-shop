@@ -1,5 +1,6 @@
 import '@tanstack/react-start/server-only';
-import type { Db, ObjectId } from 'mongodb';
+import type { Db } from 'mongodb';
+import { ObjectId as OID } from 'mongodb';
 
 import type { ProjectDocument } from '../documents';
 import { type MigrationMap, toEpoch, BaseCollection } from './_base';
@@ -18,7 +19,7 @@ export class ProjectsCollection extends BaseCollection<ProjectDocument> {
     };
 
     constructor(db: Db) {
-        super(db.collection(ProjectsCollection.prototype.collectionName));
+        super(db.collection('projects'));
     }
 
     async findByUser(userEmail: string, includeArchived = false): Promise<ProjectDocument[]> {
@@ -37,18 +38,62 @@ export class ProjectsCollection extends BaseCollection<ProjectDocument> {
         });
     }
 
-    async updateHead(
-        id: string | ObjectId,
-        headCommitId: ObjectId
-    ): Promise<ProjectDocument | null> {
-        return this.update(id, { headCommitId } as Partial<ProjectDocument>);
+    /**
+     * Fetch only the `tags` field for all projects visible to a user.
+     * Used to compute the full tag vocabulary without loading whole project documents.
+     */
+    async findTagsByUser(userEmail: string): Promise<(string[] | null | undefined)[]> {
+        const docs = await this.raw
+            .find<{ tags?: string[] | null }>(
+                { $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }] },
+                { projection: { tags: 1 } }
+            )
+            .toArray();
+        return docs.map((d) => d.tags);
     }
 
-    async updatePublishedCommit(
-        id: string | ObjectId,
-        publishedCommitId: ObjectId | null,
+    /**
+     * Fetch `_id` and `publishedCommitId` for all published projects.
+     * Projection-only query — used by the gallery handler to build the published-projects snapshot.
+     */
+    async findPublishedCommitRefs(): Promise<
+        { projectId: string; publishedCommitId: string | null }[]
+    > {
+        const docs = await this.raw
+            .find<{ _id: unknown; publishedCommitId?: unknown }>(
+                { publishedCommitId: { $ne: null }, deletedAt: { $exists: false } },
+                { projection: { _id: 1, publishedCommitId: 1 } }
+            )
+            .toArray();
+        return docs.map((doc) => ({
+            projectId: String(doc._id),
+            publishedCommitId: doc.publishedCommitId ? String(doc.publishedCommitId) : null
+        }));
+    }
+
+    /** Set the project's mutable HEAD pointer. Accepts a string commit ID. */
+    async setHeadCommit(projectId: string, commitId: string): Promise<void> {
+        await this.raw.updateOne(
+            { _id: new OID(projectId) },
+            { $set: { headCommitId: new OID(commitId), updatedAt: Date.now() } }
+        );
+    }
+
+    /** Set (or clear) the project's published commit pointer. Accepts a string commit ID or null. */
+    async setPublishedCommit(
+        projectId: string,
+        commitId: string | null,
         visibility: 'public' | 'private'
-    ): Promise<ProjectDocument | null> {
-        return this.update(id, { publishedCommitId, visibility } as Partial<ProjectDocument>);
+    ): Promise<void> {
+        await this.raw.updateOne(
+            { _id: new OID(projectId) },
+            {
+                $set: {
+                    publishedCommitId: commitId ? new OID(commitId) : null,
+                    visibility,
+                    updatedAt: Date.now()
+                }
+            }
+        );
     }
 }

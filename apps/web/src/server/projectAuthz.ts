@@ -1,18 +1,13 @@
 import '@tanstack/react-start/server-only';
 import type { ProjectDocument } from '@repo/db/documents';
-import { ObjectId } from 'mongodb';
 
 import { validateUploadToken } from '~/lib/uploadTokens';
-import { collections } from '~/server/collections';
+import { dbCol } from '~/server/collections';
 
 type Actor = {
     email: string;
     role?: string;
 };
-
-const projects = collections.projects;
-const commits = collections.commits;
-const assets = collections.assets;
 
 function isAdmin(role: string | null | undefined): boolean {
     return role === 'admin';
@@ -35,54 +30,39 @@ function hasCollaboratorRole(
 }
 
 export async function canViewProject(actor: Actor, projectId: string): Promise<boolean> {
-    if (!ObjectId.isValid(projectId)) return false;
+    if (!projectId) return false;
     if (isAdmin(actor.role)) return true;
-    const project = await projects.findOne(
-        { _id: new ObjectId(projectId) },
-        { projection: { createdBy: 1, collaborators: 1 } }
-    );
+    const project = await dbCol.projects.findById(projectId);
     if (!project) return false;
     return hasProjectMembership(project, actor.email);
 }
 
 export async function canEditProject(actor: Actor, projectId: string): Promise<boolean> {
-    if (!ObjectId.isValid(projectId)) return false;
+    if (!projectId) return false;
     if (isAdmin(actor.role)) return true;
-    const project = await projects.findOne(
-        { _id: new ObjectId(projectId) },
-        { projection: { collaborators: 1 } }
-    );
+    const project = await dbCol.projects.findById(projectId);
     if (!project) return false;
     return hasCollaboratorRole(project, actor.email, ['owner', 'editor']);
 }
 
 export async function ownsProject(actor: Actor, projectId: string): Promise<boolean> {
-    if (!ObjectId.isValid(projectId)) return false;
+    if (!projectId) return false;
     if (isAdmin(actor.role)) return true;
-    const project = await projects.findOne(
-        { _id: new ObjectId(projectId) },
-        { projection: { collaborators: 1 } }
-    );
+    const project = await dbCol.projects.findById(projectId);
     if (!project) return false;
     return hasCollaboratorRole(project, actor.email, ['owner']);
 }
 
 export async function resolveProjectIdForCommit(commitId: string): Promise<string | null> {
-    if (!ObjectId.isValid(commitId)) return null;
-    const commit = await commits.findOne(
-        { _id: new ObjectId(commitId) },
-        { projection: { projectId: 1 } }
-    );
+    if (!commitId) return null;
+    const commit = await dbCol.commits.findById(commitId);
     if (!commit?.projectId) return null;
     return String(commit.projectId);
 }
 
 export async function resolveProjectIdForAsset(assetId: string): Promise<string | null> {
-    if (!ObjectId.isValid(assetId)) return null;
-    const asset = await assets.findOne(
-        { _id: new ObjectId(assetId) },
-        { projection: { projectId: 1 } }
-    );
+    if (!assetId) return null;
+    const asset = await dbCol.assets.findById(assetId);
     if (!asset?.projectId) return null;
     return String(asset.projectId);
 }

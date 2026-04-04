@@ -109,7 +109,7 @@ export const $updateProject = createServerFn({ method: 'POST' })
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
         if (!actor) throw new Error('Access denied');
-        const allowed = await canEditProject(actor, data._id);
+        const allowed = await canEditProject(actor, data.id);
         if (!allowed) throw new Error('Access denied');
         return updateProject(data, context.user.email);
     });

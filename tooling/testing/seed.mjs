@@ -97,7 +97,8 @@ async function createActor(testHelpers, input) {
 async function seed() {
     ensureEnvDefaults();
 
-    const [{ collections }, { db }, { auth }] = await Promise.all([
+    // collections only exports Better Auth / jobs handles; app-owned collections use db directly.
+    const [, { db }, { auth }] = await Promise.all([
         import('../../apps/web/src/server/collections.ts'),
         import('@repo/db'),
         import('@repo/auth/auth')
@@ -133,13 +134,13 @@ async function seed() {
         })
     };
 
-    const now = new Date().toISOString();
+    const now = Date.now();
     const privateProjectId = new ObjectId('000000000000000000000101');
     const publicProjectId = new ObjectId('000000000000000000000102');
     const privateCommitId = new ObjectId('000000000000000000000201');
     const publicCommitId = new ObjectId('000000000000000000000202');
 
-    await collections.projects.insertMany([
+    await db.collection('projects').insertMany([
         {
             _id: privateProjectId,
             name: 'Harness Private Project',
@@ -156,7 +157,8 @@ async function seed() {
             publishedCommitId: null,
             createdBy: actors.user_editor.email,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            _version: 1
         },
         {
             _id: publicProjectId,
@@ -171,21 +173,23 @@ async function seed() {
             publishedCommitId: publicCommitId,
             createdBy: actors.user_editor.email,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            _version: 1
         }
     ]);
 
-    await collections.commits.insertMany([
+    await db.collection('commits').insertMany([
         {
             _id: privateCommitId,
             projectId: privateProjectId,
             parentId: null,
             authorId: new ObjectId(),
             message: 'Harness private head',
-            content: { slides: [{ id: 'slide-private-1', order: 0, layers: [] }] },
+            content: { slides: [{ id: 'slide-private-1', order: 0, name: 'Slide 1', layers: [] }] },
             isAutoSave: false,
             isMutableHead: true,
-            createdAt: new Date()
+            createdAt: now,
+            _version: 1
         },
         {
             _id: publicCommitId,
@@ -193,14 +197,15 @@ async function seed() {
             parentId: null,
             authorId: new ObjectId(),
             message: 'Harness public head',
-            content: { slides: [{ id: 'slide-public-1', order: 0, layers: [] }] },
+            content: { slides: [{ id: 'slide-public-1', order: 0, name: 'Slide 1', layers: [] }] },
             isAutoSave: false,
             isMutableHead: true,
-            createdAt: new Date()
+            createdAt: now,
+            _version: 1
         }
     ]);
 
-    await collections.walls.insertOne({
+    await db.collection('walls').insertOne({
         _id: new ObjectId('000000000000000000000301'),
         wallId: 'test-wall-1',
         name: 'Test Wall 1',
@@ -213,7 +218,8 @@ async function seed() {
         site: null,
         notes: null,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        _version: 1
     });
 
     const deviceEntries = [
@@ -241,7 +247,7 @@ async function seed() {
     const deviceManifest = {};
     for (const entry of deviceEntries) {
         const cryptoMaterial = await createDeviceCryptoMaterial(entry.deviceId);
-        await collections.devices.insertOne({
+        await db.collection('devices').insertOne({
             deviceId: entry.deviceId,
             publicKey: cryptoMaterial.publicKey,
             kind: entry.kind,
@@ -249,7 +255,8 @@ async function seed() {
             assignedWallId: entry.assignedWallId,
             createdAt: now,
             updatedAt: now,
-            lastSeenAt: now
+            lastSeenAt: now,
+            _version: 1
         });
         deviceManifest[entry.deviceId] = {
             ...entry,
