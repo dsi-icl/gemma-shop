@@ -1258,13 +1258,16 @@ export async function seedScopeFromDb(scopeId: ScopeId): Promise<boolean> {
 export async function buildSlidesSnapshot(
     scope: ScopeState,
     headCommitId: ObjectId | string | null
-): Promise<Array<{ id: string; order: number; name?: string; layers: Layer[] }>> {
-    let existingSlides: Array<{ id: string; order: number; name?: string; layers: Layer[] }> = [];
+): Promise<Array<{ id: string; order: number; name: string; layers: Layer[] }>> {
+    let existingSlides: Array<{ id: string; order: number; name: string; layers: Layer[] }> = [];
 
     if (headCommitId) {
         const headCommit = await collections.commits.findOne({ _id: new ObjectId(headCommitId) });
         if (headCommit?.content?.slides) {
-            existingSlides = headCommit.content.slides as typeof existingSlides;
+            existingSlides = headCommit.content.slides.map((s, i) => ({
+                ...s,
+                name: s.name ?? `Slide ${i + 1}`
+            }));
         }
     }
 
@@ -1282,6 +1285,7 @@ export async function buildSlidesSnapshot(
         updatedSlides.push({
             id: scope.slideId,
             order: updatedSlides.length,
+            name: `Slide ${updatedSlides.length + 1}`,
             layers: currentLayers
         });
     }

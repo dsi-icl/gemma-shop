@@ -437,5 +437,5 @@ export interface ScopeState {
 export interface Slide {
     id: string;
     order: number;
-    name?: string;
+    name: string;
 }
