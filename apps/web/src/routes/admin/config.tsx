@@ -28,7 +28,7 @@ function AdminConfig() {
 
     const initialValues = useMemo(() => {
         const out: Record<string, string> = {};
-        for (const field of fields as any[]) {
+        for (const field of fields) {
             out[field.key] = stringifyValue(field.value, field.type);
         }
         return out;
@@ -70,7 +70,7 @@ function AdminConfig() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {(fields as any[]).map((field) => {
+                        {fields.map((field) => {
                             const current = values[field.key] ?? '';
                             const isBoolean = field.type === 'boolean';
                             const inputType = field.type === 'secret' ? 'password' : 'text';

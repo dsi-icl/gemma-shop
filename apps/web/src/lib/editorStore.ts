@@ -148,7 +148,7 @@ export const useEditorStore =
                   engine.sendJSON({
                       type: 'update_slides',
                       commitId,
-                      slides: slides.map((s) => ({ id: s.id, order: s.order, name: s.name }))
+                      slides: slides.map((s) => ({ id: s.id, order: s.order, name: s.name ?? '' }))
                   });
               }
 

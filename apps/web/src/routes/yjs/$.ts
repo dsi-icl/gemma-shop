@@ -655,7 +655,7 @@ class YCrossws {
                 fallbackLayer: doc.fallbackLayer ?? undefined
             };
 
-            const sent = await (process as any).__YJS_UPSERT_LAYER__?.(payload);
+            const sent = await process.__YJS_UPSERT_LAYER__?.(payload);
             debugLog('flushDoc', doc.name, { sent, hash: nextHash });
         })()
             .catch((error) => {
@@ -808,7 +808,7 @@ const hooks = defineHooks({
     }
 });
 
-(process as any).__YJS_RECOMPUTE_AUTH_CONTEXT__ = async (input?: { email?: string }) => {
+process.__YJS_RECOMPUTE_AUTH_CONTEXT__ = async (input?: { email?: string }) => {
     return yc.recomputePeerAuthContexts(input ?? {});
 };
 

@@ -24,7 +24,7 @@ export function SlideItem({
     canDelete = true
 }: SlideItemProps) {
     const [editing, setEditing] = useState(false);
-    const [editValue, setEditValue] = useState(slide.name);
+    const [editValue, setEditValue] = useState(slide.name ?? '');
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -72,7 +72,7 @@ export function SlideItem({
                     onDoubleClick={(e) => {
                         if (!onRenameSlide) return;
                         e.stopPropagation();
-                        setEditValue(slide.name);
+                        setEditValue(slide.name ?? '');
                         setEditing(true);
                     }}
                 >
@@ -87,7 +87,7 @@ export function SlideItem({
                             variant="ghost"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                setEditValue(slide.name);
+                                setEditValue(slide.name ?? '');
                                 setEditing(true);
                             }}
                             className="opacity-0 group-hover:opacity-100 touch:opacity-100"

@@ -43,6 +43,8 @@ declare global {
             }) => boolean | Promise<boolean>;
             __VSYNC_INTERVAL__?: ReturnType<typeof setInterval>;
             __AUTO_SAVE_INTERVAL__?: ReturnType<typeof setInterval>;
+            __REAPER_INTERVAL__?: ReturnType<typeof setInterval>;
+            __MEDIA_WORKER_STARTED__?: boolean;
         }
     }
 }

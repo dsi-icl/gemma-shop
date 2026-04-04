@@ -79,6 +79,7 @@ export async function ensureDeviceByPublicKey(input: {
 
     const deviceId = new ObjectId().toHexString();
     const created = {
+        _id: new ObjectId(),
         deviceId,
         publicKey,
         kind: input.kind,

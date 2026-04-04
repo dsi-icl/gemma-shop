@@ -17,7 +17,7 @@ export interface SerializedCommitWithContent extends SerializedCommit {
     content: {
         slides: {
             id: string;
-            name: string;
+            name?: string;
             order: number;
             layers: any[];
         }[];

@@ -73,7 +73,7 @@ function AssetsTab() {
     } | null>(null);
 
     const displayedAssets = useMemo(() => {
-        const sorted = sortAssetsFontsLast(assets as any[]);
+        const sorted = sortAssetsFontsLast(assets ?? []);
         return sorted.filter((asset) =>
             kindFilter === 'font' ? isFontAsset(asset) : !isFontAsset(asset)
         );
@@ -401,8 +401,8 @@ function AssetsTab() {
                                 <div className="group relative h-16 w-16 overflow-hidden rounded-md">
                                     <ProjectImage
                                         src={asset.previewUrl ?? asset.url}
-                                        blurhash={asset.blurhash}
-                                        sizes={asset.sizes}
+                                        blurhash={asset.blurhash ?? undefined}
+                                        sizes={asset.sizes ?? undefined}
                                         alt={asset.name}
                                         className="h-16 w-16 rounded-md"
                                         imgClassName="cursor-pointer object-cover"
@@ -497,8 +497,8 @@ function AssetsTab() {
                             ) : (
                                 <ProjectImage
                                     src={asset.previewUrl ?? asset.url}
-                                    blurhash={asset.blurhash}
-                                    sizes={asset.sizes}
+                                    blurhash={asset.blurhash ?? undefined}
+                                    sizes={asset.sizes ?? undefined}
                                     alt={asset.name}
                                     className="--check-size=5px aspect-square w-full rounded-lg"
                                     imgClassName="cursor-pointer object-cover"

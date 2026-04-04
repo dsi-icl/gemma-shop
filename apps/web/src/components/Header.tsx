@@ -97,9 +97,15 @@ function HeaderAuthSection() {
                     navigate({ to: '/' });
                 },
                 onError: async (ctx) => {
+                    const err =
+                        ctx && typeof ctx === 'object'
+                            ? (ctx as Record<string, unknown>).error
+                            : null;
+                    const errObj =
+                        err && typeof err === 'object' ? (err as Record<string, unknown>) : null;
                     const message =
-                        (ctx as any)?.error?.message ||
-                        (ctx as any)?.error?.statusText ||
+                        (typeof errObj?.message === 'string' ? errObj.message : null) ||
+                        (typeof errObj?.statusText === 'string' ? errObj.statusText : null) ||
                         'Sign out failed';
                     toast.error(message);
                     queryClient.setQueryData(authQueryOptions().queryKey, null);
@@ -131,7 +137,7 @@ function HeaderAuthSection() {
                     <BookOpenUserIcon className="h-[1.2rem] w-[1.2rem]" />
                 </Button>
             </Link>
-            {(user as any).role === 'admin' && (
+            {user.role === 'admin' && (
                 <Link to="/admin">
                     <Button variant="outline" size="icon" title="Administration">
                         <CastleTurretIcon className="h-[1.2rem] w-[1.2rem]" />

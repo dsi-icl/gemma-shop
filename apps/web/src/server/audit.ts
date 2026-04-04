@@ -27,6 +27,7 @@ export async function logAudit(input: AuditLogInput): Promise<void> {
     try {
         const projectId = toObjectIdOrNull(input.projectId);
         await collections.auditLogs.insertOne({
+            _id: new ObjectId(),
             projectId,
             actorId: input.actorId ?? null,
             action: input.action,

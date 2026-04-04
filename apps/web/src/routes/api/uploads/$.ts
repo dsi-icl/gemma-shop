@@ -136,7 +136,7 @@ const tusServer = new Server({
             const projectId = tokenData.projectId;
             const userEmail = tokenData.userEmail;
 
-            const uploaderIp = getClientIpFromHeaders(req.headers as any);
+            const uploaderIp = getClientIpFromHeaders(req.headers);
             const uploadFinalizeRate = checkRateLimit({
                 subjectKey: buildRateLimitSubjectKey({
                     actorId: userEmail,
@@ -245,10 +245,12 @@ const tusServer = new Server({
             if (assetFilename) {
                 const fileSize =
                     (await stat(join(ASSET_DIR, assetFilename)).catch(() => null))?.size ??
-                    upload.size;
+                    upload.size ??
+                    0;
 
                 const isPublicAsset = projectId === PUBLIC_ASSET_PROJECT_ID;
                 const insertResult = await collections.assets.insertOne({
+                    _id: new ObjectId(),
                     projectId: new ObjectId(projectId),
                     name: originalName,
                     url: assetFilename,

@@ -240,6 +240,7 @@ export async function adminCreateWall(input: { wallId: string; name?: string | n
     if (existing) throw new Error('Wall already exists');
 
     const doc = {
+        _id: new ObjectId(),
         wallId,
         name: input.name?.trim() || wallId,
         lastSeen: now,

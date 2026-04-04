@@ -20,8 +20,8 @@ const store = (process as any).__RATE_LIMIT_STORE__ ?? new Map<string, StoredEnt
 function pickHeader(headers: MaybeHeaders, key: string): string | null {
     if (!headers) return null;
 
-    if (typeof (headers as any).get === 'function') {
-        return (headers as any).get(key);
+    if (headers instanceof Headers) {
+        return headers.get(key);
     }
 
     const raw = (headers as Record<string, unknown>)[key.toLowerCase()];

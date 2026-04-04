@@ -7,6 +7,8 @@ export interface ProcessImageAssetPayload {
     uploadId: string;
     sourceExt: string;
     sourceFilename: string;
+    /** @deprecated Legacy field — use sourceFilename instead */
+    sourcePath?: string;
 }
 
 export interface ProcessVideoAssetPayload {
@@ -15,6 +17,12 @@ export interface ProcessVideoAssetPayload {
     sourceExt: string;
     duration: number;
     numericId: number;
+    /** @deprecated Legacy field — use sourceFilename instead */
+    sourcePath?: string;
+    /** @deprecated Legacy field */
+    outputPath?: string;
+    /** @deprecated Legacy field */
+    previewPath?: string;
 }
 
 export interface ProcessImageAssetResult {

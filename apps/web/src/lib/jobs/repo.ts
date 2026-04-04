@@ -1,5 +1,4 @@
 import { ObjectId } from 'mongodb';
-import type { OptionalId } from 'mongodb';
 
 import { collections } from '~/server/collections';
 
@@ -35,7 +34,8 @@ export async function enqueueJob({
     maxAttempts?: number;
 }) {
     const now = new Date();
-    const doc: OptionalId<JobDocument> = {
+    const doc: JobDocument = {
+        _id: new ObjectId(),
         nodeId,
         type,
         status: 'queued' as const,
@@ -46,7 +46,7 @@ export async function enqueueJob({
         createdAt: now,
         updatedAt: now
     };
-    const inserted = await collections.jobs.insertOne(doc as any);
+    const inserted = await collections.jobs.insertOne(doc);
     return inserted.insertedId;
 }
 

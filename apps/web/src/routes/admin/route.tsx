@@ -39,7 +39,7 @@ export const Route = createFileRoute('/admin')({
                 ...authQueryOptions()
             });
         }
-        if ((user as any).role !== 'admin') throw redirect({ to: '/quarry' });
+        if (user?.role !== 'admin') throw redirect({ to: '/quarry' });
         return { user };
     }
 });

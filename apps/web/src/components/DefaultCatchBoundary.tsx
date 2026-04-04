@@ -25,7 +25,9 @@ function getHttpStatus(error: unknown): number | null {
         coerceStatus(e.status) ??
         coerceStatus(e.statusCode) ??
         coerceStatus(
-            e.response && typeof e.response === 'object' ? (e.response as any).status : null
+            e.response && typeof e.response === 'object'
+                ? (e.response as Record<string, unknown>).status
+                : null
         )
     );
 }

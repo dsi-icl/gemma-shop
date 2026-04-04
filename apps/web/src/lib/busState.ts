@@ -1258,13 +1258,13 @@ export async function seedScopeFromDb(scopeId: ScopeId): Promise<boolean> {
 export async function buildSlidesSnapshot(
     scope: ScopeState,
     headCommitId: ObjectId | string | null
-): Promise<Array<{ id: string; order: number; layers: Layer[] }>> {
-    let existingSlides: Array<{ id: string; order: number; layers: Layer[] }> = [];
+): Promise<Array<{ id: string; order: number; name?: string; layers: Layer[] }>> {
+    let existingSlides: Array<{ id: string; order: number; name?: string; layers: Layer[] }> = [];
 
     if (headCommitId) {
         const headCommit = await collections.commits.findOne({ _id: new ObjectId(headCommitId) });
         if (headCommit?.content?.slides) {
-            existingSlides = headCommit.content.slides;
+            existingSlides = headCommit.content.slides as typeof existingSlides;
         }
     }
 
@@ -1331,6 +1331,7 @@ export async function saveScope(
 
         // Manual save: create immutable snapshot, then pointer-swap HEAD's parentId
         const snapshot = {
+            _id: new ObjectId(),
             projectId,
             parentId: null as ObjectId | null,
             authorId: new ObjectId(), // TODO: session user
@@ -1375,8 +1376,12 @@ export async function persistSlideMetadata(
         const commit = await collections.commits.findOne({ _id: new ObjectId(commitId) });
         if (!commit?.content?.slides) return false;
 
-        const existingSlides: Array<{ id: string; order: number; name: string; layers: any[] }> =
-            commit.content.slides;
+        const existingSlides: Array<{
+            id: string;
+            order: number;
+            name?: string;
+            layers: unknown[];
+        }> = commit.content.slides;
 
         // Build a lookup of new metadata by slide id
         const metaById = new Map(slides.map((s) => [s.id, s]));

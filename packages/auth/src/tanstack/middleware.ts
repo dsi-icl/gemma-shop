@@ -61,7 +61,7 @@ export const adminMiddleware = createMiddleware().server(async ({ next, context 
         throw new Error('Unauthorized');
     }
 
-    if ((user as any).role !== 'admin') {
+    if (user.role !== 'admin') {
         setResponseStatus(403);
         throw new Error('Forbidden');
     }

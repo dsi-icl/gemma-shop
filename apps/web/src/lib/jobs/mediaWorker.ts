@@ -38,13 +38,13 @@ function getCleanString(value: unknown): string | null {
 }
 
 async function resolveVideoSourcePath(payload: ProcessVideoAssetPayload): Promise<string> {
-    const legacyPath = getCleanString((payload as any).sourcePath);
+    const legacyPath = getCleanString(payload.sourcePath);
     if (legacyPath) return legacyPath;
 
-    const sourceFilename = getCleanString((payload as any).sourceFilename);
+    const sourceFilename = getCleanString(payload.sourceFilename);
     if (sourceFilename) return join(TMP_DIR, sourceFilename);
 
-    const sourceExt = getCleanString((payload as any).sourceExt);
+    const sourceExt = getCleanString(payload.sourceExt);
     if (sourceExt) return join(TMP_DIR, `${payload.uploadId}_raw${sourceExt}`);
 
     const prefix = `${payload.uploadId}_raw`;
@@ -58,7 +58,7 @@ async function resolveVideoSourcePath(payload: ProcessVideoAssetPayload): Promis
 async function processImageJob(job: JobDocument) {
     const payload = job.payload as ProcessImageAssetPayload;
     const sourcePath =
-        getCleanString((payload as any).sourcePath) ?? join(ASSET_DIR, payload.sourceFilename);
+        getCleanString(payload.sourcePath) ?? join(ASSET_DIR, payload.sourceFilename);
     const blurhash = await computeBlurhash(sourcePath);
     const sizes =
         payload.sourceExt === '.svg' ? [] : await generateVariants(sourcePath, payload.uploadId);
@@ -129,9 +129,9 @@ async function processVideoJob(job: JobDocument) {
     const payload = job.payload as ProcessVideoAssetPayload;
     const sourcePath = await resolveVideoSourcePath(payload);
     const outputPath =
-        getCleanString((payload as any).outputPath) ?? join(ASSET_DIR, `${payload.uploadId}.mp4`);
+        getCleanString(payload.outputPath) ?? join(ASSET_DIR, `${payload.uploadId}.mp4`);
     const previewPath =
-        getCleanString((payload as any).previewPath) ?? join(ASSET_DIR, `${payload.uploadId}.jpg`);
+        getCleanString(payload.previewPath) ?? join(ASSET_DIR, `${payload.uploadId}.jpg`);
     const sourceExists = await stat(sourcePath)
         .then((s) => s.isFile())
         .catch(() => false);
@@ -271,9 +271,8 @@ function startSignalWatcher() {
 }
 
 export async function startMediaWorker() {
-    const globalKey = '__MEDIA_WORKER_STARTED__';
-    if ((process as any)[globalKey]) return;
-    (process as any)[globalKey] = true;
+    if (process.__MEDIA_WORKER_STARTED__) return;
+    process.__MEDIA_WORKER_STARTED__ = true;
 
     await ensureJobIndexes();
     startSignalWatcher();

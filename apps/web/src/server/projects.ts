@@ -184,7 +184,7 @@ export async function createProject(input: CreateProjectInput, userEmail: string
         createdAt: now,
         updatedAt: now
     };
-    const result = await projects.insertOne(doc);
+    const result = await projects.insertOne({ _id: new ObjectId(), ...doc });
 
     await logAuditSuccess({
         action: 'PROJECT_CREATED',
@@ -200,13 +200,20 @@ export async function createProject(input: CreateProjectInput, userEmail: string
 }
 
 export async function updateProject(input: UpdateProjectInput, userEmail: string) {
-    const { _id, ...updates } = input;
+    const { _id, publishedCommitId: rawPublishedCommitId, ...updates } = input;
     const existing = await projects.findOne({ _id: new ObjectId(_id) });
     if (!existing) throw new Error('Project not found');
 
+    const setFields: Record<string, unknown> = { ...updates, updatedAt: new Date().toISOString() };
+    if (rawPublishedCommitId !== undefined) {
+        setFields.publishedCommitId = rawPublishedCommitId
+            ? new ObjectId(rawPublishedCommitId)
+            : null;
+    }
+
     const result = await projects.findOneAndUpdate(
         { _id: new ObjectId(_id) },
-        { $set: { ...updates, updatedAt: new Date().toISOString() } },
+        { $set: setFields },
         { returnDocument: 'after' }
     );
     if (!result) throw new Error('Update failed');
@@ -217,7 +224,7 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
         projectId: _id,
         resourceType: 'project',
         resourceId: _id,
-        changes: updates as Record<string, unknown>
+        changes: { ...updates, publishedCommitId: rawPublishedCommitId } as Record<string, unknown>
     });
 
     // Live-push custom render settings changes to any bound walls
@@ -228,7 +235,7 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
     ) {
         updateProjectCustomRenderSettings(
             _id,
-            updates.customRenderUrl ?? existing.customRenderUrl,
+            updates.customRenderUrl ?? existing.customRenderUrl ?? undefined,
             updates.customRenderCompat,
             updates.customRenderProxy
         );
@@ -327,7 +334,7 @@ export async function publishCommit(projectId: string, commitId: string | null, 
         { _id: new ObjectId(projectId) },
         {
             $set: {
-                publishedCommitId: commitId,
+                publishedCommitId: commitId ? new ObjectId(commitId) : null,
                 visibility: isPublishing ? 'public' : 'private',
                 updatedAt: new Date().toISOString()
             }
@@ -362,6 +369,7 @@ export async function publishCustomRenderProject(projectId: string, userEmail: s
 
     const sentinelSlideId = new ObjectId().toHexString();
     const sentinel = {
+        _id: new ObjectId(),
         projectId: new ObjectId(projectId),
         parentId: null,
         authorId: new ObjectId(),
@@ -394,6 +402,7 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
 
         // Case 2: HEAD exists but is immutable (legacy) — create mutable HEAD on top
         const newHead = {
+            _id: new ObjectId(),
             projectId: new ObjectId(projectId),
             parentId: new ObjectId(project.headCommitId),
             authorId: new ObjectId(),
@@ -422,6 +431,7 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
     // Case 3: No HEAD at all — create fresh mutable HEAD with a default slide
     const defaultSlideId = new ObjectId().toHexString();
     const newHead = {
+        _id: new ObjectId(),
         projectId: new ObjectId(projectId),
         parentId: null,
         authorId: new ObjectId(),
@@ -466,6 +476,7 @@ export async function createBranchHead(
         throw new Error('Commit does not belong to project');
 
     const branchHead = {
+        _id: new ObjectId(),
         projectId: new ObjectId(projectId),
         parentId: new ObjectId(sourceCommitId),
         authorId: new ObjectId(),

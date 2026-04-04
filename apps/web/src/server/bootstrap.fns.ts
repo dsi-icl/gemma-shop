@@ -65,7 +65,7 @@ export const $finalizeFirstAdminForCurrentUser = createServerFn({ method: 'POST'
     .middleware([freshAuthMiddleware])
     .handler(async ({ context }) =>
         finalizeFirstAdminForUser({
-            userId: (context.user as any)?.id ?? null,
+            userId: context.user?.id ?? null,
             email: context.user.email
         })
     );

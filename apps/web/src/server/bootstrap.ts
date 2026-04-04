@@ -548,11 +548,10 @@ export async function finalizeFirstAdminForUser(input: {
 
     if (!target?._id) return { promoted: false, reason: 'user_not_found' };
 
-    const now = nowIso();
     await users.updateOne(
         { _id: target._id },
         {
-            $set: { role: 'admin', updatedAt: now },
+            $set: { role: 'admin', updatedAt: new Date() },
             $unset: { banned: '', banReason: '', banExpires: '' }
         }
     );

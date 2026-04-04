@@ -9,7 +9,7 @@ export function isFontAsset(asset: { name: string; mimeType?: string | null }): 
     return asset.mimeType === 'font/woff2' || /\.woff2$/i.test(asset.name);
 }
 
-export function sortAssetsFontsLast<T extends { name: string; mimeType?: string }>(
+export function sortAssetsFontsLast<T extends { name: string; mimeType?: string | null }>(
     items: T[]
 ): T[] {
     const media: T[] = [];

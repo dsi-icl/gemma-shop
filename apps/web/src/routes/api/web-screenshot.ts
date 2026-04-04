@@ -245,6 +245,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     // without the record appearing in asset library listings.
                     const fileSize = (await stat(screenshotPath).catch(() => null))?.size ?? 0;
                     await collections.assets.insertOne({
+                        _id: new ObjectId(),
                         projectId: new ObjectId(projectId),
                         url: filename,
                         size: fileSize,

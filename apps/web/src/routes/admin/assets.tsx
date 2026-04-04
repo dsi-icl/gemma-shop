@@ -88,7 +88,7 @@ function AdminAssetsTab() {
     } | null>(null);
 
     const displayedAssets = useMemo(() => {
-        const sorted = sortAssetsFontsLast(assets as any[]);
+        const sorted = sortAssetsFontsLast(assets ?? []);
         return sorted.filter((asset) =>
             kindFilter === 'font' ? isFontAsset(asset) : !isFontAsset(asset)
         );

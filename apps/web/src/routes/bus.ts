@@ -111,7 +111,11 @@ const pongView = new DataView(pongBuf);
 pongView.setUint8(0, OP.CLOCK_PONG);
 
 function hasType(raw: unknown): raw is { type: string; [k: string]: unknown } {
-    return typeof raw === 'object' && raw !== null && typeof (raw as any).type === 'string';
+    return (
+        typeof raw === 'object' &&
+        raw !== null &&
+        typeof (raw as Record<string, unknown>).type === 'string'
+    );
 }
 
 function toArrayBufferView(data: Uint8Array | Buffer): ArrayBuffer {
@@ -480,7 +484,7 @@ async function performLiveBind(
             projectId,
             commitId,
             resolvedSlideId,
-            project?.customRenderUrl,
+            project?.customRenderUrl ?? undefined,
             project?.customRenderCompat,
             project?.customRenderProxy
         );
@@ -2260,7 +2264,7 @@ export const Route = createFileRoute('/bus')({
 // ── Global bridge for upload progress ────────────────────────────────────────
 // Uses the flat allEditors set — no scan of full peers map needed.
 
-(process as any).__BROADCAST_EDITORS__ = (data: unknown) => {
+process.__BROADCAST_EDITORS__ = (data: unknown) => {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
     for (const entry of allEditors) {
         entry.peer.send(payload);
@@ -2268,27 +2272,24 @@ export const Route = createFileRoute('/bus')({
 };
 
 // Bridge for asset uploads — broadcast asset_added to editors on the same project
-(process as any).__BROADCAST_ASSET_ADDED__ = (
-    projectId: string,
-    asset: Record<string, unknown>
-) => {
+process.__BROADCAST_ASSET_ADDED__ = (projectId: string, asset: Record<string, unknown>) => {
     broadcastAssetToEditorsByProject(projectId, asset);
 };
 
 // Bridge for non-WS wall binding mutations (gallery/admin server functions)
-(process as any).__BROADCAST_WALL_BINDING_CHANGED__ = (wallId: string) => {
+process.__BROADCAST_WALL_BINDING_CHANGED__ = (wallId: string) => {
     broadcastWallBindingToEditors(wallId);
     broadcastWallBindingToGalleries(wallId);
 };
 
 // Bridge for server-side project mutations to refresh gallery listings.
-(process as any).__BROADCAST_PROJECTS_CHANGED__ = (projectId?: string) => {
+process.__BROADCAST_PROJECTS_CHANGED__ = (projectId?: string) => {
     broadcastProjectsChanged(projectId);
 };
 
 // Bridge for admin device revocation: guarantee immediate socket disconnection
 // for all peers authenticated as the deleted device id.
-(process as any).__DISCONNECT_DEVICE__ = (deviceId: string) => {
+process.__DISCONNECT_DEVICE__ = (deviceId: string) => {
     const normalized = deviceId.trim();
     if (!normalized) return 0;
     let closed = 0;
@@ -2305,14 +2306,11 @@ export const Route = createFileRoute('/bus')({
     return closed;
 };
 
-(process as any).__BUS_RECOMPUTE_AUTH_CONTEXT__ = async (input?: {
-    email?: string;
-    projectId?: string;
-}) => {
+process.__BUS_RECOMPUTE_AUTH_CONTEXT__ = async (input?: { email?: string; projectId?: string }) => {
     return recomputePeerAuthContexts(input ?? {});
 };
 
-(process as any).__REBOOT_WALL__ = (wallId: string, node?: { c: number; r: number }) => {
+process.__REBOOT_WALL__ = (wallId: string, node?: { c: number; r: number }) => {
     const peersForWall = wallsByWallId.get(wallId);
     if (!peersForWall || peersForWall.size === 0) return 0;
     const payload = JSON.stringify({ type: 'reboot' } satisfies GSMessage);
@@ -2326,7 +2324,7 @@ export const Route = createFileRoute('/bus')({
     return sent;
 };
 
-(process as any).__REBOOT_DEVICE__ = (deviceId: string) => {
+process.__REBOOT_DEVICE__ = (deviceId: string) => {
     const normalized = deviceId.trim();
     if (!normalized) return 0;
     const payload = JSON.stringify({ type: 'reboot' } satisfies GSMessage);
@@ -2341,7 +2339,7 @@ export const Route = createFileRoute('/bus')({
 };
 
 // Bridge for YJS text updates — scope-targeted upsert into bus state + fanout.
-(process as any).__YJS_UPSERT_LAYER__ = (payload: {
+process.__YJS_UPSERT_LAYER__ = (payload: {
     projectId: string;
     commitId: string;
     slideId: string;
@@ -2387,8 +2385,8 @@ export const Route = createFileRoute('/bus')({
 // ── VSYNC loop (iterates active videos only) ─────────────────────────────────
 // O(playing videos) instead of O(scopes × layers).
 
-if ((process as any).__VSYNC_INTERVAL__) clearInterval((process as any).__VSYNC_INTERVAL__);
-(process as any).__VSYNC_INTERVAL__ = setInterval(() => {
+if (process.__VSYNC_INTERVAL__) clearInterval(process.__VSYNC_INTERVAL__);
+process.__VSYNC_INTERVAL__ = setInterval(() => {
     const now = Date.now();
     const batch: Array<{
         numericId: number;
@@ -2432,8 +2430,8 @@ if ((process as any).__VSYNC_INTERVAL__) clearInterval((process as any).__VSYNC_
 
 const AUTO_SAVE_INTERVAL = 30_000;
 
-if ((process as any).__AUTO_SAVE_INTERVAL__) clearInterval((process as any).__AUTO_SAVE_INTERVAL__);
-(process as any).__AUTO_SAVE_INTERVAL__ = setInterval(() => {
+if (process.__AUTO_SAVE_INTERVAL__) clearInterval(process.__AUTO_SAVE_INTERVAL__);
+process.__AUTO_SAVE_INTERVAL__ = setInterval(() => {
     for (const [scopeId, scope] of scopedState) {
         if (scope.dirty) {
             console.log(`[Bus] Auto-saving scope ${scopeLabel(scopeId)}`);
@@ -2455,17 +2453,15 @@ if ((process as any).__AUTO_SAVE_INTERVAL__) clearInterval((process as any).__AU
     }
 }, AUTO_SAVE_INTERVAL);
 
-if ((process as any).__REAPER_INTERVAL__) clearInterval((process as any).__REAPER_INTERVAL__);
-(process as any).__REAPER_INTERVAL__ = setInterval(() => {
+if (process.__REAPER_INTERVAL__) clearInterval(process.__REAPER_INTERVAL__);
+process.__REAPER_INTERVAL__ = setInterval(() => {
     reapStalePeers();
 }, 10_000);
 
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        if ((process as any).__VSYNC_INTERVAL__) clearInterval((process as any).__VSYNC_INTERVAL__);
-        if ((process as any).__AUTO_SAVE_INTERVAL__)
-            clearInterval((process as any).__AUTO_SAVE_INTERVAL__);
-        if ((process as any).__REAPER_INTERVAL__)
-            clearInterval((process as any).__REAPER_INTERVAL__);
+        if (process.__VSYNC_INTERVAL__) clearInterval(process.__VSYNC_INTERVAL__);
+        if (process.__AUTO_SAVE_INTERVAL__) clearInterval(process.__AUTO_SAVE_INTERVAL__);
+        if (process.__REAPER_INTERVAL__) clearInterval(process.__REAPER_INTERVAL__);
     });
 }
