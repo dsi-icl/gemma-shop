@@ -261,7 +261,7 @@ const tusServer = new Server({
                     sizes: sizes.length > 0 ? sizes : undefined,
                     public: isPublicAsset,
                     createdBy: userEmail,
-                    createdAt: new Date().toISOString()
+                    createdAt: Date.now()
                 });
                 await logAuditSuccess({
                     action: 'UPLOAD_FINALIZED',
@@ -291,7 +291,7 @@ const tusServer = new Server({
                         blurhash: blurhash ?? undefined,
                         previewUrl: previewFilename ?? undefined,
                         sizes: sizes.length > 0 ? sizes : undefined,
-                        createdAt: new Date().toISOString(),
+                        createdAt: Date.now(),
                         createdBy: userEmail
                     });
                 }

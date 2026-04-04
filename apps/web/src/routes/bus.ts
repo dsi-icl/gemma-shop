@@ -521,7 +521,7 @@ async function performLiveBind(
                     boundCommitId: commitId,
                     boundSlideId: resolvedSlideId,
                     boundSource: source,
-                    updatedAt: new Date().toISOString()
+                    updatedAt: Date.now()
                 }
             }
         );
@@ -1179,7 +1179,7 @@ function handleEditorScopeVacated(scopeId: number) {
                     boundCommitId: null,
                     boundSlideId: null,
                     boundSource: null,
-                    updatedAt: new Date().toISOString()
+                    updatedAt: Date.now()
                 }
             }
         );
@@ -1700,7 +1700,7 @@ handlers.set('unbind_wall', ({ data }) => {
                 boundCommitId: null,
                 boundSlideId: null,
                 boundSource: null,
-                updatedAt: new Date().toISOString()
+                updatedAt: Date.now()
             }
         }
     );
@@ -2044,7 +2044,7 @@ const hooks = defineHooks({
                                 boundCommitId: null,
                                 boundSlideId: null,
                                 boundSource: null,
-                                updatedAt: new Date().toISOString()
+                                updatedAt: Date.now()
                             }
                         }
                     );

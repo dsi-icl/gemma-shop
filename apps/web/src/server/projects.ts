@@ -173,7 +173,7 @@ export async function getCommit(id: string) {
 }
 
 export async function createProject(input: CreateProjectInput, userEmail: string) {
-    const now = new Date().toISOString();
+    const now = Date.now();
     const doc = {
         ...input,
         collaborators: [{ email: userEmail, role: 'owner' as const }, ...input.collaborators],
@@ -204,7 +204,7 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
     const existing = await projects.findOne({ _id: new ObjectId(_id) });
     if (!existing) throw new Error('Project not found');
 
-    const setFields: Record<string, unknown> = { ...updates, updatedAt: new Date().toISOString() };
+    const setFields: Record<string, unknown> = { ...updates, updatedAt: Date.now() };
     if (rawPublishedCommitId !== undefined) {
         setFields.publishedCommitId = rawPublishedCommitId
             ? new ObjectId(rawPublishedCommitId)
@@ -253,9 +253,9 @@ export async function archiveProject(id: string, userEmail: string) {
         { _id: new ObjectId(id) },
         {
             $set: {
-                deletedAt: new Date().toISOString(),
+                deletedAt: Date.now(),
                 deletedBy: userEmail,
-                updatedAt: new Date().toISOString()
+                updatedAt: Date.now()
             }
         }
     );
@@ -286,7 +286,7 @@ export async function deleteAsset(assetId: string, userEmail: string) {
         { _id: new ObjectId(assetId) },
         {
             $set: {
-                deletedAt: new Date().toISOString(),
+                deletedAt: Date.now(),
                 deletedBy: userEmail
             }
         }
@@ -307,7 +307,7 @@ export async function restoreProject(id: string, userEmail: string) {
     await projects.updateOne(
         { _id: new ObjectId(id) },
         {
-            $set: { updatedAt: new Date().toISOString() },
+            $set: { updatedAt: Date.now() },
             $unset: { deletedAt: '', deletedBy: '' }
         }
     );
@@ -336,7 +336,7 @@ export async function publishCommit(projectId: string, commitId: string | null, 
             $set: {
                 publishedCommitId: commitId ? new ObjectId(commitId) : null,
                 visibility: isPublishing ? 'public' : 'private',
-                updatedAt: new Date().toISOString()
+                updatedAt: Date.now()
             }
         }
     );
@@ -374,10 +374,10 @@ export async function publishCustomRenderProject(projectId: string, userEmail: s
         parentId: null,
         authorId: new ObjectId(),
         message: 'Published (custom render)',
-        content: { slides: [{ id: sentinelSlideId, order: 0, layers: [] }] },
+        content: { slides: [{ id: sentinelSlideId, order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
         isMutableHead: false,
-        createdAt: new Date()
+        createdAt: Date.now()
     };
     const result = await commits.insertOne(sentinel);
     const sentinelId = result.insertedId.toHexString();
@@ -410,12 +410,12 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
             content: head?.content ?? { slides: [] },
             isAutoSave: false,
             isMutableHead: true,
-            createdAt: new Date()
+            createdAt: Date.now()
         };
         const result = await commits.insertOne(newHead);
         await projects.updateOne(
             { _id: new ObjectId(projectId) },
-            { $set: { headCommitId: result.insertedId, updatedAt: new Date().toISOString() } }
+            { $set: { headCommitId: result.insertedId, updatedAt: Date.now() } }
         );
         await logAuditSuccess({
             action: 'MUTABLE_HEAD_ENSURED',
@@ -436,15 +436,15 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
         parentId: null,
         authorId: new ObjectId(),
         message: 'HEAD',
-        content: { slides: [{ id: defaultSlideId, order: 0, layers: [] }] },
+        content: { slides: [{ id: defaultSlideId, order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
         isMutableHead: true,
-        createdAt: new Date()
+        createdAt: Date.now()
     };
     const result = await commits.insertOne(newHead);
     await projects.updateOne(
         { _id: new ObjectId(projectId) },
-        { $set: { headCommitId: result.insertedId, updatedAt: new Date().toISOString() } }
+        { $set: { headCommitId: result.insertedId, updatedAt: Date.now() } }
     );
     await logAuditSuccess({
         action: 'MUTABLE_HEAD_ENSURED',
@@ -484,7 +484,7 @@ export async function createBranchHead(
         content: source.content ?? { slides: [] },
         isAutoSave: false,
         isMutableHead: true,
-        createdAt: new Date()
+        createdAt: Date.now()
     };
     const result = await commits.insertOne(branchHead);
     await logAuditSuccess({
@@ -521,7 +521,7 @@ export async function promoteBranchHead(
         {
             $set: {
                 headCommitId: new ObjectId(branchCommitId),
-                updatedAt: new Date().toISOString()
+                updatedAt: Date.now()
             }
         }
     );
@@ -629,7 +629,7 @@ export async function copySlideInCommit(
 
     await commits.updateOne(
         { _id: new ObjectId(commitId) },
-        { $set: { 'content.slides': updatedSlides, updatedAt: new Date() } }
+        { $set: { 'content.slides': updatedSlides, updatedAt: Date.now() } }
     );
 }
 
@@ -657,7 +657,7 @@ export async function deleteSlideFromCommit(commitId: string, slideId: string): 
 
     await commits.updateOne(
         { _id: new ObjectId(commitId) },
-        { $set: { 'content.slides': updatedSlides, updatedAt: new Date() } }
+        { $set: { 'content.slides': updatedSlides, updatedAt: Date.now() } }
     );
 
     return true;

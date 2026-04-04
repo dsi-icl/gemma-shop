@@ -37,7 +37,7 @@ export async function logAudit(input: AuditLogInput): Promise<void> {
             reasonCode: input.reasonCode ?? null,
             changes: input.changes ? serializeForClient(input.changes) : null,
             error: input.error ?? null,
-            createdAt: new Date()
+            createdAt: Date.now()
         });
     } catch (error) {
         // Audit logging must not break business flows.

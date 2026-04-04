@@ -234,7 +234,7 @@ export async function adminListWalls() {
 export async function adminCreateWall(input: { wallId: string; name?: string | null }) {
     const wallId = input.wallId.trim();
     if (!wallId) throw new Error('Wall ID is required');
-    const now = new Date().toISOString();
+    const now = Date.now();
 
     const existing = await collections.walls.findOne({ wallId });
     if (existing) throw new Error('Wall already exists');
@@ -287,7 +287,7 @@ export async function adminUpdateWallMetadata(input: {
         name: input.name?.trim() || wallId,
         site: input.site?.trim() || null,
         notes: input.notes?.trim() || null,
-        updatedAt: new Date().toISOString()
+        updatedAt: Date.now()
     };
 
     const existing = await findWallById(wallId);
@@ -319,7 +319,7 @@ export async function adminDeleteWall(wallId: string) {
     hydrateWallNodes(resolvedWallId);
     notifyControllers(resolvedWallId, false);
 
-    const now = new Date().toISOString();
+    const now = Date.now();
     await Promise.all([
         collections.walls.deleteOne({ _id: existing._id }),
         collections.devices.updateMany(
@@ -422,7 +422,7 @@ export async function adminUnbindWall(wallId: string) {
                 boundCommitId: null,
                 boundSlideId: null,
                 boundSource: null,
-                updatedAt: new Date().toISOString()
+                updatedAt: Date.now()
             }
         }
     );
@@ -563,7 +563,7 @@ export async function adminDeletePublicAsset(assetId: string, userEmail: string)
         { _id: new ObjectId(assetId) },
         {
             $set: {
-                deletedAt: new Date().toISOString(),
+                deletedAt: Date.now(),
                 deletedBy: userEmail
             }
         }

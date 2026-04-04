@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 
 import { logAuditSuccess } from '~/server/audit';
 import { collections } from '~/server/collections';
+import { epochToISO } from '~/server/serialization';
 
 export type DeviceKind = 'wall' | 'gallery' | 'controller';
 export type DeviceStatus = 'pending' | 'active' | 'revoked';
@@ -39,9 +40,12 @@ function serializeDevice(doc: any): DeviceRecord {
         kind: (doc.kind ?? 'wall') as DeviceKind,
         status: (doc.status ?? 'pending') as DeviceStatus,
         assignedWallId: doc.assignedWallId ? String(doc.assignedWallId) : null,
-        createdAt: String(doc.createdAt ?? ''),
-        updatedAt: String(doc.updatedAt ?? ''),
-        lastSeenAt: doc.lastSeenAt ? String(doc.lastSeenAt) : null
+        createdAt: epochToISO(doc.createdAt as number | string | Date | null | undefined),
+        updatedAt: epochToISO(doc.updatedAt as number | string | Date | null | undefined),
+        lastSeenAt:
+            doc.lastSeenAt != null
+                ? epochToISO(doc.lastSeenAt as number | string | Date | null | undefined)
+                : null
     };
 }
 
@@ -52,7 +56,7 @@ export async function ensureDeviceByPublicKey(input: {
     const publicKey = input.publicKey.trim();
     if (!publicKey) throw new Error('Device public key is required');
 
-    const now = new Date().toISOString();
+    const now = Date.now();
     const existing = await devices.findOne({ publicKey });
     if (existing) {
         await devices.updateOne(
@@ -134,7 +138,7 @@ export async function adminEnrollDeviceBySignature(input: {
     const valid = await verifySignature(String(device.publicKey ?? ''), deviceId, signature);
     if (!valid) throw new Error('Invalid device signature');
 
-    const now = new Date().toISOString();
+    const now = Date.now();
     const result = await devices.findOneAndUpdate(
         { _id: device._id, status: { $ne: 'revoked' }, assignedWallId: null },
         {
@@ -168,7 +172,7 @@ export async function adminListDevices() {
 export async function markDeviceDisconnectedById(deviceId: string) {
     const normalized = deviceId.trim();
     if (!normalized) return;
-    const now = new Date().toISOString();
+    const now = Date.now();
     await devices.updateOne(
         { deviceId: normalized },
         {

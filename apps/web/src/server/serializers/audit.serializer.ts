@@ -1,6 +1,6 @@
 import type { AuditLogDocument } from '@repo/db/documents';
 
-import { serializeForClient, toScalarString, toIdString } from '~/server/serialization';
+import { epochToISO, serializeForClient, toIdString, toScalarString } from '~/server/serialization';
 
 export interface SerializedAuditLog {
     _id: string;
@@ -21,7 +21,6 @@ export function serializeAudit(doc: AuditLogDocument): SerializedAuditLog {
             (doc.changes
                 ? (serializeForClient(doc.changes) as SerializedAuditLog['changes'])
                 : null) ?? null,
-        createdAt:
-            doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt)
+        createdAt: epochToISO(doc.createdAt)
     });
 }

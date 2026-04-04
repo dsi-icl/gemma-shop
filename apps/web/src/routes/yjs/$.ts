@@ -359,10 +359,10 @@ class MongoYDocPersistence implements Persistence {
                 $set: {
                     scope,
                     data: new Binary(Buffer.from(update)),
-                    updatedAt: new Date().toISOString()
+                    updatedAt: Date.now()
                 },
                 $setOnInsert: {
-                    createdAt: new Date().toISOString()
+                    createdAt: Date.now()
                 }
             },
             { upsert: true }

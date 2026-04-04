@@ -7,6 +7,7 @@ import type { CollaboratorRole, ProjectVisibility } from './schema/project';
 // ── Better Auth managed ───────────────────────────────────────────────────────
 // Minimal interfaces covering only the fields accessed by application code.
 // Better Auth owns the write path for these two collections.
+// Timestamps remain as Date — Better Auth controls the format.
 
 export interface UserDocument {
     _id: ObjectId;
@@ -33,6 +34,8 @@ export interface SessionDocument {
 }
 
 // ── Application collections ───────────────────────────────────────────────────
+// All timestamps are epoch milliseconds (number).
+// The collection layer normalises legacy string / Date values on read via fromDB().
 
 export interface ProjectDocument {
     _id: ObjectId;
@@ -49,11 +52,11 @@ export interface ProjectDocument {
     collaborators: Array<{ email: string; role: CollaboratorRole }>;
     headCommitId: ObjectId | null;
     publishedCommitId: ObjectId | null;
-    deletedAt?: string | null;
+    deletedAt?: number | null;
     deletedBy?: string | null;
     createdBy: string;
-    createdAt: string;
-    updatedAt: string;
+    createdAt: number;
+    updatedAt: number;
 }
 
 export interface CommitDocument {
@@ -66,13 +69,14 @@ export interface CommitDocument {
         slides: Array<{
             id: string;
             order: number;
-            name?: string;
+            name: string;
             layers: Array<Record<string, unknown>>;
         }>;
     };
     isAutoSave: boolean;
     isMutableHead: boolean;
-    createdAt: Date;
+    createdAt: number;
+    updatedAt?: number;
 }
 
 export interface AssetDocument {
@@ -88,11 +92,11 @@ export interface AssetDocument {
     public?: boolean | null;
     /** Set on auto-generated assets (e.g. web screenshots) to exclude from library listings */
     hidden?: boolean;
-    deletedAt?: string | null;
+    deletedAt?: number | null;
     deletedBy?: string | null;
-    createdAt: string;
+    createdAt: number;
     createdBy: string;
-    updatedAt?: string;
+    updatedAt?: number;
 }
 
 export interface WallDocument {
@@ -100,15 +104,15 @@ export interface WallDocument {
     wallId: string;
     name: string;
     connectedNodes?: number;
-    lastSeen: string;
+    lastSeen: number;
     boundProjectId?: string | null;
     boundCommitId?: string | null;
     boundSlideId?: string | null;
     boundSource?: 'live' | 'gallery' | null;
     site?: string | null;
     notes?: string | null;
-    createdAt: string;
-    updatedAt?: string;
+    createdAt: number;
+    updatedAt?: number;
 }
 
 export interface DeviceDocument {
@@ -118,11 +122,11 @@ export interface DeviceDocument {
     kind: DeviceKind;
     status: DeviceStatus;
     assignedWallId?: string | null;
-    assignedAt?: string;
+    assignedAt?: number;
     assignedBy?: string;
-    createdAt: string;
-    updatedAt: string;
-    lastSeenAt?: string | null;
+    createdAt: number;
+    updatedAt: number;
+    lastSeenAt?: number | null;
     label?: string | null;
     notes?: string | null;
 }
@@ -131,8 +135,8 @@ export interface YDocDocument {
     _id: ObjectId;
     scope: string;
     data: Binary;
-    createdAt: string;
-    updatedAt: string;
+    createdAt: number;
+    updatedAt: number;
 }
 
 export interface AuditLogDocument {
@@ -146,5 +150,5 @@ export interface AuditLogDocument {
     reasonCode?: string | null;
     changes?: Record<string, unknown> | null;
     error?: string | null;
-    createdAt: Date;
+    createdAt: number;
 }

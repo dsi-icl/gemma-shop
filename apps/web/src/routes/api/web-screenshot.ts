@@ -255,7 +255,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
                         hidden: true,
                         name: `web-screenshot:${url}`,
                         createdBy: userEmail,
-                        createdAt: new Date().toISOString()
+                        createdAt: Date.now()
                     });
 
                     return new Response(JSON.stringify({ filename, baseId, blurhash, sizes }), {

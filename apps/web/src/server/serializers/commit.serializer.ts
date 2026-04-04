@@ -1,4 +1,6 @@
-import { serializeForClient, toIdString, toScalarString } from '~/server/serialization';
+import type { CommitDocument } from '@repo/db/documents';
+
+import { epochToISO, serializeForClient, toIdString, toScalarString } from '~/server/serialization';
 
 export interface SerializedCommit {
     _id: string;
@@ -17,15 +19,14 @@ export interface SerializedCommitWithContent extends SerializedCommit {
     content: {
         slides: {
             id: string;
-            name?: string;
+            name: string;
             order: number;
             layers: any[];
         }[];
     };
 }
 
-export function serializeCommit(doc: Record<string, unknown>): SerializedCommitWithContent {
-    const content = doc.content as SerializedCommitWithContent['content'];
+export function serializeCommit(doc: CommitDocument): SerializedCommitWithContent {
     return serializeForClient({
         _id: toIdString(doc._id),
         projectId: toIdString(doc.projectId),
@@ -34,11 +35,9 @@ export function serializeCommit(doc: Record<string, unknown>): SerializedCommitW
         message: toScalarString(doc.message),
         isMutableHead: Boolean(doc.isMutableHead),
         isAutoSave: Boolean(doc.isAutoSave),
-        firstSlideId: content?.slides?.[0]?.id ?? null,
-        createdAt:
-            doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
-        updatedAt:
-            doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : String(doc.updatedAt),
-        content
+        firstSlideId: doc.content?.slides?.[0]?.id ?? null,
+        createdAt: epochToISO(doc.createdAt),
+        updatedAt: epochToISO(doc.updatedAt),
+        content: doc.content
     });
 }

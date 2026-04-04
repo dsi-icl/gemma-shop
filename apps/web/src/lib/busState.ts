@@ -1324,7 +1324,7 @@ export async function saveScope(
                     $set: {
                         message,
                         content: { slides: updatedSlides },
-                        updatedAt: new Date()
+                        updatedAt: Date.now()
                     }
                 }
             );
@@ -1343,7 +1343,7 @@ export async function saveScope(
             content: { slides: updatedSlides },
             isAutoSave: false,
             isMutableHead: false,
-            createdAt: new Date()
+            createdAt: Date.now()
         };
 
         // Preserve HEAD's current parentId chain on the snapshot
@@ -1412,7 +1412,7 @@ export async function persistSlideMetadata(
 
         await collections.commits.updateOne(
             { _id: new ObjectId(commitId) },
-            { $set: { 'content.slides': updatedSlides, updatedAt: new Date() } }
+            { $set: { 'content.slides': updatedSlides, updatedAt: Date.now() } }
         );
 
         return true;

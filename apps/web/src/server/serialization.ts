@@ -1,5 +1,13 @@
 import { ObjectId } from 'mongodb';
 
+/** Converts an epoch-ms number (or legacy Date / ISO string) to an ISO 8601 string for the client. */
+export function epochToISO(value: number | string | Date | null | undefined): string {
+    if (value == null) return '';
+    if (typeof value === 'number') return new Date(value).toISOString();
+    if (value instanceof Date) return value.toISOString();
+    return value; // already a string
+}
+
 export function serializeForClient<T>(value: T): T {
     if (value instanceof ObjectId) {
         return value.toHexString() as T;
