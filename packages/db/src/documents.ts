@@ -51,8 +51,8 @@ export interface ProjectDocument {
     customRenderCompat: boolean;
     customRenderProxy: boolean;
     collaborators: Array<{ email: string; role: CollaboratorRole }>;
-    headCommitId: ObjectId | null;
-    publishedCommitId: ObjectId | null;
+    headCommitId: string | null;
+    publishedCommitId: string | null;
     deletedAt?: number | null;
     deletedBy?: string | null;
     createdBy: string;
@@ -63,9 +63,9 @@ export interface ProjectDocument {
 export interface CommitDocument {
     _id: ObjectId;
     id: string;
-    projectId: ObjectId;
-    parentId: ObjectId | null;
-    authorId: ObjectId;
+    projectId: string;
+    parentId: string | null;
+    authorId: string;
     message: string;
     content: {
         slides: Array<{
@@ -84,7 +84,7 @@ export interface CommitDocument {
 export interface AssetDocument {
     _id: ObjectId;
     id: string;
-    projectId: ObjectId;
+    projectId: string;
     name: string;
     url: string;
     size: number;
@@ -148,7 +148,7 @@ export interface YDocDocument {
 export interface AuditLogDocument {
     _id: ObjectId;
     id: string;
-    projectId: ObjectId | null;
+    projectId: string | null;
     actorId: string | null;
     action: string;
     outcome: 'success' | 'denied' | 'failure' | 'error';

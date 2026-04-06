@@ -1,5 +1,3 @@
-import { ObjectId } from 'mongodb';
-
 import { dbCol } from '~/server/collections';
 import { serializeForClient } from '~/server/serialization';
 
@@ -8,7 +6,7 @@ export type AuditOutcome = 'success' | 'denied' | 'failure' | 'error';
 export interface AuditLogInput {
     action: string;
     actorId?: string | null;
-    projectId?: string | ObjectId | null;
+    projectId?: string | null;
     resourceType?: string | null;
     resourceId?: string | null;
     outcome?: AuditOutcome;
@@ -17,17 +15,10 @@ export interface AuditLogInput {
     error?: string | null;
 }
 
-function toObjectIdOrNull(value: string | ObjectId | null | undefined): ObjectId | null {
-    if (!value) return null;
-    if (value instanceof ObjectId) return value;
-    return ObjectId.isValid(value) ? new ObjectId(value) : null;
-}
-
 export async function logAudit(input: AuditLogInput): Promise<void> {
     try {
-        const projectId = toObjectIdOrNull(input.projectId);
         await dbCol.auditLogs.insertLog({
-            projectId,
+            projectId: input.projectId ?? null,
             actorId: input.actorId ?? null,
             action: input.action,
             outcome: input.outcome ?? 'success',

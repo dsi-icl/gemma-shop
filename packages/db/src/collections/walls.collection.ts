@@ -2,7 +2,7 @@ import '@tanstack/react-start/server-only';
 import type { Db } from 'mongodb';
 
 import type { WallDocument } from '../documents';
-import { type MigrationMap, toEpoch, BaseCollection } from './_base';
+import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_base';
 
 export class WallsCollection extends BaseCollection<WallDocument> {
     readonly collectionName = 'walls';
@@ -21,7 +21,7 @@ export class WallsCollection extends BaseCollection<WallDocument> {
         super(db.collection('walls'));
     }
 
-    async findByWallId(wallId: string): Promise<WallDocument | null> {
+    async findByWallId(wallId: string): Promise<PublicDoc<WallDocument> | null> {
         return this.findOne({ wallId });
     }
 
@@ -46,7 +46,7 @@ export class WallsCollection extends BaseCollection<WallDocument> {
      */
     async updateByWallId(
         wallId: string,
-        fields: Partial<Omit<WallDocument, '_id' | 'createdAt' | '_version'>>
+        fields: Partial<Omit<WallDocument, '_id' | 'id' | 'createdAt' | '_version'>>
     ): Promise<void> {
         await this.raw.updateOne(
             { wallId },

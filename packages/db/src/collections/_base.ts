@@ -42,6 +42,12 @@ export interface BaseDoc {
 }
 
 /**
+ * The public-facing document type returned by all collection read/write methods.
+ * `_id` is stripped — callers use `id: string` instead.
+ */
+export type PublicDoc<TDoc extends BaseDoc> = Omit<TDoc, '_id'>;
+
+/**
  * Fields excluded from insert input — generated automatically by the collection layer.
  */
 type InsertData<TDoc extends BaseDoc> = Omit<
@@ -63,9 +69,13 @@ type UpdateData<TDoc extends BaseDoc> = Partial<
  * Responsibilities:
  *  - `fromDB`    applies the migration chain for stale documents, then writes back
  *                asynchronously using a version guard to prevent racing a concurrent write.
+ *  - `expose`    strips `_id` from a document before returning it to callers.
  *  - `insert`    auto-generates `_id`, `createdAt`, `updatedAt`, `_version`.
  *  - `update`    always stamps `updatedAt` and `_version`.
  *  - `softDelete` stamps `deletedAt`, `deletedBy`, `updatedAt`, `_version`.
+ *
+ * All public read/write methods return `PublicDoc<TDoc>` — `_id` is never exposed
+ * outside the collection layer. Use `id: string` everywhere in app code.
  *
  * Subclasses must declare:
  *  - `currentVersion` — the schema version stamped on every new write.
@@ -88,6 +98,16 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
     protected readonly migrations: MigrationMap = {};
 
     protected constructor(protected readonly raw: Collection<Document>) {}
+
+    /**
+     * Convert app-layer insert data to the raw MongoDB document shape.
+     * Override in subclasses to convert string foreign keys to ObjectId before storage.
+     * Default: identity (no conversion needed).
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    protected toRaw(data: InsertData<TDoc>): Record<string, any> {
+        return data as Record<string, unknown>;
+    }
 
     /**
      * Normalise a raw MongoDB document to `TDoc`:
@@ -126,21 +146,28 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
         } as unknown as TDoc;
     }
 
+    /** Strip `_id` from a fully-migrated document before returning it to app code. */
+    protected expose(doc: TDoc): PublicDoc<TDoc> {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _id, ...rest } = doc as TDoc & { _id: unknown };
+        return rest as PublicDoc<TDoc>;
+    }
+
     // ── Read ──────────────────────────────────────────────────────────────────
 
-    async findById(id: string | ObjectId): Promise<TDoc | null> {
+    async findById(id: string | ObjectId): Promise<PublicDoc<TDoc> | null> {
         const doc = await this.raw.findOne({ _id: new OID(id) });
-        return doc ? this.fromDB(doc) : null;
+        return doc ? this.expose(this.fromDB(doc)) : null;
     }
 
-    async findOne(filter: Filter<Document>): Promise<TDoc | null> {
+    async findOne(filter: Filter<Document>): Promise<PublicDoc<TDoc> | null> {
         const doc = await this.raw.findOne(filter);
-        return doc ? this.fromDB(doc) : null;
+        return doc ? this.expose(this.fromDB(doc)) : null;
     }
 
-    async find(filter: Filter<Document> = {}, options?: FindOptions): Promise<TDoc[]> {
+    async find(filter: Filter<Document> = {}, options?: FindOptions): Promise<PublicDoc<TDoc>[]> {
         const docs = await this.raw.find(filter, options).toArray();
-        return docs.map((d) => this.fromDB(d));
+        return docs.map((d) => this.expose(this.fromDB(d)));
     }
 
     async count(filter: Filter<Document> = {}): Promise<number> {
@@ -150,24 +177,24 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
     // ── Write ─────────────────────────────────────────────────────────────────
 
     /** Insert a new document. `_id`, `createdAt`, `updatedAt`, and `_version` are auto-generated. */
-    async insert(data: InsertData<TDoc>): Promise<TDoc> {
+    async insert(data: InsertData<TDoc>): Promise<PublicDoc<TDoc>> {
         const now = Date.now();
         const doc: Document = {
             _id: new OID(),
             createdAt: now,
             updatedAt: now,
             _version: this.currentVersion,
-            ...data
+            ...this.toRaw(data)
         };
         await this.raw.insertOne(doc);
-        return this.fromDB(doc);
+        return this.expose(this.fromDB(doc));
     }
 
     /**
      * Update fields on a document by id. `updatedAt` and `_version` are always stamped.
      * Returns the updated document, or `null` if not found.
      */
-    async update(id: string | ObjectId, $set: UpdateData<TDoc>): Promise<TDoc | null> {
+    async update(id: string | ObjectId, $set: UpdateData<TDoc>): Promise<PublicDoc<TDoc> | null> {
         const result = await this.raw.findOneAndUpdate(
             { _id: new OID(id) },
             {
@@ -175,7 +202,7 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
             } as UpdateFilter<Document>,
             { returnDocument: 'after' }
         );
-        return result ? this.fromDB(result) : null;
+        return result ? this.expose(this.fromDB(result)) : null;
     }
 
     /**
@@ -183,11 +210,14 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
      * Use when you need `$unset`, `$push`, etc. — `updatedAt` and `_version` are NOT
      * auto-stamped here; callers are responsible for including them if needed.
      */
-    async updateRaw(id: string | ObjectId, update: UpdateFilter<Document>): Promise<TDoc | null> {
+    async updateRaw(
+        id: string | ObjectId,
+        update: UpdateFilter<Document>
+    ): Promise<PublicDoc<TDoc> | null> {
         const result = await this.raw.findOneAndUpdate({ _id: new OID(id) }, update, {
             returnDocument: 'after'
         });
-        return result ? this.fromDB(result) : null;
+        return result ? this.expose(this.fromDB(result)) : null;
     }
 
     /** Soft-delete: stamps `deletedAt`, `deletedBy`, `updatedAt`, and `_version`. */

@@ -9,7 +9,7 @@ import { Window } from 'happy-dom';
 import { $createParagraphNode, $getRoot } from 'lexical';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
-import { Binary, ObjectId } from 'mongodb';
+import { Binary } from 'mongodb';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
@@ -191,7 +191,7 @@ function parseScope(docName: string): DocScope {
         throw new Error(`Invalid docName format: ${docName}`);
     }
     const [projectId, commitId, slideId, layerIdRaw] = parts;
-    if (!ObjectId.isValid(projectId) || !ObjectId.isValid(commitId)) {
+    if (!/^[0-9a-f]{24}$/i.test(projectId) || !/^[0-9a-f]{24}$/i.test(commitId)) {
         throw new Error(`Invalid projectId/commitId in docName: ${docName}`);
     }
     const layerId = Number.parseInt(layerIdRaw, 10);

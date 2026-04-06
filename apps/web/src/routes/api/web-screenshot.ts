@@ -5,7 +5,6 @@ import { isIP } from 'node:net';
 import { join } from 'node:path';
 
 import { createFileRoute } from '@tanstack/react-router';
-import { ObjectId } from 'mongodb';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { ASSET_DIR } from '~/lib/serverVariables';
@@ -245,7 +244,7 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     // without the record appearing in asset library listings.
                     const fileSize = (await stat(screenshotPath).catch(() => null))?.size ?? 0;
                     await dbCol.assets.insert({
-                        projectId: new ObjectId(projectId),
+                        projectId,
                         url: filename,
                         size: fileSize,
                         sizes: sizes.length > 0 ? sizes : undefined,

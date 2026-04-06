@@ -1,9 +1,11 @@
 import '@tanstack/react-start/server-only';
-import type { Db, FindOptions, ObjectId } from 'mongodb';
+import type { Db, Document, FindOptions, ObjectId } from 'mongodb';
 import { ObjectId as OID } from 'mongodb';
 
 import type { AssetDocument } from '../documents';
-import { type MigrationMap, toEpoch, BaseCollection } from './_base';
+import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_base';
+
+type AssetInsertData = Omit<AssetDocument, '_id' | 'id' | 'createdAt' | 'updatedAt' | '_version'>;
 
 export class AssetsCollection extends BaseCollection<AssetDocument> {
     readonly collectionName = 'assets';
@@ -22,11 +24,26 @@ export class AssetsCollection extends BaseCollection<AssetDocument> {
         super(db.collection('assets'));
     }
 
+    protected fromDB(doc: Document): AssetDocument {
+        const base = super.fromDB(doc) as unknown as AssetDocument & { projectId: unknown };
+        return {
+            ...base,
+            projectId: String(base.projectId)
+        };
+    }
+
+    protected toRaw(data: AssetInsertData): Record<string, unknown> {
+        return {
+            ...data,
+            projectId: new OID(data.projectId)
+        };
+    }
+
     async findByProject(
         projectId: string | ObjectId,
         includeDeleted = false,
         options?: FindOptions
-    ): Promise<AssetDocument[]> {
+    ): Promise<PublicDoc<AssetDocument>[]> {
         const filter: Record<string, unknown> = {
             projectId: new OID(projectId),
             hidden: { $ne: true }
@@ -35,7 +52,10 @@ export class AssetsCollection extends BaseCollection<AssetDocument> {
         return this.find(filter, options);
     }
 
-    async findPublic(includeDeleted = false, options?: FindOptions): Promise<AssetDocument[]> {
+    async findPublic(
+        includeDeleted = false,
+        options?: FindOptions
+    ): Promise<PublicDoc<AssetDocument>[]> {
         const filter: Record<string, unknown> = { public: true, hidden: { $ne: true } };
         if (!includeDeleted) filter.deletedAt = { $exists: false };
         return this.find(filter, options);

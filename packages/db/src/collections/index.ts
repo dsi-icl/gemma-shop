@@ -10,7 +10,7 @@ import { WallsCollection } from './walls.collection';
 import { YDocsCollection } from './ydocs.collection';
 
 export { BaseCollection, toEpoch } from './_base';
-export type { BaseDoc, MigrationFn, MigrationMap } from './_base';
+export type { BaseDoc, MigrationFn, MigrationMap, PublicDoc } from './_base';
 export { AuditLogsCollection } from './audit-logs.collection';
 export { AssetsCollection } from './assets.collection';
 export { CommitsCollection } from './commits.collection';

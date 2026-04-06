@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { basename, join, extname } from 'path';
 
+import type { PublicDoc } from '@repo/db/collections';
 import type { AssetDocument } from '@repo/db/documents';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerOnlyFn } from '@tanstack/react-start';
@@ -27,14 +28,6 @@ function escapeRegex(value: string): string {
 
 function normalizeProjectId(value: unknown): string | null {
     if (typeof value === 'string' && value.length > 0) return value;
-    if (
-        value &&
-        typeof value === 'object' &&
-        'toHexString' in value &&
-        typeof (value as { toHexString?: unknown }).toHexString === 'function'
-    ) {
-        return (value as { toHexString: () => string }).toHexString();
-    }
     return null;
 }
 
@@ -83,7 +76,9 @@ async function chooseVariantFallbackFilename(requestedFilename: string): Promise
     return baseExists ? baseOriginal : null;
 }
 
-async function getAssetRecordForFilename(filename: string): Promise<AssetDocument | null> {
+async function getAssetRecordForFilename(
+    filename: string
+): Promise<PublicDoc<AssetDocument> | null> {
     const exact = await dbCol.assets.findOne({
         $or: [{ url: filename }, { previewUrl: filename }]
     });

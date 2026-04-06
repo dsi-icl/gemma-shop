@@ -1,8 +1,8 @@
 import '@tanstack/react-start/server-only';
-import type { Db, FindOptions, ObjectId } from 'mongodb';
+import type { Db, Document, FindOptions, ObjectId } from 'mongodb';
 
 import type { AuditLogDocument } from '../documents';
-import { type MigrationMap, toEpoch, BaseCollection } from './_base';
+import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_base';
 
 export class AuditLogsCollection extends BaseCollection<AuditLogDocument> {
     readonly collectionName = 'audit_logs';
@@ -19,10 +19,18 @@ export class AuditLogsCollection extends BaseCollection<AuditLogDocument> {
         super(db.collection('audit_logs'));
     }
 
+    protected fromDB(doc: Document): AuditLogDocument {
+        const base = super.fromDB(doc) as unknown as AuditLogDocument & { projectId: unknown };
+        return {
+            ...base,
+            projectId: base.projectId ? String(base.projectId) : null
+        };
+    }
+
     async findByProject(
         projectId: string | ObjectId,
         options?: FindOptions
-    ): Promise<AuditLogDocument[]> {
+    ): Promise<PublicDoc<AuditLogDocument>[]> {
         const { ObjectId: OID } = await import('mongodb');
         return this.find({ projectId: new OID(projectId) }, options);
     }
@@ -33,15 +41,16 @@ export class AuditLogsCollection extends BaseCollection<AuditLogDocument> {
      */
     async insertLog(
         data: Omit<AuditLogDocument, '_id' | 'id' | 'createdAt' | '_version'>
-    ): Promise<AuditLogDocument> {
+    ): Promise<PublicDoc<AuditLogDocument>> {
         const { ObjectId: OID } = await import('mongodb');
         const doc = {
             _id: new OID(),
             createdAt: Date.now(),
             _version: this.currentVersion,
-            ...data
+            ...data,
+            projectId: data.projectId ? new OID(data.projectId) : null
         };
         await this.raw.insertOne(doc);
-        return this.fromDB(doc);
+        return this.expose(this.fromDB(doc));
     }
 }

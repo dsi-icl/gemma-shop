@@ -3,7 +3,7 @@ import type { Db } from 'mongodb';
 import { ObjectId as OID } from 'mongodb';
 
 import type { DeviceDocument } from '../documents';
-import { type MigrationMap, toEpoch, BaseCollection } from './_base';
+import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_base';
 
 export class DevicesCollection extends BaseCollection<DeviceDocument> {
     readonly collectionName = 'devices';
@@ -23,7 +23,7 @@ export class DevicesCollection extends BaseCollection<DeviceDocument> {
         super(db.collection('devices'));
     }
 
-    async findByWall(wallId: string): Promise<DeviceDocument[]> {
+    async findByWall(wallId: string): Promise<PublicDoc<DeviceDocument>[]> {
         return this.find({ assignedWallId: wallId });
     }
 
@@ -101,7 +101,7 @@ export class DevicesCollection extends BaseCollection<DeviceDocument> {
     async enroll(
         id: string | OID,
         data: { assignedWallId: string; assignedBy: string; assignedAt: number }
-    ): Promise<DeviceDocument | null> {
+    ): Promise<PublicDoc<DeviceDocument> | null> {
         const result = await this.raw.findOneAndUpdate(
             { _id: new OID(id), status: { $ne: 'revoked' }, assignedWallId: null },
             {
@@ -114,6 +114,6 @@ export class DevicesCollection extends BaseCollection<DeviceDocument> {
             },
             { returnDocument: 'after' }
         );
-        return result ? this.fromDB(result) : null;
+        return result ? this.expose(this.fromDB(result)) : null;
     }
 }

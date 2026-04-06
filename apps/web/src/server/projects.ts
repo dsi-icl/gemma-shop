@@ -1,7 +1,6 @@
 import '@tanstack/react-start/server-only';
 import type { CommitDocument } from '@repo/db/documents';
 import type { CreateProjectInput, UpdateProjectInput } from '@repo/db/schema';
-import { ObjectId } from 'mongodb';
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
@@ -268,10 +267,11 @@ export async function publishCommit(projectId: string, commitId: string | null, 
 
     const isPublishing = commitId !== null;
 
-    await dbCol.projects.update(projectId, {
-        publishedCommitId: commitId ? new ObjectId(commitId) : null,
-        visibility: isPublishing ? 'public' : 'private'
-    } as any);
+    await dbCol.projects.setPublishedCommit(
+        projectId,
+        commitId,
+        isPublishing ? 'public' : 'private'
+    );
 
     await logAuditSuccess({
         action: commitId ? 'PROJECT_PUBLISHED' : 'PROJECT_UNPUBLISHED',
@@ -299,13 +299,12 @@ export async function publishCustomRenderProject(projectId: string, userEmail: s
     // If already published, no-op
     if (existing.publishedCommitId) return true;
 
-    const sentinelSlideId = new ObjectId().toHexString();
     const sentinel = await dbCol.commits.insert({
-        projectId: new ObjectId(projectId),
+        projectId,
         parentId: null,
-        authorId: new ObjectId(),
+        authorId: 'system',
         message: 'Published (custom render)',
-        content: { slides: [{ id: sentinelSlideId, order: 0, name: 'Slide 1', layers: [] }] },
+        content: { slides: [{ id: crypto.randomUUID(), order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
         isMutableHead: false
     });
@@ -325,14 +324,14 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
     if (project.headCommitId) {
         const head = await dbCol.commits.findById(project.headCommitId);
         if (head?.isMutableHead) {
-            return project.headCommitId.toString();
+            return project.headCommitId;
         }
 
         // Case 2: HEAD exists but is immutable (legacy) — create mutable HEAD on top
         const newHead = await dbCol.commits.insert({
-            projectId: new ObjectId(projectId),
-            parentId: new ObjectId(project.headCommitId),
-            authorId: new ObjectId(),
+            projectId,
+            parentId: project.headCommitId,
+            authorId: 'system',
             message: 'HEAD',
             content: head?.content ?? { slides: [] },
             isAutoSave: false,
@@ -351,13 +350,12 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
     }
 
     // Case 3: No HEAD at all — create fresh mutable HEAD with a default slide
-    const defaultSlideId = new ObjectId().toHexString();
     const newHead = await dbCol.commits.insert({
-        projectId: new ObjectId(projectId),
+        projectId,
         parentId: null,
-        authorId: new ObjectId(),
+        authorId: 'system',
         message: 'HEAD',
-        content: { slides: [{ id: defaultSlideId, order: 0, name: 'Slide 1', layers: [] }] },
+        content: { slides: [{ id: crypto.randomUUID(), order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
         isMutableHead: true
     });
@@ -388,13 +386,12 @@ export async function createBranchHead(
 
     const source = await dbCol.commits.findById(sourceCommitId);
     if (!source) throw new Error('Source commit not found');
-    if (source.projectId.toString() !== projectId)
-        throw new Error('Commit does not belong to project');
+    if (source.projectId !== projectId) throw new Error('Commit does not belong to project');
 
     const branchHead = await dbCol.commits.insert({
-        projectId: new ObjectId(projectId),
-        parentId: new ObjectId(sourceCommitId),
-        authorId: new ObjectId(),
+        projectId,
+        parentId: sourceCommitId,
+        authorId: 'system',
         message: 'HEAD',
         content: source.content ?? { slides: [] },
         isAutoSave: false,
@@ -426,12 +423,9 @@ export async function promoteBranchHead(
     const branch = await dbCol.commits.findById(branchCommitId);
     if (!branch) throw new Error('Branch commit not found');
     if (!branch.isMutableHead) throw new Error('Can only promote a mutable branch head');
-    if (branch.projectId.toString() !== projectId)
-        throw new Error('Commit does not belong to project');
+    if (branch.projectId !== projectId) throw new Error('Commit does not belong to project');
 
-    await dbCol.projects.update(projectId, {
-        headCommitId: new ObjectId(branchCommitId)
-    } as any);
+    await dbCol.projects.setHeadCommit(projectId, branchCommitId);
 
     await logAuditSuccess({
         action: 'BRANCH_PROMOTED',

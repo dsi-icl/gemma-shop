@@ -1,6 +1,6 @@
 import type { CommitDocument } from '@repo/db/documents';
 import type { Peer } from 'crossws';
-import { ObjectId, type ChangeStreamDocument } from 'mongodb';
+import type { ChangeStreamDocument } from 'mongodb';
 
 import { makeScopeLabel, type GSMessage, type Layer, type ScopeState } from '~/lib/types';
 import { dbCol } from '~/server/collections';
@@ -1258,7 +1258,7 @@ export async function seedScopeFromDb(scopeId: ScopeId): Promise<boolean> {
 // DB snapshoting
 export async function buildSlidesSnapshot(
     scope: ScopeState,
-    headCommitId: ObjectId | string | null
+    headCommitId: string | null
 ): Promise<Array<{ id: string; order: number; name: string; layers: Layer[] }>> {
     let existingSlides: Array<{ id: string; order: number; name: string; layers: Layer[] }> = [];
 
@@ -1311,7 +1311,7 @@ export async function saveScope(
         } else {
             const project = await dbCol.projects.findById(scope.projectId);
             if (!project?.headCommitId) return { success: false, error: 'No HEAD commit' };
-            headId = String(project.headCommitId);
+            headId = project.headCommitId;
         }
 
         const updatedSlides = await buildSlidesSnapshot(scope, headId);
@@ -1331,9 +1331,9 @@ export async function saveScope(
         // Preserve HEAD's current parentId chain on the snapshot
         const currentHead = await dbCol.commits.findById(headId);
         const snapshot = await dbCol.commits.insert({
-            projectId: new ObjectId(scope.projectId),
+            projectId: scope.projectId,
             parentId: currentHead?.parentId ?? null,
-            authorId: new ObjectId(), // TODO: session user
+            authorId: 'system', // TODO: session user
             message,
             content: { slides: updatedSlides },
             isAutoSave: false,

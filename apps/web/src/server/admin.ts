@@ -3,7 +3,6 @@ import { auth } from '@repo/auth/auth';
 import { createSmtpTransport } from '@repo/auth/smtp';
 import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
 import { getRequest } from '@tanstack/react-start/server';
-import { ObjectId } from 'mongodb';
 
 import {
     getBusRuntimeTelemetry,
@@ -47,7 +46,7 @@ async function findWallById(identifier: string) {
     });
     if (whitespaceTolerant) return whitespaceTolerant;
 
-    if (ObjectId.isValid(normalized)) {
+    if (/^[0-9a-f]{24}$/i.test(normalized)) {
         const byId = await dbCol.walls.findById(normalized);
         if (byId) return byId;
     }

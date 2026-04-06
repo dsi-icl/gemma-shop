@@ -5,7 +5,6 @@ import { extname, join } from 'node:path';
 import { createFileRoute } from '@tanstack/react-router';
 import { FileStore } from '@tus/file-store';
 import { Server } from '@tus/server';
-import { ObjectId } from 'mongodb';
 
 import {
     ASSET_MIME_TYPES,
@@ -250,7 +249,7 @@ const tusServer = new Server({
 
                 const isPublicAsset = projectId === PUBLIC_ASSET_PROJECT_ID;
                 const created = await dbCol.assets.insert({
-                    projectId: new ObjectId(projectId),
+                    projectId,
                     name: originalName,
                     url: assetFilename,
                     size: fileSize,

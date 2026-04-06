@@ -1,9 +1,10 @@
 import '@tanstack/react-start/server-only';
 import type { Db } from 'mongodb';
 import { ObjectId as OID } from 'mongodb';
+import type { Document } from 'mongodb';
 
 import type { ProjectDocument } from '../documents';
-import { type MigrationMap, toEpoch, BaseCollection } from './_base';
+import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_base';
 
 export class ProjectsCollection extends BaseCollection<ProjectDocument> {
     readonly collectionName = 'projects';
@@ -22,7 +23,22 @@ export class ProjectsCollection extends BaseCollection<ProjectDocument> {
         super(db.collection('projects'));
     }
 
-    async findByUser(userEmail: string, includeArchived = false): Promise<ProjectDocument[]> {
+    protected fromDB(doc: Document): ProjectDocument {
+        const base = super.fromDB(doc) as unknown as ProjectDocument & {
+            headCommitId: unknown;
+            publishedCommitId: unknown;
+        };
+        return {
+            ...base,
+            headCommitId: base.headCommitId ? String(base.headCommitId) : null,
+            publishedCommitId: base.publishedCommitId ? String(base.publishedCommitId) : null
+        };
+    }
+
+    async findByUser(
+        userEmail: string,
+        includeArchived = false
+    ): Promise<PublicDoc<ProjectDocument>[]> {
         const filter: Record<string, unknown> = {
             $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }]
         };
@@ -30,7 +46,7 @@ export class ProjectsCollection extends BaseCollection<ProjectDocument> {
         return this.find(filter);
     }
 
-    async findPublished(): Promise<ProjectDocument[]> {
+    async findPublished(): Promise<PublicDoc<ProjectDocument>[]> {
         return this.find({
             deletedAt: { $exists: false },
             visibility: 'public',

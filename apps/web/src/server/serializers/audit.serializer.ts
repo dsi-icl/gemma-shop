@@ -1,3 +1,4 @@
+import type { PublicDoc } from '@repo/db/collections';
 import type { AuditLogDocument } from '@repo/db/documents';
 
 import { epochToISO, serializeForClient, toIdString, toScalarString } from '~/server/serialization';
@@ -11,16 +12,16 @@ export interface SerializedAuditLog {
     createdAt: string;
 }
 
-export function serializeAudit(doc: AuditLogDocument): SerializedAuditLog {
-    return serializeForClient({
+export function serializeAudit(doc: PublicDoc<AuditLogDocument>): SerializedAuditLog {
+    return {
         id: doc.id,
         projectId: toIdString(doc.projectId),
         actorId: toScalarString(doc.actorId),
         action: toScalarString(doc.action),
-        changes:
-            (doc.changes
-                ? (serializeForClient(doc.changes) as SerializedAuditLog['changes'])
-                : null) ?? null,
+        // changes is Record<string, unknown> — may contain ObjectIds or Dates from old data
+        changes: doc.changes
+            ? (serializeForClient(doc.changes) as SerializedAuditLog['changes'])
+            : null,
         createdAt: epochToISO(doc.createdAt)
-    });
+    };
 }

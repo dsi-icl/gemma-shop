@@ -1,4 +1,5 @@
 import '@tanstack/react-start/server-only';
+import type { PublicDoc } from '@repo/db/collections';
 import type { DeviceDocument } from '@repo/db/documents';
 
 import { logAuditSuccess } from '~/server/audit';
@@ -32,7 +33,7 @@ function fromBase64Url(input: string): Uint8Array {
     return new Uint8Array(binary);
 }
 
-export function serializeDevice(device: DeviceDocument): DeviceRecord {
+export function serializeDevice(device: PublicDoc<DeviceDocument>): DeviceRecord {
     return {
         deviceId: device.deviceId,
         publicKey: device.publicKey,
@@ -75,8 +76,7 @@ export async function ensureDeviceByPublicKey(input: {
         return serializeDevice({ ...existing, lastSeenAt: now, updatedAt: now });
     }
 
-    const { ObjectId } = await import('mongodb');
-    const deviceId = new ObjectId().toHexString();
+    const deviceId = crypto.randomUUID().replace(/-/g, '');
     const created = await dbCol.devices.insert({
         deviceId,
         publicKey,

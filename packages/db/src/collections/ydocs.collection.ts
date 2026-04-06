@@ -3,7 +3,7 @@ import type { Binary, Db } from 'mongodb';
 import { ObjectId as OID } from 'mongodb';
 
 import type { YDocDocument } from '../documents';
-import { type MigrationMap, toEpoch, BaseCollection } from './_base';
+import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_base';
 
 export class YDocsCollection extends BaseCollection<YDocDocument> {
     readonly collectionName = 'ydocs';
@@ -26,7 +26,7 @@ export class YDocsCollection extends BaseCollection<YDocDocument> {
         await this.raw.createIndex({ scope: 1 }, { unique: true, name: 'scope_unique' });
     }
 
-    async findByScope(scope: string): Promise<YDocDocument | null> {
+    async findByScope(scope: string): Promise<PublicDoc<YDocDocument> | null> {
         return this.findOne({ scope });
     }
 

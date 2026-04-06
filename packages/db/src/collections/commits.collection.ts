@@ -1,9 +1,11 @@
 import '@tanstack/react-start/server-only';
-import type { Db, FindOptions, ObjectId } from 'mongodb';
+import type { Db, Document, FindOptions, ObjectId } from 'mongodb';
 import { ObjectId as OID } from 'mongodb';
 
 import type { CommitDocument } from '../documents';
-import { type MigrationMap, toEpoch, BaseCollection } from './_base';
+import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_base';
+
+type CommitInsertData = Omit<CommitDocument, '_id' | 'id' | 'createdAt' | 'updatedAt' | '_version'>;
 
 export class CommitsCollection extends BaseCollection<CommitDocument> {
     readonly collectionName = 'commits';
@@ -21,14 +23,37 @@ export class CommitsCollection extends BaseCollection<CommitDocument> {
         super(db.collection('commits'));
     }
 
+    protected fromDB(doc: Document): CommitDocument {
+        const base = super.fromDB(doc) as unknown as CommitDocument & {
+            projectId: unknown;
+            parentId: unknown;
+            authorId: unknown;
+        };
+        return {
+            ...base,
+            projectId: String(base.projectId),
+            parentId: base.parentId ? String(base.parentId) : null,
+            authorId: String(base.authorId)
+        };
+    }
+
+    protected toRaw(data: CommitInsertData): Record<string, unknown> {
+        return {
+            ...data,
+            projectId: new OID(data.projectId),
+            parentId: data.parentId ? new OID(data.parentId) : null,
+            authorId: new OID(data.authorId)
+        };
+    }
+
     async findByProject(
         projectId: string | ObjectId,
         options?: FindOptions
-    ): Promise<CommitDocument[]> {
+    ): Promise<PublicDoc<CommitDocument>[]> {
         return this.find({ projectId: new OID(projectId) }, options);
     }
 
-    async findMutableHead(projectId: string | ObjectId): Promise<CommitDocument | null> {
+    async findMutableHead(projectId: string | ObjectId): Promise<PublicDoc<CommitDocument> | null> {
         return this.findOne({ projectId: new OID(projectId), isMutableHead: true });
     }
 

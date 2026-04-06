@@ -1,6 +1,7 @@
+import type { PublicDoc } from '@repo/db/collections';
 import type { CommitDocument } from '@repo/db/documents';
 
-import { epochToISO, serializeForClient, toIdString, toScalarString } from '~/server/serialization';
+import { epochToISO, toIdString, toScalarString } from '~/server/serialization';
 
 export interface SerializedCommit {
     id: string;
@@ -26,8 +27,8 @@ export interface SerializedCommitWithContent extends SerializedCommit {
     };
 }
 
-export function serializeCommit(doc: CommitDocument): SerializedCommitWithContent {
-    return serializeForClient({
+export function serializeCommit(doc: PublicDoc<CommitDocument>): SerializedCommitWithContent {
+    return {
         id: doc.id,
         projectId: toIdString(doc.projectId),
         parentId: doc.parentId ? toIdString(doc.parentId) : null,
@@ -39,5 +40,5 @@ export function serializeCommit(doc: CommitDocument): SerializedCommitWithConten
         createdAt: epochToISO(doc.createdAt),
         updatedAt: epochToISO(doc.updatedAt),
         content: doc.content
-    });
+    };
 }
