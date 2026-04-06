@@ -10,8 +10,6 @@ import {
     $listProjects,
     $listPublishedProjects
 } from './projects.fns';
-import { SerializedAuditLog } from './serializers/audit.serializer';
-import { SerializedCommit, SerializedCommitWithContent } from './serializers/commit.serializer';
 
 export const projectsQueryOptions = (includeArchived = false) =>
     queryOptions({
@@ -46,18 +44,17 @@ export const projectTagSuggestionsQueryOptions = () =>
 export const auditLogsQueryOptions = (projectId: string) =>
     queryOptions({
         queryKey: ['projects', projectId, 'audit'],
-        queryFn: () => $getAuditLogs({ data: { projectId } }) as Promise<SerializedAuditLog[]>
+        queryFn: () => $getAuditLogs({ data: { projectId } })
     });
 
 export const commitsQueryOptions = (projectId: string) =>
     queryOptions({
         queryKey: ['projects', projectId, 'commits'],
-        queryFn: () => $getProjectCommits({ data: { projectId } }) as Promise<SerializedCommit[]>
+        queryFn: () => $getProjectCommits({ data: { projectId } })
     });
 
 export const commitQueryOptions = (commitId: string) =>
     queryOptions({
         queryKey: ['commits', commitId],
-        queryFn: () =>
-            $getCommit({ data: { id: commitId } }) as Promise<SerializedCommitWithContent>
+        queryFn: () => $getCommit({ data: { id: commitId } })
     });

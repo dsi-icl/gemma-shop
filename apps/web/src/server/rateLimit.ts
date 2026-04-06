@@ -62,12 +62,10 @@ export function getClientIpFromHeaders(headers: MaybeHeaders): string {
 
 export function buildRateLimitSubjectKey(input: {
     actorId?: string | null;
-    deviceId?: string | null;
     ip?: string | null;
     peerId?: string | null;
 }): string {
     if (input.actorId) return `actor:${input.actorId}`;
-    if (input.deviceId) return `device:${input.deviceId}`;
     if (input.ip) return `ip:${input.ip}`;
     if (input.peerId) return `peer:${input.peerId}`;
     return 'anonymous';

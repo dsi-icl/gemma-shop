@@ -43,9 +43,9 @@ export interface BaseDoc {
 
 /**
  * The public-facing document type returned by all collection read/write methods.
- * `_id` is stripped — callers use `id: string` instead.
+ * `_id` and `_version` are stripped — both are internal implementation details.
  */
-export type PublicDoc<TDoc extends BaseDoc> = Omit<TDoc, '_id'>;
+export type PublicDoc<TDoc extends BaseDoc> = Omit<TDoc, '_id' | '_version'>;
 
 /**
  * Fields excluded from insert input — generated automatically by the collection layer.
@@ -146,10 +146,10 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
         } as unknown as TDoc;
     }
 
-    /** Strip `_id` from a fully-migrated document before returning it to app code. */
+    /** Strip `_id` and `_version` from a fully-migrated document before returning it to app code. */
     protected expose(doc: TDoc): PublicDoc<TDoc> {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { _id, ...rest } = doc as TDoc & { _id: unknown };
+        const { _id, _version, ...rest } = doc as TDoc & { _id: unknown; _version: unknown };
         return rest as PublicDoc<TDoc>;
     }
 

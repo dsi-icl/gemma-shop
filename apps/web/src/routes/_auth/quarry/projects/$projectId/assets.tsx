@@ -11,7 +11,9 @@ import {
     TrashIcon,
     VideoCameraIcon
 } from '@phosphor-icons/react';
-import type { Asset } from '@repo/db/schema';
+import type { AssetDocument } from '@repo/db/documents';
+
+type Asset = Omit<AssetDocument, '_id' | '_version'>;
 import { Button } from '@repo/ui/components/button';
 import { useLocalStorageValue } from '@repo/ui/hooks/use-localstorage-value';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';

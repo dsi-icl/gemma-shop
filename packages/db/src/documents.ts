@@ -4,6 +4,11 @@ import type { Binary, ObjectId } from 'mongodb';
 import type { DeviceKind, DeviceStatus } from './schema/device';
 import type { CollaboratorRole, ProjectVisibility } from './schema/project';
 
+// JSON-compatible value type — safe for TanStack Start server function return values.
+export type JsonPrimitive = string | number | boolean | null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+
 // ── Better Auth managed ───────────────────────────────────────────────────────
 // Minimal interfaces covering only the fields accessed by application code.
 // Better Auth owns the write path for these two collections.
@@ -72,7 +77,7 @@ export interface CommitDocument {
             id: string;
             order: number;
             name: string;
-            layers: Array<Record<string, unknown>>;
+            layers: Array<{ [key: string]: JsonValue }>;
         }>;
     };
     isAutoSave: boolean;
@@ -122,7 +127,6 @@ export interface WallDocument {
 export interface DeviceDocument {
     _id: ObjectId;
     id: string;
-    deviceId: string;
     publicKey: string;
     kind: DeviceKind;
     status: DeviceStatus;
@@ -155,7 +159,7 @@ export interface AuditLogDocument {
     resourceType?: string | null;
     resourceId?: string | null;
     reasonCode?: string | null;
-    changes?: Record<string, unknown> | null;
+    changes?: { [key: string]: JsonValue } | null;
     error?: string | null;
     createdAt: number;
 }

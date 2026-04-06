@@ -6,10 +6,6 @@ import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 import { logAuditSuccess } from '~/server/audit';
 import { dbCol, collections } from '~/server/collections';
-import { serializeAsset } from '~/server/serializers/asset.serializer';
-import { serializeAudit } from '~/server/serializers/audit.serializer';
-import { serializeCommit } from '~/server/serializers/commit.serializer';
-import { serializeProject } from '~/server/serializers/project.serializer';
 
 function normalizeAssetFilename(value: unknown): string | null {
     if (typeof value !== 'string' || value.length === 0) return null;
@@ -31,7 +27,7 @@ export async function listProjects(userEmail: string, includeArchived = false) {
         filter.deletedAt = { $exists: false };
     }
     const projects = await dbCol.projects.find(filter, { sort: { updatedAt: -1 } });
-    return projects.map(serializeProject);
+    return projects;
 }
 
 export async function listPublishedProjects() {
@@ -44,16 +40,15 @@ export async function listPublishedProjects() {
         (project) => project.visibility === 'public' && Boolean(project.publishedCommitId)
     );
 
-    const serialized = visibleProjects.map(serializeProject);
     const heroFilenames = Array.from(
         new Set(
-            serialized
+            visibleProjects
                 .map((project) => normalizeAssetFilename(project.heroImages?.[0]))
                 .filter((value): value is string => Boolean(value))
         )
     );
 
-    if (heroFilenames.length === 0) return serialized;
+    if (heroFilenames.length === 0) return visibleProjects;
 
     const heroAssets = await dbCol.assets.findBlurhashMetaByUrls(heroFilenames);
 
@@ -69,7 +64,7 @@ export async function listPublishedProjects() {
         });
     }
 
-    return serialized.map((project) => {
+    return visibleProjects.map((project) => {
         const heroImageMeta = (Array.isArray(project.heroImages) ? project.heroImages : [])
             .map((src) => {
                 const filename = normalizeAssetFilename(src);
@@ -115,23 +110,22 @@ export async function listAssets(projectId: string) {
         dbCol.assets.findPublic(false, { sort: { createdAt: -1 } })
     ]);
 
-    const projectAssets = projectDocs.map(serializeAsset);
-    const projectIds = new Set(projectAssets.map((a) => a.id));
-    const publicAssets = publicDocs.filter((d) => !projectIds.has(d.id)).map(serializeAsset);
+    const projectIds = new Set(projectDocs.map((a) => a.id));
+    const publicAssets = publicDocs.filter((d) => !projectIds.has(d.id));
 
-    return [...projectAssets, ...publicAssets];
+    return [...projectDocs, ...publicAssets];
 }
 
 export async function getProject(id: string) {
     const project = await dbCol.projects.findById(id);
     if (!project) return null;
-    return serializeProject(project);
+    return project;
 }
 
 export async function getCommit(id: string) {
     const commit = await dbCol.commits.findById(id);
     if (!commit) return null;
-    return serializeCommit(commit);
+    return commit;
 }
 
 export async function createProject(input: CreateProjectInput, userEmail: string) {
@@ -154,7 +148,7 @@ export async function createProject(input: CreateProjectInput, userEmail: string
     });
 
     process.__BROADCAST_PROJECTS_CHANGED__?.(created.id);
-    return serializeProject(created);
+    return created;
 }
 
 export async function updateProject(input: UpdateProjectInput, userEmail: string) {
@@ -181,7 +175,7 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
         projectId,
         resourceType: 'project',
         resourceId: projectId,
-        changes: { ...updates, publishedCommitId: rawPublishedCommitId } as Record<string, unknown>
+        changes: { ...updates, publishedCommitId: rawPublishedCommitId ?? null }
     });
 
     // Live-push custom render settings changes to any bound walls
@@ -202,7 +196,7 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
     // Re-fetch to get the latest state after both updates
     const updated = await dbCol.projects.findById(projectId);
     if (!updated) throw new Error('Project not found after update');
-    return serializeProject(updated);
+    return updated;
 }
 
 export async function archiveProject(id: string, userEmail: string) {
@@ -442,12 +436,11 @@ export async function getAuditLogs(projectId: string) {
     if (!project) throw new Error('Project not found');
 
     const auditLogs = await dbCol.auditLogs.findByProject(projectId, { sort: { createdAt: -1 } });
-    return auditLogs.map(serializeAudit);
+    return auditLogs;
 }
 
 export async function getProjectCommits(projectId: string) {
-    const commits = await dbCol.commits.findByProject(projectId, { sort: { createdAt: -1 } });
-    return commits.map(serializeCommit);
+    return dbCol.commits.findByProject(projectId, { sort: { createdAt: -1 } });
 }
 
 /**

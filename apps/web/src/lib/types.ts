@@ -392,7 +392,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
     }),
     z.object({
         type: z.literal('device_enrollment'),
-        deviceId: z.string()
+        id: z.string()
     })
 ]);
 

@@ -148,7 +148,7 @@ export const $adminDevicesEnrollBySignature = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
     .inputValidator(
         z.object({
-            deviceId: z.string(),
+            id: z.string(),
             signature: z.string(),
             kind: z.enum(['wall', 'gallery', 'controller']),
             wallId: z.string()
@@ -156,7 +156,7 @@ export const $adminDevicesEnrollBySignature = createServerFn({ method: 'POST' })
     )
     .handler(async ({ data, context }) =>
         adminDevicesEnrollBySignature({
-            deviceId: data.deviceId,
+            id: data.id,
             signature: data.signature,
             kind: data.kind,
             wallId: data.wallId,
@@ -168,12 +168,12 @@ export const $adminDeleteDevice = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
     .inputValidator(
         z.object({
-            deviceId: z.string()
+            id: z.string()
         })
     )
     .handler(async ({ data, context }) =>
         adminDeleteDevice({
-            deviceId: data.deviceId,
+            id: data.id,
             deletedBy: context.user.email
         })
     );

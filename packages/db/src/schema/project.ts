@@ -35,11 +35,11 @@ export const ProjectSchema = z.object({
     headCommitId: oid.nullable().default(null),
     // When set, the project is publicly visible using this specific commit
     publishedCommitId: oid.nullable().default(null),
-    deletedAt: z.iso.datetime().nullish(),
+    deletedAt: z.number().nullish(),
     deletedBy: z.string().nullish(),
     createdBy: z.string(),
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime()
+    createdAt: z.number(),
+    updatedAt: z.number()
 });
 export type Project = z.infer<typeof ProjectSchema>;
 

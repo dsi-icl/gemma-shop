@@ -250,7 +250,7 @@ export const useEditorStore =
                           set({ activeSlideId: slideId });
                       } else {
                           // Fresh scope — seed from commit data
-                          const commitSlides = commit?.content?.slides as
+                          const commitSlides = commit?.content?.slides as unknown as
                               | Array<{ id: string; order: number; layers: LayerWithEditorState[] }>
                               | undefined;
                           const activeSlide = commitSlides?.find((s) => s.id === slideId);
@@ -286,7 +286,7 @@ export const useEditorStore =
                       } else {
                           // Fresh scope — seed from commit data
                           const commit = await $getCommit({ data: { id: commitId } });
-                          const commitSlides = commit?.content?.slides as
+                          const commitSlides = commit?.content?.slides as unknown as
                               | Array<{ id: string; order: number; layers: LayerWithEditorState[] }>
                               | undefined;
                           const activeSlide = commitSlides?.find((s) => s.id === slideId);

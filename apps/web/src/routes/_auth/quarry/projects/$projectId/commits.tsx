@@ -6,6 +6,8 @@ import {
     GlobeXIcon,
     PencilSimpleIcon
 } from '@phosphor-icons/react';
+import type { PublicDoc } from '@repo/db/collections';
+import type { CommitDocument } from '@repo/db/documents';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import {
@@ -31,20 +33,21 @@ import { toast } from 'sonner';
 
 import { $promoteBranchHead, $publishCommit } from '~/server/projects.fns';
 import { commitsQueryOptions, projectQueryOptions } from '~/server/projects.queries';
-import { SerializedCommit } from '~/server/serializers/commit.serializer';
+
+type Commit = PublicDoc<CommitDocument>;
 
 /**
  * Sort commits topologically by walking the parentId chain from HEAD,
  * then from any other branch heads. Project HEAD branch comes first.
  */
-function topoSort(commits: SerializedCommit[], headCommitId: string | null): SerializedCommit[] {
+function topoSort(commits: Commit[], headCommitId: string | null): Commit[] {
     if (commits.length === 0) return [];
     const byId = new Map(commits.map((c) => [c.id, c]));
-    const sorted: SerializedCommit[] = [];
+    const sorted: Commit[] = [];
     const visited = new Set<string>();
 
     // Walk a chain from a starting commit
-    const walkChain = (start: SerializedCommit | undefined) => {
+    const walkChain = (start: Commit | undefined) => {
         let current = start;
         while (current && !visited.has(current.id)) {
             visited.add(current.id);
@@ -309,7 +312,7 @@ function CommitsTab() {
                                                 <GlobeIcon /> Publish
                                             </Button>
                                         )}
-                                        {commit.isMutableHead && commit.firstSlideId ? (
+                                        {commit.isMutableHead && commit.content?.slides?.[0]?.id ? (
                                             <Button
                                                 render={
                                                     <Link
@@ -317,7 +320,7 @@ function CommitsTab() {
                                                         params={{
                                                             projectId,
                                                             commitId: commit.id,
-                                                            slideId: commit.firstSlideId
+                                                            slideId: commit.content.slides[0].id
                                                         }}
                                                     />
                                                 }

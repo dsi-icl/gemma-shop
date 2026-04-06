@@ -16,11 +16,7 @@ import {
 } from '~/lib/busState';
 import { logAuditSuccess } from '~/server/audit';
 import { dbCol, collections } from '~/server/collections';
-import { adminEnrollDeviceBySignature, adminListDevices, serializeDevice } from '~/server/devices';
-import { serializeForClient } from '~/server/serialization';
-import { serializeAsset } from '~/server/serializers/asset.serializer';
-import { serializeProject } from '~/server/serializers/project.serializer';
-import { serializeWall } from '~/server/serializers/wall.serializer';
+import { adminEnrollDeviceBySignature, adminListDevices } from '~/server/devices';
 
 let prevCpuUsage = process.cpuUsage();
 let prevCpuAt = process.hrtime.bigint();
@@ -72,17 +68,13 @@ export async function adminListUsers() {
         const { _id, ...userFields } = user;
         void _id; // Better Auth's ObjectId — not exposed to the client
         const id = String(userFields.id ?? '');
-        return serializeForClient({
-            ...userFields,
-            id,
-            isActiveSession: activeUserIds.has(id)
-        });
+        return { ...userFields, id, isActiveSession: activeUserIds.has(id) };
     });
 }
 
 export async function adminListProjects() {
     const projects = await dbCol.projects.find({}, { sort: { updatedAt: -1 } });
-    return projects.map(serializeProject);
+    return projects;
 }
 
 export async function adminGetStats() {
@@ -163,21 +155,18 @@ export async function adminListWalls() {
     const [wallDocs, wallDeviceCounts, connectedAssignedDevices] = await Promise.all([
         dbCol.walls.find({}, { sort: { lastSeen: -1 } }),
         dbCol.devices.aggregateCountByWall(),
-        dbCol.devices.findWallDevicesByIds(Array.from(allConnectedDeviceIds))
+        dbCol.devices.findWallAssignmentsByIds(Array.from(allConnectedDeviceIds))
     ]);
-    const walls = wallDocs.map(serializeWall);
     const assignedStatsByWallId = new Map(
         wallDeviceCounts.map((entry) => [entry.wallId, { total: Number(entry.total ?? 0) }])
     );
     const assignedWallIdByDeviceId = new Map<string, string>();
     for (const device of connectedAssignedDevices) {
-        const deviceId = typeof device.deviceId === 'string' ? device.deviceId : null;
-        const assignedWallId =
-            typeof device.assignedWallId === 'string' ? device.assignedWallId : null;
-        if (!deviceId || !assignedWallId) continue;
-        assignedWallIdByDeviceId.set(deviceId, assignedWallId);
+        if (device.id && device.assignedWallId) {
+            assignedWallIdByDeviceId.set(device.id, device.assignedWallId);
+        }
     }
-    return walls.map((wall) => ({
+    return wallDocs.map((wall) => ({
         ...wall,
         assignedConnectedNodes: (() => {
             const wallId = String(wall.wallId ?? '');
@@ -219,7 +208,7 @@ export async function adminCreateWall(input: { wallId: string; name?: string | n
         resourceId: wallId,
         changes: { name: wall.name }
     });
-    return serializeWall(wall);
+    return wall;
 }
 
 export async function adminGetWall(wallId: string) {
@@ -227,10 +216,9 @@ export async function adminGetWall(wallId: string) {
     if (!targetWallId) throw new Error('Wall ID is required');
     const wall = await findWallById(targetWallId);
     if (!wall) throw new Error('Wall not found');
-    const serialized = serializeWall(wall);
     return {
-        wallId: String(serialized.wallId ?? targetWallId),
-        name: serialized.name ? String(serialized.name) : null
+        wallId: String(wall.wallId ?? targetWallId),
+        name: wall.name ? String(wall.name) : null
     };
 }
 
@@ -296,7 +284,7 @@ export async function adminListDevicesForWall(wallId: string) {
         { assignedWallId: resolvedWallId },
         { sort: { updatedAt: -1 } }
     );
-    return devices.map(serializeDevice);
+    return devices;
 }
 
 export async function adminGetWallBindingMeta(input: {
@@ -367,7 +355,7 @@ export async function adminDevicesList() {
 }
 
 export async function adminDevicesEnrollBySignature(input: {
-    deviceId: string;
+    id: string;
     signature: string;
     kind: 'wall' | 'gallery' | 'controller';
     wallId: string;
@@ -380,26 +368,25 @@ export async function adminDevicesEnrollBySignature(input: {
         ...input,
         wallId: resolvedWallId
     });
-    process.__REBOOT_DEVICE__?.(enrolled.deviceId);
+    process.__REBOOT_DEVICE__?.(enrolled.id);
     return enrolled;
 }
 
-export async function adminDeleteDevice(input: { deviceId: string; deletedBy: string }) {
-    const deviceId = input.deviceId.trim();
-    if (!deviceId) throw new Error('Device ID is required');
+export async function adminDeleteDevice(input: { id: string; deletedBy: string }) {
+    const id = input.id.trim();
+    if (!id) throw new Error('Device ID is required');
 
-    const existing = await dbCol.devices.findOne({ deviceId });
+    const existing = await dbCol.devices.findById(id);
     if (!existing) throw new Error('Device not found');
 
-    await dbCol.devices.delete(existing.id);
+    await dbCol.devices.delete(id);
     await logAuditSuccess({
         action: 'DEVICE_DELETED',
         actorId: input.deletedBy,
         resourceType: 'device',
-        resourceId: deviceId
+        resourceId: id
     });
-    // Guarantee disconnection of any live WS peers authenticated with this device.
-    process.__DISCONNECT_DEVICE__?.(deviceId);
+    process.__DISCONNECT_DEVICE__?.(id);
 
     return { ok: true };
 }
@@ -472,7 +459,7 @@ export async function adminSetUserBanStatus(input: {
 
 export async function adminListPublicAssets() {
     const assets = await dbCol.assets.findPublic(false, { sort: { createdAt: -1 } });
-    return assets.map(serializeAsset);
+    return assets;
 }
 
 export async function adminDeletePublicAsset(assetId: string, userEmail: string) {

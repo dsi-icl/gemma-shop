@@ -26,7 +26,7 @@ function AdminDevices() {
     const queryClient = useQueryClient();
     const [deleteTargetDeviceId, setDeleteTargetDeviceId] = useState<string | null>(null);
     const deleteDeviceMutation = useMutation({
-        mutationFn: async (deviceId: string) => $adminDeleteDevice({ data: { deviceId } }),
+        mutationFn: async (id: string) => $adminDeleteDevice({ data: { id } }),
         onSuccess: async () => {
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: adminDevicesQueryOptions().queryKey }),
@@ -61,10 +61,8 @@ function AdminDevices() {
                         </thead>
                         <tbody className="divide-y divide-border">
                             {(devices as Array<any>).map((device) => (
-                                <tr key={device.deviceId} className="hover:bg-muted/30">
-                                    <td className="px-4 py-3 font-mono text-xs">
-                                        {device.deviceId}
-                                    </td>
+                                <tr key={device.id} className="hover:bg-muted/30">
+                                    <td className="px-4 py-3 font-mono text-xs">{device.id}</td>
                                     <td className="px-4 py-3 capitalize">{device.kind}</td>
                                     <td className="px-4 py-3 capitalize">{device.status}</td>
                                     <td className="px-4 py-3">
@@ -93,7 +91,7 @@ function AdminDevices() {
                                             size="sm"
                                             variant="destructive"
                                             disabled={deleteDeviceMutation.isPending}
-                                            onClick={() => setDeleteTargetDeviceId(device.deviceId)}
+                                            onClick={() => setDeleteTargetDeviceId(device.id)}
                                         >
                                             Delete
                                         </Button>

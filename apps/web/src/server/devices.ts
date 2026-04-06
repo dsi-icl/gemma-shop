@@ -4,21 +4,6 @@ import type { DeviceDocument } from '@repo/db/documents';
 
 import { logAuditSuccess } from '~/server/audit';
 import { dbCol } from '~/server/collections';
-import { epochToISO } from '~/server/serialization';
-
-export type DeviceKind = 'wall' | 'gallery' | 'controller';
-export type DeviceStatus = 'pending' | 'active' | 'revoked';
-
-export interface DeviceRecord {
-    deviceId: string;
-    publicKey: string;
-    kind: DeviceKind;
-    status: DeviceStatus;
-    assignedWallId: string | null;
-    createdAt: string;
-    updatedAt: string;
-    lastSeenAt: string | null;
-}
 
 const ALGO: EcKeyImportParams & EcdsaParams = {
     name: 'ECDSA',
@@ -33,52 +18,37 @@ function fromBase64Url(input: string): Uint8Array {
     return new Uint8Array(binary);
 }
 
-export function serializeDevice(device: PublicDoc<DeviceDocument>): DeviceRecord {
-    return {
-        deviceId: device.deviceId,
-        publicKey: device.publicKey,
-        kind: device.kind,
-        status: device.status,
-        assignedWallId: device.assignedWallId ?? null,
-        createdAt: epochToISO(device.createdAt),
-        updatedAt: epochToISO(device.updatedAt),
-        lastSeenAt: device.lastSeenAt != null ? epochToISO(device.lastSeenAt) : null
-    };
-}
-
-async function verifySignature(publicKeyJwkJson: string, deviceId: string, signature: string) {
+async function verifySignature(publicKeyJwkJson: string, id: string, signature: string) {
     const pub = JSON.parse(publicKeyJwkJson) as JsonWebKey;
     const key = await crypto.subtle.importKey('jwk', pub, ALGO, false, ['verify']);
     const rawSigBytes = fromBase64Url(signature);
     const sigBytes = new Uint8Array(rawSigBytes.byteLength);
     sigBytes.set(rawSigBytes);
-    const data = new TextEncoder().encode(deviceId);
+    const data = new TextEncoder().encode(id);
     return crypto.subtle.verify(ALGO, key, sigBytes, data);
 }
 
 export async function ensureDeviceByPublicKey(input: {
     publicKey: string;
-    kind: DeviceKind;
-}): Promise<DeviceRecord> {
+    kind: DeviceDocument['kind'];
+}): Promise<PublicDoc<DeviceDocument>> {
     const publicKey = input.publicKey.trim();
     if (!publicKey) throw new Error('Device public key is required');
 
     const now = Date.now();
     const existing = await dbCol.devices.findOne({ publicKey });
     if (existing) {
-        await dbCol.devices.touchLastSeen(existing.deviceId);
+        await dbCol.devices.touchLastSeen(existing.id);
         await logAuditSuccess({
             action: 'DEVICE_SEEN',
             resourceType: 'device',
-            resourceId: existing.deviceId,
+            resourceId: existing.id,
             changes: { kind: input.kind }
         });
-        return serializeDevice({ ...existing, lastSeenAt: now, updatedAt: now });
+        return { ...existing, lastSeenAt: now, updatedAt: now };
     }
 
-    const deviceId = crypto.randomUUID().replace(/-/g, '');
     const created = await dbCol.devices.insert({
-        deviceId,
         publicKey,
         kind: input.kind,
         status: 'pending' as const,
@@ -88,27 +58,27 @@ export async function ensureDeviceByPublicKey(input: {
     await logAuditSuccess({
         action: 'DEVICE_CREATED',
         resourceType: 'device',
-        resourceId: deviceId,
+        resourceId: created.id,
         changes: { kind: input.kind, status: 'pending' }
     });
-    return serializeDevice(created);
+    return created;
 }
 
 export async function adminEnrollDeviceBySignature(input: {
-    deviceId: string;
+    id: string;
     signature: string;
-    kind: DeviceKind;
+    kind: DeviceDocument['kind'];
     wallId: string;
     assignedBy: string;
-}): Promise<DeviceRecord> {
-    const deviceId = input.deviceId.trim();
+}): Promise<PublicDoc<DeviceDocument>> {
+    const id = input.id.trim();
     const signature = input.signature.trim();
     const wallId = input.wallId.trim();
-    if (!deviceId) throw new Error('Device ID is required');
+    if (!id) throw new Error('Device ID is required');
     if (!signature) throw new Error('Signature is required');
     if (!wallId) throw new Error('Wall ID is required');
 
-    const device = await dbCol.devices.findOne({ deviceId });
+    const device = await dbCol.devices.findById(id);
     if (!device) throw new Error('Unknown device');
     if (device.kind !== input.kind) throw new Error('Device kind mismatch');
     if (device.status === 'revoked') throw new Error('Device is revoked');
@@ -116,7 +86,7 @@ export async function adminEnrollDeviceBySignature(input: {
         throw new Error('Device is already enrolled');
     }
 
-    const valid = await verifySignature(String(device.publicKey ?? ''), deviceId, signature);
+    const valid = await verifySignature(String(device.publicKey ?? ''), id, signature);
     if (!valid) throw new Error('Invalid device signature');
 
     const now = Date.now();
@@ -130,20 +100,19 @@ export async function adminEnrollDeviceBySignature(input: {
         action: 'DEVICE_ENROLLED',
         actorId: input.assignedBy,
         resourceType: 'device',
-        resourceId: deviceId,
+        resourceId: id,
         projectId: null,
         changes: { wallId, kind: input.kind, status: 'active' }
     });
-    return serializeDevice(result);
+    return result;
 }
 
-export async function adminListDevices() {
-    const devices = await dbCol.devices.find({}, { sort: { updatedAt: -1 } });
-    return devices.map(serializeDevice);
+export async function adminListDevices(): Promise<PublicDoc<DeviceDocument>[]> {
+    return dbCol.devices.find({}, { sort: { updatedAt: -1 } });
 }
 
-export async function markDeviceDisconnectedById(deviceId: string) {
-    const normalized = deviceId.trim();
+export async function markDeviceDisconnectedById(id: string) {
+    const normalized = id.trim();
     if (!normalized) return;
     await dbCol.devices.touchLastSeen(normalized);
 }

@@ -952,7 +952,7 @@ async function completeHelloRegistration(
         if (wallDevice?.status === 'pending') {
             sendJSON(peer, {
                 type: 'device_enrollment',
-                deviceId: wallDevice.deviceId
+                id: wallDevice.id
             });
             return;
         }
@@ -962,7 +962,7 @@ async function completeHelloRegistration(
             ? {
                   kind: 'wall' as const,
                   wallId: effectiveWallId,
-                  id: wallDevice.deviceId
+                  id: wallDevice.id
               }
             : passedAuthContext.device
               ? {
@@ -1015,7 +1015,7 @@ async function completeHelloRegistration(
             if (controllerDevice.status === 'pending') {
                 sendJSON(peer, {
                     type: 'device_enrollment',
-                    deviceId: controllerDevice.deviceId
+                    id: controllerDevice.id
                 });
                 return;
             }
@@ -1028,7 +1028,7 @@ async function completeHelloRegistration(
                       device: {
                           kind: 'controller' as const,
                           wallId: parsed.wallId,
-                          id: controllerDevice.deviceId
+                          id: controllerDevice.id
                       }
                   }
                 : passedAuthContext.device
@@ -1088,7 +1088,7 @@ async function completeHelloRegistration(
         if (galleryDevice.status === 'pending') {
             sendJSON(peer, {
                 type: 'device_enrollment',
-                deviceId: galleryDevice.deviceId
+                id: galleryDevice.id
             });
             if (!(passedAuthContext.user?.role === 'admin')) return;
         }
@@ -1101,7 +1101,7 @@ async function completeHelloRegistration(
                   device: {
                       kind: 'gallery' as const,
                       ...(parsed.wallId ? { wallId: parsed.wallId } : {}),
-                      id: galleryDevice.deviceId
+                      id: galleryDevice.id
                   }
               }
             : passedAuthContext.device
@@ -1788,19 +1788,19 @@ async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
             authenticated = true;
             if (pending.hello.specimen === 'wall') {
                 resolvedAuth.device = {
-                    id: ensuredDevice.deviceId,
+                    id: ensuredDevice.id,
                     kind: 'wall',
                     wallId: pending.hello.wallId
                 };
             } else if (pending.hello.specimen === 'controller') {
                 resolvedAuth.device = {
-                    id: ensuredDevice.deviceId,
+                    id: ensuredDevice.id,
                     kind: 'controller',
                     wallId: pending.hello.wallId
                 };
             } else {
                 resolvedAuth.device = {
-                    id: ensuredDevice.deviceId,
+                    id: ensuredDevice.id,
                     kind: 'gallery',
                     ...(pending.hello.wallId ? { wallId: pending.hello.wallId } : {})
                 };

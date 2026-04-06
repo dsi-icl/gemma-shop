@@ -27,10 +27,10 @@ export class DevicesCollection extends BaseCollection<DeviceDocument> {
         return this.find({ assignedWallId: wallId });
     }
 
-    async touchLastSeen(deviceId: string): Promise<void> {
+    async touchLastSeen(id: string): Promise<void> {
         const now = Date.now();
         await this.raw.updateOne(
-            { deviceId },
+            { _id: new OID(id) },
             { $set: { lastSeenAt: now, updatedAt: now, _version: this.currentVersion } }
         );
     }
@@ -56,24 +56,28 @@ export class DevicesCollection extends BaseCollection<DeviceDocument> {
     }
 
     /**
-     * Fetch the wall assignment for a set of connected device IDs.
+     * Fetch wall assignments for a set of connected device IDs (MongoDB `id` strings).
      * Used to correlate live WebSocket sessions with their assigned wall.
      */
-    async findWallDevicesByIds(
-        deviceIds: string[]
-    ): Promise<{ deviceId?: string; assignedWallId?: string | null }[]> {
-        if (deviceIds.length === 0) return [];
-        return this.raw
-            .find<{ deviceId?: string; assignedWallId?: string | null }>(
+    async findWallAssignmentsByIds(
+        ids: string[]
+    ): Promise<{ id: string; assignedWallId: string | null }[]> {
+        if (ids.length === 0) return [];
+        const rows = await this.raw
+            .find<{ _id: unknown; assignedWallId?: string | null }>(
                 {
-                    deviceId: { $in: deviceIds },
+                    _id: { $in: ids.map((id) => new OID(id)) },
                     kind: 'wall',
                     assignedWallId: { $type: 'string', $ne: null },
                     status: { $ne: 'revoked' }
                 },
-                { projection: { deviceId: 1, assignedWallId: 1 } }
+                { projection: { _id: 1, assignedWallId: 1 } }
             )
             .toArray();
+        return rows.map((r) => ({
+            id: String(r._id),
+            assignedWallId: typeof r.assignedWallId === 'string' ? r.assignedWallId : null
+        }));
     }
 
     /**

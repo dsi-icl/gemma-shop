@@ -109,13 +109,13 @@ function WallDevicesTab() {
                 did?: string;
                 sig?: string;
             };
-            const deviceId = parsed.did;
+            const id = parsed.did;
             const signature = parsed.sig;
-            if (typeof deviceId !== 'string' || typeof signature !== 'string') {
+            if (typeof id !== 'string' || typeof signature !== 'string') {
                 return null;
             }
             return {
-                deviceId,
+                id,
                 signature
             } as const;
         } catch {
@@ -137,10 +137,10 @@ function WallDevicesTab() {
                 continue;
             }
             const kind = (
-                allDevices as Array<{ deviceId: string; kind?: 'wall' | 'gallery' | 'controller' }>
-            ).find((d) => d.deviceId === payload.deviceId)?.kind;
+                allDevices as Array<{ id: string; kind?: 'wall' | 'gallery' | 'controller' }>
+            ).find((d) => d.id === payload.id)?.kind;
             if (!kind) {
-                pushEvent(`Failed ${payload.deviceId.slice(0, 8)}...: unknown device kind`, false);
+                pushEvent(`Failed ${payload.id.slice(0, 8)}...: unknown device kind`, false);
                 continue;
             }
 
@@ -148,7 +148,7 @@ function WallDevicesTab() {
             try {
                 await $adminDevicesEnrollBySignature({
                     data: {
-                        deviceId: payload.deviceId,
+                        id: payload.id,
                         signature: payload.signature,
                         kind,
                         wallId
@@ -161,11 +161,11 @@ function WallDevicesTab() {
                     queryClient.invalidateQueries({ queryKey: ['admin', 'devices'] }),
                     queryClient.invalidateQueries({ queryKey: ['admin', 'walls'] })
                 ]);
-                pushEvent(`Enrolled ${payload.deviceId.slice(0, 8)}...`, true);
-                toast.success(`Device enrolled: ${payload.deviceId.slice(0, 8)}...`);
+                pushEvent(`Enrolled ${payload.id.slice(0, 8)}...`, true);
+                toast.success(`Device enrolled: ${payload.id.slice(0, 8)}...`);
             } catch (error: any) {
                 pushEvent(
-                    `Failed ${payload.deviceId.slice(0, 8)}...: ${error?.message ?? 'Unknown error'}`,
+                    `Failed ${payload.id.slice(0, 8)}...: ${error?.message ?? 'Unknown error'}`,
                     false
                 );
             } finally {
@@ -175,7 +175,7 @@ function WallDevicesTab() {
     };
 
     const deleteDeviceMutation = useMutation({
-        mutationFn: async (deviceId: string) => $adminDeleteDevice({ data: { deviceId } }),
+        mutationFn: async (id: string) => $adminDeleteDevice({ data: { id } }),
         onSuccess: async () => {
             await Promise.all([
                 queryClient.invalidateQueries({
@@ -215,10 +215,8 @@ function WallDevicesTab() {
                         </thead>
                         <tbody className="divide-y divide-border">
                             {(devices as Array<any>).map((device) => (
-                                <tr key={device.deviceId} className="hover:bg-muted/30">
-                                    <td className="px-4 py-3 font-mono text-xs">
-                                        {device.deviceId}
-                                    </td>
+                                <tr key={device.id} className="hover:bg-muted/30">
+                                    <td className="px-4 py-3 font-mono text-xs">{device.id}</td>
                                     <td className="px-4 py-3 capitalize">{device.kind}</td>
                                     <td className="px-4 py-3 capitalize">{device.status}</td>
                                     <td className="px-4 py-3 text-xs text-muted-foreground">
@@ -229,7 +227,7 @@ function WallDevicesTab() {
                                             size="sm"
                                             variant="destructive"
                                             disabled={deleteDeviceMutation.isPending}
-                                            onClick={() => setDeleteTargetDeviceId(device.deviceId)}
+                                            onClick={() => setDeleteTargetDeviceId(device.id)}
                                         >
                                             Delete
                                         </Button>

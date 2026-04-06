@@ -298,7 +298,7 @@ function WallApp() {
             } else if (data.type === 'delete_layer') {
                 setLayers((prev) => prev.filter((l) => l.numericId !== data.numericId));
             } else if (data.type === 'device_enrollment') {
-                setDeviceEnrollmentId(data.deviceId);
+                setDeviceEnrollmentId(data.id);
             } else if (data.type === 'reboot') {
                 setBlackOverlayOpacity(1);
                 setTimeout(() => window.location.reload(), Math.random() * 1000 + 2000);

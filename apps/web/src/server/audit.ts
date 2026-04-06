@@ -1,5 +1,6 @@
+import type { JsonValue } from '@repo/db/documents';
+
 import { dbCol } from '~/server/collections';
-import { serializeForClient } from '~/server/serialization';
 
 export type AuditOutcome = 'success' | 'denied' | 'failure' | 'error';
 
@@ -11,7 +12,7 @@ export interface AuditLogInput {
     resourceId?: string | null;
     outcome?: AuditOutcome;
     reasonCode?: string | null;
-    changes?: Record<string, unknown> | null;
+    changes?: { [key: string]: JsonValue } | null;
     error?: string | null;
 }
 
@@ -25,7 +26,7 @@ export async function logAudit(input: AuditLogInput): Promise<void> {
             resourceType: input.resourceType ?? null,
             resourceId: input.resourceId ?? null,
             reasonCode: input.reasonCode ?? null,
-            changes: input.changes ? serializeForClient(input.changes) : null,
+            changes: input.changes ?? null,
             error: input.error ?? null
         });
     } catch (error) {

@@ -189,7 +189,7 @@ function HomePage() {
             galleryEngine.onMessage((data) => {
                 if (!enrollmentModeEnabled) return;
                 if (data.type === 'device_enrollment') {
-                    setDeviceEnrollmentId(data.deviceId);
+                    setDeviceEnrollmentId(data.id);
                 }
             }),
             galleryEngine.onGalleryState((snapshot) => {

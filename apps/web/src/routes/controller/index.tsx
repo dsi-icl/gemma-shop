@@ -198,7 +198,7 @@ function Controller() {
         if (!engine) return;
         return engine.onMessage((data) => {
             if (data.type === 'device_enrollment') {
-                setDeviceEnrollmentId(data.deviceId);
+                setDeviceEnrollmentId(data.id);
             }
         });
     }, [engine]);
