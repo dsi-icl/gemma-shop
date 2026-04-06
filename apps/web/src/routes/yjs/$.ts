@@ -1,12 +1,7 @@
 import { createHash } from 'node:crypto';
 
-import { createHeadlessEditor } from '@lexical/headless';
-import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
-import { createBinding, syncLexicalUpdateToYjs, syncYjsChangesToLexical } from '@lexical/yjs';
 import { createFileRoute } from '@tanstack/react-router';
 import { defineHooks, type Message, type Peer } from 'crossws';
-import { Window } from 'happy-dom';
-import { $createParagraphNode, $getRoot } from 'lexical';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import { Binary } from 'mongodb';
@@ -20,11 +15,12 @@ import { dbCol } from '~/server/collections';
 import { canEditProject } from '~/server/projectAuthz';
 import { resolveAuthContextFromRequest } from '~/server/requestAuthContext';
 
+import { applyHtmlToDoc, withLexicalDomGlobals, yDocToHtml } from './lexical';
+
 const messageSync = 0;
 const messageAwareness = 1;
 const SYNC_INTERVAL_MS = 1000;
 const YJS_DEBUG = process.env.YJS_DEBUG === 'true';
-const LEXICAL_NAMESPACE = 'Gemma Shop Text Bonanza';
 
 type TextLayer = Extract<Layer, { type: 'text' }>;
 
@@ -66,25 +62,6 @@ interface Persistence {
     provider: unknown;
 }
 
-type NoopProvider = {
-    awareness: {
-        getLocalState: () => null;
-        getStates: () => Map<number, unknown>;
-        off: (_type: 'update', _cb: () => void) => void;
-        on: (_type: 'update', _cb: () => void) => void;
-        setLocalState: (_state: unknown) => void;
-        setLocalStateField: (_field: string, _value: unknown) => void;
-    };
-    connect: () => void;
-    disconnect: () => void;
-    off: (
-        _type: 'sync' | 'update' | 'status' | 'reload',
-        _cb: (...args: unknown[]) => void
-    ) => void;
-    on: (_type: 'sync' | 'update' | 'status' | 'reload', _cb: (...args: unknown[]) => void) => void;
-};
-
-const lexicalWindow = new Window();
 const YJS_PEER_STATE_KEY = '__yjsState';
 
 function debugLog(...args: unknown[]) {
@@ -131,48 +108,6 @@ async function waitForOpenCompletion(
     return getYjsPeerState(peer)?.openReady === true;
 }
 
-function withLexicalDomGlobals<T>(fn: () => T): T {
-    const g = globalThis as any;
-    const previous = {
-        window: g.window,
-        document: g.document,
-        Document: g.Document,
-        Node: g.Node,
-        HTMLElement: g.HTMLElement
-    };
-    g.window = lexicalWindow;
-    g.document = lexicalWindow.document;
-    g.Document = lexicalWindow.Document;
-    g.Node = lexicalWindow.Node;
-    g.HTMLElement = lexicalWindow.HTMLElement;
-    try {
-        return fn();
-    } finally {
-        g.window = previous.window;
-        g.document = previous.document;
-        g.Document = previous.Document;
-        g.Node = previous.Node;
-        g.HTMLElement = previous.HTMLElement;
-    }
-}
-
-function createNoopProvider(): NoopProvider {
-    return {
-        awareness: {
-            getLocalState: () => null,
-            getStates: () => new Map(),
-            off: () => {},
-            on: () => {},
-            setLocalState: () => {},
-            setLocalStateField: () => {}
-        },
-        connect: () => {},
-        disconnect: () => {},
-        off: () => {},
-        on: () => {}
-    };
-}
-
 function getDocName(peer: Peer): string {
     const rawUrl = peer.request?.url;
     if (!rawUrl) throw new Error('Peer URL missing');
@@ -215,92 +150,6 @@ function binaryToUint8Array(data: unknown): Uint8Array | null {
         return new Uint8Array(Buffer.from(data, 'base64'));
     }
     return null;
-}
-
-async function delay(ms: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function htmlToYUpdate(html: string, docName: string): Promise<Uint8Array> {
-    const doc = new Y.Doc();
-    const docMap = new Map<string, Y.Doc>([[docName, doc]]);
-    const provider = createNoopProvider();
-    const editor = createHeadlessEditor({ namespace: LEXICAL_NAMESPACE, nodes: [] });
-    const binding = createBinding(editor, provider as any, docName, doc, docMap);
-
-    const unobserve = editor.registerUpdateListener(
-        ({ prevEditorState, editorState, dirtyElements, dirtyLeaves, normalizedNodes, tags }) => {
-            syncLexicalUpdateToYjs(
-                binding,
-                provider as any,
-                prevEditorState,
-                editorState,
-                dirtyElements,
-                dirtyLeaves,
-                normalizedNodes,
-                tags
-            );
-        }
-    );
-
-    withLexicalDomGlobals(() => {
-        const parser = new lexicalWindow.DOMParser();
-        const dom = parser.parseFromString(html || '<p></p>', 'text/html');
-        editor.update(() => {
-            const root = $getRoot();
-            root.clear();
-            const nodes = $generateNodesFromDOM(editor, dom as unknown as Document);
-            if (nodes.length === 0) {
-                root.append($createParagraphNode());
-            } else {
-                root.append(...nodes);
-            }
-        });
-    });
-
-    await delay(0);
-    unobserve();
-    binding.root.destroy(binding as any);
-    return Y.encodeStateAsUpdate(doc);
-}
-
-async function yDocToHtml(doc: Y.Doc, docName: string): Promise<string> {
-    const sourceUpdate = Y.encodeStateAsUpdate(doc);
-    const tempDoc = new Y.Doc();
-    const docMap = new Map<string, Y.Doc>([[docName, tempDoc]]);
-    const provider = createNoopProvider();
-    const editor = createHeadlessEditor({ namespace: LEXICAL_NAMESPACE, nodes: [] });
-    const binding = createBinding(editor, provider as any, docName, tempDoc, docMap);
-
-    const observer = (events: any[], transaction: Y.Transaction) => {
-        syncYjsChangesToLexical(
-            binding,
-            provider as any,
-            events as any,
-            transaction.origin instanceof Y.UndoManager
-        );
-    };
-
-    binding.root.getSharedType().observeDeep(observer);
-    Y.applyUpdate(tempDoc, sourceUpdate);
-    await delay(0);
-    binding.root.getSharedType().unobserveDeep(observer);
-
-    const html = withLexicalDomGlobals(() => {
-        let out = '';
-        editor.getEditorState().read(() => {
-            out = $generateHtmlFromNodes(editor);
-        });
-        return out;
-    });
-
-    binding.root.destroy(binding as any);
-    return html || '<p></p>';
-}
-
-async function applyHtmlToDoc(doc: Y.Doc, html: string, docName: string) {
-    const update = await htmlToYUpdate(html, docName);
-    Y.applyUpdate(doc, update);
 }
 
 async function loadTextLayer(scope: DocScope): Promise<TextLayer> {
