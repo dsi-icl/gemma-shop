@@ -14,15 +14,8 @@ import { getBrowserQueryClient } from './queryClient';
 import type { ConnectionStatus } from './reconnectingWs';
 import type { Layer, LayerWithEditorState, Slide } from './types';
 
-/** Generate a 24-char hex string mimicking a MongoDB ObjectId (timestamp + random). */
 function generateSlideId(): string {
-    const timestamp = Math.floor(Date.now() / 1000)
-        .toString(16)
-        .padStart(8, '0');
-    const random = Array.from(crypto.getRandomValues(new Uint8Array(8)))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-    return timestamp + random;
+    return crypto.randomUUID();
 }
 
 type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
