@@ -19,13 +19,10 @@ import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { ControllerEngine } from '~/lib/controllerEngine';
 import { useControllerStore } from '~/lib/controllerStore';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
+import { COLS, ROWS, SCREEN_H, SCREEN_W } from '~/lib/stageConstants';
 import type { LayerWithEditorState } from '~/lib/types';
 
 const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
-const SCREEN_W = 1920;
-const SCREEN_H = 1080;
-const COLS = 16;
-const ROWS = 4;
 const BINDING_SIGNAL_TIMEOUT_MS = 1500;
 const HYDRATE_TIMEOUT_MS = 2000;
 const TEMP_BOUND_SLIDE_ID = '__bound-current__';

@@ -15,6 +15,16 @@ import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
 import { fitSizeToViewport, MIN_LAYER_DIMENSION } from '~/lib/fitSizeToViewport';
+import { COLS, ROWS, SCREEN_H, SCREEN_W, SNAP_GRID } from '~/lib/stageConstants';
+import {
+    getAngle,
+    getAngleDelta,
+    getDistance,
+    isCardinalRotation,
+    normalizeRotationToQuadrant,
+    snapToGrid,
+    touchToStagePoint
+} from '~/lib/stageGeometry';
 import { scrubInsecureTusResumeEntries } from '~/lib/tusClient';
 import type { Layer, LayerWithEditorState } from '~/lib/types';
 import { $createUploadToken } from '~/server/projects.fns';
@@ -22,52 +32,8 @@ import { $createUploadToken } from '~/server/projects.fns';
 import { SlatePreview } from './SlatePreview';
 
 const DEFAULT_STAGE_SCALE_FACTOR = 0.15;
-const SCREEN_W = 1920;
-const SCREEN_H = 1080;
-// Square snap grid aligned with physical screen boundaries:
-// 1920 % 120 === 0 and 1080 % 120 === 0
-const SNAP_GRID = 120;
-const COLS = 16;
-const ROWS = 4;
 const EDGE_SCROLL_ZONE_PX = 96;
 const EDGE_SCROLL_MAX_STEP_PX = 24;
-
-function normalizeRotationToQuadrant(rotation: number): number {
-    return ((Math.round(rotation) % 360) + 360) % 360;
-}
-
-function isCardinalRotation(rotation: number): boolean {
-    const normalized = normalizeRotationToQuadrant(rotation);
-    return normalized === 0 || normalized === 90 || normalized === 180 || normalized === 270;
-}
-
-function snapToGrid(value: number, grid: number): number {
-    return Math.round(value / grid) * grid;
-}
-
-function getDistance(p1: { x: number; y: number }, p2: { x: number; y: number }) {
-    return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
-}
-
-function getAngle(p1: { x: number; y: number }, p2: { x: number; y: number }) {
-    return (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
-}
-
-function getAngleDelta(current: number, previous: number): number {
-    // Keep delta in [-180, 180] to avoid wrap-around jumps at the -180/180 boundary.
-    return ((current - previous + 540) % 360) - 180;
-}
-
-function touchToStagePoint(stage: Konva.Stage, touch: Touch): { x: number; y: number } {
-    const rect = stage.container().getBoundingClientRect();
-    const pointer = {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top
-    };
-    const transform = stage.getAbsoluteTransform().copy();
-    transform.invert();
-    return transform.point(pointer);
-}
 
 export function EditorSlate() {
     const engine = useMemo(

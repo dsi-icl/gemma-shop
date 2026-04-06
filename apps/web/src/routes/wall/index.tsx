@@ -9,64 +9,15 @@ import { MapWrapper } from '~/components/MapWrapper';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { toCssFilterString } from '~/lib/layerFilters';
 import { signedFetch } from '~/lib/signedFetch';
+import { COLS, ROWS, SCREEN_H, SCREEN_W } from '~/lib/stageConstants';
+import { getCullingPadding, getLineBounds } from '~/lib/stageGeometry';
 import { TEXT_BASE_STYLE } from '~/lib/textRenderConfig';
 import type { LayerWithWallComponentState } from '~/lib/types';
 import { WallEngine, type Viewport } from '~/lib/wallEngine';
 
-// Define the physical screen resolution
-const SCREEN_W = 1920;
-const SCREEN_H = 1080;
-const COLS = 16;
-const ROWS = 4;
 const HYDRATE_FADE_MS = 1000;
 const HYDRATE_IFRAME_TIMEOUT_MS = 2000;
 const warmedImageUrls = new Set<string>();
-
-function getLineBounds(line: number[]) {
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-
-    for (let i = 0; i < line.length; i += 2) {
-        const x = line[i];
-        const y = line[i + 1];
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-    }
-
-    if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
-        return null;
-    }
-
-    const rawWidth = maxX - minX;
-    const rawHeight = maxY - minY;
-    const width = Math.max(1, Math.round(rawWidth));
-    const height = Math.max(1, Math.round(rawHeight));
-    const cx = minX + rawWidth / 2;
-    const cy = minY + rawHeight / 2;
-
-    return { minX, minY, maxX, maxY, width, height, cx, cy };
-}
-
-function getCullingPadding(
-    layer: LayerWithWallComponentState,
-    pos: { scaleX: number; scaleY: number }
-) {
-    const scale = Math.max(Math.abs(pos.scaleX), Math.abs(pos.scaleY), 1);
-    const filterBlur =
-        layer.config.filters?.enabled === true ? (layer.config.filters.blur ?? 0) : 0;
-    const blurPadding = filterBlur * scale * 2;
-
-    let strokePadding = 0;
-    if (layer.type === 'line' || layer.type === 'shape') {
-        strokePadding = (layer.strokeWidth / 2) * scale;
-    }
-
-    return 20 + blurPadding + strokePadding;
-}
 
 export const Route = createFileRoute('/wall/')({
     component: WallApp
