@@ -5,7 +5,21 @@ import {
     PuzzlePieceIcon,
     TrashIcon
 } from '@phosphor-icons/react';
-import type { CreateProjectInput } from '@repo/db/schema';
+import type { Collaborator, ProjectVisibility } from '@repo/db/schema';
+
+interface CreateProjectInput {
+    name: string;
+    authorOrganisation: string;
+    description: string;
+    tags: string[];
+    visibility: ProjectVisibility;
+    heroImages: string[];
+    customControlUrl?: string;
+    customRenderUrl?: string;
+    customRenderCompat: boolean;
+    customRenderProxy: boolean;
+    collaborators: Collaborator[];
+}
 import { Button } from '@repo/ui/components/button';
 import {
     Dialog,

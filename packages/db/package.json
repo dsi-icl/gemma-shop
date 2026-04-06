@@ -6,7 +6,7 @@
     "exports": {
         ".": "./src/index.ts",
         "./config": "./src/config.ts",
-        "./schema": "./src/schema/index.ts",
+        "./schema": "./src/schema.ts",
         "./documents": "./src/documents.ts",
         "./collections": "./src/collections/index.ts"
     },

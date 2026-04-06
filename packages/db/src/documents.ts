@@ -1,8 +1,7 @@
 import '@tanstack/react-start/server-only';
 import type { Binary, ObjectId } from 'mongodb';
 
-import type { DeviceKind, DeviceStatus } from './schema/device';
-import type { CollaboratorRole, ProjectVisibility } from './schema/project';
+import type { CollaboratorRole, ProjectVisibility } from './schema';
 
 // JSON-compatible value type — safe for TanStack Start server function return values.
 export type JsonPrimitive = string | number | boolean | null;
@@ -123,6 +122,9 @@ export interface WallDocument {
     createdAt: number;
     updatedAt?: number;
 }
+
+export type DeviceKind = 'wall' | 'gallery' | 'controller';
+export type DeviceStatus = 'pending' | 'active' | 'revoked';
 
 export interface DeviceDocument {
     _id: ObjectId;

@@ -1,6 +1,36 @@
 import '@tanstack/react-start/server-only';
 import type { CommitDocument } from '@repo/db/documents';
-import type { CreateProjectInput, UpdateProjectInput } from '@repo/db/schema';
+import type { Collaborator, CollaboratorRole, ProjectVisibility } from '@repo/db/schema';
+
+interface CreateProjectInput {
+    name: string;
+    authorOrganisation: string;
+    description: string;
+    tags: string[];
+    visibility: ProjectVisibility;
+    heroImages: string[];
+    customControlUrl?: string | null;
+    customRenderUrl?: string | null;
+    customRenderCompat: boolean;
+    customRenderProxy: boolean;
+    collaborators: Collaborator[];
+}
+
+interface UpdateProjectInput {
+    id: string;
+    name?: string;
+    authorOrganisation?: string;
+    description?: string;
+    tags?: string[];
+    visibility?: ProjectVisibility;
+    heroImages?: string[];
+    customControlUrl?: string;
+    customRenderUrl?: string;
+    customRenderCompat?: boolean;
+    customRenderProxy?: boolean;
+    collaborators?: Array<{ email: string; role: CollaboratorRole }>;
+    publishedCommitId?: string | null;
+}
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';

@@ -1,9 +1,39 @@
 import { authMiddleware } from '@repo/auth/tanstack/middleware';
-import { CreateProjectInput, UpdateProjectInput } from '@repo/db/schema';
+import { Collaborator, ProjectVisibility } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 
 import { createUploadToken, validateUploadToken } from '~/lib/uploadTokens';
+
+const CreateProjectInput = z.object({
+    name: z.string().min(1, 'Name is required'),
+    authorOrganisation: z.string().min(1, 'Author/Organisation is required'),
+    description: z.string().default(''),
+    tags: z.array(z.string()).default([]),
+    visibility: ProjectVisibility.default('private'),
+    heroImages: z.array(z.string()).default([]),
+    customControlUrl: z.string().optional(),
+    customRenderUrl: z.string().optional(),
+    customRenderCompat: z.boolean().default(false),
+    customRenderProxy: z.boolean().default(false),
+    collaborators: z.array(Collaborator).default([])
+});
+
+const UpdateProjectInput = z.object({
+    id: z.string(),
+    name: z.string().min(1, 'Name is required').optional(),
+    authorOrganisation: z.string().min(1, 'Author/Organisation is required').optional(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    visibility: ProjectVisibility.optional(),
+    heroImages: z.array(z.string()).optional(),
+    customControlUrl: z.string().optional(),
+    customRenderUrl: z.string().optional(),
+    customRenderCompat: z.boolean().optional(),
+    customRenderProxy: z.boolean().optional(),
+    collaborators: z.array(Collaborator).optional(),
+    publishedCommitId: z.string().nullable().optional()
+});
 import {
     actorFromAuthContext,
     canEditProject,

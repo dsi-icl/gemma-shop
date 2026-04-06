@@ -8,7 +8,9 @@ import {
     MagnifyingGlassIcon,
     PlusIcon
 } from '@phosphor-icons/react';
-import type { Project } from '@repo/db/schema';
+import type { ProjectDocument } from '@repo/db/documents';
+
+type Project = Omit<ProjectDocument, '_id' | '_version'>;
 import { Badge } from '@repo/ui/components/badge';
 import AnimatedBlurPattern from '@repo/ui/components/blur-pattern';
 import { Button } from '@repo/ui/components/button';
