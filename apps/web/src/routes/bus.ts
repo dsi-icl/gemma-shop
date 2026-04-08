@@ -34,16 +34,13 @@ import {
     type PeerEntry
 } from '~/lib/busState';
 import { GSMessageSchema, makeScopeLabel, type GSMessage, type Layer } from '~/lib/types';
-import { dbCol } from '~/server/collections';
-import { markDeviceDisconnectedById } from '~/server/devices';
-
 import {
     editorProjectPermissions,
     enforceWsHandshakeRateLimit,
     enforceWsRateLimit,
     isWsMessageAuthorized,
     wsRateLimitStrikes
-} from './bus.authz';
+} from '~/server/bus/bus.authz';
 import {
     broadcastProjectsChanged,
     broadcastWallBindingToEditors,
@@ -51,10 +48,17 @@ import {
     broadcastWallNodeCountToEditors,
     clearPendingBindOverride,
     pendingBindOverrides
-} from './bus.binding';
-import { clearPendingHelloAuth } from './bus.crypto';
-import { handlers, handleHello, handleHelloAuth, handleSwitchScope } from './bus.handlers';
-import { handleEditorScopeVacated, recomputePeerAuthContexts } from './bus.peers';
+} from '~/server/bus/bus.binding';
+import { clearPendingHelloAuth } from '~/server/bus/bus.crypto';
+import {
+    handlers,
+    handleHello,
+    handleHelloAuth,
+    handleSwitchScope
+} from '~/server/bus/bus.handlers';
+import { handleEditorScopeVacated, recomputePeerAuthContexts } from '~/server/bus/bus.peers';
+import { dbCol } from '~/server/collections';
+import { markDeviceDisconnectedById } from '~/server/devices';
 
 // ── Binary opcodes ──────────────────────────────────────────────────────────
 

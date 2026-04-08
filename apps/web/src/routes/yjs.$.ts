@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { defineHooks } from 'crossws';
 
-import { YCrossws } from './yjs.session';
+import { YCrossws } from '~/server/yjs/yjs.session';
 
 const yc = new YCrossws();
 
