@@ -59,13 +59,13 @@ export class ProjectsCollection extends BaseCollection<ProjectDocument> {
      * Used to compute the full tag vocabulary without loading whole project documents.
      */
     async findTagsByUser(userEmail: string): Promise<(string[] | null | undefined)[]> {
-        const docs = await this.raw
+        const projects = await this.raw
             .find<{ tags?: string[] | null }>(
                 { $or: [{ createdBy: userEmail }, { 'collaborators.email': userEmail }] },
                 { projection: { tags: 1 } }
             )
             .toArray();
-        return docs.map((d) => d.tags);
+        return projects.map((project) => project.tags);
     }
 
     /**
@@ -75,15 +75,15 @@ export class ProjectsCollection extends BaseCollection<ProjectDocument> {
     async findPublishedCommitRefs(): Promise<
         { projectId: string; publishedCommitId: string | null }[]
     > {
-        const docs = await this.raw
+        const projects = await this.raw
             .find<{ _id: unknown; publishedCommitId?: unknown }>(
                 { publishedCommitId: { $ne: null }, deletedAt: { $exists: false } },
                 { projection: { _id: 1, publishedCommitId: 1 } }
             )
             .toArray();
-        return docs.map((doc) => ({
-            projectId: String(doc._id),
-            publishedCommitId: doc.publishedCommitId ? String(doc.publishedCommitId) : null
+        return projects.map((project) => ({
+            projectId: String(project._id),
+            publishedCommitId: project.publishedCommitId ? String(project.publishedCommitId) : null
         }));
     }
 

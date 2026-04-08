@@ -72,10 +72,11 @@ function decryptValue(envelope: SecretEnvelope): unknown {
 }
 
 export async function getConfigValue<T>(key: string): Promise<T | null> {
-    const doc = await configCollection().findOne({ key });
-    if (!doc) return null;
-    if (doc.encrypted && doc.secret) return decryptValue(doc.secret) as T;
-    return (doc.value ?? null) as T | null;
+    const configRecord = await configCollection().findOne({ key });
+    if (!configRecord) return null;
+    if (configRecord.encrypted && configRecord.secret)
+        return decryptValue(configRecord.secret) as T;
+    return (configRecord.value ?? null) as T | null;
 }
 
 export async function setConfigValue(input: {
@@ -138,15 +139,17 @@ export async function listConfigEntries(): Promise<
         version: number;
     }>
 > {
-    const docs = await configCollection().find().sort({ key: 1 }).toArray();
-    return docs.map((doc) => ({
-        key: doc.key,
-        encrypted: !!doc.encrypted,
-        value: doc.encrypted ? null : (doc.value ?? null),
-        isSet: doc.encrypted ? !!doc.secret : doc.value !== undefined && doc.value !== null,
-        updatedAt: doc.updatedAt,
-        updatedBy: doc.updatedBy,
-        version: doc.version
+    const config = await configCollection().find().sort({ key: 1 }).toArray();
+    return config.map((configRecord) => ({
+        key: configRecord.key,
+        encrypted: !!configRecord.encrypted,
+        value: configRecord.encrypted ? null : (configRecord.value ?? null),
+        isSet: configRecord.encrypted
+            ? !!configRecord.secret
+            : configRecord.value !== undefined && configRecord.value !== null,
+        updatedAt: configRecord.updatedAt,
+        updatedBy: configRecord.updatedBy,
+        version: configRecord.version
     }));
 }
 

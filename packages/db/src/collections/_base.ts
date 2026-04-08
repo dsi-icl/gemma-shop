@@ -156,18 +156,18 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
     // ── Read ──────────────────────────────────────────────────────────────────
 
     async findById(id: string | ObjectId): Promise<PublicDoc<TDoc> | null> {
-        const doc = await this.raw.findOne({ _id: new OID(id) });
-        return doc ? this.expose(this.fromDB(doc)) : null;
+        const record = await this.raw.findOne({ _id: new OID(id) });
+        return record ? this.expose(this.fromDB(record)) : null;
     }
 
     async findOne(filter: Filter<Document>): Promise<PublicDoc<TDoc> | null> {
-        const doc = await this.raw.findOne(filter);
-        return doc ? this.expose(this.fromDB(doc)) : null;
+        const record = await this.raw.findOne(filter);
+        return record ? this.expose(this.fromDB(record)) : null;
     }
 
     async find(filter: Filter<Document> = {}, options?: FindOptions): Promise<PublicDoc<TDoc>[]> {
-        const docs = await this.raw.find(filter, options).toArray();
-        return docs.map((d) => this.expose(this.fromDB(d)));
+        const records = await this.raw.find(filter, options).toArray();
+        return records.map((r) => this.expose(this.fromDB(r)));
     }
 
     async count(filter: Filter<Document> = {}): Promise<number> {

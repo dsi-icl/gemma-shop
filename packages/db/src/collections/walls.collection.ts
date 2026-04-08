@@ -27,8 +27,10 @@ export class WallsCollection extends BaseCollection<WallDocument> {
 
     /** Returns all wallId strings — used for lightweight stats lookups. */
     async listWallIds(): Promise<string[]> {
-        const docs = await this.raw.find({}).project({ wallId: 1 }).toArray();
-        return docs.map((d) => d.wallId).filter((id): id is string => typeof id === 'string');
+        const walls = await this.raw.find({}).project({ wallId: 1 }).toArray();
+        return walls
+            .map((wall) => wall.wallId)
+            .filter((id): id is string => typeof id === 'string');
     }
 
     async touchLastSeen(wallId: string): Promise<void> {
