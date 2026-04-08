@@ -22,6 +22,7 @@ import {
     DropdownMenuTrigger
 } from '@repo/ui/components/dropdown-menu';
 import { Input } from '@repo/ui/components/input';
+import { ProjectImage } from '@repo/ui/components/project-image';
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
@@ -36,7 +37,6 @@ import {
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import { ProjectImage } from '~/components/ProjectImage';
 import { toLocalDateString } from '~/lib/safeDate';
 import { $archiveProject, $publishCommit, $restoreProject } from '~/server/projects.fns';
 import { projectsQueryOptions } from '~/server/projects.queries';

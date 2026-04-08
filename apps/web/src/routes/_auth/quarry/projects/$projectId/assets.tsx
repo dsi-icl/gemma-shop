@@ -15,6 +15,7 @@ import type { AssetDocument } from '@repo/db/documents';
 
 type Asset = Omit<AssetDocument, '_id' | '_version'>;
 import { Button } from '@repo/ui/components/button';
+import { ProjectImage } from '@repo/ui/components/project-image';
 import { useLocalStorageValue } from '@repo/ui/hooks/use-localstorage-value';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
@@ -31,7 +32,6 @@ import { toast } from 'sonner';
 
 import { AssetPreviewPortal, downloadAsset, isVideoAsset } from '~/components/AssetPreviewOverlay';
 import { FontPlaceholder } from '~/components/FontPlaceholder';
-import { ProjectImage } from '~/components/ProjectImage';
 import { UploadDialog } from '~/components/UploadDialog';
 import { isFontAsset, sortAssetsFontsLast } from '~/lib/mediaUtils';
 import { toLocalDateTimeString } from '~/lib/safeDate';

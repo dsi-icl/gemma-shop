@@ -30,6 +30,7 @@ import {
 } from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
+import { ProjectImage } from '@repo/ui/components/project-image';
 import { TagInput } from '@repo/ui/components/tag-input';
 import { Textarea } from '@repo/ui/components/textarea';
 import { useForm } from '@tanstack/react-form';
@@ -39,7 +40,6 @@ import { z } from 'zod';
 
 import { AssetLibrary } from '~/components/AssetLibrary';
 import { AssetPreviewPortal, isVideoAsset } from '~/components/AssetPreviewOverlay';
-import { ProjectImage } from '~/components/ProjectImage';
 import {
     projectAssetsQueryOptions,
     projectTagSuggestionsQueryOptions
