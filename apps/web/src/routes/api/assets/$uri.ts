@@ -14,6 +14,7 @@ import { dbCol } from '~/server/collections';
 import { canViewProject } from '~/server/projectAuthz';
 import type { AuthContext } from '~/server/requestAuthContext';
 
+const isDev = process.env.NODE_ENV === 'development';
 function parseVariantFilename(filename: string): { baseId: string; requested: number } | null {
     const m = filename.match(/^(.*)_([0-9]+)\.webp$/i);
     if (!m) return null;
@@ -219,25 +220,39 @@ export const Route = createFileRoute('/api/assets/$uri')({
                 const device = authContext.device;
 
                 if (!user && !device) {
-                    return new Response('Unauthorized', { status: 401 });
+                    return new Response('Not Found', {
+                        status: 404,
+                        headers: isDev ? { 'X-Dev-Status-Message': 'Unauthenticated' } : undefined
+                    });
                 }
 
                 const assetRecord = await getAssetRecordForFilename(requestedFilename);
                 if (!assetRecord) {
-                    return new Response('Not Found', { status: 404 });
+                    return new Response('Not Found', {
+                        status: 404,
+                        headers: isDev ? { 'X-Dev-Status-Message': 'Asset Not Found' } : undefined
+                    });
                 }
 
                 if (user && user.role !== 'admin') {
                     const projectId = normalizeProjectId(assetRecord.projectId);
                     if (!projectId) {
-                        return new Response('Not Found', { status: 404 });
+                        return new Response('Not Found', {
+                            status: 404,
+                            headers: isDev
+                                ? { 'X-Dev-Status-Message': 'Project Not Found' }
+                                : undefined
+                        });
                     }
                     const allowed = await canViewProject(
                         { email: user.email, role: user.role },
                         projectId
                     );
                     if (!allowed) {
-                        return new Response('Not Found', { status: 404 });
+                        return new Response('Not Found', {
+                            status: 404,
+                            headers: isDev ? { 'X-Dev-Status-Message': 'Unauthorized' } : undefined
+                        });
                     }
                 }
 
