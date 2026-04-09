@@ -1,7 +1,7 @@
+import { DateDisplay } from '@repo/ui/components/date-display';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { formatDateValue } from '~/lib/safeDate';
 import { adminProjectsQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/projects')({
@@ -37,7 +37,7 @@ function AdminProjects() {
                                     {project.createdBy}
                                 </td>
                                 <td className="px-4 py-3 text-muted-foreground">
-                                    {formatDateValue(project.createdAt, 'd MMM yyyy')}
+                                    <DateDisplay value={project.createdAt} />
                                 </td>
                                 <td className="px-4 py-3">
                                     {project.deletedAt ? (

@@ -14,6 +14,7 @@ type Project = Omit<ProjectDocument, '_id' | '_version'>;
 import { Badge } from '@repo/ui/components/badge';
 import AnimatedBlurPattern from '@repo/ui/components/blur-pattern';
 import { Button } from '@repo/ui/components/button';
+import { DateDisplay } from '@repo/ui/components/date-display';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -37,7 +38,6 @@ import {
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import { toLocalDateString } from '~/lib/safeDate';
 import { $archiveProject, $publishCommit, $restoreProject } from '~/server/projects.fns';
 import { projectsQueryOptions } from '~/server/projects.queries';
 
@@ -188,7 +188,7 @@ function QuarryIndex() {
                 </button>
             ),
             cell: (info) => (
-                <span className="text-muted-foreground">{toLocalDateString(info.getValue())}</span>
+                <DateDisplay value={info.getValue()} className="text-muted-foreground" />
             )
         }),
         columnHelper.display({

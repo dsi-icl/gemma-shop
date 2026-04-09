@@ -1,4 +1,5 @@
 import { Button } from '@repo/ui/components/button';
+import { DateDisplay } from '@repo/ui/components/date-display';
 import {
     Dialog,
     DialogClose,
@@ -270,7 +271,7 @@ function WallDevicesTab() {
                                     <td className="px-4 py-3 capitalize">{device.kind}</td>
                                     <td className="px-4 py-3 capitalize">{device.status}</td>
                                     <td className="px-4 py-3 text-xs text-muted-foreground">
-                                        {device.lastSeenAt ?? '—'}
+                                        <DateDisplay value={device.lastSeenAt} />
                                     </td>
                                     <td className="px-4 py-3">
                                         <Button

@@ -15,6 +15,7 @@ import type { AssetDocument } from '@repo/db/documents';
 
 type Asset = Omit<AssetDocument, '_id' | '_version'>;
 import { Button } from '@repo/ui/components/button';
+import { DateDisplay } from '@repo/ui/components/date-display';
 import { ProjectImage } from '@repo/ui/components/project-image';
 import { useLocalStorageValue } from '@repo/ui/hooks/use-localstorage-value';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
@@ -34,7 +35,6 @@ import { AssetPreviewPortal, downloadAsset, isVideoAsset } from '~/components/As
 import { FontPlaceholder } from '~/components/FontPlaceholder';
 import { UploadDialog } from '~/components/UploadDialog';
 import { isFontAsset, sortAssetsFontsLast } from '~/lib/mediaUtils';
-import { toLocalDateTimeString } from '~/lib/safeDate';
 import { useSubHeaderSlot } from '~/lib/subHeaderSlot';
 import { $deleteAsset } from '~/server/projects.fns';
 import { projectAssetsQueryOptions, projectQueryOptions } from '~/server/projects.queries';
@@ -222,9 +222,7 @@ function AssetsTab() {
                     </button>
                 ),
                 cell: (info) => (
-                    <span className="text-muted-foreground">
-                        {toLocalDateTimeString(info.getValue())}
-                    </span>
+                    <DateDisplay value={info.getValue()} className="text-muted-foreground" />
                 )
             }),
             assetColumnHelper.display({

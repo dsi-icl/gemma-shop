@@ -1,8 +1,8 @@
 import { ClockIcon } from '@phosphor-icons/react';
+import { DateDisplay } from '@repo/ui/components/date-display';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { toLocalDateTimeString } from '~/lib/safeDate';
 import { auditLogsQueryOptions, projectQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId/history')({
@@ -46,9 +46,10 @@ function HistoryTab() {
                         <div className="flex-1">
                             <div className="flex items-center justify-between">
                                 <span className="font-medium">{log.action.replace(/_/g, ' ')}</span>
-                                <span className="text-xs text-muted-foreground">
-                                    {toLocalDateTimeString(log.createdAt)}
-                                </span>
+                                <DateDisplay
+                                    value={log.createdAt}
+                                    className="text-xs text-muted-foreground"
+                                />
                             </div>
                             <p className="mt-1 text-xs text-muted-foreground">
                                 by {typeof log.actorId === 'string' ? log.actorId : 'Unknown'}

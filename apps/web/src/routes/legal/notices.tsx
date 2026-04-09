@@ -1,8 +1,7 @@
 import { Button } from '@repo/ui/components/button';
+import { DateDisplay } from '@repo/ui/components/date-display';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
-
-import { toLocalDateTimeString } from '~/lib/safeDate';
 
 type ThirdPartyPackage = {
     name: string;
@@ -119,8 +118,11 @@ function LegalNoticesPage() {
                         <>
                             <div className="text-sm text-muted-foreground">
                                 Generated:{' '}
-                                {toLocalDateTimeString(data.generatedAt, 'not generated yet')} |
-                                Packages: {data.packageCount}
+                                <DateDisplay
+                                    value={data.generatedAt}
+                                    fallback="not generated yet"
+                                />{' '}
+                                | Packages: {data.packageCount}
                             </div>
 
                             {data.packageCount === 0 ? (

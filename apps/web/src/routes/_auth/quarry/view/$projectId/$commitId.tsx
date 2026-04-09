@@ -5,6 +5,7 @@ import {
     SlideshowIcon
 } from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
+import { DateDisplay } from '@repo/ui/components/date-display';
 import {
     ResizableHandle,
     ResizablePanel,
@@ -13,14 +14,6 @@ import {
 import { Separator } from '@repo/ui/components/separator';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import {
-    differenceInDays,
-    format,
-    formatDistanceToNow,
-    isBefore,
-    isValid,
-    subMonths
-} from 'date-fns';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -159,46 +152,6 @@ function CommitViewer() {
         }
     };
 
-    const formatRelativeDate = (date: Date): string => {
-        const now = new Date();
-        const oneMonthAgo = subMonths(now, 1);
-
-        if (isBefore(date, oneMonthAgo)) {
-            return format(date, 'd MMM yyyy, HH:mm');
-        }
-
-        const daysDifference = differenceInDays(now, date);
-
-        if (daysDifference >= 7) {
-            const weeksDifference = Math.round(daysDifference / 7);
-            if (weeksDifference === 1) {
-                return `a week ago`;
-            }
-            return `${weeksDifference} weeks ago`;
-        }
-
-        if (daysDifference > 0) {
-            const distance = formatDistanceToNow(date, { addSuffix: true });
-            return `${distance} at ${format(date, 'HH:mm')}`;
-        }
-
-        // It's today
-        return formatDistanceToNow(date, { addSuffix: true });
-    };
-
-    const formatSafeRelativeDate = (input: unknown): string => {
-        let parsed: Date;
-        if (input instanceof Date) {
-            parsed = input;
-        } else if (typeof input === 'string' || typeof input === 'number') {
-            parsed = new Date(input);
-        } else {
-            return '-';
-        }
-        if (!isValid(parsed)) return '-';
-        return formatRelativeDate(parsed);
-    };
-
     return (
         <div className="container flex h-full max-h-full min-h-0 min-w-full flex-col overflow-hidden pt-18 pb-13">
             <ResizablePanelGroup
@@ -226,7 +179,12 @@ function CommitViewer() {
                                 <div className="flex items-center gap-2">
                                     <h2 className="text-sm font-medium">{commit.message}</h2>
                                     <p className="text-xs text-muted-foreground">
-                                        Read-only view · {formatSafeRelativeDate(commit.createdAt)}
+                                        Read-only view ·{' '}
+                                        <DateDisplay
+                                            value={commit.createdAt}
+                                            fallback="-"
+                                            className="text-xs text-muted-foreground"
+                                        />
                                     </p>
                                 </div>
                             </div>

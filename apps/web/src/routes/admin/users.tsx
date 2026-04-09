@@ -1,10 +1,10 @@
 import { ProhibitIcon, ShieldCheckIcon } from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
+import { DateDisplay } from '@repo/ui/components/date-display';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { toast } from 'sonner';
 
-import { formatDateValue } from '~/lib/safeDate';
 import { $adminSetUserBanStatus } from '~/server/admin.fns';
 import { adminUsersQueryOptions } from '~/server/admin.queries';
 
@@ -59,7 +59,7 @@ function AdminUsers() {
                                     </span>
                                 </td>
                                 <td className="px-4 py-3 text-muted-foreground">
-                                    {formatDateValue(user.createdAt, 'd MMM yyyy')}
+                                    <DateDisplay value={user.createdAt} />
                                 </td>
                                 <td className="px-4 py-3">
                                     {user.banned ? (

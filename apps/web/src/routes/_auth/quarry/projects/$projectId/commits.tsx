@@ -10,6 +10,7 @@ import type { PublicDoc } from '@repo/db/collections';
 import type { CommitDocument } from '@repo/db/documents';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
+import { DateDisplay } from '@repo/ui/components/date-display';
 import {
     Table,
     TableBody,
@@ -20,14 +21,6 @@ import {
 } from '@repo/ui/components/table';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import {
-    differenceInDays,
-    format,
-    formatDistanceToNow,
-    isBefore,
-    isValid,
-    subMonths
-} from 'date-fns';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 
@@ -172,44 +165,6 @@ function CommitsTab() {
         onError: (e) => toast.error(e.message)
     });
 
-    const parseDateInput = (input: unknown): Date | null => {
-        if (input instanceof Date) {
-            return isValid(input) ? input : null;
-        }
-        if (typeof input === 'string' || typeof input === 'number') {
-            const parsed = new Date(input);
-            return isValid(parsed) ? parsed : null;
-        }
-        return null;
-    };
-
-    const formatRelativeDate = (date: Date): string => {
-        const now = new Date();
-        const oneMonthAgo = subMonths(now, 1);
-
-        if (isBefore(date, oneMonthAgo)) {
-            return format(date, 'd MMM yyyy, HH:mm');
-        }
-
-        const daysDifference = differenceInDays(now, date);
-
-        if (daysDifference >= 7) {
-            const weeksDifference = Math.round(daysDifference / 7);
-            if (weeksDifference === 1) {
-                return `a week ago`;
-            }
-            return `${weeksDifference} weeks ago`;
-        }
-
-        if (daysDifference > 0) {
-            const distance = formatDistanceToNow(date, { addSuffix: true });
-            return `${distance} at ${format(date, 'HH:mm')}`;
-        }
-
-        // It's today
-        return formatDistanceToNow(date, { addSuffix: true });
-    };
-
     const sorted = useMemo(
         () => topoSort(commits, project.headCommitId ?? null),
         [commits, project.headCommitId]
@@ -240,11 +195,6 @@ function CommitsTab() {
                     <TableBody>
                         {sorted.map((commit, idx) => {
                             const isPublished = commit.id === project.publishedCommitId;
-                            let displayDate = '-';
-                            const commitDate = parseDateInput(commit.updatedAt ?? commit.createdAt);
-                            if (commitDate) {
-                                displayDate = formatRelativeDate(commitDate);
-                            }
                             return (
                                 <TableRow key={commit.id}>
                                     <TableCell className="h-12 w-6 px-0 py-0!">
@@ -257,7 +207,10 @@ function CommitsTab() {
                                     </TableCell>
                                     <TableCell className="font-medium">{commit.message}</TableCell>
                                     <TableCell className="text-muted-foreground">
-                                        {displayDate}
+                                        <DateDisplay
+                                            value={commit.updatedAt ?? commit.createdAt}
+                                            fallback="-"
+                                        />
                                     </TableCell>
                                     <TableCell>
                                         {isPublished && (
