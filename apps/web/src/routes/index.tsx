@@ -49,14 +49,14 @@ function HomePage() {
     );
 
     return (
-        <div
-            className="relative h-screen w-screen overflow-hidden"
-            onClick={() => navigate({ to: '/gallery' })}
-        >
+        <div className="relative h-screen w-screen overflow-hidden">
             <Suspense
                 fallback={<div className="h-full w-full" style={{ backgroundColor: '#111' }} />}
             >
-                <LandingHero heroImages={heroImages} />
+                <LandingHero
+                    heroImages={heroImages}
+                    onActivate={() => navigate({ to: '/gallery' })}
+                />
             </Suspense>
         </div>
     );

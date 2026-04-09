@@ -1,18 +1,21 @@
 import { OrbitControls } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { selectAssetVariantSrc } from '@repo/ui/lib/assetVariants';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
-// Arc length = radius(10) × degToRad(313) ≈ 54.6, height = 6
-// Surface aspect ≈ 9.1:1, so 4096 / 9.1 ≈ 450
-const MOSAIC_W = 4096;
+// Arc length = radius(10) × degToRad(313) ≈ 54.6
+// Surface aspect ≈ 9.1:1, so 2560 / 9.1 ≈ 281
+const MOSAIC_W = 2560;
 const MOSAIC_H = Math.round(MOSAIC_W * (6 / (10 * THREE.MathUtils.degToRad(313))));
 
 const GRID_COLS = 16;
 const GRID_ROWS = 4;
 const CELL_COUNT = GRID_COLS * GRID_ROWS;
-const FADE_SPEED = 0.006; // opacity change per frame
+const FADE_RATE = 0.4; // opacity units per second
+const DRAW_FPS = 24;
+const DRAW_INTERVAL = 1 / DRAW_FPS;
 const FILL_RATIO = 0.4; // fraction of cells that get an image at all
 
 interface CellState {
@@ -20,14 +23,36 @@ interface CellState {
     targetOpacity: number; // 0 or 1
     currentOpacity: number; // lerped
     nextToggleAt: number; // timestamp when this cell next changes state
+    sx: number;
+    sy: number;
+    sw: number;
+    sh: number;
 }
 
-function drawMosaic(ctx: CanvasRenderingContext2D, cells: CellState[], cols: number, rows: number) {
+function computeCoverCrop(image: HTMLImageElement, cellW: number, cellH: number) {
+    const imgAspect = image.naturalWidth / image.naturalHeight;
+    const cellAspect = cellW / cellH;
+    if (imgAspect > cellAspect) {
+        const sh = image.naturalHeight;
+        const sw = sh * cellAspect;
+        return { sx: (image.naturalWidth - sw) / 2, sy: 0, sw, sh };
+    }
+    const sw = image.naturalWidth;
+    const sh = sw / cellAspect;
+    return { sx: 0, sy: (image.naturalHeight - sh) / 2, sw, sh };
+}
+
+function drawMosaic(
+    ctx: CanvasRenderingContext2D,
+    cells: CellState[],
+    cols: number,
+    rows: number,
+    staticLayer: HTMLCanvasElement
+) {
     const cellW = MOSAIC_W / cols;
     const cellH = MOSAIC_H / rows;
-
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, 0, MOSAIC_W, MOSAIC_H);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(staticLayer, 0, 0);
 
     for (let i = 0; i < cells.length; i++) {
         const cell = cells[i];
@@ -41,40 +66,8 @@ function drawMosaic(ctx: CanvasRenderingContext2D, cells: CellState[], cols: num
         const x = col * cellW;
         const y = row * cellH;
 
-        // Cover-fit: fill cell without distortion, crop the overflow
-        const imgAspect = img.naturalWidth / img.naturalHeight;
-        const cellAspect = cellW / cellH;
-        let sw: number, sh: number, sx: number, sy: number;
-        if (imgAspect > cellAspect) {
-            sh = img.naturalHeight;
-            sw = sh * cellAspect;
-            sx = (img.naturalWidth - sw) / 2;
-            sy = 0;
-        } else {
-            sw = img.naturalWidth;
-            sh = sw / cellAspect;
-            sx = 0;
-            sy = (img.naturalHeight - sh) / 2;
-        }
-
         ctx.globalAlpha = cell.currentOpacity;
-        ctx.drawImage(img, sx, sy, sw, sh, x, y, cellW, cellH);
-    }
-
-    // Grid lines (always full opacity)
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = '#333';
-    for (let i = 1; i < cols; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * cellW, 0);
-        ctx.lineTo(i * cellW, MOSAIC_H);
-        ctx.stroke();
-    }
-    for (let i = 1; i < rows; i++) {
-        ctx.beginPath();
-        ctx.moveTo(0, i * cellH);
-        ctx.lineTo(MOSAIC_W, i * cellH);
-        ctx.stroke();
+        ctx.drawImage(img, cell.sx, cell.sy, cell.sw, cell.sh, x, y, cellW, cellH);
     }
 }
 
@@ -90,10 +83,13 @@ function MosaicCylinder({
     radius?: number;
     height?: number;
 }) {
+    const gl = useThree((s) => s.gl);
     const textureRef = useRef<THREE.CanvasTexture | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const staticLayerRef = useRef<HTMLCanvasElement | null>(null);
     const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
     const cellsRef = useRef<CellState[]>([]);
+    const elapsedRef = useRef(0);
     const [ready, setReady] = useState(false);
 
     const imageKey = useMemo(() => heroImages.map((h) => h.src).join(','), [heroImages]);
@@ -139,23 +135,34 @@ function MosaicCylinder({
 
             const now = performance.now();
             let imgIdx = 0;
+            const cellW = MOSAIC_W / GRID_COLS;
+            const cellH = MOSAIC_H / GRID_ROWS;
             cellsRef.current = Array.from({ length: CELL_COUNT }, (_, i) => {
                 if (!activeCells.has(i)) {
                     return {
                         image: null,
                         targetOpacity: 0,
                         currentOpacity: 0,
-                        nextToggleAt: Infinity
+                        nextToggleAt: Infinity,
+                        sx: 0,
+                        sy: 0,
+                        sw: 0,
+                        sh: 0
                     };
                 }
                 const img = loaded[imgIdx++ % loaded.length];
+                const validImage = img.naturalWidth ? img : null;
+                const crop = validImage
+                    ? computeCoverCrop(validImage, cellW, cellH)
+                    : { sx: 0, sy: 0, sw: 0, sh: 0 };
                 const visible = Math.random() < 0.5;
                 return {
-                    image: img.naturalWidth ? img : null,
+                    image: validImage,
                     targetOpacity: visible ? 1 : 0,
                     currentOpacity: 0,
                     // Stagger initial toggles + random off-time (3-8s)
-                    nextToggleAt: now + 2000 + Math.random() * 6000
+                    nextToggleAt: now + 2000 + Math.random() * 6000,
+                    ...crop
                 };
             });
 
@@ -165,25 +172,69 @@ function MosaicCylinder({
             canvasRef.current = canvas;
             ctxRef.current = canvas.getContext('2d')!;
 
+            const staticLayer = document.createElement('canvas');
+            staticLayer.width = MOSAIC_W;
+            staticLayer.height = MOSAIC_H;
+            const staticCtx = staticLayer.getContext('2d');
+            if (staticCtx) {
+                staticCtx.fillStyle = '#111';
+                staticCtx.fillRect(0, 0, MOSAIC_W, MOSAIC_H);
+                staticCtx.globalAlpha = 1;
+                staticCtx.strokeStyle = '#333';
+                for (let i = 1; i < GRID_COLS; i++) {
+                    staticCtx.beginPath();
+                    staticCtx.moveTo(i * cellW, 0);
+                    staticCtx.lineTo(i * cellW, MOSAIC_H);
+                    staticCtx.stroke();
+                }
+                for (let i = 1; i < GRID_ROWS; i++) {
+                    staticCtx.beginPath();
+                    staticCtx.moveTo(0, i * cellH);
+                    staticCtx.lineTo(MOSAIC_W, i * cellH);
+                    staticCtx.stroke();
+                }
+            }
+            staticLayerRef.current = staticLayer;
+
             const tex = new THREE.CanvasTexture(canvas);
             tex.colorSpace = THREE.SRGBColorSpace;
             tex.repeat.x = -1;
             tex.offset.x = 1;
+            tex.generateMipmaps = false;
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy());
             textureRef.current = tex;
+            if (ctxRef.current && staticLayerRef.current) {
+                drawMosaic(
+                    ctxRef.current,
+                    cellsRef.current,
+                    GRID_COLS,
+                    GRID_ROWS,
+                    staticLayerRef.current
+                );
+                tex.needsUpdate = true;
+            }
             setReady(true);
         });
 
         return () => {
             cancelled = true;
         };
-    }, [imageKey]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [gl.capabilities, imageKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Animate cell opacities and redraw canvas each frame
-    useFrame(() => {
+    // Animate cell opacities and redraw at a capped cadence.
+    useFrame((_, delta) => {
         const ctx = ctxRef.current;
         const tex = textureRef.current;
         const cells = cellsRef.current;
-        if (!ctx || !tex || cells.length === 0) return;
+        const staticLayer = staticLayerRef.current;
+        if (!ctx || !tex || !staticLayer || cells.length === 0) return;
+
+        elapsedRef.current += delta;
+        if (elapsedRef.current < DRAW_INTERVAL) return;
+        const step = elapsedRef.current;
+        elapsedRef.current = 0;
 
         // Per-cell timers: each cell toggles on its own random schedule
         const now = performance.now();
@@ -201,7 +252,8 @@ function MosaicCylinder({
         for (const cell of cells) {
             const diff = cell.targetOpacity - cell.currentOpacity;
             if (Math.abs(diff) > 0.005) {
-                cell.currentOpacity += diff * FADE_SPEED;
+                const fadeStep = Math.min(1, FADE_RATE * step);
+                cell.currentOpacity += diff * fadeStep;
                 dirty = true;
             } else if (cell.currentOpacity !== cell.targetOpacity) {
                 cell.currentOpacity = cell.targetOpacity;
@@ -210,14 +262,14 @@ function MosaicCylinder({
         }
 
         if (dirty) {
-            drawMosaic(ctx, cells, GRID_COLS, GRID_ROWS);
+            drawMosaic(ctx, cells, GRID_COLS, GRID_ROWS, staticLayer);
             tex.needsUpdate = true;
         }
     });
 
     const thetaStart = THREE.MathUtils.degToRad(GAP_ANGLE / 2);
     const thetaLength = THREE.MathUtils.degToRad(VIEW_ANGLE);
-    const geometryArgs = [radius, radius, height, 64, 1, true, thetaStart, thetaLength] as const;
+    const geometryArgs = [radius, radius, height, 32, 1, true, thetaStart, thetaLength] as const;
 
     return (
         <group>
@@ -326,13 +378,72 @@ function AnimatedControls() {
 }
 
 export default function LandingHero({
-    heroImages
+    heroImages,
+    onActivate
 }: {
     heroImages: { src: string; sizes?: number[] }[];
+    onActivate?: () => void;
 }) {
+    const pointerRef = useRef<{
+        id: number | null;
+        startX: number;
+        startY: number;
+        startAt: number;
+        moved: boolean;
+    }>({
+        id: null,
+        startX: 0,
+        startY: 0,
+        startAt: 0,
+        moved: false
+    });
+
+    const handlePointerDownCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        pointerRef.current = {
+            id: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            startAt: performance.now(),
+            moved: false
+        };
+    };
+
+    const handlePointerMoveCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+        const state = pointerRef.current;
+        if (state.id !== event.pointerId || state.moved) return;
+        const dx = event.clientX - state.startX;
+        const dy = event.clientY - state.startY;
+        if (dx * dx + dy * dy > 64) state.moved = true; // 8px threshold
+    };
+
+    const handlePointerUpCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+        const state = pointerRef.current;
+        if (state.id !== event.pointerId) return;
+        const elapsed = performance.now() - state.startAt;
+        const shouldActivate = !state.moved && elapsed <= 350;
+        pointerRef.current.id = null;
+        if (shouldActivate) onActivate?.();
+    };
+
+    const handlePointerCancelCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (pointerRef.current.id === event.pointerId) pointerRef.current.id = null;
+    };
+
     return (
-        <div className="absolute inset-0" style={{ backgroundColor: '#111' }}>
-            <Canvas camera={{ position: [0, 2, 20], fov: 50 }}>
+        <div
+            className="absolute inset-0"
+            style={{ backgroundColor: '#111' }}
+            onPointerDownCapture={handlePointerDownCapture}
+            onPointerMoveCapture={handlePointerMoveCapture}
+            onPointerUpCapture={handlePointerUpCapture}
+            onPointerCancelCapture={handlePointerCancelCapture}
+        >
+            <Canvas
+                camera={{ position: [0, 2, 20], fov: 50 }}
+                dpr={[1, 1.5]}
+                gl={{ antialias: true, powerPreference: 'high-performance' }}
+            >
                 <Suspense fallback={null}>
                     <MosaicCylinder heroImages={heroImages} radius={10} height={6} />
                 </Suspense>
