@@ -8,6 +8,7 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { computeBlurhash, generateVariants } from '~/lib/serverAssetUtils';
 import { ASSET_DIR } from '~/lib/serverVariables';
+import { logAuditDenied } from '~/server/audit';
 import { dbCol } from '~/server/collections';
 import { canEditProject } from '~/server/projectAuthz';
 import {
@@ -106,6 +107,17 @@ export const Route = createFileRoute('/api/web-screenshot')({
                         ? authContext.user.email
                         : null;
                 if (!userEmail) {
+                    await logAuditDenied({
+                        action: 'WEB_SCREENSHOT_DENIED',
+                        reasonCode: 'UNAUTHORIZED',
+                        resourceType: 'asset',
+                        authContext,
+                        executionContext: {
+                            surface: 'http',
+                            operation: 'POST /api/web-screenshot',
+                            request
+                        }
+                    });
                     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                         status: 401,
                         headers: { 'Content-Type': 'application/json' }
@@ -121,6 +133,20 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     subjectKey
                 });
                 if (!rateLimit.allowed) {
+                    await logAuditDenied({
+                        action: 'WEB_SCREENSHOT_DENIED',
+                        reasonCode: 'RATE_LIMITED',
+                        actorId: userEmail,
+                        resourceType: 'asset',
+                        authContext,
+                        changes: { retryAfterMs: rateLimit.retryAfterMs },
+                        executionContext: {
+                            surface: 'http',
+                            operation: 'POST /api/web-screenshot',
+                            request,
+                            ip: requesterIp
+                        }
+                    });
                     return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
                         status: 429,
                         headers: {
@@ -162,6 +188,20 @@ export const Route = createFileRoute('/api/web-screenshot')({
                     projectId
                 );
                 if (!canEdit) {
+                    await logAuditDenied({
+                        action: 'WEB_SCREENSHOT_DENIED',
+                        reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                        actorId: userEmail,
+                        projectId,
+                        resourceType: 'project',
+                        resourceId: projectId,
+                        authContext,
+                        executionContext: {
+                            surface: 'http',
+                            operation: 'POST /api/web-screenshot',
+                            request
+                        }
+                    });
                     return new Response(JSON.stringify({ error: 'Access denied' }), {
                         status: 403,
                         headers: { 'Content-Type': 'application/json' }

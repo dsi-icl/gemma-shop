@@ -34,6 +34,7 @@ import {
     type PeerEntry
 } from '~/lib/busState';
 import { GSMessageSchema, makeScopeLabel, type GSMessage, type Layer } from '~/lib/types';
+import { logAuditDenied } from '~/server/audit';
 import {
     editorProjectPermissions,
     enforceWsHandshakeRateLimit,
@@ -178,6 +179,20 @@ function handleBinary(peer: import('crossws').Peer, rawData: ArrayBuffer) {
             console.warn(
                 `[WS] Unauthorized binary SPATIAL_MOVE from peer ${peer.id} (${senderEntry.meta.specimen})`
             );
+            void logAuditDenied({
+                action: 'WS_MESSAGE_DENIED',
+                reasonCode: 'WS_BINARY_UNAUTHORIZED',
+                projectId,
+                resourceType: 'ws_message',
+                resourceId: 'SPATIAL_MOVE',
+                authContext: senderEntry.meta.authContext,
+                executionContext: {
+                    surface: 'ws',
+                    operation: 'binary:SPATIAL_MOVE',
+                    peerId: peer.id,
+                    details: { specimen: senderEntry.meta.specimen }
+                }
+            });
             return;
         }
 
@@ -240,6 +255,20 @@ function dispatchJsonMessage(
             console.warn(
                 `[WS] Unauthorized message ${data.type} from peer ${peer.id} (${entry.meta.specimen})`
             );
+            void logAuditDenied({
+                action: 'WS_MESSAGE_DENIED',
+                reasonCode: 'WS_JSON_UNAUTHORIZED',
+                projectId: getScopeProjectId(scopeId),
+                resourceType: 'ws_message',
+                resourceId: data.type,
+                authContext: entry.meta.authContext,
+                executionContext: {
+                    surface: 'ws',
+                    operation: `json:${data.type}`,
+                    peerId: peer.id,
+                    details: { specimen: entry.meta.specimen }
+                }
+            });
             return;
         }
         void enforceWsRateLimit(peer, data.type, { entry }).then((allowed) => {

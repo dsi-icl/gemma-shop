@@ -8,6 +8,7 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 
 import type { PeerMeta } from '~/lib/busState';
+import { logAuditDenied } from '~/server/audit';
 import { canEditProject } from '~/server/projectAuthz';
 import { resolveAuthContextFromRequest } from '~/server/requestAuthContext';
 
@@ -147,6 +148,16 @@ export class YCrossws {
                 if (!user) {
                     const latest = getYjsPeerState(peer) ?? existing;
                     setYjsPeerState(peer, { ...latest });
+                    await logAuditDenied({
+                        action: 'YJS_SESSION_DENIED',
+                        reasonCode: 'MISSING_SESSION',
+                        resourceType: 'scope',
+                        executionContext: {
+                            surface: 'yjs',
+                            operation: 'onOpen',
+                            peerId: peer.id
+                        }
+                    });
                     throw new Error('unauthenticated');
                 }
                 const userEmail = user.email;
@@ -157,6 +168,19 @@ export class YCrossws {
                     scope.projectId
                 );
                 if (!canEdit) {
+                    await logAuditDenied({
+                        action: 'YJS_SESSION_DENIED',
+                        reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                        projectId: scope.projectId,
+                        resourceType: 'scope',
+                        resourceId: docName,
+                        authContext: { user: { email: userEmail, role: user.role } },
+                        executionContext: {
+                            surface: 'yjs',
+                            operation: 'onOpen',
+                            peerId: peer.id
+                        }
+                    });
                     throw new Error('forbidden');
                 }
 
@@ -421,6 +445,21 @@ export class YCrossws {
                 if (state) {
                     setYjsPeerState(peer, { ...state });
                 }
+                await logAuditDenied({
+                    action: 'YJS_SESSION_DENIED',
+                    reasonCode: 'MISSING_SESSION_RECOMPUTE',
+                    projectId: state?.scope?.projectId ?? null,
+                    resourceType: 'scope',
+                    resourceId: state?.scope
+                        ? `${state.scope.projectId}_${state.scope.commitId}_${state.scope.slideId}_${state.scope.layerId}`
+                        : null,
+                    authContext: state?.meta?.authContext ?? { guest: true },
+                    executionContext: {
+                        surface: 'yjs',
+                        operation: 'recomputePeerAuthContexts',
+                        peerId: peer.id
+                    }
+                });
                 try {
                     peer.close();
                 } catch {
@@ -437,6 +476,24 @@ export class YCrossws {
                     scopeProjectId
                 );
                 if (!allowed) {
+                    await logAuditDenied({
+                        action: 'YJS_SESSION_DENIED',
+                        reasonCode: 'PROJECT_EDIT_FORBIDDEN_RECOMPUTE',
+                        projectId: scopeProjectId,
+                        resourceType: 'scope',
+                        resourceId: state?.scope
+                            ? `${state.scope.projectId}_${state.scope.commitId}_${state.scope.slideId}_${state.scope.layerId}`
+                            : null,
+                        authContext: {
+                            ...(state?.meta?.authContext ?? {}),
+                            user: { email: nextEmail, role: user.role }
+                        },
+                        executionContext: {
+                            surface: 'yjs',
+                            operation: 'recomputePeerAuthContexts',
+                            peerId: peer.id
+                        }
+                    });
                     try {
                         peer.close();
                     } catch {

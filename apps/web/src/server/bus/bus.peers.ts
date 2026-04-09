@@ -25,6 +25,7 @@ import {
     wallsByWallId
 } from '~/lib/busState';
 import { makeScopeLabel, type GSMessage } from '~/lib/types';
+import { logAuditDenied } from '~/server/audit';
 import { dbCol } from '~/server/collections';
 import { ensureDeviceByPublicKey } from '~/server/devices';
 import { canEditProject, canViewProject } from '~/server/projectAuthz';
@@ -53,6 +54,23 @@ export async function registerEditorPeer(
         ? { email: authContext.user.email, role: authContext.user.role }
         : null;
     if (!userActor) {
+        await logAuditDenied({
+            action: 'WS_SESSION_DENIED',
+            reasonCode: 'MISSING_SESSION',
+            projectId: scopeInput.projectId,
+            resourceType: 'scope',
+            resourceId: makeScopeLabel(
+                scopeInput.projectId,
+                scopeInput.commitId,
+                scopeInput.slideId
+            ),
+            authContext,
+            executionContext: {
+                surface: 'ws',
+                operation: 'registerEditorPeer',
+                peerId: peer.id
+            }
+        });
         sendJSON(peer, { type: 'auth_denied', reason: 'missing_session' });
         try {
             peer.close();
@@ -67,6 +85,23 @@ export async function registerEditorPeer(
         canEditProject(userActor, scopeInput.projectId)
     ]);
     if (!canView) {
+        await logAuditDenied({
+            action: 'WS_SESSION_DENIED',
+            reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+            projectId: scopeInput.projectId,
+            resourceType: 'scope',
+            resourceId: makeScopeLabel(
+                scopeInput.projectId,
+                scopeInput.commitId,
+                scopeInput.slideId
+            ),
+            authContext,
+            executionContext: {
+                surface: 'ws',
+                operation: 'registerEditorPeer',
+                peerId: peer.id
+            }
+        });
         sendJSON(peer, { type: 'auth_denied' });
         try {
             peer.close();
@@ -423,6 +458,19 @@ export async function recomputePeerAuthContexts(
         } = await resolveAuthContextFromRequest(entry.peer.request);
         if (!user) {
             editorProjectPermissions.delete(entry.peer.id);
+            await logAuditDenied({
+                action: 'WS_SESSION_DENIED',
+                reasonCode: 'MISSING_SESSION_RECOMPUTE',
+                projectId: scopeProjectId,
+                resourceType: 'scope',
+                resourceId: scopeProjectId ?? null,
+                authContext: entry.meta.authContext,
+                executionContext: {
+                    surface: 'ws',
+                    operation: 'recomputePeerAuthContexts',
+                    peerId: entry.peer.id
+                }
+            });
             sendJSON(entry.peer, { type: 'auth_denied', reason: 'missing_session' });
             try {
                 entry.peer.close();
@@ -440,6 +488,19 @@ export async function recomputePeerAuthContexts(
             ]);
             if (!canView) {
                 editorProjectPermissions.delete(entry.peer.id);
+                await logAuditDenied({
+                    action: 'WS_SESSION_DENIED',
+                    reasonCode: 'PROJECT_VIEW_FORBIDDEN_RECOMPUTE',
+                    projectId: scopeProjectId,
+                    resourceType: 'scope',
+                    resourceId: scopeProjectId,
+                    authContext: entry.meta.authContext,
+                    executionContext: {
+                        surface: 'ws',
+                        operation: 'recomputePeerAuthContexts',
+                        peerId: entry.peer.id
+                    }
+                });
                 sendJSON(entry.peer, { type: 'auth_denied' });
                 try {
                     entry.peer.close();

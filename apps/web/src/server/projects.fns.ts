@@ -34,6 +34,7 @@ const UpdateProjectInput = z.object({
     collaborators: z.array(Collaborator).optional(),
     publishedCommitId: z.string().nullable().optional()
 });
+import { logAuditDenied } from '~/server/audit';
 import {
     actorFromAuthContext,
     canEditProject,
@@ -43,6 +44,7 @@ import {
     resolveProjectIdForCommit,
     resolveProjectIdForUploadToken
 } from '~/server/projectAuthz';
+import type { AuthContext } from '~/server/requestAuthContext';
 
 import {
     archiveProject,
@@ -68,6 +70,38 @@ import {
     updateProject
 } from './projects';
 
+function authContextFromServerFnContext(context: unknown): AuthContext {
+    const c = context as { user?: { email?: string; role?: string } } | undefined;
+    const email = c?.user?.email;
+    const role = c?.user?.role;
+    if (typeof email === 'string' && (role === 'admin' || role === 'user')) {
+        return { user: { email, role } };
+    }
+    return { guest: true };
+}
+
+async function denyProjectFn(params: {
+    context: unknown;
+    operation: string;
+    reasonCode: string;
+    projectId?: string | null;
+    resourceType?: 'project' | 'commit' | 'asset' | 'upload_token' | 'unknown';
+    resourceId?: string | null;
+}) {
+    await logAuditDenied({
+        action: 'PROJECTS_FN_ACCESS_DENIED',
+        projectId: params.projectId ?? null,
+        resourceType: params.resourceType ?? 'unknown',
+        resourceId: params.resourceId ?? null,
+        reasonCode: params.reasonCode,
+        authContext: authContextFromServerFnContext(params.context),
+        executionContext: {
+            surface: 'serverfn',
+            operation: params.operation
+        }
+    });
+}
+
 export const $listProjects = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ includeArchived: z.boolean().optional() }))
     .middleware([authMiddleware])
@@ -90,9 +124,29 @@ export const $listAssets = createServerFn({ method: 'GET' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$listAssets',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canViewProject(actor, data.projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$listAssets',
+                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         return listAssets(data.projectId);
     });
 
@@ -103,9 +157,27 @@ export const $getProject = createServerFn({ method: 'GET' })
         const project = await getProject(data.id);
         if (!project) throw new Error('Project not found');
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$getProject',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.id,
+                resourceType: 'project',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canViewProject(actor, data.id);
         if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$getProject',
+                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                projectId: data.id,
+                resourceType: 'project',
+                resourceId: data.id
+            });
             throw new Error('Access denied');
         }
         return project;
@@ -118,9 +190,26 @@ export const $getCommit = createServerFn({ method: 'GET' })
         const commit = await getCommit(data.id);
         if (!commit) throw new Error('Commit not found');
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$getCommit',
+                reasonCode: 'MISSING_ACTOR',
+                resourceType: 'commit',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canViewProject(actor, commit.projectId);
         if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$getCommit',
+                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                projectId: commit.projectId,
+                resourceType: 'commit',
+                resourceId: data.id
+            });
             throw new Error('Access denied');
         }
         return commit;
@@ -138,9 +227,29 @@ export const $updateProject = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$updateProject',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.id,
+                resourceType: 'project',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, data.id);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$updateProject',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId: data.id,
+                resourceType: 'project',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         return updateProject(data, context.user.email);
     });
 
@@ -149,9 +258,29 @@ export const $archiveProject = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$archiveProject',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.id,
+                resourceType: 'project',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await ownsProject(actor, data.id);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$archiveProject',
+                reasonCode: 'PROJECT_OWNER_REQUIRED',
+                projectId: data.id,
+                resourceType: 'project',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         await archiveProject(data.id, context.user.email);
     });
 
@@ -162,9 +291,29 @@ export const $deleteAsset = createServerFn({ method: 'POST' })
         const projectId = await resolveProjectIdForAsset(data.id);
         if (!projectId) throw new Error('Asset not found');
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$deleteAsset',
+                reasonCode: 'MISSING_ACTOR',
+                projectId,
+                resourceType: 'asset',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$deleteAsset',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId,
+                resourceType: 'asset',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         await deleteAsset(data.id, context.user.email);
     });
 
@@ -173,9 +322,29 @@ export const $restoreProject = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$restoreProject',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.id,
+                resourceType: 'project',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, data.id);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$restoreProject',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId: data.id,
+                resourceType: 'project',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
         await restoreProject(data.id, context.user.email);
     });
 
@@ -184,9 +353,29 @@ export const $publishCommit = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$publishCommit',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, data.projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$publishCommit',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         return publishCommit(data.projectId, data.commitId, context.user.email);
     });
 
@@ -195,9 +384,29 @@ export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$publishCustomRenderProject',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, data.projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$publishCustomRenderProject',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         return publishCustomRenderProject(data.projectId, context.user.email);
     });
 
@@ -206,9 +415,29 @@ export const $getAudits = createServerFn({ method: 'GET' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$getAudits',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canViewProject(actor, data.projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$getAudits',
+                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         return getAudits(data.projectId);
     });
 
@@ -217,9 +446,29 @@ export const $ensureMutableHead = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$ensureMutableHead',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, data.projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$ensureMutableHead',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         return ensureMutableHead(data.projectId, context.user.email);
     });
 
@@ -228,9 +477,29 @@ export const $getProjectCommits = createServerFn({ method: 'GET' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$getProjectCommits',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canViewProject(actor, data.projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$getProjectCommits',
+                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         return getProjectCommits(data.projectId);
     });
 
@@ -239,9 +508,29 @@ export const $createBranchHead = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$createBranchHead',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, data.projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$createBranchHead',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         return createBranchHead(data.projectId, data.sourceCommitId, context.user.email);
     });
 
@@ -250,9 +539,29 @@ export const $promoteBranchHead = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$promoteBranchHead',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, data.projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$promoteBranchHead',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         return promoteBranchHead(data.projectId, data.branchCommitId, context.user.email);
     });
 
@@ -272,9 +581,29 @@ export const $copySlideInCommit = createServerFn({ method: 'POST' })
         const projectId = await resolveProjectIdForCommit(data.commitId);
         if (!projectId) throw new Error('Commit not found');
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$copySlideInCommit',
+                reasonCode: 'MISSING_ACTOR',
+                projectId,
+                resourceType: 'commit',
+                resourceId: data.commitId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$copySlideInCommit',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId,
+                resourceType: 'commit',
+                resourceId: data.commitId
+            });
+            throw new Error('Access denied');
+        }
         return copySlideInCommit(
             data.commitId,
             data.sourceSlideId,
@@ -290,9 +619,29 @@ export const $deleteSlideFromCommit = createServerFn({ method: 'POST' })
         const projectId = await resolveProjectIdForCommit(data.commitId);
         if (!projectId) throw new Error('Commit not found');
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$deleteSlideFromCommit',
+                reasonCode: 'MISSING_ACTOR',
+                projectId,
+                resourceType: 'commit',
+                resourceId: data.commitId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$deleteSlideFromCommit',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId,
+                resourceType: 'commit',
+                resourceId: data.commitId
+            });
+            throw new Error('Access denied');
+        }
         return deleteSlideFromCommit(data.commitId, data.slideId);
     });
 
@@ -303,9 +652,29 @@ export const $createUploadToken = createServerFn({ method: 'POST' })
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$createUploadToken',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, data.projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$createUploadToken',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
         return createUploadToken(data.projectId, context.user.email);
     });
 
@@ -316,9 +685,27 @@ export const $revokeUploadToken = createServerFn({ method: 'POST' })
         const projectId = resolveProjectIdForUploadToken(data.token);
         if (!projectId) return;
         const actor = actorFromAuthContext(context);
-        if (!actor) throw new Error('Access denied');
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$revokeUploadToken',
+                reasonCode: 'MISSING_ACTOR',
+                projectId,
+                resourceType: 'upload_token'
+            });
+            throw new Error('Access denied');
+        }
         const allowed = await canEditProject(actor, projectId);
-        if (!allowed) throw new Error('Access denied');
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$revokeUploadToken',
+                reasonCode: 'PROJECT_EDIT_FORBIDDEN',
+                projectId,
+                resourceType: 'upload_token'
+            });
+            throw new Error('Access denied');
+        }
         await revokeUploadTokenForActor(data.token, context.user.email);
     });
 

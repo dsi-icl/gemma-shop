@@ -4,17 +4,42 @@ import { Readable } from 'node:stream';
 import { basename, join, extname } from 'path';
 
 import type { PublicDoc } from '@repo/db/collections';
-import type { AssetDocument } from '@repo/db/documents';
+import type { AssetDocument, JsonValue } from '@repo/db/documents';
 import { createFileRoute } from '@tanstack/react-router';
 import { createServerOnlyFn } from '@tanstack/react-start';
 
 import { ASSET_MIME_TYPES } from '~/lib/assetMime';
 import { ASSET_DIR } from '~/lib/serverVariables';
+import { logAuditDenied } from '~/server/audit';
 import { dbCol } from '~/server/collections';
 import { canViewProject } from '~/server/projectAuthz';
 import type { AuthContext } from '~/server/requestAuthContext';
 
 const isDev = process.env.NODE_ENV === 'development';
+async function logAssetDenied(input: {
+    request: Request;
+    authContext: AuthContext;
+    reasonCode: string;
+    projectId?: string | null;
+    resourceId?: string | null;
+    details?: Record<string, JsonValue>;
+}) {
+    await logAuditDenied({
+        action: 'ASSET_READ_DENIED',
+        projectId: input.projectId ?? null,
+        resourceType: 'asset',
+        resourceId: input.resourceId ?? null,
+        reasonCode: input.reasonCode,
+        authContext: input.authContext,
+        ...(input.details ? { changes: input.details } : {}),
+        executionContext: {
+            surface: 'http',
+            operation: 'GET /api/assets/$uri',
+            request: input.request
+        }
+    });
+}
+
 function parseVariantFilename(filename: string): { baseId: string; requested: number } | null {
     const m = filename.match(/^(.*)_([0-9]+)\.webp$/i);
     if (!m) return null;
@@ -238,6 +263,13 @@ export const Route = createFileRoute('/api/assets/$uri')({
                 if (!user && !device) {
                     const project = await dbCol.projects.findById(projectId);
                     if (!project || project.deletedAt || project.visibility !== 'public') {
+                        await logAssetDenied({
+                            request,
+                            authContext,
+                            reasonCode: 'UNAUTHORIZED_GUEST',
+                            projectId,
+                            resourceId: requestedFilename
+                        });
                         return new Response('Not Found', {
                             status: 404,
                             headers: isDev
@@ -253,6 +285,13 @@ export const Route = createFileRoute('/api/assets/$uri')({
                         projectId
                     );
                     if (!allowed && !device) {
+                        await logAssetDenied({
+                            request,
+                            authContext,
+                            reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                            projectId,
+                            resourceId: requestedFilename
+                        });
                         return new Response('Not Found', {
                             status: 404,
                             headers: isDev ? { 'X-Dev-Status-Message': 'Unauthorized' } : undefined
@@ -267,6 +306,13 @@ export const Route = createFileRoute('/api/assets/$uri')({
                             : null;
 
                     if (!deviceWallId) {
+                        await logAssetDenied({
+                            request,
+                            authContext,
+                            reasonCode: 'DEVICE_WALL_ID_MISSING',
+                            projectId,
+                            resourceId: requestedFilename
+                        });
                         return new Response('Not Found', {
                             status: 404,
                             headers: isDev
@@ -277,6 +323,14 @@ export const Route = createFileRoute('/api/assets/$uri')({
 
                     const wall = await dbCol.walls.findByWallId(deviceWallId);
                     if (!wall || wall.boundProjectId !== projectId) {
+                        await logAssetDenied({
+                            request,
+                            authContext,
+                            reasonCode: 'DEVICE_WALL_NOT_BOUND_TO_PROJECT',
+                            projectId,
+                            resourceId: requestedFilename,
+                            details: { wallId: deviceWallId }
+                        });
                         return new Response('Not Found', {
                             status: 404,
                             headers: isDev

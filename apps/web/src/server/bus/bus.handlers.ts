@@ -47,6 +47,7 @@ import {
 } from '~/lib/busState';
 import { validatePortalToken } from '~/lib/portalTokens';
 import { GSMessageSchema, HelloSchema, makeScopeLabel, type GSMessage } from '~/lib/types';
+import { logAuditDenied } from '~/server/audit';
 import { dbCol } from '~/server/collections';
 import { ensureDeviceByPublicKey } from '~/server/devices';
 import { resolveAuthContextFromRequest } from '~/server/requestAuthContext';
@@ -633,6 +634,18 @@ export async function handleHello(peer: Peer, data: Record<string, any>) {
             authContext: { user }
         } = await resolveAuthContextFromRequest(peer.request);
         if (!user) {
+            await logAuditDenied({
+                action: 'WS_HANDSHAKE_DENIED',
+                reasonCode: 'MISSING_SESSION',
+                resourceType: 'ws_message',
+                resourceId: 'hello',
+                executionContext: {
+                    surface: 'ws',
+                    operation: 'hello',
+                    peerId: peer.id,
+                    details: { specimen: 'editor' }
+                }
+            });
             sendJSON(peer, { type: 'auth_denied', reason: 'missing_session' });
             try {
                 peer.close();
@@ -663,6 +676,17 @@ export async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
     const pending = pendingHelloAuthByPeer.get(peer.id);
     if (!pending) {
         console.warn(`[WS] hello_auth without pending challenge from peer ${peer.id}`);
+        await logAuditDenied({
+            action: 'WS_HANDSHAKE_DENIED',
+            reasonCode: 'MISSING_HELLO_CHALLENGE',
+            resourceType: 'ws_message',
+            resourceId: 'hello_auth',
+            executionContext: {
+                surface: 'ws',
+                operation: 'hello_auth',
+                peerId: peer.id
+            }
+        });
         return;
     }
 
@@ -730,6 +754,18 @@ export async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
     if (!authenticated) {
         clearPendingHelloAuth(peer.id);
         console.warn(`[WS] hello_auth failed for peer ${peer.id}`);
+        await logAuditDenied({
+            action: 'WS_HANDSHAKE_DENIED',
+            reasonCode: 'HELLO_AUTH_FAILED',
+            resourceType: 'ws_message',
+            resourceId: 'hello_auth',
+            executionContext: {
+                surface: 'ws',
+                operation: 'hello_auth',
+                peerId: peer.id,
+                details: { specimen: pending.hello.specimen }
+            }
+        });
         try {
             peer.close();
         } catch {
@@ -763,11 +799,35 @@ export async function handleSwitchScope(peer: Peer, data: Record<string, any>) {
     const existing = peers.get(peer.id);
     if (existing && existing.meta.specimen !== 'editor') {
         console.warn(`[WS] switch_scope rejected for non-editor peer ${peer.id}`);
+        await logAuditDenied({
+            action: 'WS_MESSAGE_DENIED',
+            reasonCode: 'SWITCH_SCOPE_NON_EDITOR',
+            resourceType: 'ws_message',
+            resourceId: 'switch_scope',
+            authContext: existing.meta.authContext,
+            executionContext: {
+                surface: 'ws',
+                operation: 'switch_scope',
+                peerId: peer.id,
+                details: { specimen: existing.meta.specimen }
+            }
+        });
         return;
     }
 
     if (!existing || existing.meta.specimen !== 'editor') {
         console.warn(`[WS] switch_scope from unauthenticated peer ${peer.id}`);
+        await logAuditDenied({
+            action: 'WS_MESSAGE_DENIED',
+            reasonCode: 'SWITCH_SCOPE_UNAUTHENTICATED',
+            resourceType: 'ws_message',
+            resourceId: 'switch_scope',
+            executionContext: {
+                surface: 'ws',
+                operation: 'switch_scope',
+                peerId: peer.id
+            }
+        });
         return;
     }
 

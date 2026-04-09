@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery, getRequestHost } from 'nitro/h3';
 
+import { logAuditDenied } from '~/server/audit';
 import { resolveRequestAuthContext } from '~/server/requestAuthContext';
 
 const PROXY_ALLOWED_REFERRERS = (process.env.PROXY_ALLOWED_REFERRERS ?? '')
@@ -182,13 +183,22 @@ async function readWithCap(response: Response, maxBytes: number): Promise<string
 }
 
 export default defineEventHandler(async (event) => {
-    const { authContext } = await resolveRequestAuthContext(
-        new Request(toAbsoluteRequestUrl(event), {
-            method: event.req.method,
-            headers: event.req.headers
-        })
-    );
+    const request = new Request(toAbsoluteRequestUrl(event), {
+        method: event.req.method,
+        headers: event.req.headers
+    });
+    const { authContext } = await resolveRequestAuthContext(request);
     if (authContext.device?.kind !== 'wall') {
+        await logAuditDenied({
+            action: 'PROXY_DENIED',
+            reasonCode: 'WALL_DEVICE_REQUIRED',
+            authContext,
+            executionContext: {
+                surface: 'http',
+                operation: 'GET /proxy',
+                request
+            }
+        });
         return Response.redirect(buildAbsoluteUrl(event, '/web-nonet?l=wall'), 302);
     }
 
@@ -213,6 +223,20 @@ export default defineEventHandler(async (event) => {
         isAllowedReferrer(origin ?? null, allowlist);
 
     if (!allowed && !PROXY_ALLOW_MISSING_REFERRER) {
+        await logAuditDenied({
+            action: 'PROXY_DENIED',
+            reasonCode: 'FORBIDDEN_ORIGIN',
+            authContext,
+            changes: {
+                referer: referer ?? null,
+                origin: origin ?? null
+            },
+            executionContext: {
+                surface: 'http',
+                operation: 'GET /proxy',
+                request
+            }
+        });
         if (checkOnly) {
             return Response.json(
                 { ok: false, reason: 'forbidden_origin', fallback: '/web-nonet?l=wall' },

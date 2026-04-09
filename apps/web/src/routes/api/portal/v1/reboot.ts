@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { wallBindings } from '~/lib/busState';
 import { pruneExpiredPortalTokens, validatePortalToken } from '~/lib/portalTokens';
+import { logAuditDenied } from '~/server/audit';
 
 const rebootRequestSchema = z
     .object({
@@ -56,11 +57,31 @@ export const Route = createFileRoute('/api/portal/v1/reboot')({
 
                 const token = getBearerToken(request);
                 if (!token) {
+                    await logAuditDenied({
+                        action: 'PORTAL_REBOOT_DENIED',
+                        resourceType: 'portal_token',
+                        reasonCode: 'MISSING_BEARER_TOKEN',
+                        executionContext: {
+                            surface: 'http',
+                            operation: 'POST /api/portal/v1/reboot',
+                            request
+                        }
+                    });
                     return json(request, 401, { error: 'Missing bearer token' });
                 }
 
                 const validated = validatePortalToken(token);
                 if (!validated) {
+                    await logAuditDenied({
+                        action: 'PORTAL_REBOOT_DENIED',
+                        resourceType: 'portal_token',
+                        reasonCode: 'INVALID_OR_EXPIRED_TOKEN',
+                        executionContext: {
+                            surface: 'http',
+                            operation: 'POST /api/portal/v1/reboot',
+                            request
+                        }
+                    });
                     return json(request, 401, { error: 'Invalid or expired token' });
                 }
 
@@ -76,6 +97,17 @@ export const Route = createFileRoute('/api/portal/v1/reboot')({
 
                 const targetWallId = body.wallId ?? validated.wallId;
                 if (targetWallId !== validated.wallId) {
+                    await logAuditDenied({
+                        action: 'PORTAL_REBOOT_DENIED',
+                        resourceType: 'portal_token',
+                        resourceId: targetWallId,
+                        reasonCode: 'TOKEN_WALL_MISMATCH',
+                        executionContext: {
+                            surface: 'http',
+                            operation: 'POST /api/portal/v1/reboot',
+                            request
+                        }
+                    });
                     return json(request, 403, {
                         error: 'Token is not allowed to control this wall'
                     });
