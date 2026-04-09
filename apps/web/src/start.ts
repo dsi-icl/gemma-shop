@@ -74,9 +74,7 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
     ].join(' ');
     const connectSrc = ["'self'", 'ws:', 'wss:', 'https:', ...(isDev ? ['http:'] : [])].join(' ');
     const frameSrc = ["'self'", 'https:', ...(isDev ? ['http:'] : [])].join(' ');
-    const styleSrcElem = isDev
-        ? "'self' 'unsafe-inline'"
-        : `'self' 'nonce-${nonce}' 'unsafe-inline'`;
+    const styleSrcElem = "'self' 'unsafe-inline'";
     const directives = [
         'upgrade-insecure-requests',
         "default-src 'none'",
