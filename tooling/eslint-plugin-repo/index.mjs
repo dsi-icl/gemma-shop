@@ -79,7 +79,7 @@ function isAuditInsertCall(node) {
     const target = callee.object;
     if (!target) return false;
 
-    if (target.type === 'Identifier' && target.name === 'auditLogs') return true;
+    if (target.type === 'Identifier' && target.name === 'audits') return true;
 
     if (
         target.type === 'MemberExpression' &&
@@ -87,7 +87,7 @@ function isAuditInsertCall(node) {
         target.object?.type === 'Identifier' &&
         target.object.name === 'collections' &&
         target.property?.type === 'Identifier' &&
-        target.property.name === 'auditLogs'
+        target.property.name === 'audits'
     ) {
         return true;
     }
@@ -100,7 +100,7 @@ const noDirectAuditInsertRule = {
         type: 'problem',
         docs: {
             description:
-                'Disallow direct auditLogs.insertOne(...) outside apps/web/src/server/audit.ts'
+                'Disallow direct audits.insertOne(...) outside apps/web/src/server/audit.ts'
         },
         schema: [],
         messages: {

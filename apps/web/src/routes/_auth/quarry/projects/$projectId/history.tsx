@@ -3,11 +3,11 @@ import { DateDisplay } from '@repo/ui/components/date-display';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { auditLogsQueryOptions, projectQueryOptions } from '~/server/projects.queries';
+import { auditsQueryOptions, projectQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId/history')({
     loader: async ({ context, params }) => {
-        context.queryClient.ensureQueryData(auditLogsQueryOptions(params.projectId));
+        context.queryClient.ensureQueryData(auditsQueryOptions(params.projectId));
         const project = await context.queryClient.ensureQueryData(
             projectQueryOptions(params.projectId)
         );
@@ -23,7 +23,7 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId/history'
 
 function HistoryTab() {
     const { projectId } = Route.useParams();
-    const { data: logs } = useSuspenseQuery(auditLogsQueryOptions(projectId));
+    const { data: logs } = useSuspenseQuery(auditsQueryOptions(projectId));
 
     if (logs.length === 0) {
         return (

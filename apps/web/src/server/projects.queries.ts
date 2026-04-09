@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 
 import {
-    $getAuditLogs,
+    $getAudits,
     $getCommit,
     $getProject,
     $getProjectCommits,
@@ -41,10 +41,10 @@ export const projectTagSuggestionsQueryOptions = () =>
         queryFn: () => $listKnownTags()
     });
 
-export const auditLogsQueryOptions = (projectId: string) =>
+export const auditsQueryOptions = (projectId: string) =>
     queryOptions({
         queryKey: ['projects', projectId, 'audit'],
-        queryFn: () => $getAuditLogs({ data: { projectId } })
+        queryFn: () => $getAudits({ data: { projectId } })
     });
 
 export const commitsQueryOptions = (projectId: string) =>

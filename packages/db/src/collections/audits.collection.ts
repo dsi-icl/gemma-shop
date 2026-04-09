@@ -4,8 +4,8 @@ import type { Db, Document, FindOptions, ObjectId } from 'mongodb';
 import type { AuditLogDocument } from '../documents';
 import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_base';
 
-export class AuditLogsCollection extends BaseCollection<AuditLogDocument> {
-    readonly collectionName = 'audit_logs';
+export class AuditsCollection extends BaseCollection<AuditLogDocument> {
+    readonly collectionName = 'audits';
     readonly currentVersion = 1;
 
     protected readonly migrations: MigrationMap = {
@@ -16,7 +16,7 @@ export class AuditLogsCollection extends BaseCollection<AuditLogDocument> {
     };
 
     constructor(db: Db) {
-        super(db.collection('audit_logs'));
+        super(db.collection('audits'));
     }
 
     protected fromDB(doc: Document): AuditLogDocument {

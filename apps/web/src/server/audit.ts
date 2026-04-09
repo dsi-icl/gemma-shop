@@ -18,7 +18,7 @@ export interface AuditLogInput {
 
 export async function logAudit(input: AuditLogInput): Promise<void> {
     try {
-        await dbCol.auditLogs.insertLog({
+        await dbCol.audits.insertLog({
             projectId: input.projectId ?? null,
             actorId: input.actorId ?? null,
             action: input.action,

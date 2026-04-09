@@ -461,12 +461,12 @@ export async function promoteBranchHead(
     });
 }
 
-export async function getAuditLogs(projectId: string) {
+export async function getAudits(projectId: string) {
     const project = await dbCol.projects.findById(projectId);
     if (!project) throw new Error('Project not found');
 
-    const auditLogs = await dbCol.auditLogs.findByProject(projectId, { sort: { createdAt: -1 } });
-    return auditLogs;
+    const audits = await dbCol.audits.findByProject(projectId, { sort: { createdAt: -1 } });
+    return audits;
 }
 
 export async function getProjectCommits(projectId: string) {

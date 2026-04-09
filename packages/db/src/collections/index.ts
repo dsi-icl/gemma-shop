@@ -2,7 +2,7 @@ import '@tanstack/react-start/server-only';
 import type { Db } from 'mongodb';
 
 import { AssetsCollection } from './assets.collection';
-import { AuditLogsCollection } from './audit-logs.collection';
+import { AuditsCollection } from './audits.collection';
 import { CommitsCollection } from './commits.collection';
 import { DevicesCollection } from './devices.collection';
 import { ProjectsCollection } from './projects.collection';
@@ -11,7 +11,7 @@ import { YDocsCollection } from './ydocs.collection';
 
 export { BaseCollection, toEpoch } from './_base';
 export type { BaseDoc, MigrationFn, MigrationMap, PublicDoc } from './_base';
-export { AuditLogsCollection } from './audit-logs.collection';
+export { AuditsCollection } from './audits.collection';
 export { AssetsCollection } from './assets.collection';
 export { CommitsCollection } from './commits.collection';
 export { DevicesCollection } from './devices.collection';
@@ -27,7 +27,7 @@ export function createCollections(db: Db) {
         assets: new AssetsCollection(db),
         walls: new WallsCollection(db),
         devices: new DevicesCollection(db),
-        auditLogs: new AuditLogsCollection(db),
+        audits: new AuditsCollection(db),
         ydocs: new YDocsCollection(db)
     } as const;
 }

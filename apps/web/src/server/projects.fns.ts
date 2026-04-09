@@ -52,7 +52,7 @@ import {
     deleteAsset,
     deleteSlideFromCommit,
     ensureMutableHead,
-    getAuditLogs,
+    getAudits,
     getCommit,
     getProject,
     getProjectCommits,
@@ -201,7 +201,7 @@ export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
         return publishCustomRenderProject(data.projectId, context.user.email);
     });
 
-export const $getAuditLogs = createServerFn({ method: 'GET' })
+export const $getAudits = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ projectId: z.string() }))
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
@@ -209,7 +209,7 @@ export const $getAuditLogs = createServerFn({ method: 'GET' })
         if (!actor) throw new Error('Access denied');
         const allowed = await canViewProject(actor, data.projectId);
         if (!allowed) throw new Error('Access denied');
-        return getAuditLogs(data.projectId);
+        return getAudits(data.projectId);
     });
 
 export const $ensureMutableHead = createServerFn({ method: 'POST' })
