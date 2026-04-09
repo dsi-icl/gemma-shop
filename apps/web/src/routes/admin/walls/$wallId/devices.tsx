@@ -290,7 +290,7 @@ function WallDevicesTab() {
             </div>
 
             <Dialog open={scanDialogOpen} onOpenChange={setScanDialogOpen}>
-                <DialogContent className="max-w-xl p-5">
+                <DialogContent className="w-[calc(100vw-0.5rem)] max-w-[calc(100vw-0.5rem)] p-4 sm:max-w-xl sm:p-5">
                     <DialogTitle>Enroll Devices</DialogTitle>
                     <DialogDescription className="mt-1">
                         Point your camera at each screen QR code. Scanning stays active until you
@@ -359,26 +359,6 @@ function WallDevicesTab() {
                             </div>
                             <span className="text-muted-foreground">Detected: {qrDetections}</span>
                         </div>
-                        <div className="flex justify-end gap-2">
-                            {!cameraReady ? (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => void requestCameraPermission()}
-                                >
-                                    Enable Camera
-                                </Button>
-                            ) : null}
-                            {cameraPermission === 'denied' ? (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => void requestCameraPermission()}
-                                >
-                                    Retry Camera
-                                </Button>
-                            ) : null}
-                        </div>
                         <div className="max-h-40 overflow-auto rounded border border-border bg-muted/20 p-2 text-xs">
                             {scanEvents.length === 0 ? (
                                 <div className="text-muted-foreground">No scans yet.</div>
@@ -398,8 +378,25 @@ function WallDevicesTab() {
                             )}
                         </div>
                     </div>
-
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-4 flex justify-end gap-3">
+                        {!cameraReady ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => void requestCameraPermission()}
+                            >
+                                Enable Camera
+                            </Button>
+                        ) : null}
+                        {cameraPermission === 'denied' ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => void requestCameraPermission()}
+                            >
+                                Retry Camera
+                            </Button>
+                        ) : null}
                         <Button variant="outline" onClick={() => setScanDialogOpen(false)}>
                             Done
                         </Button>
