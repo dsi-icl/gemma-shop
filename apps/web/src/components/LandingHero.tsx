@@ -13,13 +13,19 @@ const MOSAIC_H = Math.round(MOSAIC_W * (6 / (10 * THREE.MathUtils.degToRad(313))
 const GRID_COLS = 16;
 const GRID_ROWS = 4;
 const CELL_COUNT = GRID_COLS * GRID_ROWS;
+const CELL_W = MOSAIC_W / GRID_COLS;
+const CELL_H = MOSAIC_H / GRID_ROWS;
 const FADE_RATE = 0.4; // opacity units per second
 const DRAW_FPS = 24;
 const DRAW_INTERVAL = 1 / DRAW_FPS;
 const FILL_RATIO = 0.4; // fraction of cells that get an image at all
+const PATTERN_MIX_RATIO = 0.35; // within active cells, fraction rendered as blur-pattern tiles
 
 interface CellState {
     image: HTMLImageElement | null;
+    fallback: boolean;
+    hue: number;
+    patternPoints: PatternPoint[];
     targetOpacity: number; // 0 or 1
     currentOpacity: number; // lerped
     nextToggleAt: number; // timestamp when this cell next changes state
@@ -27,6 +33,18 @@ interface CellState {
     sy: number;
     sw: number;
     sh: number;
+}
+
+interface PatternPoint {
+    ox: number;
+    oy: number;
+    hueShift: number;
+    hueDriftAmp: number;
+    hueDriftSpeed: number;
+    hueDriftPhase: number;
+    inner: number;
+    outer: number;
+    strength: number;
 }
 
 function computeCoverCrop(image: HTMLImageElement, cellW: number, cellH: number) {
@@ -42,6 +60,72 @@ function computeCoverCrop(image: HTMLImageElement, cellW: number, cellH: number)
     return { sx: 0, sy: (image.naturalHeight - sh) / 2, sw, sh };
 }
 
+function createPatternPoints(): PatternPoint[] {
+    return Array.from({ length: 3 }, () => {
+        let ox = 0.16 + Math.random() * 0.68;
+        let oy = 0.18 + Math.random() * 0.64;
+        // Keep blobs meaningfully off-centre.
+        if (Math.abs(ox - 0.5) + Math.abs(oy - 0.5) < 0.22) {
+            ox = ox < 0.5 ? ox - 0.12 : ox + 0.12;
+            oy = oy < 0.5 ? oy - 0.12 : oy + 0.12;
+        }
+        return {
+            ox: Math.min(0.9, Math.max(0.1, ox)),
+            oy: Math.min(0.9, Math.max(0.1, oy)),
+            hueShift: -90 + Math.random() * 240,
+            hueDriftAmp: 10 + Math.random() * 30,
+            hueDriftSpeed: 0.00035 + Math.random() * 0.00055,
+            hueDriftPhase: Math.random() * Math.PI * 2,
+            inner: 0.04 + Math.random() * 0.05,
+            outer: 0.5 + Math.random() * 0.24,
+            strength: 0.62 + Math.random() * 0.34
+        };
+    });
+}
+
+function assignRandomTileContent(
+    cell: CellState,
+    images: HTMLImageElement[],
+    patternMixRatio: number,
+    cellW: number,
+    cellH: number
+) {
+    const usePattern = images.length === 0 || Math.random() < patternMixRatio;
+    cell.hue = Math.random() * 360;
+
+    if (usePattern) {
+        cell.image = null;
+        cell.fallback = true;
+        cell.patternPoints = createPatternPoints();
+        cell.sx = 0;
+        cell.sy = 0;
+        cell.sw = 0;
+        cell.sh = 0;
+        return;
+    }
+
+    const img = images[Math.floor(Math.random() * images.length)];
+    if (!img.naturalWidth || !img.naturalHeight) {
+        cell.image = null;
+        cell.fallback = true;
+        cell.patternPoints = createPatternPoints();
+        cell.sx = 0;
+        cell.sy = 0;
+        cell.sw = 0;
+        cell.sh = 0;
+        return;
+    }
+
+    const crop = computeCoverCrop(img, cellW, cellH);
+    cell.image = img;
+    cell.fallback = false;
+    cell.patternPoints = [];
+    cell.sx = crop.sx;
+    cell.sy = crop.sy;
+    cell.sw = crop.sw;
+    cell.sh = crop.sh;
+}
+
 function drawMosaic(
     ctx: CanvasRenderingContext2D,
     cells: CellState[],
@@ -51,23 +135,53 @@ function drawMosaic(
 ) {
     const cellW = MOSAIC_W / cols;
     const cellH = MOSAIC_H / rows;
+    const time = performance.now();
     ctx.globalAlpha = 1;
     ctx.drawImage(staticLayer, 0, 0);
 
     for (let i = 0; i < cells.length; i++) {
         const cell = cells[i];
-        if (cell.currentOpacity < 0.01 || !cell.image) continue;
-
-        const img = cell.image;
-        if (!img.naturalWidth || !img.naturalHeight) continue;
+        if (cell.currentOpacity < 0.01) continue;
 
         const col = i % cols;
         const row = Math.floor(i / cols);
         const x = col * cellW;
         const y = row * cellH;
 
-        ctx.globalAlpha = cell.currentOpacity;
-        ctx.drawImage(img, cell.sx, cell.sy, cell.sw, cell.sh, x, y, cellW, cellH);
+        if (cell.image) {
+            const img = cell.image;
+            if (!img.naturalWidth || !img.naturalHeight) continue;
+            ctx.globalAlpha = cell.currentOpacity;
+            ctx.drawImage(img, cell.sx, cell.sy, cell.sw, cell.sh, x, y, cellW, cellH);
+            continue;
+        }
+
+        if (!cell.fallback) continue;
+
+        const alpha = Math.min(0.9, cell.currentOpacity);
+        const points = cell.patternPoints.length > 0 ? cell.patternPoints : createPatternPoints();
+
+        for (let p = 0; p < points.length; p++) {
+            const point = points[p];
+            const cx = x + cellW * point.ox;
+            const cy = y + cellH * point.oy;
+            const glow = ctx.createRadialGradient(
+                cx,
+                cy,
+                cellW * point.inner,
+                cx,
+                cy,
+                cellW * point.outer
+            );
+            const drift =
+                Math.sin(time * point.hueDriftSpeed + point.hueDriftPhase) * point.hueDriftAmp;
+            const startHue = (cell.hue + point.hueShift + drift + 360) % 360;
+            const edgeHue = (startHue + 36) % 360;
+            glow.addColorStop(0, `hsla(${startHue}, 92%, 64%, ${alpha * point.strength})`);
+            glow.addColorStop(1, `hsla(${edgeHue}, 86%, 44%, 0)`);
+            ctx.fillStyle = glow;
+            ctx.fillRect(x, y, cellW, cellH);
+        }
     }
 }
 
@@ -89,6 +203,8 @@ function MosaicCylinder({
     const staticLayerRef = useRef<HTMLCanvasElement | null>(null);
     const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
     const cellsRef = useRef<CellState[]>([]);
+    const loadedImagesRef = useRef<HTMLImageElement[]>([]);
+    const patternMixRatioRef = useRef(PATTERN_MIX_RATIO);
     const elapsedRef = useRef(0);
     const [ready, setReady] = useState(false);
 
@@ -96,26 +212,41 @@ function MosaicCylinder({
 
     // Load images and initialise cell state
     useEffect(() => {
-        if (heroImages.length === 0) return;
-
-        // Only assign images to a subset of cells
-        const fillCount = Math.round(CELL_COUNT * FILL_RATIO);
+        const useFallbackOnly = heroImages.length === 0;
+        patternMixRatioRef.current = useFallbackOnly ? 1 : PATTERN_MIX_RATIO;
+        // Only assign content to a subset of cells.
+        // With no images we fill every tile with blur-pattern content.
+        const fillCount = useFallbackOnly ? CELL_COUNT : Math.round(CELL_COUNT * FILL_RATIO);
         const shuffled = Array.from({ length: CELL_COUNT }, (_, i) => i);
         for (let i = shuffled.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
-        const activeCells = new Set(shuffled.slice(0, fillCount));
+        const activeCellIds = shuffled.slice(0, fillCount);
+        const activeCells = new Set(activeCellIds);
 
-        // Only load images for active cells
-        const urls = Array.from({ length: fillCount }, (_, i) => {
-            const img = heroImages[i % heroImages.length];
-            return selectAssetVariantSrc({
-                src: img.src,
-                sizes: img.sizes,
-                targetWidth: 800
-            });
-        });
+        const patternCells = new Set<number>();
+        if (useFallbackOnly) {
+            for (const id of activeCellIds) patternCells.add(id);
+        } else {
+            const patternCount = Math.round(fillCount * PATTERN_MIX_RATIO);
+            for (let i = 0; i < patternCount; i++) {
+                patternCells.add(activeCellIds[i]);
+            }
+        }
+        const imageCells = activeCellIds.filter((id) => !patternCells.has(id));
+
+        // Only load images for image-designated active cells
+        const urls = useFallbackOnly
+            ? []
+            : Array.from({ length: imageCells.length }, (_, i) => {
+                  const img = heroImages[i % heroImages.length];
+                  return selectAssetVariantSrc({
+                      src: img.src,
+                      sizes: img.sizes,
+                      targetWidth: 800
+                  });
+              });
 
         let cancelled = false;
 
@@ -133,14 +264,17 @@ function MosaicCylinder({
         ).then((loaded) => {
             if (cancelled) return;
 
+            loadedImagesRef.current = loaded.filter((img) => img.naturalWidth && img.naturalHeight);
+
             const now = performance.now();
             let imgIdx = 0;
-            const cellW = MOSAIC_W / GRID_COLS;
-            const cellH = MOSAIC_H / GRID_ROWS;
             cellsRef.current = Array.from({ length: CELL_COUNT }, (_, i) => {
                 if (!activeCells.has(i)) {
                     return {
                         image: null,
+                        fallback: false,
+                        hue: 0,
+                        patternPoints: [],
                         targetOpacity: 0,
                         currentOpacity: 0,
                         nextToggleAt: Infinity,
@@ -150,14 +284,20 @@ function MosaicCylinder({
                         sh: 0
                     };
                 }
-                const img = loaded[imgIdx++ % loaded.length];
-                const validImage = img.naturalWidth ? img : null;
+                const usePatternTile = patternCells.has(i);
+                const img =
+                    usePatternTile || loaded.length === 0 ? null : loaded[imgIdx++ % loaded.length];
+                const validImage = img && img.naturalWidth ? img : null;
                 const crop = validImage
-                    ? computeCoverCrop(validImage, cellW, cellH)
+                    ? computeCoverCrop(validImage, CELL_W, CELL_H)
                     : { sx: 0, sy: 0, sw: 0, sh: 0 };
                 const visible = Math.random() < 0.5;
+                const fallback = usePatternTile || !validImage;
                 return {
                     image: validImage,
+                    fallback,
+                    hue: 170 + Math.random() * 200,
+                    patternPoints: fallback ? createPatternPoints() : [],
                     targetOpacity: visible ? 1 : 0,
                     currentOpacity: 0,
                     // Stagger initial toggles + random off-time (3-8s)
@@ -183,14 +323,14 @@ function MosaicCylinder({
                 staticCtx.strokeStyle = '#333';
                 for (let i = 1; i < GRID_COLS; i++) {
                     staticCtx.beginPath();
-                    staticCtx.moveTo(i * cellW, 0);
-                    staticCtx.lineTo(i * cellW, MOSAIC_H);
+                    staticCtx.moveTo(i * CELL_W, 0);
+                    staticCtx.lineTo(i * CELL_W, MOSAIC_H);
                     staticCtx.stroke();
                 }
                 for (let i = 1; i < GRID_ROWS; i++) {
                     staticCtx.beginPath();
-                    staticCtx.moveTo(0, i * cellH);
-                    staticCtx.lineTo(MOSAIC_W, i * cellH);
+                    staticCtx.moveTo(0, i * CELL_H);
+                    staticCtx.lineTo(MOSAIC_W, i * CELL_H);
                     staticCtx.stroke();
                 }
             }
@@ -239,8 +379,17 @@ function MosaicCylinder({
         // Per-cell timers: each cell toggles on its own random schedule
         const now = performance.now();
         for (const cell of cells) {
-            if (!cell.image || now < cell.nextToggleAt) continue;
+            if ((!cell.image && !cell.fallback) || now < cell.nextToggleAt) continue;
             const goingOn = cell.targetOpacity < 0.5;
+            if (goingOn) {
+                assignRandomTileContent(
+                    cell,
+                    loadedImagesRef.current,
+                    patternMixRatioRef.current,
+                    CELL_W,
+                    CELL_H
+                );
+            }
             cell.targetOpacity = goingOn ? 1 : 0;
             // Visible for 3-6s, dark for 5-12s
             cell.nextToggleAt =
@@ -290,7 +439,7 @@ function MosaicCylinder({
 const ORIGIN = new THREE.Vector3(0, 8, 25);
 const TARGET = new THREE.Vector3(0, -1, 0);
 const IDLE_TIMEOUT = 2500; // ms after last interaction before returning to origin
-const SWEEP_SPEED = 0.1; // degrees per frame for the idle sweep target
+const SWEEP_SPEED = 0.01; // degrees per frame for the idle sweep target
 const SWEEP_HALF = 25; // degrees each side of centre
 const LERP_FACTOR = 0.008; // smoothing factor for all camera movement
 
