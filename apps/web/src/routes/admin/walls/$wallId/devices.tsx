@@ -51,8 +51,11 @@ function WallDevicesTab() {
     const [scanEvents, setScanEvents] = useState<Array<{ id: string; text: string; ok: boolean }>>(
         []
     );
+    const [qrDetections, setQrDetections] = useState(0);
+    const [qrDetectedFlash, setQrDetectedFlash] = useState(false);
     const seenPayloadsRef = useRef(new Set<string>());
     const processingRef = useRef(false);
+    const qrFlashTimeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (!scanDialogOpen) return;
@@ -61,6 +64,8 @@ function WallDevicesTab() {
         setCameraReady(false);
         seenPayloadsRef.current.clear();
         setScanEvents([]);
+        setQrDetections(0);
+        setQrDetectedFlash(false);
 
         void (async () => {
             try {
@@ -87,6 +92,16 @@ function WallDevicesTab() {
             }
         })();
     }, [scanDialogOpen]);
+
+    useEffect(
+        () => () => {
+            if (qrFlashTimeoutRef.current != null) {
+                window.clearTimeout(qrFlashTimeoutRef.current);
+                qrFlashTimeoutRef.current = null;
+            }
+        },
+        []
+    );
 
     const requestCameraPermission = async () => {
         setScanStatus('Requesting camera access...');
@@ -119,6 +134,18 @@ function WallDevicesTab() {
         );
     };
 
+    const signalQrDetected = () => {
+        setQrDetections((current) => current + 1);
+        setQrDetectedFlash(true);
+        if (qrFlashTimeoutRef.current != null) {
+            window.clearTimeout(qrFlashTimeoutRef.current);
+        }
+        qrFlashTimeoutRef.current = window.setTimeout(() => {
+            setQrDetectedFlash(false);
+            qrFlashTimeoutRef.current = null;
+        }, 1200);
+    };
+
     const parsePayload = (raw: string) => {
         try {
             const parsed = JSON.parse(raw) as {
@@ -147,8 +174,11 @@ function WallDevicesTab() {
             const raw = detection.rawValue?.trim();
             if (!raw || seenPayloadsRef.current.has(raw)) continue;
             seenPayloadsRef.current.add(raw);
+            signalQrDetected();
+            setScanStatus('QR detected. Validating payload...');
             const payload = parsePayload(raw);
             if (!payload) {
+                setScanStatus('Detected QR code is not a valid enrollment payload.');
                 pushEvent('Skipped: QR is not a valid enrollment payload', false);
                 continue;
             }
@@ -156,12 +186,14 @@ function WallDevicesTab() {
                 allDevices as Array<{ id: string; kind?: 'wall' | 'gallery' | 'controller' }>
             ).find((d) => d.id === payload.id)?.kind;
             if (!kind) {
+                setScanStatus('QR detected, but device kind could not be resolved.');
                 pushEvent(`Failed ${payload.id.slice(0, 8)}...: unknown device kind`, false);
                 continue;
             }
 
             processingRef.current = true;
             try {
+                setScanStatus(`QR detected for ${payload.id.slice(0, 8)}... enrolling...`);
                 await $adminDevicesEnrollBySignature({
                     data: {
                         id: payload.id,
@@ -178,8 +210,10 @@ function WallDevicesTab() {
                     queryClient.invalidateQueries({ queryKey: ['admin', 'walls'] })
                 ]);
                 pushEvent(`Enrolled ${payload.id.slice(0, 8)}...`, true);
+                setScanStatus('Enrollment succeeded. Continue scanning.');
                 toast.success(`Device enrolled: ${payload.id.slice(0, 8)}...`);
             } catch (error: any) {
+                setScanStatus('Enrollment failed. Continue scanning.');
                 pushEvent(
                     `Failed ${payload.id.slice(0, 8)}...: ${error?.message ?? 'Unknown error'}`,
                     false
@@ -293,17 +327,38 @@ function WallDevicesTab() {
                                     paused={!scanDialogOpen || cameraPermission === 'denied'}
                                     scanDelay={250}
                                     classNames={{
-                                        container: 'h-72 w-full',
-                                        video: 'h-72 w-full object-cover'
+                                        container: 'h-[22rem] w-full sm:h-[26rem]',
+                                        video: 'h-[22rem] w-full object-cover sm:h-[26rem]'
                                     }}
                                 />
                             ) : (
-                                <div className="flex h-72 w-full items-center justify-center text-sm text-muted-foreground">
+                                <div className="flex h-88 w-full items-center justify-center text-sm text-muted-foreground sm:h-104">
                                     Camera is not active yet.
                                 </div>
                             )}
                         </div>
                         <p className="text-xs text-muted-foreground">{scanStatus}</p>
+                        <div className="flex items-center justify-between rounded border border-border bg-muted/20 px-3 py-2 text-xs">
+                            <div className="flex items-center gap-2">
+                                <span
+                                    className={`h-2 w-2 rounded-full ${
+                                        qrDetectedFlash
+                                            ? 'bg-emerald-500'
+                                            : 'bg-muted-foreground/40'
+                                    }`}
+                                />
+                                <span
+                                    className={
+                                        qrDetectedFlash
+                                            ? 'font-medium text-emerald-600'
+                                            : 'text-muted-foreground'
+                                    }
+                                >
+                                    {qrDetectedFlash ? 'QR code detected' : 'Waiting for QR code'}
+                                </span>
+                            </div>
+                            <span className="text-muted-foreground">Detected: {qrDetections}</span>
+                        </div>
                         <div className="flex justify-end gap-2">
                             {!cameraReady ? (
                                 <Button
