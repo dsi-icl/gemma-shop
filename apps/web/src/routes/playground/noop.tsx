@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/playground/noop')({
+    head: () => ({
+        meta: [{ title: 'Disconnected · Playground · GemmaShop' }]
+    }),
     component: NoopPage
 });
 

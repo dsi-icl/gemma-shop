@@ -11,11 +11,19 @@ import { AnimatePresence, motion } from 'motion/react';
 import { adminDevicesForWallQueryOptions, adminWallQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/walls/$wallId')({
-    component: WallLayout,
-    loader: ({ context, params }) => {
-        context.queryClient.ensureQueryData(adminWallQueryOptions(params.wallId));
+    loader: async ({ context, params }) => {
+        const wall = await context.queryClient.ensureQueryData(
+            adminWallQueryOptions(params.wallId)
+        );
         context.queryClient.ensureQueryData(adminDevicesForWallQueryOptions(params.wallId));
-    }
+        return {
+            wallName: wall?.name || wall?.wallId || 'Wall'
+        };
+    },
+    component: WallLayout,
+    head: ({ loaderData }) => ({
+        meta: [{ title: `${loaderData?.wallName ?? 'Wall'} · Admin · GemmaShop` }]
+    })
 });
 
 const TAB_ORDER = { info: 0, devices: 1 } as const;

@@ -8,6 +8,9 @@ import { ProjectForm } from '~/components/ProjectForm';
 import { $createProject } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/_auth/quarry/projects/new')({
+    head: () => ({
+        meta: [{ title: 'New Project · Quarry · GemmaShop' }]
+    }),
     component: NewProject
 });
 

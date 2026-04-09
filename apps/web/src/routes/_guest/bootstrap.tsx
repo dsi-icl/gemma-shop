@@ -54,6 +54,9 @@ export const Route = createFileRoute('/_guest/bootstrap' as any)({
         }
         return status;
     },
+    head: () => ({
+        meta: [{ title: 'Bootstrap Setup · GemmaShop' }]
+    }),
     component: BootstrapPage
 });
 

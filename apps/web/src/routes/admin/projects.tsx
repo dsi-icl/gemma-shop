@@ -5,10 +5,13 @@ import { formatDateValue } from '~/lib/safeDate';
 import { adminProjectsQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/projects')({
-    component: AdminProjects,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(adminProjectsQueryOptions());
-    }
+    },
+    component: AdminProjects,
+    head: () => ({
+        meta: [{ title: 'Projects · Admin · GemmaShop' }]
+    })
 });
 
 function AdminProjects() {

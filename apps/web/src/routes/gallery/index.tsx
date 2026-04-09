@@ -16,10 +16,13 @@ import { publishedProjectsQueryOptions } from '~/server/projects.queries';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
 export const Route = createFileRoute('/gallery/')({
-    component: HomePage,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(publishedProjectsQueryOptions());
-    }
+    },
+    component: HomePage,
+    head: () => ({
+        meta: [{ title: 'Gallery · GemmaShop' }]
+    })
 });
 
 type ProjectWithId = Project & { id: string; publishedCommitId?: string | null };

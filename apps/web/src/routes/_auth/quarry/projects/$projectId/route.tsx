@@ -33,10 +33,18 @@ import {
 import { projectQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId')({
+    loader: async ({ context, params }) => {
+        const project = await context.queryClient.ensureQueryData(
+            projectQueryOptions(params.projectId)
+        );
+        return {
+            projectName: project?.name ?? 'Project'
+        };
+    },
     component: ProjectLayout,
-    loader: ({ context, params }) => {
-        context.queryClient.ensureQueryData(projectQueryOptions(params.projectId));
-    }
+    head: ({ loaderData }) => ({
+        meta: [{ title: `${loaderData?.projectName ?? 'Project'} · Quarry · GemmaShop` }]
+    })
 });
 
 const TAB_ORDER = { info: 0, permissions: 1, commits: 2, history: 3, assets: 4 } as const;

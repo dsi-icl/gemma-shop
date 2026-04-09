@@ -18,6 +18,17 @@ import { useEditorStore } from '~/lib/editorStore';
 import { projectQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/editor/$projectId/$commitId/$slideId')({
+    loader: async ({ context, params }) => {
+        const project = await context.queryClient.ensureQueryData(
+            projectQueryOptions(params.projectId)
+        );
+        return {
+            projectName: project?.name ?? 'Project'
+        };
+    },
+    head: ({ loaderData }) => ({
+        meta: [{ title: `Editor · ${loaderData?.projectName ?? 'Project'} · GemmaShop` }]
+    }),
     component: SlideEditor
 });
 

@@ -8,7 +8,6 @@ import { publishedProjectsQueryOptions } from '~/server/projects.queries';
 const LandingHero = lazy(() => import('~/components/LandingHero'));
 
 export const Route = createFileRoute('/')({
-    component: HomePage,
     beforeLoad: async ({ context, search }) => {
         const { w } = search as { w?: string };
         if (w) {
@@ -18,9 +17,13 @@ export const Route = createFileRoute('/')({
             }
         }
     },
+    component: HomePage,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(publishedProjectsQueryOptions());
-    }
+    },
+    head: () => ({
+        meta: [{ title: 'Home · GemmaShop' }]
+    })
 });
 
 function HomePage() {

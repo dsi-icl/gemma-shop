@@ -18,6 +18,17 @@ import { $adminDeleteWall, $adminUpdateWallMetadata } from '~/server/admin.fns';
 import { adminWallQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/walls/$wallId/')({
+    loader: async ({ context, params }) => {
+        const wall = await context.queryClient.ensureQueryData(
+            adminWallQueryOptions(params.wallId)
+        );
+        return {
+            wallName: wall?.name || wall?.wallId || 'Wall'
+        };
+    },
+    head: ({ loaderData }) => ({
+        meta: [{ title: `Wall Info · ${loaderData?.wallName ?? 'Wall'} · Admin · GemmaShop` }]
+    }),
     component: WallInfoTab
 });
 

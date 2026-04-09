@@ -15,10 +15,13 @@ import { $adminDeleteDevice } from '~/server/admin.fns';
 import { adminDevicesQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/devices')({
-    component: AdminDevices,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(adminDevicesQueryOptions());
-    }
+    },
+    component: AdminDevices,
+    head: () => ({
+        meta: [{ title: 'Devices · Admin · GemmaShop' }]
+    })
 });
 
 function AdminDevices() {

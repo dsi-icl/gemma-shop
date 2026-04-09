@@ -6,10 +6,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { adminStatsQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/stats')({
-    component: AdminStats,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(adminStatsQueryOptions());
-    }
+    },
+    component: AdminStats,
+    head: () => ({
+        meta: [{ title: 'Stats · Admin · GemmaShop' }]
+    })
 });
 
 function StatCard({ label, value }: { label: string; value: string | number }) {

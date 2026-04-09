@@ -20,6 +20,9 @@ const HYDRATE_IFRAME_TIMEOUT_MS = 2000;
 const warmedImageUrls = new Set<string>();
 
 export const Route = createFileRoute('/wall/')({
+    head: () => ({
+        meta: [{ title: 'Wall Display · GemmaShop' }]
+    }),
     component: WallApp
 });
 

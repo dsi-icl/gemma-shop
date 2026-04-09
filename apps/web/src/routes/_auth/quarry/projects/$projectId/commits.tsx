@@ -132,10 +132,19 @@ function CommitGraphNode({
 }
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId/commits')({
-    component: CommitsTab,
-    loader: ({ context, params }) => {
+    loader: async ({ context, params }) => {
         context.queryClient.ensureQueryData(commitsQueryOptions(params.projectId));
-    }
+        const project = await context.queryClient.ensureQueryData(
+            projectQueryOptions(params.projectId)
+        );
+        return {
+            projectName: project?.name ?? 'Project'
+        };
+    },
+    component: CommitsTab,
+    head: ({ loaderData }) => ({
+        meta: [{ title: `Commits · ${loaderData?.projectName ?? 'Project'} · GemmaShop` }]
+    })
 });
 
 function CommitsTab() {

@@ -12,10 +12,13 @@ import { $adminCreateWall, $adminUnbindWall } from '~/server/admin.fns';
 import { adminWallBindingMetaQueryOptions, adminWallsQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/walls/')({
-    component: AdminWalls,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(adminWallsQueryOptions());
-    }
+    },
+    component: AdminWalls,
+    head: () => ({
+        meta: [{ title: 'Walls · Admin · GemmaShop' }]
+    })
 });
 
 function AdminWalls() {

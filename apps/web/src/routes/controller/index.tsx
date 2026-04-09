@@ -28,6 +28,9 @@ const HYDRATE_TIMEOUT_MS = 2000;
 const TEMP_BOUND_SLIDE_ID = '__bound-current__';
 
 export const Route = createFileRoute('/controller/')({
+    head: () => ({
+        meta: [{ title: 'Controller · GemmaShop' }]
+    }),
     component: Controller
 });
 

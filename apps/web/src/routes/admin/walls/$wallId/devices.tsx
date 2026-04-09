@@ -13,9 +13,25 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { $adminDeleteDevice, $adminDevicesEnrollBySignature } from '~/server/admin.fns';
-import { adminDevicesForWallQueryOptions, adminDevicesQueryOptions } from '~/server/admin.queries';
+import {
+    adminDevicesForWallQueryOptions,
+    adminDevicesQueryOptions,
+    adminWallQueryOptions
+} from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/walls/$wallId/devices')({
+    loader: async ({ context, params }) => {
+        const wall = await context.queryClient.ensureQueryData(
+            adminWallQueryOptions(params.wallId)
+        );
+        context.queryClient.ensureQueryData(adminDevicesForWallQueryOptions(params.wallId));
+        return {
+            wallName: wall?.name || wall?.wallId || 'Wall'
+        };
+    },
+    head: ({ loaderData }) => ({
+        meta: [{ title: `Wall Devices · ${loaderData?.wallName ?? 'Wall'} · Admin · GemmaShop` }]
+    }),
     component: WallDevicesTab
 });
 

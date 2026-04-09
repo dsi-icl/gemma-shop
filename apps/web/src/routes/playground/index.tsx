@@ -32,6 +32,9 @@ const NATIVE_PREVIEW_WIDTH = 1920;
 const NATIVE_PREVIEW_HEIGHT = 1080;
 
 export const Route = createFileRoute('/playground/')({
+    head: () => ({
+        meta: [{ title: 'Playground · GemmaShop' }]
+    }),
     component: HomePage
 });
 

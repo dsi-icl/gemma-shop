@@ -2,7 +2,6 @@ import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_guest')({
-    component: RouteComponent,
     beforeLoad: async ({ context, location }) => {
         const REDIRECT_URL = '/quarry';
         const pathname = location.pathname.replace(/\/+$/, '') || '/';
@@ -26,7 +25,11 @@ export const Route = createFileRoute('/_guest')({
         return {
             redirectUrl: REDIRECT_URL
         };
-    }
+    },
+    component: RouteComponent,
+    head: () => ({
+        meta: [{ title: 'Sign In · GemmaShop' }]
+    })
 });
 
 function RouteComponent() {

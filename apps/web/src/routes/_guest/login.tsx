@@ -23,6 +23,9 @@ export const Route = createFileRoute('/_guest/login')({
             throw redirect({ to: '/bootstrap' });
         }
     },
+    head: () => ({
+        meta: [{ title: 'Login · GemmaShop' }]
+    }),
     component: LoginForm
 });
 

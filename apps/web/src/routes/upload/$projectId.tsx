@@ -16,6 +16,9 @@ import { scrubInsecureTusResumeEntries } from '~/lib/tusClient';
 import { $validateUploadToken } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/upload/$projectId')({
+    head: () => ({
+        meta: [{ title: 'Upload · GemmaShop' }]
+    }),
     component: MobileUpload
 });
 

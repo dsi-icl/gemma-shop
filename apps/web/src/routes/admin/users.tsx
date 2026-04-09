@@ -9,10 +9,13 @@ import { $adminSetUserBanStatus } from '~/server/admin.fns';
 import { adminUsersQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/users')({
-    component: AdminUsers,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(adminUsersQueryOptions());
-    }
+    },
+    component: AdminUsers,
+    head: () => ({
+        meta: [{ title: 'Users · Admin · GemmaShop' }]
+    })
 });
 
 function AdminUsers() {

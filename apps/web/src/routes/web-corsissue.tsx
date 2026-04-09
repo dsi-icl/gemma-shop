@@ -2,6 +2,9 @@ import { YinYangIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/web-corsissue')({
+    head: () => ({
+        meta: [{ title: 'CORS Issue · GemmaShop' }]
+    }),
     component: WebNoNet
 });
 

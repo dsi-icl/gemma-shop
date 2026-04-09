@@ -41,11 +41,19 @@ const COLS = 16;
 const ROWS = 4;
 
 export const Route = createFileRoute('/_auth/quarry/view/$projectId/$commitId')({
-    component: CommitViewer,
-    loader: ({ context, params }) => {
+    loader: async ({ context, params }) => {
         context.queryClient.ensureQueryData(commitQueryOptions(params.commitId));
-        context.queryClient.ensureQueryData(projectQueryOptions(params.projectId));
-    }
+        const project = await context.queryClient.ensureQueryData(
+            projectQueryOptions(params.projectId)
+        );
+        return {
+            projectName: project?.name ?? 'Project'
+        };
+    },
+    component: CommitViewer,
+    head: ({ loaderData }) => ({
+        meta: [{ title: `Commit Viewer · ${loaderData?.projectName ?? 'Project'} · GemmaShop` }]
+    })
 });
 
 function CommitViewer() {

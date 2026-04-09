@@ -25,7 +25,6 @@ import { SubHeaderSlotOutlet, SubHeaderSlotProvider } from '~/lib/subHeaderSlot'
 import { $finalizeFirstAdminForCurrentUser } from '~/server/bootstrap.fns';
 
 export const Route = createFileRoute('/admin')({
-    component: AdminLayout,
     beforeLoad: async ({ context }) => {
         let user = await context.queryClient.ensureQueryData({
             ...authQueryOptions(),
@@ -41,7 +40,11 @@ export const Route = createFileRoute('/admin')({
         }
         if (user?.role !== 'admin') throw redirect({ to: '/quarry' });
         return { user };
-    }
+    },
+    component: AdminLayout,
+    head: () => ({
+        meta: [{ title: 'Admin · GemmaShop' }]
+    })
 });
 
 const NAV = [

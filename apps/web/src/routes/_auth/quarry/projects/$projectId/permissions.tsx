@@ -28,6 +28,17 @@ import { $updateProject } from '~/server/projects.fns';
 import { projectQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId/permissions')({
+    loader: async ({ context, params }) => {
+        const project = await context.queryClient.ensureQueryData(
+            projectQueryOptions(params.projectId)
+        );
+        return {
+            projectName: project?.name ?? 'Project'
+        };
+    },
+    head: ({ loaderData }) => ({
+        meta: [{ title: `Permissions · ${loaderData?.projectName ?? 'Project'} · GemmaShop` }]
+    }),
     component: PermissionsTab
 });
 

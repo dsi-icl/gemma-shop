@@ -42,10 +42,13 @@ import { $archiveProject, $publishCommit, $restoreProject } from '~/server/proje
 import { projectsQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/')({
-    component: QuarryIndex,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(projectsQueryOptions());
-    }
+    },
+    component: QuarryIndex,
+    head: () => ({
+        meta: [{ title: 'Projects · Quarry · GemmaShop' }]
+    })
 });
 
 const columnHelper = createColumnHelper<Project>();

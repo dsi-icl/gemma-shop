@@ -10,10 +10,13 @@ import { $adminSendSmtpTest, $adminSetConfig } from '~/server/admin.fns';
 import { adminConfigQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/config')({
-    component: AdminConfig,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(adminConfigQueryOptions());
-    }
+    },
+    component: AdminConfig,
+    head: () => ({
+        meta: [{ title: 'Configuration · Admin · GemmaShop' }]
+    })
 });
 
 function stringifyValue(value: unknown, type: string): string {

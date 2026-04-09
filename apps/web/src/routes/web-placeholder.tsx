@@ -2,6 +2,9 @@ import { GlobeSimpleIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/web-placeholder')({
+    head: () => ({
+        meta: [{ title: 'Web Placeholder · GemmaShop' }]
+    }),
     component: WebPlaceholder
 });
 

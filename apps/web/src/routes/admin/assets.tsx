@@ -44,10 +44,13 @@ import { $revokeUploadToken } from '~/server/projects.fns';
 const assetColumnHelper = createColumnHelper<Asset>();
 
 export const Route = createFileRoute('/admin/assets')({
-    component: AdminAssetsPage,
     loader: ({ context }) => {
         context.queryClient.ensureQueryData(adminPublicAssetsQueryOptions());
-    }
+    },
+    component: AdminAssetsPage,
+    head: () => ({
+        meta: [{ title: 'Public Assets · Admin · GemmaShop' }]
+    })
 });
 
 type View = 'list' | 'list-preview' | 'grid';

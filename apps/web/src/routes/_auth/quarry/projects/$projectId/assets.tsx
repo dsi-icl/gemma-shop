@@ -37,15 +37,24 @@ import { isFontAsset, sortAssetsFontsLast } from '~/lib/mediaUtils';
 import { toLocalDateTimeString } from '~/lib/safeDate';
 import { useSubHeaderSlot } from '~/lib/subHeaderSlot';
 import { $deleteAsset } from '~/server/projects.fns';
-import { projectAssetsQueryOptions } from '~/server/projects.queries';
+import { projectAssetsQueryOptions, projectQueryOptions } from '~/server/projects.queries';
 
 const assetColumnHelper = createColumnHelper<Asset>();
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId/assets')({
-    component: AssetsTab,
-    loader: ({ context, params }) => {
+    loader: async ({ context, params }) => {
         context.queryClient.ensureQueryData(projectAssetsQueryOptions(params.projectId));
-    }
+        const project = await context.queryClient.ensureQueryData(
+            projectQueryOptions(params.projectId)
+        );
+        return {
+            projectName: project?.name ?? 'Project'
+        };
+    },
+    component: AssetsTab,
+    head: ({ loaderData }) => ({
+        meta: [{ title: `Assets · ${loaderData?.projectName ?? 'Project'} · GemmaShop` }]
+    })
 });
 
 type View = 'list' | 'list-preview' | 'grid';

@@ -3,13 +3,22 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { toLocalDateTimeString } from '~/lib/safeDate';
-import { auditLogsQueryOptions } from '~/server/projects.queries';
+import { auditLogsQueryOptions, projectQueryOptions } from '~/server/projects.queries';
 
 export const Route = createFileRoute('/_auth/quarry/projects/$projectId/history')({
-    component: HistoryTab,
-    loader: ({ context, params }) => {
+    loader: async ({ context, params }) => {
         context.queryClient.ensureQueryData(auditLogsQueryOptions(params.projectId));
-    }
+        const project = await context.queryClient.ensureQueryData(
+            projectQueryOptions(params.projectId)
+        );
+        return {
+            projectName: project?.name ?? 'Project'
+        };
+    },
+    component: HistoryTab,
+    head: ({ loaderData }) => ({
+        meta: [{ title: `History · ${loaderData?.projectName ?? 'Project'} · GemmaShop` }]
+    })
 });
 
 function HistoryTab() {
