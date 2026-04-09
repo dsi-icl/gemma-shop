@@ -6,7 +6,7 @@ import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_b
 
 export class AuditsCollection extends BaseCollection<AuditLogDocument> {
     readonly collectionName = 'audits';
-    readonly currentVersion = 1;
+    readonly currentVersion = 2;
 
     protected readonly migrations: MigrationMap = {
         0: (doc) => ({

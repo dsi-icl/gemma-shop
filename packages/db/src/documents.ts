@@ -151,6 +151,51 @@ export interface YDocDocument {
     updatedAt: number;
 }
 
+export interface AuthContext {
+    guest?: boolean;
+    user?: {
+        email: string;
+        role: 'admin' | 'user';
+    };
+    device?: {
+        id: string;
+        kind: 'wall' | 'controller' | 'gallery';
+        wallId?: string;
+    };
+    portal?: {
+        wallId: string;
+    };
+}
+
+export interface AuditExecutionContext {
+    surface?: 'http' | 'serverfn' | 'ws' | 'yjs' | 'job' | 'system' | 'unknown' | null;
+    operation?: string | null;
+    method?: string | null;
+    path?: string | null;
+    requestId?: string | null;
+    peerId?: string | null;
+    ip?: string | null;
+    userAgent?: string | null;
+    details?: { [key: string]: JsonValue } | null;
+}
+
+export type AuditResourceType =
+    | 'project'
+    | 'commit'
+    | 'asset'
+    | 'wall'
+    | 'device'
+    | 'user'
+    | 'upload_token'
+    | 'start_route'
+    | 'ws_message'
+    | 'portal_token'
+    | 'bootstrap'
+    | 'config'
+    | 'smtp'
+    | 'scope'
+    | 'unknown';
+
 export interface AuditLogDocument {
     _id: ObjectId;
     id: string;
@@ -158,10 +203,12 @@ export interface AuditLogDocument {
     actorId: string | null;
     action: string;
     outcome: 'success' | 'denied' | 'failure' | 'error';
-    resourceType?: string | null;
+    resourceType?: AuditResourceType | null;
     resourceId?: string | null;
     reasonCode?: string | null;
     changes?: { [key: string]: JsonValue } | null;
     error?: string | null;
+    authContext?: AuthContext | null;
+    executionContext?: AuditExecutionContext | null;
     createdAt: number;
 }

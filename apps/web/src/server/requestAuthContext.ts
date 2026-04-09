@@ -1,4 +1,5 @@
 import { auth } from '@repo/auth/auth';
+import type { AuthContext } from '@repo/db/documents';
 
 import { validatePortalToken } from '~/lib/portalTokens';
 import {
@@ -14,21 +15,7 @@ import {
 } from '~/lib/requestSignatureContract';
 import { dbCol } from '~/server/collections';
 
-export type AuthContext = {
-    guest?: boolean;
-    user?: {
-        email: string;
-        role: 'admin' | 'user';
-    };
-    device?: {
-        id: string;
-        kind: 'wall' | 'controller' | 'gallery';
-        wallId?: string;
-    };
-    portal?: {
-        wallId: string;
-    };
-};
+export type { AuthContext } from '@repo/db/documents';
 
 const DEVICE_CLOCK_SKEW_MS = 60_000;
 const NONCE_TTL_MS = 5 * 60_000;
