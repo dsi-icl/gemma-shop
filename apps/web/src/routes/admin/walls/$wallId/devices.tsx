@@ -183,12 +183,18 @@ function WallDevicesTab() {
                 pushEvent('Skipped: QR is not a valid enrollment payload', false);
                 continue;
             }
-            const kind = (
+            const knownDevice = (
                 allDevices as Array<{ id: string; kind?: 'wall' | 'gallery' | 'controller' }>
-            ).find((d) => d.id === payload.id)?.kind;
+            ).find((d) => d.id === payload.id);
+            if (!knownDevice) {
+                setScanStatus('QR detected, but this device ID is not registered.');
+                pushEvent(`Failed ${payload.id.slice(0, 8)}...: unknown device`, false);
+                continue;
+            }
+            const kind = knownDevice.kind;
             if (!kind) {
-                setScanStatus('QR detected, but device kind could not be resolved.');
-                pushEvent(`Failed ${payload.id.slice(0, 8)}...: unknown device kind`, false);
+                setScanStatus('QR detected, but device kind is missing.');
+                pushEvent(`Failed ${payload.id.slice(0, 8)}...: missing device kind`, false);
                 continue;
             }
 
