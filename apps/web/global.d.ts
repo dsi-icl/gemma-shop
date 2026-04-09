@@ -9,6 +9,9 @@ import type { WallEngine } from '~/lib/wallEngine';
 export {};
 
 declare global {
+    const __APP_COMMIT_SHA__: string;
+    const __APP_BUILD_TIMESTAMP__: string;
+
     interface Window {
         __CONTROLLER_ENGINE__?: ControllerEngine;
         __EDITOR_ENGINE__?: EditorEngine;

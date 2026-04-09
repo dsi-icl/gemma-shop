@@ -3,6 +3,8 @@ import { DateDisplay } from '@repo/ui/components/date-display';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 
+import { buildInfo } from '~/lib/buildInfo';
+
 type ThirdPartyPackage = {
     name: string;
     version: string;
@@ -96,6 +98,16 @@ function LegalNoticesPage() {
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                     <a className="underline" href={noticesTxtUrl} download>
                         Download full notice file
+                    </a>
+                    <span>
+                        Build: <code>{buildInfo.commitSha}</code>
+                    </span>
+                    <span>
+                        Built:{' '}
+                        <DateDisplay value={buildInfo.builtAt} fallback={buildInfo.builtAt} />
+                    </span>
+                    <a className="underline" href="/api/version" target="_blank" rel="noreferrer">
+                        API version
                     </a>
                 </div>
             </div>

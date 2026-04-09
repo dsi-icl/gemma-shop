@@ -1,3 +1,5 @@
+import { execSync } from 'node:child_process';
+
 import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { devtools } from '@tanstack/devtools-vite';
@@ -14,11 +16,27 @@ const shouldEnableSourceMaps = ['1', 'true', 'yes', 'on'].includes(
     String(process.env.BUILD_SOURCEMAPS ?? '').toLowerCase()
 );
 
+function resolveBuildCommitSha(): string {
+    const fromEnv = process.env.VITE_GIT_SHA?.trim();
+    if (fromEnv) return fromEnv;
+    try {
+        return execSync('git rev-parse --short=8 HEAD').toString().trim();
+    } catch {
+        return 'unknown';
+    }
+}
+
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     const isHttps = env.VITE_HTTPS === 'true';
+    const buildCommitSha = resolveBuildCommitSha();
+    const buildTimestamp = new Date().toISOString();
 
     return {
+        define: {
+            __APP_COMMIT_SHA__: JSON.stringify(buildCommitSha),
+            __APP_BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp)
+        },
         build: {
             sourcemap: shouldEnableSourceMaps,
             rollupOptions: {

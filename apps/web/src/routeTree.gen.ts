@@ -28,6 +28,7 @@ import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
 import { Route as PlaygroundNoopRouteImport } from './routes/playground/noop'
 import { Route as LegalNoticesRouteImport } from './routes/legal/notices'
 import { Route as ApiWebScreenshotRouteImport } from './routes/api/web-screenshot'
+import { Route as ApiVersionRouteImport } from './routes/api/version'
 import { Route as ApiReportCspRouteImport } from './routes/api/report-csp'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminStatsRouteImport } from './routes/admin/stats'
@@ -151,6 +152,11 @@ const LegalNoticesRoute = LegalNoticesRouteImport.update({
 const ApiWebScreenshotRoute = ApiWebScreenshotRouteImport.update({
   id: '/api/web-screenshot',
   path: '/api/web-screenshot',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVersionRoute = ApiVersionRouteImport.update({
+  id: '/api/version',
+  path: '/api/version',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiReportCspRoute = ApiReportCspRouteImport.update({
@@ -336,6 +342,7 @@ export interface FileRoutesByFullPath {
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/report-csp': typeof ApiReportCspRoute
+  '/api/version': typeof ApiVersionRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
   '/playground/noop': typeof PlaygroundNoopRoute
@@ -385,6 +392,7 @@ export interface FileRoutesByTo {
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/report-csp': typeof ApiReportCspRoute
+  '/api/version': typeof ApiVersionRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
   '/playground/noop': typeof PlaygroundNoopRoute
@@ -436,6 +444,7 @@ export interface FileRoutesById {
   '/admin/stats': typeof AdminStatsRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/report-csp': typeof ApiReportCspRoute
+  '/api/version': typeof ApiVersionRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
   '/playground/noop': typeof PlaygroundNoopRoute
@@ -488,6 +497,7 @@ export interface FileRouteTypes {
     | '/admin/stats'
     | '/admin/users'
     | '/api/report-csp'
+    | '/api/version'
     | '/api/web-screenshot'
     | '/legal/notices'
     | '/playground/noop'
@@ -537,6 +547,7 @@ export interface FileRouteTypes {
     | '/admin/stats'
     | '/admin/users'
     | '/api/report-csp'
+    | '/api/version'
     | '/api/web-screenshot'
     | '/legal/notices'
     | '/playground/noop'
@@ -587,6 +598,7 @@ export interface FileRouteTypes {
     | '/admin/stats'
     | '/admin/users'
     | '/api/report-csp'
+    | '/api/version'
     | '/api/web-screenshot'
     | '/legal/notices'
     | '/playground/noop'
@@ -632,6 +644,7 @@ export interface RootRouteChildren {
   WebNonetRoute: typeof WebNonetRoute
   WebPlaceholderRoute: typeof WebPlaceholderRoute
   ApiReportCspRoute: typeof ApiReportCspRoute
+  ApiVersionRoute: typeof ApiVersionRoute
   ApiWebScreenshotRoute: typeof ApiWebScreenshotRoute
   LegalNoticesRoute: typeof LegalNoticesRoute
   PlaygroundNoopRoute: typeof PlaygroundNoopRoute
@@ -780,6 +793,13 @@ declare module '@tanstack/react-router' {
       path: '/api/web-screenshot'
       fullPath: '/api/web-screenshot'
       preLoaderRoute: typeof ApiWebScreenshotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/version': {
+      id: '/api/version'
+      path: '/api/version'
+      fullPath: '/api/version'
+      preLoaderRoute: typeof ApiVersionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/report-csp': {
@@ -1150,6 +1170,7 @@ const rootRouteChildren: RootRouteChildren = {
   WebNonetRoute: WebNonetRoute,
   WebPlaceholderRoute: WebPlaceholderRoute,
   ApiReportCspRoute: ApiReportCspRoute,
+  ApiVersionRoute: ApiVersionRoute,
   ApiWebScreenshotRoute: ApiWebScreenshotRoute,
   LegalNoticesRoute: LegalNoticesRoute,
   PlaygroundNoopRoute: PlaygroundNoopRoute,

@@ -4,6 +4,8 @@ import { Link } from '@tanstack/react-router';
 import { useLocation } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
+import { buildInfo } from '~/lib/buildInfo';
+
 export function Footer() {
     const searchStr = useLocation({
         select: (location) => location.searchStr
@@ -28,7 +30,9 @@ export function Footer() {
                     <HeartIcon weight="bold" className="mb-0.5 inline align-middle" />
                 </a>{' '}
                 by Florian
-                {' · '}All rights reserved{' · '}
+                {' · '}All rights reserved
+                {' · '}Build <code>{buildInfo.commitSha}</code>
+                {' · '}
                 <Link className="underline" to="/legal/notices">
                     Third-party notices
                 </Link>
