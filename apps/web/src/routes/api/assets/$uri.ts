@@ -219,13 +219,6 @@ export const Route = createFileRoute('/api/assets/$uri')({
                 const user = authContext.user;
                 const device = authContext.device;
 
-                if (!user && !device) {
-                    return new Response('Not Found', {
-                        status: 404,
-                        headers: isDev ? { 'X-Dev-Status-Message': 'Unauthenticated' } : undefined
-                    });
-                }
-
                 const assetRecord = await getAssetRecordForFilename(requestedFilename);
                 if (!assetRecord) {
                     return new Response('Not Found', {
@@ -234,24 +227,61 @@ export const Route = createFileRoute('/api/assets/$uri')({
                     });
                 }
 
-                if (user && user.role !== 'admin') {
-                    const projectId = normalizeProjectId(assetRecord.projectId);
-                    if (!projectId) {
+                const projectId = normalizeProjectId(assetRecord.projectId);
+                if (!projectId) {
+                    return new Response('Not Found', {
+                        status: 404,
+                        headers: isDev ? { 'X-Dev-Status-Message': 'Project Not Found' } : undefined
+                    });
+                }
+
+                if (!user && !device) {
+                    const project = await dbCol.projects.findById(projectId);
+                    if (!project || project.deletedAt || project.visibility !== 'public') {
                         return new Response('Not Found', {
                             status: 404,
                             headers: isDev
-                                ? { 'X-Dev-Status-Message': 'Project Not Found' }
+                                ? { 'X-Dev-Status-Message': 'Unauthorized Guest' }
                                 : undefined
                         });
                     }
+                }
+
+                if (user && user.role !== 'admin') {
                     const allowed = await canViewProject(
                         { email: user.email, role: user.role },
                         projectId
                     );
-                    if (!allowed) {
+                    if (!allowed && !device) {
                         return new Response('Not Found', {
                             status: 404,
                             headers: isDev ? { 'X-Dev-Status-Message': 'Unauthorized' } : undefined
+                        });
+                    }
+                }
+
+                if (device) {
+                    const deviceWallId =
+                        typeof device.wallId === 'string' && device.wallId.length > 0
+                            ? device.wallId
+                            : null;
+
+                    if (!deviceWallId) {
+                        return new Response('Not Found', {
+                            status: 404,
+                            headers: isDev
+                                ? { 'X-Dev-Status-Message': 'Unauthorized Device' }
+                                : undefined
+                        });
+                    }
+
+                    const wall = await dbCol.walls.findByWallId(deviceWallId);
+                    if (!wall || wall.boundProjectId !== projectId) {
+                        return new Response('Not Found', {
+                            status: 404,
+                            headers: isDev
+                                ? { 'X-Dev-Status-Message': 'Unauthorized Wall' }
+                                : undefined
                         });
                     }
                 }
