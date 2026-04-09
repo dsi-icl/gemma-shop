@@ -16,10 +16,14 @@ export const $issueControllerPortalToken = createServerFn({ method: 'POST' })
     .handler(async ({ data, context }) => {
         const authContext = (context as { authContext?: AuthContext } | undefined)?.authContext;
         const device = authContext?.device;
-        if (!device || device.kind !== 'gallery') {
+        const user = authContext?.user;
+        const isGalleryDevice = Boolean(device && device.kind === 'gallery');
+        const isAdminUser = user?.role === 'admin';
+
+        if (!isGalleryDevice && !isAdminUser) {
             throw new Error('Forbidden');
         }
-        if (device.wallId && device.wallId !== data.wallId) {
+        if (isGalleryDevice && device?.wallId && device.wallId !== data.wallId) {
             throw new Error('Forbidden');
         }
 

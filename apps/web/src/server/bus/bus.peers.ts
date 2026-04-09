@@ -257,11 +257,15 @@ export async function completeHelloRegistration(
                 kind: 'controller'
             });
             if (controllerDevice.status === 'pending') {
-                sendJSON(peer, {
-                    type: 'device_enrollment',
-                    id: controllerDevice.id
-                });
-                return { pendingEnrollment: true };
+                const hasPortalAccess = Boolean(passedAuthContext.portal?.wallId);
+                const isAdminUser = passedAuthContext.user?.role === 'admin';
+                if (!hasPortalAccess && !isAdminUser) {
+                    sendJSON(peer, {
+                        type: 'device_enrollment',
+                        id: controllerDevice.id
+                    });
+                    return { pendingEnrollment: true };
+                }
             }
         }
 

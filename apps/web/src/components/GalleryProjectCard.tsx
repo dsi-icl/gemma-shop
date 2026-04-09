@@ -106,19 +106,42 @@ export function GalleryProjectCard({
     );
 
     const handleControllerTokenRequest = useCallback(async (wallId: string) => {
-        try {
-            const result = await $issueControllerPortalToken({
-                data: { wallId },
-                fetch: createSignedServerFnFetch({
-                    deviceKind: 'gallery',
-                    wallId
-                })
-            });
-            return result.token;
-        } catch (e: any) {
-            toast.error(e?.message ?? 'Could not initialize controller API token');
-            return null;
+        const isWallNotBoundError = (error: unknown) => {
+            const message =
+                typeof error === 'object' && error !== null && 'message' in error
+                    ? String((error as { message?: unknown }).message ?? '')
+                    : '';
+            return message.includes('Wall is not currently bound');
+        };
+
+        const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        const maxAttempts = 8;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            try {
+                const result = await $issueControllerPortalToken({
+                    data: { wallId },
+                    fetch: createSignedServerFnFetch({
+                        deviceKind: 'gallery',
+                        wallId
+                    })
+                });
+                return result.token;
+            } catch (e: unknown) {
+                if (isWallNotBoundError(e) && attempt < maxAttempts) {
+                    await sleep(200);
+                    continue;
+                }
+                toast.error(
+                    (typeof e === 'object' && e !== null && 'message' in e
+                        ? String((e as { message?: unknown }).message ?? '')
+                        : '') || 'Could not initialize controller API token'
+                );
+                return null;
+            }
         }
+
+        return null;
     }, []);
 
     return (
