@@ -26,7 +26,8 @@ export function Footer() {
                     href="mailto:f.guitton@imperial.ac.uk"
                 >
                     <HeartIcon weight="bold" className="mb-0.5 inline align-middle" />
-                </a>
+                </a>{' '}
+                by Florian
                 {' · '}All rights reserved{' · '}
                 <Link className="underline" to="/legal/notices">
                     Third-party notices
