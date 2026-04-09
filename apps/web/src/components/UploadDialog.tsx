@@ -102,12 +102,17 @@ export function UploadDialog({
                 setTokenExpiresAt(result.expiresAt);
 
                 const url = `${window.location.origin}/upload/${projectId}?token=${result.token}`;
-                QRCode.toDataURL(url, {
-                    width: 200,
-                    margin: 1,
-                    color: { dark: '#000', light: '#fff' }
-                }).then((dataUrl) => setQrDataUrl(dataUrl));
+                return QRCode.toDataURL(url, {
+                    width: 240,
+                    margin: 0,
+                    errorCorrectionLevel: 'L',
+                    color: {
+                        dark: '#939393FF',
+                        light: '#00000000'
+                    }
+                });
             })
+            .then((dataUrl) => setQrDataUrl(dataUrl))
             .catch((error: any) => {
                 toast.error(error?.message ?? 'Failed to create upload token');
                 setToken(null);

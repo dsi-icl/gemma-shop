@@ -356,8 +356,8 @@ function WallApp() {
                     width: 240,
                     errorCorrectionLevel: 'L',
                     color: {
-                        dark: '#737373',
-                        light: '#171717'
+                        dark: '#939393FF',
+                        light: '#00000000'
                     }
                 });
             })
