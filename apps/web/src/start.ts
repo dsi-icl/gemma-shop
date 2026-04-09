@@ -55,7 +55,18 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
 
     const isDev = import.meta.env.DEV;
     const nonce = crypto.randomBytes(16).toString('base64');
-    const reportUrl = new URL('/api/report-csp', request.url).toString();
+    const requestUrl = new URL(request.url);
+    const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+    const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+    const host = forwardedHost || requestUrl.host;
+    const protocol =
+        forwardedProto ||
+        (requestUrl.protocol === 'https:'
+            ? 'https'
+            : isDev || host.startsWith('localhost')
+              ? 'http'
+              : 'https');
+    const reportUrl = `${protocol}://${host}/api/report-csp`;
     const scriptSrc = [
         "'strict-dynamic'",
         `'nonce-${nonce}'`,
@@ -63,7 +74,9 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
     ].join(' ');
     const connectSrc = ["'self'", 'ws:', 'wss:', 'https:', ...(isDev ? ['http:'] : [])].join(' ');
     const frameSrc = ["'self'", 'https:', ...(isDev ? ['http:'] : [])].join(' ');
-    const styleSrcElem = isDev ? "'self' 'unsafe-inline'" : `'self' 'nonce-${nonce}'`;
+    const styleSrcElem = isDev
+        ? "'self' 'unsafe-inline'"
+        : `'self' 'nonce-${nonce}' 'unsafe-inline'`;
     const directives = [
         'upgrade-insecure-requests',
         "default-src 'none'",
