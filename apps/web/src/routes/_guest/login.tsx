@@ -103,7 +103,7 @@ function LoginForm() {
                                     {isOtpSendPending && (
                                         <CircleNotchIcon className="animate-spin" />
                                     )}
-                                    Send a code instead
+                                    Send a one-time code
                                 </Button>
                             </div>
                             <button
