@@ -20,6 +20,7 @@ RUN bun install --frozen-lockfile
 
 # Build the web app (Nitro output in apps/web/.output).
 COPY . .
+RUN NITRO_PRESET=bun bun run faviconize --filter=@repo/web
 RUN NITRO_PRESET=bun bun run build --filter=@repo/web
 
 FROM oven/bun:1.3.11 AS runtime

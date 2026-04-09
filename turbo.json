@@ -60,6 +60,11 @@
             "cache": false,
             "persistent": true
         },
+        "faviconize": {
+            "inputs": ["$TURBO_DEFAULT$", ".env"],
+            "cache": false,
+            "persistent": true
+        },
         "preview": {
             "inputs": ["$TURBO_DEFAULT$"],
             "cache": false,
