@@ -740,6 +740,9 @@ function Controller() {
                         <img
                             src={enrollmentQrDataUrl}
                             alt="Device enrollment QR code"
+                            loading="eager"
+                            fetchPriority="high"
+                            decoding="async"
                             width={200}
                             height={200}
                         />

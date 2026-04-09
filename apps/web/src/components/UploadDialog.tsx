@@ -291,6 +291,9 @@ export function UploadDialog({
                             <img
                                 src={qrDataUrl}
                                 alt="Upload QR Code"
+                                loading="eager"
+                                fetchPriority="high"
+                                decoding="async"
                                 className="rounded-lg border border-border"
                                 width={160}
                                 height={160}

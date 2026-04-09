@@ -12,6 +12,8 @@ interface ProjectImageProps {
     className?: string;
     imgClassName?: string;
     forceOriginal?: boolean;
+    loading?: 'eager' | 'lazy';
+    fetchPriority?: 'high' | 'low' | 'auto';
     onClick?: (e: React.MouseEvent) => void;
 }
 
@@ -22,6 +24,8 @@ export function ProjectImage({
     className,
     imgClassName,
     forceOriginal,
+    loading = 'eager',
+    fetchPriority = 'high',
     onClick
 }: ProjectImageProps) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -105,7 +109,8 @@ export function ProjectImage({
                 ref={imgRef}
                 src={selectedSrc}
                 alt={alt}
-                loading="lazy"
+                loading={loading}
+                fetchPriority={fetchPriority}
                 className={cn(
                     'bg-checkerboard absolute inset-0 z-10 block h-full w-full object-cover transition-opacity duration-300',
                     loaded ? 'opacity-100' : 'opacity-0',

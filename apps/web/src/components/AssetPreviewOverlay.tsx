@@ -130,6 +130,9 @@ function AssetPreviewOverlayInner({
                         <img
                             src={imageSrc}
                             alt={name}
+                            loading="eager"
+                            fetchPriority="high"
+                            decoding="async"
                             className={`bg-checkerboard absolute inset-0 z-20 m-auto block h-auto max-h-full w-auto max-w-full object-contain transition-opacity duration-300 ${
                                 mediaLoaded ? 'opacity-100' : 'opacity-0'
                             }`}

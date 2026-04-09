@@ -453,6 +453,9 @@ function WallApp() {
                         <img
                             src={enrollmentQrDataUrl}
                             alt="Device enrollment QR code"
+                            loading="eager"
+                            fetchPriority="high"
+                            decoding="async"
                             width={200}
                             height={200}
                         />
@@ -497,6 +500,8 @@ function WallApp() {
                         <img
                             src={layer.url}
                             alt={`Layer ${layer.numericId}`}
+                            loading="eager"
+                            fetchPriority="high"
                             width="100%"
                             height="100%"
                             decoding="async"
