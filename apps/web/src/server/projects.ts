@@ -1,5 +1,5 @@
 import '@tanstack/react-start/server-only';
-import type { AuthContext, CommitDocument } from '@repo/db/documents';
+import type { AuthContext, AuditResourceType, CommitDocument } from '@repo/db/documents';
 import type { Collaborator, CollaboratorRole, ProjectVisibility } from '@repo/db/schema';
 
 import type { AuditExecutionContextInput } from '~/server/audit';
@@ -32,6 +32,27 @@ interface UpdateProjectInput {
     customRenderProxy?: boolean;
     collaborators?: Array<{ email: string; role: CollaboratorRole }>;
     publishedCommitId?: string | null;
+}
+
+export type AuditOutcome = 'success' | 'denied' | 'failure' | 'error';
+
+export interface ProjectAuditCursor {
+    createdAt: number;
+    id: string;
+}
+
+export interface ProjectAuditListInput {
+    limit?: number;
+    cursor?: ProjectAuditCursor | null;
+    outcomes?: AuditOutcome[];
+    actions?: string[];
+    actorIds?: string[];
+    resourceTypes?: AuditResourceType[];
+    reasonCodes?: string[];
+    operation?: string;
+    surface?: 'http' | 'serverfn' | 'ws' | 'yjs' | 'job' | 'system' | 'unknown' | null;
+    fromCreatedAt?: number;
+    toCreatedAt?: number;
 }
 
 import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
@@ -532,6 +553,26 @@ export async function getAudits(projectId: string) {
 
     const audits = await dbCol.audits.findByProject(projectId, { sort: { createdAt: -1 } });
     return audits;
+}
+
+export async function getAuditsPage(projectId: string, input: ProjectAuditListInput = {}) {
+    const project = await dbCol.projects.findById(projectId);
+    if (!project) throw new Error('Project not found');
+
+    return dbCol.audits.queryByProject({
+        projectId,
+        limit: input.limit,
+        cursor: input.cursor ?? null,
+        outcomes: input.outcomes,
+        actions: input.actions,
+        actorIds: input.actorIds,
+        resourceTypes: input.resourceTypes,
+        reasonCodes: input.reasonCodes,
+        operation: input.operation,
+        surface: input.surface ?? undefined,
+        fromCreatedAt: input.fromCreatedAt,
+        toCreatedAt: input.toCreatedAt
+    });
 }
 
 export async function getProjectCommits(projectId: string) {

@@ -15,6 +15,7 @@ import {
     adminListConfig,
     adminGetWallBindingMeta,
     adminGetStats,
+    adminListAuditsPage,
     adminListProjects,
     adminListPublicAssets,
     adminListUsers,
@@ -54,6 +55,61 @@ export const $adminListUsers = createServerFn({ method: 'GET' })
 export const $adminListProjects = createServerFn({ method: 'GET' })
     .middleware([adminMiddleware])
     .handler(async () => adminListProjects());
+
+const AuditOutcomeEnum = z.enum(['success', 'denied', 'failure', 'error']);
+const AuditResourceTypeEnum = z.enum([
+    'project',
+    'commit',
+    'asset',
+    'wall',
+    'device',
+    'user',
+    'upload_token',
+    'start_route',
+    'ws_message',
+    'portal_token',
+    'bootstrap',
+    'config',
+    'smtp',
+    'scope',
+    'unknown'
+]);
+const AuditSurfaceEnum = z.enum(['http', 'serverfn', 'ws', 'yjs', 'job', 'system', 'unknown']);
+
+export const $adminListAuditsPage = createServerFn({ method: 'GET' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            projectId: z.string().nullable().optional(),
+            limit: z.number().int().min(1).max(100).optional(),
+            cursor: z
+                .object({
+                    createdAt: z.number().int().min(1),
+                    id: z.string().min(1)
+                })
+                .nullable()
+                .optional(),
+            outcomes: z.array(AuditOutcomeEnum).max(8).optional(),
+            resourceTypes: z.array(AuditResourceTypeEnum).max(20).optional(),
+            operation: z.string().min(1).max(120).optional(),
+            surface: AuditSurfaceEnum.optional(),
+            actorId: z.string().min(1).max(200).optional(),
+            reasonCode: z.string().min(1).max(120).optional()
+        })
+    )
+    .handler(async ({ data }) =>
+        adminListAuditsPage({
+            projectId: data.projectId ?? null,
+            limit: data.limit,
+            cursor: data.cursor ?? null,
+            outcomes: data.outcomes,
+            resourceTypes: data.resourceTypes,
+            operation: data.operation,
+            surface: data.surface,
+            actorId: data.actorId,
+            reasonCode: data.reasonCode
+        })
+    );
 
 export const $adminGetStats = createServerFn({ method: 'GET' })
     .middleware([adminMiddleware])

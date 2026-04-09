@@ -181,16 +181,15 @@ export const $finalizeFirstAdminForCurrentUser = createServerFn({ method: 'POST'
                 userId: context.user?.id ?? null,
                 email: context.user.email
             });
-            await logAuditSuccess({
-                action: result.promoted
-                    ? 'BOOTSTRAP_FIRST_ADMIN_PROMOTED'
-                    : 'BOOTSTRAP_FIRST_ADMIN_PROMOTION_SKIPPED',
-                actorId: context.user.email,
-                resourceType: 'bootstrap',
-                resourceId: context.user.email.toLowerCase(),
-                changes: result.promoted ? null : { reason: result.reason ?? 'unknown' },
-                ...auditContext
-            });
+            if (result.promoted) {
+                await logAuditSuccess({
+                    action: 'BOOTSTRAP_FIRST_ADMIN_PROMOTED',
+                    actorId: context.user.email,
+                    resourceType: 'bootstrap',
+                    resourceId: context.user.email.toLowerCase(),
+                    ...auditContext
+                });
+            }
             return result;
         } catch (error) {
             await logAuditFailure({

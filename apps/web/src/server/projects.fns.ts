@@ -55,6 +55,7 @@ import {
     deleteSlideFromCommit,
     ensureMutableHead,
     getAudits,
+    getAuditsPage,
     getCommit,
     getProject,
     getProjectCommits,
@@ -69,6 +70,26 @@ import {
     revokeUploadTokenForActor,
     updateProject
 } from './projects';
+
+const AuditOutcomeEnum = z.enum(['success', 'denied', 'failure', 'error']);
+const AuditResourceTypeEnum = z.enum([
+    'project',
+    'commit',
+    'asset',
+    'wall',
+    'device',
+    'user',
+    'upload_token',
+    'start_route',
+    'ws_message',
+    'portal_token',
+    'bootstrap',
+    'config',
+    'smtp',
+    'scope',
+    'unknown'
+]);
+const AuditSurfaceEnum = z.enum(['http', 'serverfn', 'ws', 'yjs', 'job', 'system', 'unknown']);
 
 function authContextFromServerFnContext(context: unknown): AuthContext {
     const c = context as
@@ -481,6 +502,70 @@ export const $getAudits = createServerFn({ method: 'GET' })
             throw new Error('Access denied');
         }
         return getAudits(data.projectId);
+    });
+
+export const $getAuditsPage = createServerFn({ method: 'GET' })
+    .inputValidator(
+        z.object({
+            projectId: z.string(),
+            limit: z.number().int().min(1).max(100).optional(),
+            cursor: z
+                .object({
+                    createdAt: z.number().int().min(1),
+                    id: z.string().min(1)
+                })
+                .nullable()
+                .optional(),
+            outcomes: z.array(AuditOutcomeEnum).max(8).optional(),
+            actions: z.array(z.string().min(1)).max(30).optional(),
+            actorIds: z.array(z.string().min(1)).max(20).optional(),
+            resourceTypes: z.array(AuditResourceTypeEnum).max(20).optional(),
+            reasonCodes: z.array(z.string().min(1)).max(20).optional(),
+            operation: z.string().min(1).max(120).optional(),
+            surface: AuditSurfaceEnum.optional(),
+            fromCreatedAt: z.number().int().min(1).optional(),
+            toCreatedAt: z.number().int().min(1).optional()
+        })
+    )
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        const actor = actorFromAuthContext(context);
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$getAuditsPage',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
+        const allowed = await canViewProject(actor, data.projectId);
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$getAuditsPage',
+                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
+        return getAuditsPage(data.projectId, {
+            limit: data.limit,
+            cursor: data.cursor ?? null,
+            outcomes: data.outcomes,
+            actions: data.actions,
+            actorIds: data.actorIds,
+            resourceTypes: data.resourceTypes,
+            reasonCodes: data.reasonCodes,
+            operation: data.operation,
+            surface: data.surface,
+            fromCreatedAt: data.fromCreatedAt,
+            toCreatedAt: data.toCreatedAt
+        });
     });
 
 export const $ensureMutableHead = createServerFn({ method: 'POST' })

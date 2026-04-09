@@ -1,7 +1,8 @@
-import { queryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
 import {
     $getAudits,
+    $getAuditsPage,
     $getCommit,
     $getProject,
     $getProjectCommits,
@@ -10,6 +11,27 @@ import {
     $listProjects,
     $listPublishedProjects
 } from './projects.fns';
+
+export interface AuditHistoryFilters {
+    outcomes?: Array<'success' | 'denied' | 'failure' | 'error'>;
+    resourceTypes?: Array<
+        | 'project'
+        | 'commit'
+        | 'asset'
+        | 'wall'
+        | 'device'
+        | 'user'
+        | 'upload_token'
+        | 'start_route'
+        | 'ws_message'
+        | 'portal_token'
+        | 'bootstrap'
+        | 'config'
+        | 'smtp'
+        | 'scope'
+        | 'unknown'
+    >;
+}
 
 export const projectsQueryOptions = (includeArchived = false) =>
     queryOptions({
@@ -45,6 +67,26 @@ export const auditsQueryOptions = (projectId: string) =>
     queryOptions({
         queryKey: ['projects', projectId, 'audit'],
         queryFn: () => $getAudits({ data: { projectId } })
+    });
+
+export const auditsInfiniteQueryOptions = (projectId: string, filters: AuditHistoryFilters = {}) =>
+    infiniteQueryOptions({
+        queryKey: ['projects', projectId, 'audit', 'infinite', filters],
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchInterval: 5_000,
+        initialPageParam: null as { createdAt: number; id: string } | null,
+        queryFn: ({ pageParam }) =>
+            $getAuditsPage({
+                data: {
+                    projectId,
+                    limit: 40,
+                    cursor: pageParam,
+                    outcomes: filters.outcomes,
+                    resourceTypes: filters.resourceTypes
+                }
+            }),
+        getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined
     });
 
 export const commitsQueryOptions = (projectId: string) =>

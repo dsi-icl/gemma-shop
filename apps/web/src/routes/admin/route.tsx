@@ -1,4 +1,5 @@
 import {
+    ActivityIcon,
     CastleTurretIcon,
     ChartBarIcon,
     GearIcon,
@@ -50,6 +51,7 @@ export const Route = createFileRoute('/admin')({
 const NAV = [
     { to: '/admin/users', label: 'Users', icon: UsersIcon },
     { to: '/admin/projects', label: 'Projects', icon: FolderIcon },
+    { to: '/admin/audits', label: 'Audits', icon: ActivityIcon },
     { to: '/admin/walls', label: 'Walls', icon: PanoramaIcon },
     { to: '/admin/devices', label: 'Devices', icon: MonitorIcon },
     { to: '/admin/assets', label: 'Public Assets', icon: ImageIcon },
@@ -60,11 +62,12 @@ const NAV = [
 const TAB_ORDER = {
     users: 0,
     projects: 1,
-    walls: 2,
-    devices: 3,
-    assets: 4,
-    config: 5,
-    stats: 6
+    audits: 2,
+    walls: 3,
+    devices: 4,
+    assets: 5,
+    config: 6,
+    stats: 7
 } as const;
 
 type AdminTabKey = keyof typeof TAB_ORDER;
@@ -72,6 +75,10 @@ type AdminTabKey = keyof typeof TAB_ORDER;
 const TAB_SUBHEADERS: Record<AdminTabKey, { title: string; description?: string }> = {
     users: { title: 'Users' },
     projects: { title: 'Projects' },
+    audits: {
+        title: 'Audit Explorer',
+        description: 'Cross-project audit trail with filters for operational investigation.'
+    },
     walls: { title: 'Walls' },
     devices: { title: 'Devices' },
     assets: {
@@ -102,6 +109,7 @@ const slidePanelVariants = {
 
 function getTabFromPath(pathname: string): AdminTabKey {
     if (pathname.startsWith('/admin/projects')) return 'projects';
+    if (pathname.startsWith('/admin/audits')) return 'audits';
     if (pathname.startsWith('/admin/walls')) return 'walls';
     if (pathname.startsWith('/admin/devices')) return 'devices';
     if (pathname.startsWith('/admin/assets')) return 'assets';

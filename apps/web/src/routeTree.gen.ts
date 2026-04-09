@@ -35,6 +35,7 @@ import { Route as AdminStatsRouteImport } from './routes/admin/stats'
 import { Route as AdminProjectsRouteImport } from './routes/admin/projects'
 import { Route as AdminDevicesRouteImport } from './routes/admin/devices'
 import { Route as AdminConfigRouteImport } from './routes/admin/config'
+import { Route as AdminAuditsRouteImport } from './routes/admin/audits'
 import { Route as AdminAssetsRouteImport } from './routes/admin/assets'
 import { Route as GuestLoginRouteImport } from './routes/_guest/login'
 import { Route as GuestBootstrapRouteImport } from './routes/_guest/bootstrap'
@@ -189,6 +190,11 @@ const AdminConfigRoute = AdminConfigRouteImport.update({
   path: '/config',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminAuditsRoute = AdminAuditsRouteImport.update({
+  id: '/audits',
+  path: '/audits',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminAssetsRoute = AdminAssetsRouteImport.update({
   id: '/assets',
   path: '/assets',
@@ -336,6 +342,7 @@ export interface FileRoutesByFullPath {
   '/bootstrap': typeof GuestBootstrapRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
+  '/admin/audits': typeof AdminAuditsRoute
   '/admin/config': typeof AdminConfigRoute
   '/admin/devices': typeof AdminDevicesRoute
   '/admin/projects': typeof AdminProjectsRoute
@@ -386,6 +393,7 @@ export interface FileRoutesByTo {
   '/bootstrap': typeof GuestBootstrapRoute
   '/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
+  '/admin/audits': typeof AdminAuditsRoute
   '/admin/config': typeof AdminConfigRoute
   '/admin/devices': typeof AdminDevicesRoute
   '/admin/projects': typeof AdminProjectsRoute
@@ -438,6 +446,7 @@ export interface FileRoutesById {
   '/_guest/bootstrap': typeof GuestBootstrapRoute
   '/_guest/login': typeof GuestLoginRoute
   '/admin/assets': typeof AdminAssetsRoute
+  '/admin/audits': typeof AdminAuditsRoute
   '/admin/config': typeof AdminConfigRoute
   '/admin/devices': typeof AdminDevicesRoute
   '/admin/projects': typeof AdminProjectsRoute
@@ -491,6 +500,7 @@ export interface FileRouteTypes {
     | '/bootstrap'
     | '/login'
     | '/admin/assets'
+    | '/admin/audits'
     | '/admin/config'
     | '/admin/devices'
     | '/admin/projects'
@@ -541,6 +551,7 @@ export interface FileRouteTypes {
     | '/bootstrap'
     | '/login'
     | '/admin/assets'
+    | '/admin/audits'
     | '/admin/config'
     | '/admin/devices'
     | '/admin/projects'
@@ -592,6 +603,7 @@ export interface FileRouteTypes {
     | '/_guest/bootstrap'
     | '/_guest/login'
     | '/admin/assets'
+    | '/admin/audits'
     | '/admin/config'
     | '/admin/devices'
     | '/admin/projects'
@@ -842,6 +854,13 @@ declare module '@tanstack/react-router' {
       path: '/config'
       fullPath: '/admin/config'
       preLoaderRoute: typeof AdminConfigRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/audits': {
+      id: '/admin/audits'
+      path: '/audits'
+      fullPath: '/admin/audits'
+      preLoaderRoute: typeof AdminAuditsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/assets': {
@@ -1133,6 +1152,7 @@ const AdminWallsWallIdRouteRouteWithChildren =
 
 interface AdminRouteRouteChildren {
   AdminAssetsRoute: typeof AdminAssetsRoute
+  AdminAuditsRoute: typeof AdminAuditsRoute
   AdminConfigRoute: typeof AdminConfigRoute
   AdminDevicesRoute: typeof AdminDevicesRoute
   AdminProjectsRoute: typeof AdminProjectsRoute
@@ -1145,6 +1165,7 @@ interface AdminRouteRouteChildren {
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminAssetsRoute: AdminAssetsRoute,
+  AdminAuditsRoute: AdminAuditsRoute,
   AdminConfigRoute: AdminConfigRoute,
   AdminDevicesRoute: AdminDevicesRoute,
   AdminProjectsRoute: AdminProjectsRoute,

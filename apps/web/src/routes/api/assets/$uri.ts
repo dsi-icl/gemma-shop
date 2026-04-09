@@ -10,7 +10,7 @@ import { createServerOnlyFn } from '@tanstack/react-start';
 
 import { ASSET_MIME_TYPES } from '~/lib/assetMime';
 import { ASSET_DIR } from '~/lib/serverVariables';
-import { logAuditDenied } from '~/server/audit';
+import { logAuditDenied, logAuditFailure } from '~/server/audit';
 import { dbCol } from '~/server/collections';
 import { canViewProject } from '~/server/projectAuthz';
 import type { AuthContext } from '~/server/requestAuthContext';
@@ -26,6 +26,30 @@ async function logAssetDenied(input: {
 }) {
     await logAuditDenied({
         action: 'ASSET_READ_DENIED',
+        projectId: input.projectId ?? null,
+        resourceType: 'asset',
+        resourceId: input.resourceId ?? null,
+        reasonCode: input.reasonCode,
+        authContext: input.authContext,
+        ...(input.details ? { changes: input.details } : {}),
+        executionContext: {
+            surface: 'http',
+            operation: 'GET /api/assets/$uri',
+            request: input.request
+        }
+    });
+}
+
+async function logAssetNotFound(input: {
+    request: Request;
+    authContext: AuthContext;
+    reasonCode: string;
+    projectId?: string | null;
+    resourceId?: string | null;
+    details?: Record<string, JsonValue>;
+}) {
+    await logAuditFailure({
+        action: 'ASSET_READ_NOT_FOUND',
         projectId: input.projectId ?? null,
         resourceType: 'asset',
         resourceId: input.resourceId ?? null,
@@ -125,11 +149,19 @@ const getResponse = createServerOnlyFn(
     async ({
         uri,
         range,
-        ifNoneMatch
+        ifNoneMatch,
+        request,
+        authContext,
+        projectId,
+        resourceId
     }: {
         uri: string;
         range: string | null;
         ifNoneMatch: string | null;
+        request: Request;
+        authContext: AuthContext;
+        projectId: string | null;
+        resourceId: string | null;
     }) => {
         const requestedFilename = basename(decodeURIComponent(uri));
         let resolvedFilename = requestedFilename;
@@ -138,19 +170,56 @@ const getResponse = createServerOnlyFn(
         let stats: Awaited<ReturnType<typeof stat>> | null = null;
         try {
             stats = await stat(asset);
-            if (!stats.isFile()) return new Response('Not Found', { status: 404 });
+            if (!stats.isFile()) {
+                await logAssetNotFound({
+                    request,
+                    authContext,
+                    reasonCode: 'ASSET_FILE_NOT_FOUND',
+                    projectId,
+                    resourceId: resourceId ?? requestedFilename
+                });
+                return new Response('Not Found', { status: 404 });
+            }
         } catch (error: any) {
             if (error.code === 'ENOENT') {
                 const fallback = await chooseVariantFallbackFilename(requestedFilename);
-                if (!fallback) return new Response('Not Found', { status: 404 });
+                if (!fallback) {
+                    await logAssetNotFound({
+                        request,
+                        authContext,
+                        reasonCode: 'ASSET_FILE_NOT_FOUND',
+                        projectId,
+                        resourceId: resourceId ?? requestedFilename
+                    });
+                    return new Response('Not Found', { status: 404 });
+                }
                 resolvedFilename = fallback;
                 asset = join(ASSET_DIR, resolvedFilename);
                 try {
                     stats = await stat(asset);
-                    if (!stats.isFile()) return new Response('Not Found', { status: 404 });
-                } catch (fallbackError: any) {
-                    if (fallbackError.code === 'ENOENT')
+                    if (!stats.isFile()) {
+                        await logAssetNotFound({
+                            request,
+                            authContext,
+                            reasonCode: 'ASSET_FILE_NOT_FOUND',
+                            projectId,
+                            resourceId: resourceId ?? requestedFilename,
+                            details: { resolvedFilename }
+                        });
                         return new Response('Not Found', { status: 404 });
+                    }
+                } catch (fallbackError: any) {
+                    if (fallbackError.code === 'ENOENT') {
+                        await logAssetNotFound({
+                            request,
+                            authContext,
+                            reasonCode: 'ASSET_FILE_NOT_FOUND',
+                            projectId,
+                            resourceId: resourceId ?? requestedFilename,
+                            details: { resolvedFilename }
+                        });
+                        return new Response('Not Found', { status: 404 });
+                    }
                     console.error('File system fallback error:', fallbackError);
                     return new Response('Internal Server Error', { status: 500 });
                 }
@@ -235,17 +304,28 @@ export const Route = createFileRoute('/api/assets/$uri')({
         handlers: {
             GET: async ({ request, params, context }) => {
                 const { uri } = params ?? {};
+                const authContext: AuthContext = ((context ?? {}) as { authContext?: AuthContext })
+                    .authContext ?? { guest: true };
                 if (typeof uri !== 'string' || uri.length === 0) {
+                    await logAssetNotFound({
+                        request,
+                        authContext,
+                        reasonCode: 'INVALID_ASSET_URI'
+                    });
                     return new Response('Not Found', { status: 404 });
                 }
                 const requestedFilename = basename(decodeURIComponent(uri));
-                const authContext: AuthContext = ((context ?? {}) as { authContext?: AuthContext })
-                    .authContext ?? { guest: true };
                 const user = authContext.user;
                 const device = authContext.device;
 
                 const assetRecord = await getAssetRecordForFilename(requestedFilename);
                 if (!assetRecord) {
+                    await logAssetNotFound({
+                        request,
+                        authContext,
+                        reasonCode: 'ASSET_RECORD_NOT_FOUND',
+                        resourceId: requestedFilename
+                    });
                     return new Response('Not Found', {
                         status: 404,
                         headers: isDev ? { 'X-Dev-Status-Message': 'Asset Not Found' } : undefined
@@ -254,6 +334,12 @@ export const Route = createFileRoute('/api/assets/$uri')({
 
                 const projectId = normalizeProjectId(assetRecord.projectId);
                 if (!projectId) {
+                    await logAssetNotFound({
+                        request,
+                        authContext,
+                        reasonCode: 'ASSET_PROJECT_NOT_FOUND',
+                        resourceId: requestedFilename
+                    });
                     return new Response('Not Found', {
                         status: 404,
                         headers: isDev ? { 'X-Dev-Status-Message': 'Project Not Found' } : undefined
@@ -343,7 +429,15 @@ export const Route = createFileRoute('/api/assets/$uri')({
                 const range = request.headers.get('range');
                 const ifNoneMatch = request.headers.get('if-none-match');
 
-                return getResponse({ uri, range, ifNoneMatch });
+                return getResponse({
+                    uri,
+                    range,
+                    ifNoneMatch,
+                    request,
+                    authContext,
+                    projectId,
+                    resourceId: requestedFilename
+                });
             }
         }
     }

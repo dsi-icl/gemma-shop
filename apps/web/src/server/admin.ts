@@ -91,6 +91,46 @@ export async function adminListProjects() {
     return projects;
 }
 
+export async function adminListAuditsPage(input: {
+    projectId?: string | null;
+    limit?: number;
+    cursor?: { createdAt: number; id: string } | null;
+    outcomes?: Array<'success' | 'denied' | 'failure' | 'error'>;
+    resourceTypes?: Array<
+        | 'project'
+        | 'commit'
+        | 'asset'
+        | 'wall'
+        | 'device'
+        | 'user'
+        | 'upload_token'
+        | 'start_route'
+        | 'ws_message'
+        | 'portal_token'
+        | 'bootstrap'
+        | 'config'
+        | 'smtp'
+        | 'scope'
+        | 'unknown'
+    >;
+    operation?: string;
+    surface?: 'http' | 'serverfn' | 'ws' | 'yjs' | 'job' | 'system' | 'unknown' | null;
+    actorId?: string;
+    reasonCode?: string;
+}) {
+    return dbCol.audits.queryGlobal({
+        projectId: input.projectId ?? null,
+        limit: input.limit,
+        cursor: input.cursor ?? null,
+        outcomes: input.outcomes,
+        resourceTypes: input.resourceTypes,
+        operation: input.operation,
+        surface: input.surface ?? undefined,
+        actorIds: input.actorId ? [input.actorId] : undefined,
+        reasonCodes: input.reasonCode ? [input.reasonCode] : undefined
+    });
+}
+
 export async function adminGetStats() {
     const [userCount, projectCount, commitCount, assetCount] = await Promise.all([
         collections.users.countDocuments(),

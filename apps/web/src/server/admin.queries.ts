@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
 import {
     $adminDevicesForWall,
@@ -6,12 +6,39 @@ import {
     $adminGetWall,
     $adminGetWallBindingMeta,
     $adminGetStats,
+    $adminListAuditsPage,
     $adminListConfig,
     $adminListProjects,
     $adminListPublicAssets,
     $adminListUsers,
     $adminListWalls
 } from './admin.fns';
+
+export interface AdminAuditFilters {
+    projectId?: string | null;
+    outcomes?: Array<'success' | 'denied' | 'failure' | 'error'>;
+    resourceTypes?: Array<
+        | 'project'
+        | 'commit'
+        | 'asset'
+        | 'wall'
+        | 'device'
+        | 'user'
+        | 'upload_token'
+        | 'start_route'
+        | 'ws_message'
+        | 'portal_token'
+        | 'bootstrap'
+        | 'config'
+        | 'smtp'
+        | 'scope'
+        | 'unknown'
+    >;
+    operation?: string;
+    surface?: 'http' | 'serverfn' | 'ws' | 'yjs' | 'job' | 'system' | 'unknown' | null;
+    actorId?: string;
+    reasonCode?: string;
+}
 
 export const adminUsersQueryOptions = () =>
     queryOptions({
@@ -23,6 +50,30 @@ export const adminProjectsQueryOptions = () =>
     queryOptions({
         queryKey: ['admin', 'projects'],
         queryFn: () => $adminListProjects()
+    });
+
+export const adminAuditsInfiniteQueryOptions = (filters: AdminAuditFilters = {}) =>
+    infiniteQueryOptions({
+        queryKey: ['admin', 'audits', 'infinite', filters],
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchInterval: 5_000,
+        initialPageParam: null as { createdAt: number; id: string } | null,
+        queryFn: ({ pageParam }) =>
+            $adminListAuditsPage({
+                data: {
+                    projectId: filters.projectId ?? null,
+                    limit: 50,
+                    cursor: pageParam,
+                    outcomes: filters.outcomes,
+                    resourceTypes: filters.resourceTypes,
+                    operation: filters.operation,
+                    surface: filters.surface ?? undefined,
+                    actorId: filters.actorId,
+                    reasonCode: filters.reasonCode
+                }
+            }),
+        getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined
     });
 
 export const adminStatsQueryOptions = () =>
