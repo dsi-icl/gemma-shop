@@ -50,6 +50,7 @@ import {
     pendingBindOverrides
 } from '~/server/bus/bus.binding';
 import { clearPendingHelloAuth } from '~/server/bus/bus.crypto';
+import { pendingHelloAuthByPeer } from '~/server/bus/bus.crypto';
 import {
     handlers,
     handleHello,
@@ -445,7 +446,7 @@ process.__REBOOT_WALL__ = (wallId: string, node?: { c: number; r: number }) => {
     return sent;
 };
 
-process.__REBOOT_DEVICE__ = (deviceId: string) => {
+process.__REBOOT_DEVICE__ = (deviceId: string, publicKey?: string) => {
     const normalized = deviceId.trim();
     if (!normalized) return 0;
     const payload = JSON.stringify({ type: 'reboot' } satisfies GSMessage);
@@ -456,6 +457,22 @@ process.__REBOOT_DEVICE__ = (deviceId: string) => {
         entry.peer.send(payload);
         sent += 1;
     }
+
+    // Enrollment flow keeps device sockets in pending-hello until after auth.
+    // Match those peers by device public key so they can reboot immediately.
+    const normalizedKey = typeof publicKey === 'string' ? publicKey.trim() : '';
+    if (normalizedKey) {
+        for (const pending of pendingHelloAuthByPeer.values()) {
+            if (pending.hello.devicePublicKey !== normalizedKey) continue;
+            try {
+                pending.peer.send(payload);
+                sent += 1;
+            } catch {
+                // no-op
+            }
+        }
+    }
+
     return sent;
 };
 
@@ -553,7 +570,6 @@ if (process.__AUTO_SAVE_INTERVAL__) clearInterval(process.__AUTO_SAVE_INTERVAL__
 process.__AUTO_SAVE_INTERVAL__ = setInterval(() => {
     for (const [scopeId, scope] of scopedState) {
         if (scope.dirty) {
-            console.log(`[Bus] Auto-saving scope ${scopeLabel(scopeId)}`);
             saveScope(scopeId, 'Auto-save', true).then((result) => {
                 if (result.success) {
                     broadcastToEditors(scopeId, {

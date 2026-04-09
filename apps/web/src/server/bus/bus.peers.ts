@@ -185,7 +185,7 @@ export async function completeHelloRegistration(
     peer: Peer,
     parsed: DeviceHelloMessage,
     passedAuthContext: AuthContext
-) {
+): Promise<{ pendingEnrollment: boolean }> {
     if (parsed.specimen === 'wall') {
         const wallDevice = parsed.devicePublicKey
             ? await ensureDeviceByPublicKey({
@@ -198,7 +198,7 @@ export async function completeHelloRegistration(
                 type: 'device_enrollment',
                 id: wallDevice.id
             });
-            return;
+            return { pendingEnrollment: true };
         }
         const effectiveWallId = wallDevice?.assignedWallId ?? parsed.wallId;
         const intendedWallSlug = parsed.wallId;
@@ -246,7 +246,7 @@ export async function completeHelloRegistration(
                 `(bound=${boundScope !== undefined ? scopeLabel(boundScope) : `none`})`
         );
         logPeerCounts();
-        return;
+        return { pendingEnrollment: false };
     }
 
     if (parsed.specimen === 'controller') {
@@ -261,7 +261,7 @@ export async function completeHelloRegistration(
                     type: 'device_enrollment',
                     id: controllerDevice.id
                 });
-                return;
+                return { pendingEnrollment: true };
             }
         }
 
@@ -320,7 +320,7 @@ export async function completeHelloRegistration(
 
         console.log(`[WS] Controller joined wallId=${parsed.wallId}`);
         logPeerCounts();
-        return;
+        return { pendingEnrollment: false };
     }
 
     let galleryDevice: Awaited<ReturnType<typeof ensureDeviceByPublicKey>> | null = null;
@@ -334,7 +334,9 @@ export async function completeHelloRegistration(
                 type: 'device_enrollment',
                 id: galleryDevice.id
             });
-            if (!(passedAuthContext.user?.role === 'admin')) return;
+            if (!(passedAuthContext.user?.role === 'admin')) {
+                return { pendingEnrollment: true };
+            }
         }
     }
 
@@ -367,6 +369,7 @@ export async function completeHelloRegistration(
     void sendGalleryStateSnapshot(peer, parsed.wallId);
     console.log(`[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ` (global)`}`);
     logPeerCounts();
+    return { pendingEnrollment: false };
 }
 
 export function handleEditorScopeVacated(scopeId: number) {

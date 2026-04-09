@@ -745,9 +745,11 @@ export async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
         resolvedAuth.user = user;
     }
 
-    clearPendingHelloAuth(peer.id);
     sendJSON(peer, { type: 'hello_authenticated' });
-    await completeHelloRegistration(peer, pending.hello, resolvedAuth);
+    const registration = await completeHelloRegistration(peer, pending.hello, resolvedAuth);
+    if (!registration.pendingEnrollment) {
+        clearPendingHelloAuth(peer.id);
+    }
 }
 
 export async function handleSwitchScope(peer: Peer, data: Record<string, any>) {

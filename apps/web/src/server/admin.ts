@@ -368,7 +368,10 @@ export async function adminDevicesEnrollBySignature(input: {
         ...input,
         wallId: resolvedWallId
     });
-    process.__REBOOT_DEVICE__?.(enrolled.id);
+    process.__REBOOT_DEVICE__?.(
+        enrolled.id,
+        typeof enrolled.publicKey === 'string' ? enrolled.publicKey : undefined
+    );
     return enrolled;
 }
 

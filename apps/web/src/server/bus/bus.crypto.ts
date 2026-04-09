@@ -10,6 +10,7 @@ export type DeviceHelloMessage = Exclude<HelloMessage, { specimen: 'editor' }>;
 type HelloChallengeMessage = Extract<GSMessage, { type: 'hello_challenge' }>;
 
 export interface PendingHelloAuth {
+    peer: Peer;
     hello: DeviceHelloMessage;
     nonce: string;
 }
@@ -25,6 +26,7 @@ export function clearPendingHelloAuth(peerId: string): PendingHelloAuth | null {
 
 export function issueHelloChallenge(peer: Peer, hello: DeviceHelloMessage) {
     const pending: PendingHelloAuth = {
+        peer,
         hello,
         nonce: randomBytes(16).toString('base64url')
     };

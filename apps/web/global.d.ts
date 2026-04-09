@@ -32,7 +32,7 @@ declare global {
             __YJS_RECOMPUTE_AUTH_CONTEXT__?: (payload: { email?: string }) => Promise<unknown>;
             __DISCONNECT_DEVICE__?: (deviceId: string) => number;
             __REBOOT_WALL__?: (wallId: string, node?: { c: number; r: number }) => number;
-            __REBOOT_DEVICE__?: (deviceId: string) => number;
+            __REBOOT_DEVICE__?: (deviceId: string, publicKey?: string) => number;
             __YJS_UPSERT_LAYER__?: (payload: {
                 projectId: string;
                 commitId: string;
