@@ -26,6 +26,7 @@ function AdminProjects() {
                             <th className="px-4 py-3 text-left font-medium">Name</th>
                             <th className="px-4 py-3 text-left font-medium">Owner</th>
                             <th className="px-4 py-3 text-left font-medium">Created</th>
+                            <th className="px-4 py-3 text-left font-medium">Updated</th>
                             <th className="px-4 py-3 text-left font-medium">Status</th>
                         </tr>
                     </thead>
@@ -38,6 +39,9 @@ function AdminProjects() {
                                 </td>
                                 <td className="px-4 py-3 text-muted-foreground">
                                     <DateDisplay value={project.createdAt} />
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground">
+                                    <DateDisplay value={project.updatedAt} />
                                 </td>
                                 <td className="px-4 py-3">
                                     {project.deletedAt ? (
