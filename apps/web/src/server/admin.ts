@@ -2,6 +2,7 @@ import '@tanstack/react-start/server-only';
 import { auth } from '@repo/auth/auth';
 import { createSmtpTransport } from '@repo/auth/smtp';
 import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
+import type { AuthContext } from '@repo/db/documents';
 import { getRequest } from '@tanstack/react-start/server';
 
 import {
@@ -14,6 +15,7 @@ import {
     unbindWall,
     wallsByWallId
 } from '~/lib/busState';
+import type { AuditExecutionContextInput } from '~/server/audit';
 import { logAuditSuccess } from '~/server/audit';
 import { dbCol, collections } from '~/server/collections';
 import { adminEnrollDeviceBySignature, adminListDevices } from '~/server/devices';
@@ -25,6 +27,18 @@ let prevBusSample: {
     incomingTotal: number;
     outgoingTotal: number;
 } | null = null;
+
+interface AdminAuditContext {
+    authContext?: AuthContext | null;
+    executionContext?: AuditExecutionContextInput | null;
+}
+
+function withAdminAuditContext(auditContext?: AdminAuditContext) {
+    return {
+        authContext: auditContext?.authContext ?? null,
+        executionContext: auditContext?.executionContext ?? null
+    };
+}
 
 function escapeRegex(input: string): string {
     return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -559,7 +573,10 @@ function normalizeConfigValue(field: ConfigField, value: string): unknown {
     return value;
 }
 
-export async function adminSetConfig(input: { key: string; value: string; updatedBy: string }) {
+export async function adminSetConfig(
+    input: { key: string; value: string; updatedBy: string },
+    auditContext?: AdminAuditContext
+) {
     const field = ADMIN_CONFIG_FIELDS.find((f) => f.key === input.key);
     if (!field) throw new Error('Unsupported config key');
 
@@ -573,9 +590,24 @@ export async function adminSetConfig(input: { key: string; value: string; update
         encrypted: field.encrypted,
         updatedBy: input.updatedBy
     });
+
+    await logAuditSuccess({
+        action: 'ADMIN_CONFIG_UPDATED',
+        actorId: input.updatedBy,
+        resourceType: 'config',
+        resourceId: field.key,
+        changes: {
+            encrypted: field.encrypted,
+            valueSet: true
+        },
+        ...withAdminAuditContext(auditContext)
+    });
 }
 
-export async function adminSendSmtpTest(input: { to: string }) {
+export async function adminSendSmtpTest(
+    input: { to: string; actorEmail: string },
+    auditContext?: AdminAuditContext
+) {
     const smtp = await getSmtpConfig();
     if (!smtp) {
         throw new Error(
@@ -590,6 +622,15 @@ export async function adminSendSmtpTest(input: { to: string }) {
         to: input.to,
         subject: 'Gemma Shop SMTP test',
         html: '<p>This is a test email from Gemma Shop admin configuration.</p>'
+    });
+
+    await logAuditSuccess({
+        action: 'ADMIN_SMTP_TEST_SENT',
+        actorId: input.actorEmail,
+        resourceType: 'smtp',
+        resourceId: input.to,
+        changes: { to: input.to },
+        ...withAdminAuditContext(auditContext)
     });
 
     return { ok: true };

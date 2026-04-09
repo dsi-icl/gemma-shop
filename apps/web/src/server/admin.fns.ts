@@ -1,4 +1,5 @@
 import { adminMiddleware } from '@repo/auth/tanstack/middleware';
+import type { AuthContext } from '@repo/db/documents';
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 
@@ -24,6 +25,27 @@ import {
     adminUpdateWallMetadata,
     adminUnbindWall
 } from './admin';
+import { logAuditSuccess } from './audit';
+
+function authContextFromServerFnContext(context: unknown): AuthContext {
+    const c = context as
+        | { authContext?: AuthContext; user?: { email?: string; role?: string } }
+        | undefined;
+    if (c?.authContext) return c.authContext;
+    const email = c?.user?.email;
+    const role = c?.user?.role;
+    if (typeof email === 'string' && (role === 'admin' || role === 'user')) {
+        return { user: { email, role } };
+    }
+    return { guest: true };
+}
+
+function buildAdminFnAuditContext(context: unknown, operation: string) {
+    return {
+        authContext: authContextFromServerFnContext(context),
+        executionContext: { surface: 'serverfn' as const, operation }
+    };
+}
 
 export const $adminListUsers = createServerFn({ method: 'GET' })
     .middleware([adminMiddleware])
@@ -94,7 +116,16 @@ export const $adminGetUploadToken = createServerFn({ method: 'POST' })
     .handler(async ({ context }) => {
         const { createUploadToken } = await import('~/lib/uploadTokens');
         const { PUBLIC_ASSET_PROJECT_ID } = await import('~/lib/constants');
-        return createUploadToken(PUBLIC_ASSET_PROJECT_ID, context.user.email);
+        const token = createUploadToken(PUBLIC_ASSET_PROJECT_ID, context.user.email);
+        await logAuditSuccess({
+            action: 'ADMIN_UPLOAD_TOKEN_CREATED',
+            actorId: context.user.email,
+            projectId: PUBLIC_ASSET_PROJECT_ID,
+            resourceType: 'upload_token',
+            resourceId: `project:${PUBLIC_ASSET_PROJECT_ID}`,
+            ...buildAdminFnAuditContext(context, '$adminGetUploadToken')
+        });
+        return token;
     });
 
 export const $adminGetWallBindingMeta = createServerFn({ method: 'GET' })
@@ -127,13 +158,21 @@ export const $adminSetConfig = createServerFn({ method: 'POST' })
         })
     )
     .handler(async ({ data, context }) =>
-        adminSetConfig({ key: data.key, value: data.value, updatedBy: context.user.email })
+        adminSetConfig(
+            { key: data.key, value: data.value, updatedBy: context.user.email },
+            buildAdminFnAuditContext(context, '$adminSetConfig')
+        )
     );
 
 export const $adminSendSmtpTest = createServerFn({ method: 'POST' })
     .middleware([adminMiddleware])
     .inputValidator(z.object({ to: z.email() }))
-    .handler(async ({ data }) => adminSendSmtpTest({ to: data.to }));
+    .handler(async ({ data, context }) =>
+        adminSendSmtpTest(
+            { to: data.to, actorEmail: context.user.email },
+            buildAdminFnAuditContext(context, '$adminSendSmtpTest')
+        )
+    );
 
 export const $adminDevicesList = createServerFn({ method: 'GET' })
     .middleware([adminMiddleware])

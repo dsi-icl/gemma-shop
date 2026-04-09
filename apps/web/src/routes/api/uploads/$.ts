@@ -17,7 +17,7 @@ import { enqueueJob } from '~/lib/jobs/repo';
 import { jobSignalBus } from '~/lib/jobs/signalBus';
 import { UPLOAD_DIR, TMP_DIR, ASSET_DIR } from '~/lib/serverVariables';
 import { validateUploadToken } from '~/lib/uploadTokens';
-import { logAuditSuccess } from '~/server/audit';
+import { logAuditDenied, logAuditFailure, logAuditSuccess } from '~/server/audit';
 import { dbCol } from '~/server/collections';
 import {
     buildRateLimitSubjectKey,
@@ -114,6 +114,15 @@ const tusServer = new Server({
     datastore: new FileStore({ directory: UPLOAD_DIR }),
     async onUploadFinish(req, upload) {
         const tusFilePath = join(UPLOAD_DIR, upload.id);
+        const uploaderIp = getClientIpFromHeaders(req.headers);
+
+        const auditExecutionContext = {
+            surface: 'http' as const,
+            operation: 'tus.onUploadFinish',
+            method: 'POST',
+            path: '/api/uploads/$',
+            ip: uploaderIp
+        };
 
         try {
             const originalName = upload.metadata?.filename ?? upload.id;
@@ -124,18 +133,33 @@ const tusServer = new Server({
             // Resolve project identity from the upload token only.
             const uploadToken = upload.metadata?.uploadToken;
             if (!uploadToken) {
+                await logAuditDenied({
+                    action: 'UPLOAD_FINALIZE_DENIED',
+                    resourceType: 'upload_token',
+                    resourceId: upload.id,
+                    reasonCode: 'MISSING_UPLOAD_TOKEN',
+                    authContext: { guest: true },
+                    executionContext: auditExecutionContext
+                });
                 console.warn('[Tus] Upload rejected: missing upload token');
                 throw new Error('Missing upload token');
             }
             const tokenData = validateUploadToken(uploadToken);
             if (!tokenData) {
+                await logAuditDenied({
+                    action: 'UPLOAD_FINALIZE_DENIED',
+                    resourceType: 'upload_token',
+                    resourceId: upload.id,
+                    reasonCode: 'INVALID_UPLOAD_TOKEN',
+                    authContext: { guest: true },
+                    executionContext: auditExecutionContext
+                });
                 console.warn('[Tus] Upload rejected: invalid or expired token');
                 throw new Error('Invalid or expired upload token');
             }
             const projectId = tokenData.projectId;
             const userEmail = tokenData.userEmail;
 
-            const uploaderIp = getClientIpFromHeaders(req.headers);
             const uploadFinalizeRate = checkRateLimit({
                 subjectKey: buildRateLimitSubjectKey({
                     actorId: userEmail,
@@ -143,6 +167,17 @@ const tusServer = new Server({
                 })
             });
             if (!uploadFinalizeRate.allowed) {
+                await logAuditDenied({
+                    action: 'UPLOAD_FINALIZE_DENIED',
+                    actorId: userEmail,
+                    projectId,
+                    resourceType: 'upload_token',
+                    resourceId: upload.id,
+                    reasonCode: 'RATE_LIMITED',
+                    authContext: { user: { email: userEmail, role: 'user' } },
+                    executionContext: auditExecutionContext,
+                    changes: { retryAfterMs: uploadFinalizeRate.retryAfterMs }
+                });
                 throw new Error('Upload finalize rate limit exceeded');
             }
 
@@ -300,6 +335,14 @@ const tusServer = new Server({
 
             return {};
         } catch (err) {
+            await logAuditFailure({
+                action: 'UPLOAD_FINALIZE_FAILED',
+                resourceType: 'asset',
+                resourceId: upload.id,
+                error: err instanceof Error ? err.message : String(err),
+                authContext: { guest: true },
+                executionContext: auditExecutionContext
+            });
             console.error('[Tus] onUploadFinish error:', err);
             throw err instanceof Error ? err : new Error(String(err));
         } finally {

@@ -1,6 +1,8 @@
 import '@tanstack/react-start/server-only';
-import type { CommitDocument } from '@repo/db/documents';
+import type { AuthContext, CommitDocument } from '@repo/db/documents';
 import type { Collaborator, CollaboratorRole, ProjectVisibility } from '@repo/db/schema';
+
+import type { AuditExecutionContextInput } from '~/server/audit';
 
 interface CreateProjectInput {
     name: string;
@@ -36,6 +38,24 @@ import { scopedState, updateProjectCustomRenderSettings } from '~/lib/busState';
 import { revokeUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 import { logAuditSuccess } from '~/server/audit';
 import { dbCol, collections } from '~/server/collections';
+
+export interface ProjectAuditContext {
+    authContext?: AuthContext | null;
+    executionContext?: AuditExecutionContextInput | null;
+}
+
+function withProjectAuditContext(auditContext?: ProjectAuditContext) {
+    return {
+        authContext: auditContext?.authContext ?? null,
+        executionContext: auditContext?.executionContext ?? null
+    };
+}
+
+function tokenHint(token: string): string {
+    const trimmed = token.trim();
+    if (!trimmed) return 'token:unknown';
+    return `token:...${trimmed.slice(-8)}`;
+}
 
 function normalizeAssetFilename(value: unknown): string | null {
     if (typeof value !== 'string' || value.length === 0) return null;
@@ -158,7 +178,11 @@ export async function getCommit(id: string) {
     return commit;
 }
 
-export async function createProject(input: CreateProjectInput, userEmail: string) {
+export async function createProject(
+    input: CreateProjectInput,
+    userEmail: string,
+    auditContext?: ProjectAuditContext
+) {
     const created = await dbCol.projects.insert({
         ...input,
         collaborators: [{ email: userEmail, role: 'owner' as const }, ...input.collaborators],
@@ -174,14 +198,19 @@ export async function createProject(input: CreateProjectInput, userEmail: string
         projectId: created.id,
         resourceType: 'project',
         resourceId: created.id,
-        changes: { name: input.name }
+        changes: { name: input.name },
+        ...withProjectAuditContext(auditContext)
     });
 
     process.__BROADCAST_PROJECTS_CHANGED__?.(created.id);
     return created;
 }
 
-export async function updateProject(input: UpdateProjectInput, userEmail: string) {
+export async function updateProject(
+    input: UpdateProjectInput,
+    userEmail: string,
+    auditContext?: ProjectAuditContext
+) {
     const { id: projectId, publishedCommitId: rawPublishedCommitId, ...updates } = input;
     const existing = await dbCol.projects.findById(projectId);
     if (!existing) throw new Error('Project not found');
@@ -205,7 +234,8 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
         projectId,
         resourceType: 'project',
         resourceId: projectId,
-        changes: { ...updates, publishedCommitId: rawPublishedCommitId ?? null }
+        changes: { ...updates, publishedCommitId: rawPublishedCommitId ?? null },
+        ...withProjectAuditContext(auditContext)
     });
 
     // Live-push custom render settings changes to any bound walls
@@ -229,7 +259,11 @@ export async function updateProject(input: UpdateProjectInput, userEmail: string
     return updated;
 }
 
-export async function archiveProject(id: string, userEmail: string) {
+export async function archiveProject(
+    id: string,
+    userEmail: string,
+    auditContext?: ProjectAuditContext
+) {
     const existing = await dbCol.projects.findById(id);
     if (!existing) throw new Error('Project not found');
 
@@ -241,13 +275,18 @@ export async function archiveProject(id: string, userEmail: string) {
         projectId: id,
         resourceType: 'project',
         resourceId: id,
-        changes: { deletedAt: true }
+        changes: { deletedAt: true },
+        ...withProjectAuditContext(auditContext)
     });
 
     process.__BROADCAST_PROJECTS_CHANGED__?.(id);
 }
 
-export async function deleteAsset(assetId: string, userEmail: string) {
+export async function deleteAsset(
+    assetId: string,
+    userEmail: string,
+    auditContext?: ProjectAuditContext
+) {
     const asset = await dbCol.assets.findById(assetId);
     if (!asset || asset.deletedAt) throw new Error('Asset not found');
 
@@ -260,11 +299,16 @@ export async function deleteAsset(assetId: string, userEmail: string) {
         actorId: userEmail,
         projectId: asset.projectId,
         resourceType: 'asset',
-        resourceId: assetId
+        resourceId: assetId,
+        ...withProjectAuditContext(auditContext)
     });
 }
 
-export async function restoreProject(id: string, userEmail: string) {
+export async function restoreProject(
+    id: string,
+    userEmail: string,
+    auditContext?: ProjectAuditContext
+) {
     const existing = await dbCol.projects.findById(id);
     if (!existing) throw new Error('Project not found');
 
@@ -279,13 +323,19 @@ export async function restoreProject(id: string, userEmail: string) {
         projectId: id,
         resourceType: 'project',
         resourceId: id,
-        changes: { deletedAt: false }
+        changes: { deletedAt: false },
+        ...withProjectAuditContext(auditContext)
     });
 
     process.__BROADCAST_PROJECTS_CHANGED__?.(id);
 }
 
-export async function publishCommit(projectId: string, commitId: string | null, userEmail: string) {
+export async function publishCommit(
+    projectId: string,
+    commitId: string | null,
+    userEmail: string,
+    auditContext?: ProjectAuditContext
+) {
     const existing = await dbCol.projects.findById(projectId);
     if (!existing) throw new Error('Project not found');
 
@@ -303,7 +353,8 @@ export async function publishCommit(projectId: string, commitId: string | null, 
         projectId,
         resourceType: 'project',
         resourceId: projectId,
-        changes: { publishedCommitId: commitId }
+        changes: { publishedCommitId: commitId },
+        ...withProjectAuditContext(auditContext)
     });
 
     process.__BROADCAST_PROJECTS_CHANGED__?.(projectId);
@@ -315,7 +366,11 @@ export async function publishCommit(projectId: string, commitId: string | null, 
  * Publish a custom-render project by creating a sentinel commit (one empty slide, no layers)
  * and marking it as the published commit. If already published, this is a no-op.
  */
-export async function publishCustomRenderProject(projectId: string, userEmail: string) {
+export async function publishCustomRenderProject(
+    projectId: string,
+    userEmail: string,
+    auditContext?: ProjectAuditContext
+) {
     const existing = await dbCol.projects.findById(projectId);
     if (!existing) throw new Error('Project not found');
     if (!existing.customRenderUrl) throw new Error('Project has no custom render URL');
@@ -333,14 +388,18 @@ export async function publishCustomRenderProject(projectId: string, userEmail: s
         isMutableHead: false
     });
 
-    return publishCommit(projectId, sentinel.id, userEmail);
+    return publishCommit(projectId, sentinel.id, userEmail, auditContext);
 }
 
 /**
  * Ensure a project has a mutable HEAD commit. Creates one if missing or migrates
  * legacy immutable heads. Returns the stable HEAD commit ID.
  */
-export async function ensureMutableHead(projectId: string, userEmail: string): Promise<string> {
+export async function ensureMutableHead(
+    projectId: string,
+    userEmail: string,
+    auditContext?: ProjectAuditContext
+): Promise<string> {
     const project = await dbCol.projects.findById(projectId);
     if (!project) throw new Error('Project not found');
 
@@ -368,7 +427,8 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
             projectId,
             resourceType: 'commit',
             resourceId: newHead.id,
-            changes: { source: 'legacy-head-migration' }
+            changes: { source: 'legacy-head-migration' },
+            ...withProjectAuditContext(auditContext)
         });
         return newHead.id;
     }
@@ -390,7 +450,8 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
         projectId,
         resourceType: 'commit',
         resourceId: newHead.id,
-        changes: { source: 'head-created' }
+        changes: { source: 'head-created' },
+        ...withProjectAuditContext(auditContext)
     });
     return newHead.id;
 }
@@ -403,7 +464,8 @@ export async function ensureMutableHead(projectId: string, userEmail: string): P
 export async function createBranchHead(
     projectId: string,
     sourceCommitId: string,
-    userEmail: string
+    userEmail: string,
+    auditContext?: ProjectAuditContext
 ): Promise<string> {
     const project = await dbCol.projects.findById(projectId);
     if (!project) throw new Error('Project not found');
@@ -427,7 +489,8 @@ export async function createBranchHead(
         projectId,
         resourceType: 'commit',
         resourceId: branchHead.id,
-        changes: { sourceCommitId }
+        changes: { sourceCommitId },
+        ...withProjectAuditContext(auditContext)
     });
     return branchHead.id;
 }
@@ -439,7 +502,8 @@ export async function createBranchHead(
 export async function promoteBranchHead(
     projectId: string,
     branchCommitId: string,
-    userEmail: string
+    userEmail: string,
+    auditContext?: ProjectAuditContext
 ): Promise<void> {
     const project = await dbCol.projects.findById(projectId);
     if (!project) throw new Error('Project not found');
@@ -457,7 +521,8 @@ export async function promoteBranchHead(
         projectId,
         resourceType: 'project',
         resourceId: projectId,
-        changes: { headCommitId: branchCommitId }
+        changes: { headCommitId: branchCommitId },
+        ...withProjectAuditContext(auditContext)
     });
 }
 
@@ -481,7 +546,9 @@ export async function copySlideInCommit(
     commitId: string,
     sourceSlideId: string,
     newSlideId: string,
-    newSlideName: string
+    newSlideName: string,
+    actorEmail: string,
+    auditContext?: ProjectAuditContext
 ): Promise<void> {
     const commit = await dbCol.commits.findById(commitId);
     if (!commit?.content?.slides) throw new Error('Commit not found');
@@ -547,13 +614,32 @@ export async function copySlideInCommit(
         commitId,
         updatedSlides as CommitDocument['content']['slides']
     );
+
+    await logAuditSuccess({
+        action: 'COMMIT_SLIDE_COPIED',
+        actorId: actorEmail,
+        projectId: commit.projectId,
+        resourceType: 'commit',
+        resourceId: commitId,
+        changes: {
+            sourceSlideId,
+            newSlideId,
+            newSlideName
+        },
+        ...withProjectAuditContext(auditContext)
+    });
 }
 
 /**
  * Delete a slide from a commit document.
  * Returns false if it's the last slide (must keep at least one).
  */
-export async function deleteSlideFromCommit(commitId: string, slideId: string): Promise<boolean> {
+export async function deleteSlideFromCommit(
+    commitId: string,
+    slideId: string,
+    actorEmail: string,
+    auditContext?: ProjectAuditContext
+): Promise<boolean> {
     const commit = await dbCol.commits.findById(commitId);
     if (!commit?.content?.slides) throw new Error('Commit not found');
 
@@ -564,7 +650,19 @@ export async function deleteSlideFromCommit(commitId: string, slideId: string): 
         layers: unknown[];
     }>;
 
-    if (slides.length <= 1) return false;
+    if (slides.length <= 1) {
+        await logAuditSuccess({
+            action: 'COMMIT_SLIDE_DELETE_BLOCKED',
+            actorId: actorEmail,
+            projectId: commit.projectId,
+            resourceType: 'commit',
+            resourceId: commitId,
+            reasonCode: 'LAST_SLIDE',
+            changes: { slideId },
+            ...withProjectAuditContext(auditContext)
+        });
+        return false;
+    }
 
     const updatedSlides = slides
         .filter((s) => s.id !== slideId)
@@ -576,15 +674,38 @@ export async function deleteSlideFromCommit(commitId: string, slideId: string): 
         updatedSlides as CommitDocument['content']['slides']
     );
 
+    await logAuditSuccess({
+        action: 'COMMIT_SLIDE_DELETED',
+        actorId: actorEmail,
+        projectId: commit.projectId,
+        resourceType: 'commit',
+        resourceId: commitId,
+        changes: { slideId },
+        ...withProjectAuditContext(auditContext)
+    });
+
     return true;
 }
 
-export async function revokeUploadTokenForActor(token: string, actorEmail: string): Promise<void> {
+export async function revokeUploadTokenForActor(
+    token: string,
+    actorEmail: string,
+    auditContext?: ProjectAuditContext
+): Promise<void> {
     const tokenData = validateUploadToken(token);
     if (!tokenData) return;
 
     if (tokenData.userEmail === actorEmail) {
         revokeUploadToken(token);
+        await logAuditSuccess({
+            action: 'UPLOAD_TOKEN_REVOKED',
+            actorId: actorEmail,
+            projectId: tokenData.projectId,
+            resourceType: 'upload_token',
+            resourceId: tokenHint(token),
+            changes: { revokedBy: 'token_owner' },
+            ...withProjectAuditContext(auditContext)
+        });
         return;
     }
 
@@ -598,6 +719,15 @@ export async function revokeUploadTokenForActor(token: string, actorEmail: strin
         );
         if (isOwner) {
             revokeUploadToken(token);
+            await logAuditSuccess({
+                action: 'UPLOAD_TOKEN_REVOKED',
+                actorId: actorEmail,
+                projectId: tokenData.projectId,
+                resourceType: 'upload_token',
+                resourceId: tokenHint(token),
+                changes: { revokedBy: 'project_owner' },
+                ...withProjectAuditContext(auditContext)
+            });
             return;
         }
     }
@@ -608,6 +738,15 @@ export async function revokeUploadTokenForActor(token: string, actorEmail: strin
     );
     if (admin) {
         revokeUploadToken(token);
+        await logAuditSuccess({
+            action: 'UPLOAD_TOKEN_REVOKED',
+            actorId: actorEmail,
+            projectId: tokenData.projectId,
+            resourceType: 'upload_token',
+            resourceId: tokenHint(token),
+            changes: { revokedBy: 'admin' },
+            ...withProjectAuditContext(auditContext)
+        });
         return;
     }
 

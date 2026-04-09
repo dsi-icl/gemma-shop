@@ -34,7 +34,7 @@ const UpdateProjectInput = z.object({
     collaborators: z.array(Collaborator).optional(),
     publishedCommitId: z.string().nullable().optional()
 });
-import { logAuditDenied } from '~/server/audit';
+import { logAuditDenied, logAuditSuccess } from '~/server/audit';
 import {
     actorFromAuthContext,
     canEditProject,
@@ -71,13 +71,26 @@ import {
 } from './projects';
 
 function authContextFromServerFnContext(context: unknown): AuthContext {
-    const c = context as { user?: { email?: string; role?: string } } | undefined;
+    const c = context as
+        | { authContext?: AuthContext; user?: { email?: string; role?: string } }
+        | undefined;
+    if (c?.authContext) return c.authContext;
     const email = c?.user?.email;
     const role = c?.user?.role;
     if (typeof email === 'string' && (role === 'admin' || role === 'user')) {
         return { user: { email, role } };
     }
     return { guest: true };
+}
+
+function buildProjectFnAuditContext(context: unknown, operation: string) {
+    return {
+        authContext: authContextFromServerFnContext(context),
+        executionContext: {
+            surface: 'serverfn' as const,
+            operation
+        }
+    };
 }
 
 async function denyProjectFn(params: {
@@ -219,7 +232,11 @@ export const $createProject = createServerFn({ method: 'POST' })
     .inputValidator(CreateProjectInput)
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
-        return createProject(data, context.user.email);
+        return createProject(
+            data,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$createProject')
+        );
     });
 
 export const $updateProject = createServerFn({ method: 'POST' })
@@ -250,7 +267,11 @@ export const $updateProject = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        return updateProject(data, context.user.email);
+        return updateProject(
+            data,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$updateProject')
+        );
     });
 
 export const $archiveProject = createServerFn({ method: 'POST' })
@@ -281,7 +302,11 @@ export const $archiveProject = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        await archiveProject(data.id, context.user.email);
+        await archiveProject(
+            data.id,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$archiveProject')
+        );
     });
 
 export const $deleteAsset = createServerFn({ method: 'POST' })
@@ -314,7 +339,11 @@ export const $deleteAsset = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        await deleteAsset(data.id, context.user.email);
+        await deleteAsset(
+            data.id,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$deleteAsset')
+        );
     });
 
 export const $restoreProject = createServerFn({ method: 'POST' })
@@ -345,7 +374,11 @@ export const $restoreProject = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        await restoreProject(data.id, context.user.email);
+        await restoreProject(
+            data.id,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$restoreProject')
+        );
     });
 
 export const $publishCommit = createServerFn({ method: 'POST' })
@@ -376,7 +409,12 @@ export const $publishCommit = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        return publishCommit(data.projectId, data.commitId, context.user.email);
+        return publishCommit(
+            data.projectId,
+            data.commitId,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$publishCommit')
+        );
     });
 
 export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
@@ -407,7 +445,11 @@ export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        return publishCustomRenderProject(data.projectId, context.user.email);
+        return publishCustomRenderProject(
+            data.projectId,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$publishCustomRenderProject')
+        );
     });
 
 export const $getAudits = createServerFn({ method: 'GET' })
@@ -469,7 +511,11 @@ export const $ensureMutableHead = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        return ensureMutableHead(data.projectId, context.user.email);
+        return ensureMutableHead(
+            data.projectId,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$ensureMutableHead')
+        );
     });
 
 export const $getProjectCommits = createServerFn({ method: 'GET' })
@@ -531,7 +577,12 @@ export const $createBranchHead = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        return createBranchHead(data.projectId, data.sourceCommitId, context.user.email);
+        return createBranchHead(
+            data.projectId,
+            data.sourceCommitId,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$createBranchHead')
+        );
     });
 
 export const $promoteBranchHead = createServerFn({ method: 'POST' })
@@ -562,7 +613,12 @@ export const $promoteBranchHead = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        return promoteBranchHead(data.projectId, data.branchCommitId, context.user.email);
+        return promoteBranchHead(
+            data.projectId,
+            data.branchCommitId,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$promoteBranchHead')
+        );
     });
 
 // ── Slide operations ─────────────────────────────────────────────────────────
@@ -608,7 +664,9 @@ export const $copySlideInCommit = createServerFn({ method: 'POST' })
             data.commitId,
             data.sourceSlideId,
             data.newSlideId,
-            data.newSlideName
+            data.newSlideName,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$copySlideInCommit')
         );
     });
 
@@ -642,7 +700,12 @@ export const $deleteSlideFromCommit = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        return deleteSlideFromCommit(data.commitId, data.slideId);
+        return deleteSlideFromCommit(
+            data.commitId,
+            data.slideId,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$deleteSlideFromCommit')
+        );
     });
 
 // ── Upload tokens ─────────────────────────────────────────────────────────────
@@ -675,7 +738,16 @@ export const $createUploadToken = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        return createUploadToken(data.projectId, context.user.email);
+        const token = createUploadToken(data.projectId, context.user.email);
+        await logAuditSuccess({
+            action: 'UPLOAD_TOKEN_CREATED',
+            actorId: context.user.email,
+            projectId: data.projectId,
+            resourceType: 'upload_token',
+            resourceId: `project:${data.projectId}`,
+            ...buildProjectFnAuditContext(context, '$createUploadToken')
+        });
+        return token;
     });
 
 export const $revokeUploadToken = createServerFn({ method: 'POST' })
@@ -706,7 +778,11 @@ export const $revokeUploadToken = createServerFn({ method: 'POST' })
             });
             throw new Error('Access denied');
         }
-        await revokeUploadTokenForActor(data.token, context.user.email);
+        await revokeUploadTokenForActor(
+            data.token,
+            context.user.email,
+            buildProjectFnAuditContext(context, '$revokeUploadToken')
+        );
     });
 
 export const $validateUploadToken = createServerFn({ method: 'POST' })
