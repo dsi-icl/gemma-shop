@@ -1,7 +1,8 @@
 import { freshAuthMiddleware } from '@repo/auth/tanstack/middleware';
 import type { AuthContext } from '@repo/db/documents';
 import { createServerFn } from '@tanstack/react-start';
-import { z } from 'zod';
+
+import { z } from '~/lib/zod';
 
 import { logAuditFailure, logAuditSuccess } from './audit';
 import {

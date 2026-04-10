@@ -12,8 +12,8 @@ import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-ro
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import { z } from 'zod';
 
+import { z } from '~/lib/zod';
 import { $bootstrapStatus } from '~/server/bootstrap.fns';
 
 export const Route = createFileRoute('/_guest/login')({

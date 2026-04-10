@@ -1,9 +1,9 @@
 import { authMiddleware } from '@repo/auth/tanstack/middleware';
 import { Collaborator, ProjectVisibility } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
-import { z } from 'zod';
 
 import { createUploadToken, validateUploadToken } from '~/lib/uploadTokens';
+import { z } from '~/lib/zod';
 
 const CreateProjectInput = z.object({
     name: z.string().min(1, 'Name is required'),

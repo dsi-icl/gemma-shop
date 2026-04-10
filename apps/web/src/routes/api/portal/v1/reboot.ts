@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { z } from 'zod';
 
 import { wallBindings } from '~/lib/busState';
 import { pruneExpiredPortalTokens, validatePortalToken } from '~/lib/portalTokens';
+import { z } from '~/lib/zod';
 import { logAuditDenied } from '~/server/audit';
 
 const rebootRequestSchema = z

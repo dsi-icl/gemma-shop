@@ -36,10 +36,10 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { useForm } from '@tanstack/react-form';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { z } from 'zod';
 
 import { AssetLibrary } from '~/components/AssetLibrary';
 import { AssetPreviewPortal, isVideoAsset } from '~/components/AssetPreviewOverlay';
+import { z } from '~/lib/zod';
 import {
     projectAssetsQueryOptions,
     projectTagSuggestionsQueryOptions

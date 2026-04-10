@@ -4,6 +4,8 @@ const ALLOWED_COLLECTION_LAYER_SEGMENT = '/packages/db/src/collections/';
 // Test seed scripts may use raw db.collection() to insert fixtures with deterministic IDs.
 const ALLOWED_SEED_SUFFIX = '/tooling/testing/seed.mjs';
 const ALLOWED_AUDIT_FILE_SUFFIX = '/apps/web/src/server/audit.ts';
+const WEB_APP_SRC_SEGMENT = '/apps/web/src/';
+const ALLOWED_ZOD_IMPORT_FILE_SUFFIX = '/apps/web/src/lib/zod.ts';
 
 function normalizePath(filePath) {
     return String(filePath || '').replaceAll('\\', '/');
@@ -21,6 +23,20 @@ function isAllowedFile(filePath) {
 function isAllowedAuditFile(filePath) {
     const normalized = normalizePath(filePath);
     return normalized.endsWith(ALLOWED_AUDIT_FILE_SUFFIX);
+}
+
+function isWebAppSourceFile(filePath) {
+    const normalized = normalizePath(filePath);
+    return normalized.includes(WEB_APP_SRC_SEGMENT);
+}
+
+function isAllowedZodImportFile(filePath) {
+    const normalized = normalizePath(filePath);
+    return normalized.endsWith(ALLOWED_ZOD_IMPORT_FILE_SUFFIX);
+}
+
+function isDirectZodSpecifier(specifier) {
+    return specifier === 'zod' || specifier.startsWith('zod/');
 }
 
 function isDbCollectionCall(node) {
@@ -124,6 +140,56 @@ const noDirectAuditInsertRule = {
     }
 };
 
+const noDirectZodImportRule = {
+    meta: {
+        type: 'problem',
+        docs: {
+            description:
+                'Disallow direct zod imports in apps/web/src to ensure jitless configuration is always applied'
+        },
+        schema: [],
+        messages: {
+            noDirectZodImport:
+                'Import { z } from "~/lib/zod" instead of importing directly from "zod".'
+        }
+    },
+    create(context) {
+        const filename = context.filename || '';
+        if (!isWebAppSourceFile(filename) || isAllowedZodImportFile(filename)) return {};
+
+        return {
+            ImportDeclaration(node) {
+                if (typeof node.source?.value !== 'string') return;
+                if (!isDirectZodSpecifier(node.source.value)) return;
+                context.report({
+                    node: node.source,
+                    messageId: 'noDirectZodImport'
+                });
+            },
+            ImportExpression(node) {
+                if (node.source?.type !== 'Literal') return;
+                if (typeof node.source.value !== 'string') return;
+                if (!isDirectZodSpecifier(node.source.value)) return;
+                context.report({
+                    node: node.source,
+                    messageId: 'noDirectZodImport'
+                });
+            },
+            CallExpression(node) {
+                if (node.callee?.type !== 'Identifier' || node.callee.name !== 'require') return;
+                const firstArg = node.arguments?.[0];
+                if (!firstArg || firstArg.type !== 'Literal') return;
+                if (typeof firstArg.value !== 'string') return;
+                if (!isDirectZodSpecifier(firstArg.value)) return;
+                context.report({
+                    node: firstArg,
+                    messageId: 'noDirectZodImport'
+                });
+            }
+        };
+    }
+};
+
 export default {
     meta: {
         name: 'eslint-plugin-repo',
@@ -131,6 +197,7 @@ export default {
     },
     rules: {
         'no-direct-db-collection': noDirectDbCollectionRule,
-        'no-direct-audit-insert': noDirectAuditInsertRule
+        'no-direct-audit-insert': noDirectAuditInsertRule,
+        'no-direct-zod-import': noDirectZodImportRule
     }
 };

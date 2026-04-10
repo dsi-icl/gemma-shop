@@ -45,6 +45,7 @@
         "eslint-tanstack-query/mutation-property-order": "warn",
         "repo/no-direct-db-collection": "error",
         "repo/no-direct-audit-insert": "error",
+        "repo/no-direct-zod-import": "error",
         // ref: https://github.com/TheAlexLichter/oxlint-react-compiler-rules/issues/1
         // Recommended rules (from LintRulePreset.Recommended)
         "react-hooks-js/component-hook-factories": "error",

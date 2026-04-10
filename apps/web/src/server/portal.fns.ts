@@ -1,8 +1,8 @@
 import { createServerFn } from '@tanstack/react-start';
-import { z } from 'zod';
 
 import { wallBindings } from '~/lib/busState';
 import { createPortalToken, pruneExpiredPortalTokens } from '~/lib/portalTokens';
+import { z } from '~/lib/zod';
 import { logAuditDenied } from '~/server/audit';
 import { actorAuthContextMiddleware } from '~/server/auth-context.middleware';
 import type { AuthContext } from '~/server/requestAuthContext';
