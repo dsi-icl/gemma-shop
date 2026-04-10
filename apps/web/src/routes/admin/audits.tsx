@@ -61,6 +61,10 @@ function outcomeBadgeClass(outcome: string | null | undefined): string {
     return '';
 }
 
+function collapseCountBadgeClass(): string {
+    return 'border-sky-500/50 bg-sky-500/10 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300';
+}
+
 function labelize(raw: string | null | undefined): string {
     if (!raw) return 'Unknown';
     return raw
@@ -74,6 +78,39 @@ function deviceKindFromChanges(changes: unknown): 'wall' | 'gallery' | 'controll
     const kind = (changes as { kind?: unknown }).kind;
     if (kind === 'wall' || kind === 'gallery' || kind === 'controller') return kind;
     return null;
+}
+
+function eventCollapseSignature(event: {
+    action?: string | null;
+    outcome?: string | null;
+    resourceType?: string | null;
+    resourceId?: string | null;
+    actorId?: string | null;
+    reasonCode?: string | null;
+    executionContext?: { operation?: string | null } | null;
+    changes?: unknown;
+}) {
+    const deviceKind =
+        event.resourceType === 'device' ? deviceKindFromChanges(event.changes) : null;
+    if (event.action === 'DEVICE_SEEN' && event.outcome === 'success') {
+        return [
+            event.action,
+            event.outcome,
+            event.resourceType ?? 'device',
+            event.executionContext?.operation ?? '',
+            deviceKind ?? ''
+        ].join('|');
+    }
+    return [
+        event.action ?? '',
+        event.outcome ?? '',
+        event.resourceType ?? '',
+        event.resourceId ?? '',
+        event.actorId ?? '',
+        event.reasonCode ?? '',
+        event.executionContext?.operation ?? '',
+        deviceKind ?? ''
+    ].join('|');
 }
 
 function AdminAudits() {
@@ -111,7 +148,29 @@ function AdminAudits() {
         useSuspenseInfiniteQuery(queryOptions);
 
     const items = useMemo(() => data.pages.flatMap((page) => page.items), [data.pages]);
+    const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
     const sentinelRef = useRef<HTMLDivElement | null>(null);
+    const groupedItems = useMemo(() => {
+        const groups: Array<{
+            id: string;
+            events: typeof items;
+            signature: string;
+        }> = [];
+        for (const event of items) {
+            const signature = eventCollapseSignature(event);
+            const previous = groups[groups.length - 1];
+            if (previous && previous.signature === signature && event.outcome === 'success') {
+                previous.events.push(event);
+                continue;
+            }
+            groups.push({
+                id: `${event.id}:${signature}`,
+                events: [event],
+                signature
+            });
+        }
+        return groups;
+    }, [items]);
 
     useEffect(() => {
         const node = sentinelRef.current;
@@ -269,13 +328,16 @@ function AdminAudits() {
             </div>
 
             <div className="space-y-3">
-                {items.map((event) => {
+                {groupedItems.map((group) => {
+                    const event = group.events[0];
                     const deviceKind =
                         event.resourceType === 'device'
                             ? deviceKindFromChanges(event.changes)
                             : null;
+                    const isCollapsedGroup = event.outcome === 'success' && group.events.length > 1;
+                    const isExpanded = expandedGroupIds.has(group.id);
                     return (
-                        <div key={event.id} className="rounded-xl border bg-card p-4">
+                        <div key={group.id} className="rounded-xl border bg-card p-4">
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex min-w-0 items-center gap-2">
                                     <ClockIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -300,6 +362,14 @@ function AdminAudits() {
                                     {deviceKind && (
                                         <Badge variant="outline" className="text-[11px]">
                                             {labelize(deviceKind)}
+                                        </Badge>
+                                    )}
+                                    {isCollapsedGroup && (
+                                        <Badge
+                                            variant="outline"
+                                            className={`text-[11px] ${collapseCountBadgeClass()}`}
+                                        >
+                                            x{group.events.length}
                                         </Badge>
                                     )}
                                 </div>
@@ -335,6 +405,85 @@ function AdminAudits() {
                                         {JSON.stringify(event.changes, null, 2)}
                                     </pre>
                                 </details>
+                            )}
+                            {isCollapsedGroup && (
+                                <div className="mt-3 border-t pt-2 text-xs text-muted-foreground">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span>
+                                            Collapsed {group.events.length - 1} repeated success
+                                            events
+                                        </span>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                                setExpandedGroupIds((prev) => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(group.id)) {
+                                                        next.delete(group.id);
+                                                    } else {
+                                                        next.add(group.id);
+                                                    }
+                                                    return next;
+                                                })
+                                            }
+                                        >
+                                            {isExpanded ? 'Hide' : 'Show'}
+                                        </Button>
+                                    </div>
+                                    {isExpanded && (
+                                        <div className="mt-2 space-y-1">
+                                            {group.events.slice(1).map((repeatEvent) => (
+                                                <div
+                                                    key={repeatEvent.id}
+                                                    className="rounded-md border bg-muted/30 px-2 py-2"
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="truncate">
+                                                            {repeatEvent.actorId ?? 'Unknown actor'}
+                                                        </span>
+                                                        <DateDisplay
+                                                            value={repeatEvent.createdAt}
+                                                            className="text-[11px] text-muted-foreground"
+                                                        />
+                                                    </div>
+                                                    {(repeatEvent.executionContext?.operation ||
+                                                        repeatEvent.reasonCode) && (
+                                                        <p className="mt-1 text-[11px] text-muted-foreground">
+                                                            {repeatEvent.executionContext?.operation
+                                                                ? `Operation: ${repeatEvent.executionContext.operation}`
+                                                                : ''}
+                                                            {repeatEvent.reasonCode
+                                                                ? `${repeatEvent.executionContext?.operation ? ' · ' : ''}Reason: ${labelize(repeatEvent.reasonCode)}`
+                                                                : ''}
+                                                        </p>
+                                                    )}
+                                                    {(repeatEvent.changes || repeatEvent.error) && (
+                                                        <details className="mt-1">
+                                                            <summary className="cursor-pointer text-[11px] text-muted-foreground">
+                                                                View payload
+                                                            </summary>
+                                                            <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[11px]">
+                                                                {JSON.stringify(
+                                                                    {
+                                                                        changes:
+                                                                            repeatEvent.changes ??
+                                                                            null,
+                                                                        error:
+                                                                            repeatEvent.error ??
+                                                                            null
+                                                                    },
+                                                                    null,
+                                                                    2
+                                                                )}
+                                                            </pre>
+                                                        </details>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
                     );
