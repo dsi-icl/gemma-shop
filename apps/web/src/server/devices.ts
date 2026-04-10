@@ -28,6 +28,13 @@ async function verifySignature(publicKeyJwkJson: string, id: string, signature: 
     return crypto.subtle.verify(ALGO, key, sigBytes, data);
 }
 
+function buildDeviceActorId(id: unknown): string | null {
+    if (typeof id !== 'string') return null;
+    const normalized = id.trim();
+    if (!normalized) return null;
+    return `device:${normalized}`;
+}
+
 export async function ensureDeviceByPublicKey(input: {
     publicKey: string;
     kind: DeviceDocument['kind'];
@@ -39,12 +46,20 @@ export async function ensureDeviceByPublicKey(input: {
     const existing = await dbCol.devices.findOne({ publicKey });
     if (existing) {
         await dbCol.devices.touchLastSeen(existing.id);
-        await logAuditSuccess({
-            action: 'DEVICE_SEEN',
-            resourceType: 'device',
-            resourceId: existing.id,
-            changes: { kind: input.kind }
-        });
+        const actorId = buildDeviceActorId(existing.id);
+        if (actorId) {
+            await logAuditSuccess({
+                action: 'DEVICE_SEEN',
+                actorId,
+                resourceType: 'device',
+                resourceId: existing.id,
+                changes: {
+                    kind: input.kind,
+                    status: existing.status,
+                    wallId: existing.assignedWallId ?? null
+                }
+            });
+        }
         return { ...existing, lastSeenAt: now, updatedAt: now };
     }
 
