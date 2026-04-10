@@ -69,6 +69,13 @@ function labelize(raw: string | null | undefined): string {
         .replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
+function deviceKindFromChanges(changes: unknown): 'wall' | 'gallery' | 'controller' | null {
+    if (!changes || typeof changes !== 'object') return null;
+    const kind = (changes as { kind?: unknown }).kind;
+    if (kind === 'wall' || kind === 'gallery' || kind === 'controller') return kind;
+    return null;
+}
+
 function AdminAudits() {
     const queryClient = useQueryClient();
     const [outcomeFilter, setOutcomeFilter] =
@@ -100,7 +107,7 @@ function AdminAudits() {
     );
 
     const queryOptions = useMemo(() => adminAuditsInfiniteQueryOptions(filters), [filters]);
-    const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isRefetching } =
+    const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
         useSuspenseInfiniteQuery(queryOptions);
 
     const items = useMemo(() => data.pages.flatMap((page) => page.items), [data.pages]);
@@ -230,9 +237,8 @@ function AdminAudits() {
                         onClick={() => {
                             void queryClient.resetQueries({ queryKey: queryOptions.queryKey });
                         }}
-                        disabled={isRefetching}
                     >
-                        {isRefetching ? 'Refreshing...' : 'Refresh'}
+                        Refresh
                     </Button>
                     <Button
                         variant="outline"
@@ -263,63 +269,76 @@ function AdminAudits() {
             </div>
 
             <div className="space-y-3">
-                {items.map((event) => (
-                    <div key={event.id} className="rounded-xl border bg-card p-4">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-2">
-                                <ClockIcon className="size-4 shrink-0 text-muted-foreground" />
-                                <span className="truncate text-sm font-medium">
-                                    {labelize(event.action)}
-                                </span>
-                                <Badge
-                                    variant={
-                                        event.outcome === 'failure' || event.outcome === 'error'
-                                            ? 'destructive'
-                                            : 'outline'
-                                    }
-                                    className={`text-[11px] ${outcomeBadgeClass(event.outcome)}`}
-                                >
-                                    {labelize(event.outcome)}
-                                </Badge>
-                                {event.resourceType && (
-                                    <Badge variant="outline" className="text-[11px]">
-                                        {labelize(event.resourceType)}
+                {items.map((event) => {
+                    const deviceKind =
+                        event.resourceType === 'device'
+                            ? deviceKindFromChanges(event.changes)
+                            : null;
+                    return (
+                        <div key={event.id} className="rounded-xl border bg-card p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <ClockIcon className="size-4 shrink-0 text-muted-foreground" />
+                                    <span className="truncate text-sm font-medium">
+                                        {labelize(event.action)}
+                                    </span>
+                                    <Badge
+                                        variant={
+                                            event.outcome === 'failure' || event.outcome === 'error'
+                                                ? 'destructive'
+                                                : 'outline'
+                                        }
+                                        className={`text-[11px] ${outcomeBadgeClass(event.outcome)}`}
+                                    >
+                                        {labelize(event.outcome)}
                                     </Badge>
+                                    {event.resourceType && (
+                                        <Badge variant="outline" className="text-[11px]">
+                                            {labelize(event.resourceType)}
+                                        </Badge>
+                                    )}
+                                    {deviceKind && (
+                                        <Badge variant="outline" className="text-[11px]">
+                                            {labelize(deviceKind)}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <DateDisplay
+                                    value={event.createdAt}
+                                    className="text-xs text-muted-foreground"
+                                />
+                            </div>
+
+                            <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-muted-foreground md:grid-cols-2">
+                                {event.actorId && <span>Actor: {event.actorId}</span>}
+                                {event.projectId && <span>Project: {event.projectId}</span>}
+                                {event.executionContext?.operation && (
+                                    <span>Operation: {event.executionContext.operation}</span>
+                                )}
+                                {event.executionContext?.path && (
+                                    <span>Path: {event.executionContext.path}</span>
+                                )}
+                                {event.reasonCode && (
+                                    <span>Reason: {labelize(event.reasonCode)}</span>
+                                )}
+                                {event.executionContext?.surface && (
+                                    <span>Surface: {event.executionContext.surface}</span>
                                 )}
                             </div>
-                            <DateDisplay
-                                value={event.createdAt}
-                                className="text-xs text-muted-foreground"
-                            />
-                        </div>
 
-                        <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-muted-foreground md:grid-cols-2">
-                            {event.actorId && <span>Actor: {event.actorId}</span>}
-                            {event.projectId && <span>Project: {event.projectId}</span>}
-                            {event.executionContext?.operation && (
-                                <span>Operation: {event.executionContext.operation}</span>
-                            )}
-                            {event.executionContext?.path && (
-                                <span>Path: {event.executionContext.path}</span>
-                            )}
-                            {event.reasonCode && <span>Reason: {labelize(event.reasonCode)}</span>}
-                            {event.executionContext?.surface && (
-                                <span>Surface: {event.executionContext.surface}</span>
+                            {event.changes && (
+                                <details className="mt-2">
+                                    <summary className="cursor-pointer text-xs text-muted-foreground">
+                                        View payload
+                                    </summary>
+                                    <pre className="mt-2 max-h-44 overflow-auto rounded-lg bg-muted/50 p-2 text-xs">
+                                        {JSON.stringify(event.changes, null, 2)}
+                                    </pre>
+                                </details>
                             )}
                         </div>
-
-                        {event.changes && (
-                            <details className="mt-2">
-                                <summary className="cursor-pointer text-xs text-muted-foreground">
-                                    View payload
-                                </summary>
-                                <pre className="mt-2 max-h-44 overflow-auto rounded-lg bg-muted/50 p-2 text-xs">
-                                    {JSON.stringify(event.changes, null, 2)}
-                                </pre>
-                            </details>
-                        )}
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             <div ref={sentinelRef} className="h-10" />

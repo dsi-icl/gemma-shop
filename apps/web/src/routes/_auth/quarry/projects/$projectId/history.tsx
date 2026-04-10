@@ -79,6 +79,13 @@ function outcomeBadgeClass(outcome: string | null | undefined): string {
     return '';
 }
 
+function deviceKindFromChanges(changes: unknown): 'wall' | 'gallery' | 'controller' | null {
+    if (!changes || typeof changes !== 'object') return null;
+    const kind = (changes as { kind?: unknown }).kind;
+    if (kind === 'wall' || kind === 'gallery' || kind === 'controller') return kind;
+    return null;
+}
+
 function HistoryTab() {
     const { projectId } = Route.useParams();
     const queryClient = useQueryClient();
@@ -99,7 +106,7 @@ function HistoryTab() {
         () => auditsInfiniteQueryOptions(projectId, filters),
         [filters, projectId]
     );
-    const { data, hasNextPage, isFetchingNextPage, fetchNextPage, isRefetching } =
+    const { data, hasNextPage, isFetchingNextPage, fetchNextPage } =
         useSuspenseInfiniteQuery(queryOptions);
 
     const logs = useMemo(() => data.pages.flatMap((page) => page.items), [data.pages]);
@@ -195,76 +202,86 @@ function HistoryTab() {
                         onClick={() => {
                             void queryClient.resetQueries({ queryKey: queryOptions.queryKey });
                         }}
-                        disabled={isRefetching}
                     >
-                        {isRefetching ? 'Refreshing...' : 'Refresh'}
+                        Refresh
                     </Button>
                 </div>
             </div>
             <div className="space-y-3">
-                {logs.map((log) => (
-                    <div
-                        key={log.id}
-                        className="flex items-start gap-3 rounded-xl border p-4 text-sm shadow-sm"
-                    >
-                        <ClockIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                        <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-medium">{labelize(log.action)}</span>
-                                    <Badge
-                                        variant={
-                                            log.outcome === 'failure' || log.outcome === 'error'
-                                                ? 'destructive'
-                                                : 'outline'
-                                        }
-                                        className={`text-[11px] ${outcomeBadgeClass(log.outcome)}`}
-                                    >
-                                        {labelize(log.outcome)}
-                                    </Badge>
-                                    {log.resourceType && (
-                                        <Badge variant="outline" className="text-[11px]">
-                                            {labelize(log.resourceType)}
+                {logs.map((log) => {
+                    const deviceKind =
+                        log.resourceType === 'device' ? deviceKindFromChanges(log.changes) : null;
+                    return (
+                        <div
+                            key={log.id}
+                            className="flex items-start gap-3 rounded-xl border p-4 text-sm shadow-sm"
+                        >
+                            <ClockIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                            <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium">{labelize(log.action)}</span>
+                                        <Badge
+                                            variant={
+                                                log.outcome === 'failure' || log.outcome === 'error'
+                                                    ? 'destructive'
+                                                    : 'outline'
+                                            }
+                                            className={`text-[11px] ${outcomeBadgeClass(log.outcome)}`}
+                                        >
+                                            {labelize(log.outcome)}
                                         </Badge>
-                                    )}
+                                        {log.resourceType && (
+                                            <Badge variant="outline" className="text-[11px]">
+                                                {labelize(log.resourceType)}
+                                            </Badge>
+                                        )}
+                                        {deviceKind && (
+                                            <Badge variant="outline" className="text-[11px]">
+                                                {labelize(deviceKind)}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <DateDisplay
+                                        value={log.createdAt}
+                                        className="text-xs text-muted-foreground"
+                                    />
                                 </div>
-                                <DateDisplay
-                                    value={log.createdAt}
-                                    className="text-xs text-muted-foreground"
-                                />
-                            </div>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                Actor:{' '}
-                                {typeof log.actorId === 'string' ? log.actorId : 'Unknown actor'}
-                            </p>
-                            {(log.executionContext?.operation ||
-                                log.executionContext?.path ||
-                                log.reasonCode) && (
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                    {log.executionContext?.operation
-                                        ? `Operation: ${log.executionContext.operation}`
-                                        : ''}
-                                    {log.executionContext?.path
-                                        ? `${log.executionContext?.operation ? ' · ' : ''}Path: ${log.executionContext.path}`
-                                        : ''}
-                                    {log.reasonCode
-                                        ? `${log.executionContext?.operation || log.executionContext?.path ? ' · ' : ''}Reason: ${labelize(log.reasonCode)}`
-                                        : ''}
+                                    Actor:{' '}
+                                    {typeof log.actorId === 'string'
+                                        ? log.actorId
+                                        : 'Unknown actor'}
                                 </p>
-                            )}
-                            {log.changes && (
-                                <details className="mt-2">
-                                    <summary className="cursor-pointer text-xs text-muted-foreground">
-                                        View payload
-                                    </summary>
-                                    <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-muted/50 p-2 text-xs">
-                                        {JSON.stringify(log.changes, null, 2)}
-                                    </pre>
-                                </details>
-                            )}
+                                {(log.executionContext?.operation ||
+                                    log.executionContext?.path ||
+                                    log.reasonCode) && (
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        {log.executionContext?.operation
+                                            ? `Operation: ${log.executionContext.operation}`
+                                            : ''}
+                                        {log.executionContext?.path
+                                            ? `${log.executionContext?.operation ? ' · ' : ''}Path: ${log.executionContext.path}`
+                                            : ''}
+                                        {log.reasonCode
+                                            ? `${log.executionContext?.operation || log.executionContext?.path ? ' · ' : ''}Reason: ${labelize(log.reasonCode)}`
+                                            : ''}
+                                    </p>
+                                )}
+                                {log.changes && (
+                                    <details className="mt-2">
+                                        <summary className="cursor-pointer text-xs text-muted-foreground">
+                                            View payload
+                                        </summary>
+                                        <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-muted/50 p-2 text-xs">
+                                            {JSON.stringify(log.changes, null, 2)}
+                                        </pre>
+                                    </details>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
                 <div ref={sentinelRef} className="h-10" />
                 <div className="pb-6 text-center text-xs text-muted-foreground">
                     {isFetchingNextPage
