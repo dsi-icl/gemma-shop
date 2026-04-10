@@ -9,8 +9,8 @@ import {
 } from '@repo/ui/components/dialog';
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { Scanner, type IDetectedBarcode } from '@yudiel/react-qr-scanner';
-import { useEffect, useRef, useState } from 'react';
+import type { IDetectedBarcode } from '@yudiel/react-qr-scanner';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { $adminDeleteDevice, $adminDevicesEnrollBySignature } from '~/server/admin.fns';
@@ -19,6 +19,15 @@ import {
     adminDevicesQueryOptions,
     adminWallQueryOptions
 } from '~/server/admin.queries';
+
+const Scanner = lazy(async () => {
+    const [{ configureQrScannerWasm }, { Scanner: ScannerComponent }] = await Promise.all([
+        import('~/lib/qrScannerWasm'),
+        import('@yudiel/react-qr-scanner')
+    ]);
+    configureQrScannerWasm();
+    return { default: ScannerComponent };
+});
 
 export const Route = createFileRoute('/admin/walls/$wallId/devices')({
     loader: async ({ context, params }) => {
@@ -307,37 +316,45 @@ function WallDevicesTab() {
                     <div className="mt-4 space-y-3">
                         <div className="overflow-hidden rounded-lg border border-border bg-black">
                             {cameraReady ? (
-                                <Scanner
-                                    key={scannerKey}
-                                    onScan={(codes) => void handleScan(codes)}
-                                    onError={(error: any) => {
-                                        const errorName = error?.name ?? '';
-                                        if (
-                                            errorName === 'NotAllowedError' ||
-                                            errorName === 'PermissionDeniedError'
-                                        ) {
-                                            setCameraPermission('denied');
-                                            setCameraReady(false);
-                                            setScanStatus(
-                                                'Camera access is blocked. Enable camera permission and retry.'
-                                            );
-                                            return;
-                                        }
+                                <Suspense
+                                    fallback={
+                                        <div className="flex h-88 w-full items-center justify-center text-sm text-muted-foreground sm:h-104">
+                                            Initializing scanner...
+                                        </div>
+                                    }
+                                >
+                                    <Scanner
+                                        key={scannerKey}
+                                        onScan={(codes) => void handleScan(codes)}
+                                        onError={(error: any) => {
+                                            const errorName = error?.name ?? '';
+                                            if (
+                                                errorName === 'NotAllowedError' ||
+                                                errorName === 'PermissionDeniedError'
+                                            ) {
+                                                setCameraPermission('denied');
+                                                setCameraReady(false);
+                                                setScanStatus(
+                                                    'Camera access is blocked. Enable camera permission and retry.'
+                                                );
+                                                return;
+                                            }
 
-                                        setScanStatus(
-                                            'Camera unavailable. Check permissions and retry.'
-                                        );
-                                    }}
-                                    constraints={{ facingMode: { ideal: 'environment' } }}
-                                    formats={['qr_code']}
-                                    sound={false}
-                                    paused={!scanDialogOpen || cameraPermission === 'denied'}
-                                    scanDelay={250}
-                                    classNames={{
-                                        container: 'h-[22rem] w-full sm:h-[26rem]',
-                                        video: 'h-[22rem] w-full object-cover sm:h-[26rem]'
-                                    }}
-                                />
+                                            setScanStatus(
+                                                'Camera unavailable. Check permissions and retry.'
+                                            );
+                                        }}
+                                        constraints={{ facingMode: { ideal: 'environment' } }}
+                                        formats={['qr_code']}
+                                        sound={false}
+                                        paused={!scanDialogOpen || cameraPermission === 'denied'}
+                                        scanDelay={250}
+                                        classNames={{
+                                            container: 'h-[22rem] w-full sm:h-[26rem]',
+                                            video: 'h-[22rem] w-full object-cover sm:h-[26rem]'
+                                        }}
+                                    />
+                                </Suspense>
                             ) : (
                                 <div className="flex h-88 w-full items-center justify-center text-sm text-muted-foreground sm:h-104">
                                     Camera is not active yet.
