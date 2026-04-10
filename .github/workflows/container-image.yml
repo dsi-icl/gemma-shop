@@ -66,6 +66,8 @@ jobs:
                       OCI_SOURCE=https://github.com/${{ github.repository }}
                       BUILD_SOURCEMAPS=${{ steps.sourcemaps.outputs.enabled }}
                       KEEP_SOURCE_MAPS=${{ steps.sourcemaps.outputs.enabled }}
+                      VITE_GIT_SHA=${{ github.sha }}
+                      APP_COMMIT_SHA=${{ github.sha }}
                   oci: true
 
             - name: Push image to GHCR

@@ -2,9 +2,13 @@
 
 FROM oven/bun:1.3.11 AS build
 ARG BUILD_SOURCEMAPS=false
+ARG VITE_GIT_SHA=
+ARG APP_COMMIT_SHA=
 WORKDIR /workspace
 ENV TURBO_TELEMETRY_DISABLED=1
 ENV BUILD_SOURCEMAPS=${BUILD_SOURCEMAPS}
+ENV VITE_GIT_SHA=${VITE_GIT_SHA}
+ENV APP_COMMIT_SHA=${APP_COMMIT_SHA}
 
 # Install dependencies first for better cache reuse.
 COPY package.json bun.lock bunfig.toml turbo.json ./

@@ -1,5 +1,3 @@
-import { execSync } from 'node:child_process';
-
 import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { devtools } from '@tanstack/devtools-vite';
@@ -11,31 +9,21 @@ import mkcert from 'vite-plugin-mkcert';
 
 import { thirdPartyNoticesPlugin } from './plugins/thirdPartyNotices';
 import { ttfPlugin } from './plugins/ttf';
+import { resolveBuildMetadata } from './tools/buildMetadata';
 
 const shouldEnableSourceMaps = ['1', 'true', 'yes', 'on'].includes(
     String(process.env.BUILD_SOURCEMAPS ?? '').toLowerCase()
 );
 
-function resolveBuildCommitSha(): string {
-    const fromEnv = process.env.VITE_GIT_SHA?.trim();
-    if (fromEnv) return fromEnv;
-    try {
-        return execSync('git rev-parse --short=8 HEAD').toString().trim();
-    } catch {
-        return 'unknown';
-    }
-}
-
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     const isHttps = env.VITE_HTTPS === 'true';
-    const buildCommitSha = resolveBuildCommitSha();
-    const buildTimestamp = new Date().toISOString();
+    const buildMetadata = resolveBuildMetadata(env);
 
     return {
         define: {
-            __APP_COMMIT_SHA__: JSON.stringify(buildCommitSha),
-            __APP_BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp)
+            __APP_COMMIT_SHA__: JSON.stringify(buildMetadata.commitSha),
+            __APP_BUILD_TIMESTAMP__: JSON.stringify(buildMetadata.timestamp)
         },
         build: {
             sourcemap: shouldEnableSourceMaps,
