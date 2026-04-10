@@ -276,7 +276,7 @@ function HistoryTab() {
                     return (
                         <div
                             key={group.id}
-                            className="flex items-start gap-3 rounded-xl border p-4 text-sm shadow-sm"
+                            className="flex items-start gap-3 overflow-hidden rounded-xl border p-4 text-sm shadow-sm"
                         >
                             <ClockIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                             <div className="flex-1">
@@ -343,7 +343,7 @@ function HistoryTab() {
                                         <summary className="cursor-pointer text-xs text-muted-foreground">
                                             View payload
                                         </summary>
-                                        <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-muted/50 p-2 text-xs">
+                                        <pre className="mt-2 max-h-40 max-w-full overflow-auto rounded-lg bg-muted/50 p-2 text-xs break-words whitespace-pre-wrap select-text">
                                             {JSON.stringify(log.changes, null, 2)}
                                         </pre>
                                     </details>
@@ -407,7 +407,7 @@ function HistoryTab() {
                                                                 <summary className="cursor-pointer text-[11px] text-muted-foreground">
                                                                     View payload
                                                                 </summary>
-                                                                <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[11px]">
+                                                                <pre className="mt-1 max-h-32 max-w-full overflow-auto rounded bg-muted/50 p-2 text-[11px] break-words whitespace-pre-wrap select-text">
                                                                     {JSON.stringify(
                                                                         {
                                                                             changes:

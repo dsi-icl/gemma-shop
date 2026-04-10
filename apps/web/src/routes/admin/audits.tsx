@@ -337,7 +337,10 @@ function AdminAudits() {
                     const isCollapsedGroup = event.outcome === 'success' && group.events.length > 1;
                     const isExpanded = expandedGroupIds.has(group.id);
                     return (
-                        <div key={group.id} className="rounded-xl border bg-card p-4">
+                        <div
+                            key={group.id}
+                            className="overflow-hidden rounded-xl border bg-card p-4"
+                        >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex min-w-0 items-center gap-2">
                                     <ClockIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -401,7 +404,7 @@ function AdminAudits() {
                                     <summary className="cursor-pointer text-xs text-muted-foreground">
                                         View payload
                                     </summary>
-                                    <pre className="mt-2 max-h-44 overflow-auto rounded-lg bg-muted/50 p-2 text-xs">
+                                    <pre className="mt-2 max-h-44 max-w-full overflow-auto rounded-lg bg-muted/50 p-2 text-xs break-words whitespace-pre-wrap select-text">
                                         {JSON.stringify(event.changes, null, 2)}
                                     </pre>
                                 </details>
@@ -463,7 +466,7 @@ function AdminAudits() {
                                                             <summary className="cursor-pointer text-[11px] text-muted-foreground">
                                                                 View payload
                                                             </summary>
-                                                            <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[11px]">
+                                                            <pre className="mt-1 max-h-32 max-w-full overflow-auto rounded bg-muted/50 p-2 text-[11px] break-words whitespace-pre-wrap select-text">
                                                                 {JSON.stringify(
                                                                     {
                                                                         changes:
