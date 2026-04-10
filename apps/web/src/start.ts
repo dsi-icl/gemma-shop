@@ -67,10 +67,16 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
               ? 'http'
               : 'https');
     const reportUrl = `${protocol}://${host}/api/report-csp`;
+    const needsScannerCompatEval = /^\/admin\/walls\/[^/]+\/devices\/?$/.test(requestUrl.pathname);
     const scriptSrc = [
         "'strict-dynamic'",
         `'nonce-${nonce}'`,
-        ...(isDev ? ["'unsafe-eval'"] : [])
+        // Required by modern engines for WebAssembly compilation without opening
+        // JS eval permissions.
+        "'wasm-unsafe-eval'",
+        // Compatibility fallback for engines that still gate WASM compile behind
+        // 'unsafe-eval' (kept narrowly scoped to scanner route in production).
+        ...(isDev || needsScannerCompatEval ? ["'unsafe-eval'"] : [])
     ].join(' ');
     const connectSrc = ["'self'", 'ws:', 'wss:', 'https:', ...(isDev ? ['http:'] : [])].join(' ');
     const frameSrc = ["'self'", 'https:', ...(isDev ? ['http:'] : [])].join(' ');
