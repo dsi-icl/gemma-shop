@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { defineHooks } from 'crossws';
 
+import { buildInfo } from '~/lib/buildInfo';
 import {
     activeVideos,
     allEditors,
@@ -287,6 +288,13 @@ function dispatchJsonMessage(
 const hooks = defineHooks({
     open(peer) {
         peer.websocket.binaryType = 'arraybuffer';
+        peer.send(
+            JSON.stringify({
+                type: 'server_hello',
+                commit: buildInfo.commitSha,
+                builtAt: buildInfo.builtAt
+            } satisfies GSMessage)
+        );
         console.log(`[WS] Peer ${peer.id} connected`);
     },
 

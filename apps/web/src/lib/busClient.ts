@@ -1,11 +1,13 @@
 'use client';
 
+import { buildInfo } from './buildInfo';
 import { getOrCreateDeviceIdentity, type DeviceIdentity } from './deviceIdentity';
 import { type ConnectionStatus, ReconnectingWebSocket } from './reconnectingWs';
 import { getWebSocketUrl } from './runtimeUrl';
 import type { GSMessage } from './types';
 
 type HelloMessage = Extract<GSMessage, { type: 'hello' }>;
+type ServerHelloMessage = Extract<GSMessage, { type: 'server_hello' }>;
 type HelloChallengeMessage = Extract<GSMessage, { type: 'hello_challenge' }>;
 type HelloAuthMessage = Extract<GSMessage, { type: 'hello_auth' }>;
 
@@ -38,6 +40,37 @@ interface BusClientOptions {
     auth?: BusClientAuth;
 }
 type ReadyCallback = () => void;
+
+let versionReloadTriggered = false;
+
+function normalizeVersion(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+}
+
+function checkForVersionMismatch(message: Pick<ServerHelloMessage, 'commit' | 'builtAt'>): boolean {
+    if (versionReloadTriggered) return true;
+
+    const localCommit = normalizeVersion(buildInfo.commitSha);
+    const localBuiltAt = normalizeVersion(buildInfo.builtAt);
+    if (!localCommit && !localBuiltAt) return false;
+    const serverCommit = normalizeVersion(message.commit);
+    const serverBuiltAt = normalizeVersion(message.builtAt);
+    const commitMismatch = Boolean(localCommit && serverCommit && localCommit !== serverCommit);
+    const builtAtMismatch =
+        !commitMismatch && Boolean(localBuiltAt && serverBuiltAt && localBuiltAt !== serverBuiltAt);
+    const mismatch = commitMismatch || builtAtMismatch;
+    if (mismatch) {
+        versionReloadTriggered = true;
+        console.warn('[BusClient] Detected server/client version mismatch; reloading page', {
+            local: { commit: localCommit, builtAt: localBuiltAt },
+            server: { commit: serverCommit, builtAt: serverBuiltAt }
+        });
+        window.location.reload();
+    }
+    return mismatch;
+}
 
 const getGemmaBusUrl = (): string => {
     return getWebSocketUrl('/bus');
@@ -185,6 +218,15 @@ export class BusClient {
 
         if (parsed.type === 'hello_challenge') {
             void this.respondToHelloChallenge(parsed);
+            return true;
+        }
+
+        if (parsed.type === 'server_hello') {
+            const hasVersionMismatch = checkForVersionMismatch(parsed);
+            if (hasVersionMismatch) {
+                this.isAuthenticated = false;
+                this.isReady = false;
+            }
             return true;
         }
 

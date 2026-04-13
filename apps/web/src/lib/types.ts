@@ -149,6 +149,11 @@ export const HelloSchema = z.discriminatedUnion('specimen', [
 // ── Full message schema (kept for diagnostics fallback & client-side use) ────
 
 export const GSMessageSchema = z.discriminatedUnion('type', [
+    z.object({
+        type: z.literal('server_hello'),
+        commit: z.string(),
+        builtAt: z.string()
+    }),
     z.discriminatedUnion('specimen', [
         HelloMessageBaseSchema.extend({
             type: z.literal('hello'),
