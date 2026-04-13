@@ -186,6 +186,10 @@ function ProjectCardDialogBody({
     const handleLoadButton = async () => {
         if (isLoadingWall) return;
         if (presetWallId) {
+            if (hideWallPicker) {
+                await handleSelectWall(presetWallId);
+                return;
+            }
             const exists = availableWalls.some((wall) => wall.id === presetWallId);
             if (exists) {
                 await handleSelectWall(presetWallId);
