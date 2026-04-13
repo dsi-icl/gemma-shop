@@ -379,13 +379,17 @@ export async function completeHelloRegistration(
         }
     }
 
+    // For enrolled gallery devices the server is the authoritative source of
+    // the assigned wall — prefer the DB value over whatever ?w= the client sent
+    const effectiveWallId = galleryDevice?.assignedWallId ?? parsed.wallId;
+
     const authContext: AuthContext = {
         ...(passedAuthContext.user ? { user: passedAuthContext.user } : {}),
         ...(galleryDevice
             ? {
                   device: {
                       kind: 'gallery' as const,
-                      ...(parsed.wallId ? { wallId: parsed.wallId } : {}),
+                      ...(effectiveWallId ? { wallId: effectiveWallId } : {}),
                       id: galleryDevice.id
                   }
               }
@@ -393,7 +397,7 @@ export async function completeHelloRegistration(
               ? {
                     device: {
                         kind: 'gallery' as const,
-                        ...(parsed.wallId ? { wallId: parsed.wallId } : {}),
+                        ...(effectiveWallId ? { wallId: effectiveWallId } : {}),
                         id: passedAuthContext.device.id
                     }
                 }
@@ -402,11 +406,13 @@ export async function completeHelloRegistration(
 
     registerPeer(peer, {
         specimen: 'gallery',
-        ...(parsed.wallId ? { wallId: parsed.wallId } : {}),
+        ...(effectiveWallId ? { wallId: effectiveWallId } : {}),
         authContext
     });
-    void sendGalleryStateSnapshot(peer, parsed.wallId);
-    console.log(`[WS] Gallery joined${parsed.wallId ? ` wallId=${parsed.wallId}` : ` (global)`}`);
+    void sendGalleryStateSnapshot(peer, effectiveWallId);
+    console.log(
+        `[WS] Gallery joined${effectiveWallId ? ` wallId=${effectiveWallId}` : ` (global)`}`
+    );
     logPeerCounts();
     return { pendingEnrollment: false };
 }

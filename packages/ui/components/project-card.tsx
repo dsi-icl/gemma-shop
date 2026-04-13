@@ -52,6 +52,7 @@ interface ProjectCardProps {
         connectedNodes: number;
         isBound?: boolean;
     }>;
+    hideWallPicker?: boolean;
     onLoadProject?: (wallId: string) => Promise<boolean | void>;
     onWallRebootRequest?: (wallId: string) => Promise<boolean | void> | boolean | void;
     onWallUnbindRequest?: (wallId: string) => Promise<boolean | void> | boolean | void;
@@ -111,7 +112,8 @@ function ProjectCardDialogBody({
     onControllerTokenRequest,
     onActiveWallIdChange,
     availableWalls = [],
-    presetWallId
+    presetWallId,
+    hideWallPicker = false
 }: ProjectCardProps) {
     const { state, fullscreen } = useMorphingDialog();
     const loadInFlightRef = useRef(false);
@@ -189,8 +191,12 @@ function ProjectCardDialogBody({
                 await handleSelectWall(presetWallId);
                 return;
             }
-            setErrorMessage('Preset wall is not connected. Please select another wall.');
+            setErrorMessage(
+                'Preset wall is not connected. Please select another wall or contact an administrator.'
+            );
+            if (hideWallPicker) return;
         }
+        if (hideWallPicker) return;
         setShowWallPicker((prev) => !prev);
     };
 
@@ -320,7 +326,7 @@ function ProjectCardDialogBody({
                         >
                             <p className="mt-2 opacity-50">{project.description}</p>
 
-                            {showWallPicker ? (
+                            {showWallPicker && !hideWallPicker ? (
                                 <div className="mt-5 rounded-md border">
                                     <div className="mb-2 text-xs font-medium text-muted-foreground">
                                         Select a wall
@@ -418,7 +424,8 @@ export function ProjectCard({
     onWallUnbindRequest,
     onControllerTokenRequest,
     availableWalls,
-    presetWallId
+    presetWallId,
+    hideWallPicker
 }: ProjectCardProps) {
     const activeWallIdRef = useRef<string | null>(null);
     const prevDialogStateRef = useRef<'closed' | 'expanded' | 'fullscreen' | 'minimized'>('closed');
@@ -546,6 +553,7 @@ export function ProjectCard({
                         project={project}
                         presetWallId={presetWallId}
                         availableWalls={availableWalls}
+                        hideWallPicker={hideWallPicker}
                         onLoadProject={onLoadProject}
                         onWallRebootRequest={onWallRebootRequest}
                         onControllerTokenRequest={onControllerTokenRequest}

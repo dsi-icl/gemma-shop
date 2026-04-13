@@ -102,6 +102,10 @@ export function isControllerPortal(entry: PeerEntry): boolean {
     return Boolean(entry.meta.authContext?.portal?.wallId);
 }
 
+export function isGalleryDevice(entry: PeerEntry): boolean {
+    return entry.meta.authContext?.device?.kind === 'gallery';
+}
+
 export function hasAnyAuthenticatedActor(entry: PeerEntry): boolean {
     return Boolean(
         entry.meta.authContext?.user ||
@@ -141,14 +145,13 @@ export function isWsMessageAuthorized(
     if (type === 'bind_wall') {
         if (entry.meta.specimen === 'controller')
             return isControllerDevice(entry) || isControllerPortal(entry) || isAdminUser(entry);
-        if (entry.meta.specimen === 'gallery') return isAdminUser(entry);
+        if (entry.meta.specimen === 'gallery') return isAdminUser(entry) || isGalleryDevice(entry);
         return isAdminUser(entry);
     }
     if (type === 'unbind_wall' || type === 'reboot') {
-        if (type === 'reboot' && entry.meta.specimen === 'controller') {
+        if (type === 'reboot' && entry.meta.specimen === 'controller')
             return isControllerDevice(entry) || isControllerPortal(entry) || isAdminUser(entry);
-        }
-        if (entry.meta.specimen === 'gallery') return isAdminUser(entry);
+        if (entry.meta.specimen === 'gallery') return isAdminUser(entry) || isGalleryDevice(entry);
         return isAdminUser(entry);
     }
 

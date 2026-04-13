@@ -1,6 +1,7 @@
 'use client';
 
 import { BusClient } from './busClient';
+import { useGalleryStore } from './galleryStore';
 import { GSMessageSchema, type GSMessage } from './types';
 
 type GalleryState = Extract<GSMessage, { type: 'gallery_state' }>;
@@ -29,8 +30,8 @@ export class GalleryEngine {
     private bindOverrideResultCallbacks = new Set<BindOverrideResultCallback>();
     private galleryStateCallbacks = new Set<GalleryStateCallback>();
 
-    private constructor(wallId: string | null) {
-        this.wallId = wallId;
+    private constructor() {
+        this.wallId = useGalleryStore.getState().wallId;
         this.bus = new BusClient({
             auth: {
                 kind: 'gallery',
@@ -38,6 +39,8 @@ export class GalleryEngine {
             },
             onOpen: () => {
                 console.log('Gallery Engine: Connected to Server');
+                useGalleryStore.getState().setDeviceEnrollmentId(null);
+                useGalleryStore.getState().setIsEnrolledDevice(false);
             },
             onMessage: (event) => {
                 if (typeof event.data !== 'string') return;
@@ -49,7 +52,21 @@ export class GalleryEngine {
                     return;
                 }
 
+                if (data.type === 'device_enrollment') {
+                    useGalleryStore.getState().setDeviceEnrollmentId(data.id);
+                    return;
+                }
+
                 if (data.type === 'gallery_state') {
+                    if (data.wallId) {
+                        const store = useGalleryStore.getState();
+                        if (store.wallId !== data.wallId) {
+                            store.setWallId(data.wallId);
+                        }
+                        if (!store.deviceEnrollmentId) {
+                            store.setIsEnrolledDevice(true);
+                        }
+                    }
                     this.galleryStateCallbacks.forEach((cb) => cb(data));
                     return;
                 }
@@ -81,13 +98,14 @@ export class GalleryEngine {
         });
     }
 
-    public static getInstance(wallId: string | null = null): GalleryEngine {
+    public static getInstance(): GalleryEngine {
         if (typeof window === 'undefined') {
             throw new Error('GalleryEngine can only be used in the browser');
         }
+        const wallId = useGalleryStore.getState().wallId;
         if (!window.__GALLERY_ENGINE__ || window.__GALLERY_ENGINE__.wallId !== wallId) {
             window.__GALLERY_ENGINE__?.destroy();
-            window.__GALLERY_ENGINE__ = new GalleryEngine(wallId);
+            window.__GALLERY_ENGINE__ = new GalleryEngine();
         }
         return window.__GALLERY_ENGINE__;
     }

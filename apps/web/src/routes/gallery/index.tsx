@@ -12,12 +12,20 @@ import { toast } from 'sonner';
 import { GalleryProjectCard } from '~/components/GalleryProjectCard';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { GalleryEngine } from '~/lib/galleryEngine';
+import { initGalleryStore, useGalleryStore } from '~/lib/galleryStore';
 import { publishedProjectsQueryOptions } from '~/server/projects.queries';
 import { wallsQueryOptions } from '~/server/walls.queries';
 
 export const Route = createFileRoute('/gallery/')({
-    loader: ({ context }) => {
+    loader: ({ context, location }) => {
         context.queryClient.ensureQueryData(publishedProjectsQueryOptions());
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(location.searchStr);
+            initGalleryStore({
+                wallId: params.get('w') || null,
+                enrollmentModeEnabled: params.has('enroll')
+            });
+        }
     },
     component: HomePage,
     head: () => ({
@@ -38,9 +46,7 @@ type WallListEntry = {
 
 function HomePage() {
     const { user } = useAuth();
-    const canManageWalls = Boolean(user);
     const [activeTag, setActiveTag] = useState<string | null>(null);
-    const [deviceEnrollmentId, setDeviceEnrollmentId] = useState<string | null>(null);
     const [enrollmentQrDataUrl, setEnrollmentQrDataUrl] = useState<string | null>(null);
     const [autoOpenRevision, setAutoOpenRevision] = useState(0);
     const [liveSessionRevision, setLiveSessionRevision] = useState(0);
@@ -49,7 +55,7 @@ function HomePage() {
     const { data: publishedProjects = [] } = useQuery(publishedProjectsQueryOptions());
     const { data: walls = [] } = useQuery({
         ...wallsQueryOptions(),
-        enabled: canManageWalls
+        enabled: Boolean(user)
     });
     const queryClient = useQueryClient();
     const searchStr = useLocation({ select: (location) => location.searchStr });
@@ -67,26 +73,25 @@ function HomePage() {
     const liveBoundForTargetRef = useRef(false);
     const lastGalleryBoundProjectRef = useRef<string | null>(null);
 
-    const formatRequesterLabel = (email?: string) => {
-        // TODO Lookup through university LDAP to get names maybe ?
-        return `${email}`;
-    };
+    const wallId = useGalleryStore((s) => s.wallId);
+    const deviceEnrollmentId = useGalleryStore((s) => s.deviceEnrollmentId);
+    const enrollmentModeEnabled = useGalleryStore((s) => s.enrollmentModeEnabled);
 
-    const wallId = useMemo(() => {
+    useEffect(() => {
         const params = new URLSearchParams(searchStr);
-        const w = params.get('w');
-        return w && w.trim().length > 0 ? w : null;
-    }, [searchStr]);
-
-    const enrollmentModeEnabled = useMemo(() => {
-        const params = new URLSearchParams(searchStr);
-        return params.has('enroll');
+        initGalleryStore({
+            wallId: params.get('w') || null,
+            enrollmentModeEnabled: params.has('enroll')
+        });
     }, [searchStr]);
 
     const galleryEnrollmentGateActive = enrollmentModeEnabled && Boolean(deviceEnrollmentId);
 
     const galleryEngine = useMemo(
-        () => (typeof window !== 'undefined' ? GalleryEngine.getInstance(wallId) : null),
+        () => (typeof window !== 'undefined' ? GalleryEngine.getInstance() : null),
+        // Re-derive the engine whenever the effective wallId changes so the
+        // singleton is recreated for the correct wall.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [wallId]
     );
 
@@ -189,12 +194,6 @@ function HomePage() {
         };
 
         const unsubs = [
-            galleryEngine.onMessage((data) => {
-                if (!enrollmentModeEnabled) return;
-                if (data.type === 'device_enrollment') {
-                    setDeviceEnrollmentId(data.id);
-                }
-            }),
             galleryEngine.onGalleryState((snapshot) => {
                 queryClient.setQueryData<WallListEntry[]>(wallsQueryKey, (current) => {
                     const byWallId = new Map(
@@ -214,8 +213,9 @@ function HomePage() {
                     }
                     return Array.from(byWallId.values());
                 });
-                if (wallId) {
-                    const targetWall = snapshot.walls.find((wall) => wall.wallId === wallId);
+                const currentWallId = useGalleryStore.getState().wallId;
+                if (currentWallId) {
+                    const targetWall = snapshot.walls.find((wall) => wall.wallId === currentWallId);
                     if (targetWall) {
                         handleLiveBindingStatus(
                             targetWall.wallId,
@@ -235,7 +235,7 @@ function HomePage() {
                             updateCurrentGalleryBoundProject(null);
                         }
                     } else {
-                        handleLiveBindingStatus(wallId, false);
+                        handleLiveBindingStatus(currentWallId, false);
                         const previouslyBoundProject = lastGalleryBoundProjectRef.current;
                         if (previouslyBoundProject) triggerSyncedCardClose(previouslyBoundProject);
                         updateCurrentGalleryBoundProject(null);
@@ -305,7 +305,7 @@ function HomePage() {
         return () => {
             for (const unsub of unsubs) unsub();
         };
-    }, [galleryEngine, queryClient, wallId, pendingOverride, enrollmentModeEnabled]);
+    }, [galleryEngine, queryClient, wallId, pendingOverride]);
 
     useEffect(() => {
         const deviceId = deviceEnrollmentId?.trim();
@@ -316,8 +316,6 @@ function HomePage() {
                 const identity = await getOrCreateDeviceIdentity('gallery');
                 const signature = await identity.signPayload(deviceId);
                 const payload = JSON.stringify({
-                    // schema: 'gem://',
-                    // kind: 'wall',
                     did: deviceId,
                     sig: signature
                 });
@@ -383,6 +381,11 @@ function HomePage() {
             document.documentElement.style.removeProperty('--gallery-minimized-left');
         };
     }, []);
+
+    const formatRequesterLabel = (email?: string) => {
+        // TODO Lookup through university LDAP to get names maybe ?
+        return `${email}`;
+    };
 
     const overrideSecondsLeft = pendingOverride
         ? Math.ceil(Math.max(0, pendingOverride.expiresAt - overrideClockNow) / 1000)

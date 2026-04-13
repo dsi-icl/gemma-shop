@@ -2,10 +2,11 @@ import { useAuth } from '@repo/auth/tanstack/hooks';
 import type { Project } from '@repo/ui/components/project-card';
 import { ProjectCard } from '@repo/ui/components/project-card';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { toast } from 'sonner';
 
 import { GalleryEngine } from '~/lib/galleryEngine';
+import { useGalleryStore } from '~/lib/galleryStore';
 import { createSignedServerFnFetch } from '~/lib/signedFetch';
 import { $issueControllerPortalToken } from '~/server/portal.fns';
 import { wallsQueryOptions } from '~/server/walls.queries';
@@ -31,25 +32,25 @@ export function GalleryProjectCard({
     allowWallActions = true
 }: GalleryProjectCardProps) {
     const { user } = useAuth();
-    const canManageWalls = Boolean(user) && allowWallActions;
+
+    const wallId = useGalleryStore((s) => s.wallId);
+    const isEnrolledDevice = useGalleryStore((s) => s.isEnrolledDevice);
+    const canUserManageWalls = Boolean(user) && allowWallActions;
+    const canEnrolledDeviceLoad = isEnrolledDevice && !Boolean(user) && allowWallActions;
     const { data: walls = [] } = useQuery({
         ...wallsQueryOptions(),
-        enabled: canManageWalls
+        enabled: canUserManageWalls
     });
-    const presetWallId = useMemo(() => {
-        if (typeof window === 'undefined') return null;
-        const params = new URLSearchParams(window.location.search);
-        return params.get('w');
-    }, []);
 
-    const availableWalls = canManageWalls
-        ? walls.map((wall) => ({
-              id: wall.wallId,
-              name: wall.name,
-              connectedNodes: wall.connectedNodes,
-              isBound: Boolean(wall.boundProjectId)
-          }))
-        : [];
+    const availableWalls =
+        canUserManageWalls || canEnrolledDeviceLoad
+            ? walls.map((wall) => ({
+                  id: wall.wallId,
+                  name: wall.name,
+                  connectedNodes: wall.connectedNodes,
+                  isBound: Boolean(wall.boundProjectId)
+              }))
+            : [];
 
     const handleLoadProject = useCallback(
         async (wallId: string) => {
@@ -59,7 +60,7 @@ export function GalleryProjectCard({
             }
 
             try {
-                const engine = GalleryEngine.getInstance(presetWallId);
+                const engine = GalleryEngine.getInstance();
                 engine.sendJSON({
                     type: 'bind_wall',
                     wallId,
@@ -74,36 +75,30 @@ export function GalleryProjectCard({
                 return false;
             }
         },
-        [presetWallId, project.id, project.publishedCommitId]
+        [project.id, project.publishedCommitId]
     );
 
-    const handleWallRebootRequest = useCallback(
-        async (_wallId: string) => {
-            try {
-                const engine = GalleryEngine.getInstance(presetWallId);
-                engine.sendJSON({ type: 'reboot' });
-                return true;
-            } catch (e: any) {
-                toast.error(e?.message ?? 'Could not refresh wall screens');
-                return false;
-            }
-        },
-        [presetWallId]
-    );
+    const handleWallRebootRequest = useCallback(async (_wallId: string) => {
+        try {
+            const engine = GalleryEngine.getInstance();
+            engine.sendJSON({ type: 'reboot' });
+            return true;
+        } catch (e: any) {
+            toast.error(e?.message ?? 'Could not refresh wall screens');
+            return false;
+        }
+    }, []);
 
-    const handleWallUnbindRequest = useCallback(
-        async (wallId: string) => {
-            try {
-                const engine = GalleryEngine.getInstance(presetWallId);
-                engine.unbindWall(wallId);
-                return true;
-            } catch (e: any) {
-                toast.error(e?.message ?? 'Could not unbind wall');
-                return false;
-            }
-        },
-        [presetWallId]
-    );
+    const handleWallUnbindRequest = useCallback(async (wallId: string) => {
+        try {
+            const engine = GalleryEngine.getInstance();
+            engine.unbindWall(wallId);
+            return true;
+        } catch (e: any) {
+            toast.error(e?.message ?? 'Could not unbind wall');
+            return false;
+        }
+    }, []);
 
     const handleControllerTokenRequest = useCallback(async (wallId: string) => {
         const isWallNotBoundError = (error: unknown) => {
@@ -144,6 +139,8 @@ export function GalleryProjectCard({
         return null;
     }, []);
 
+    const canLoad = canUserManageWalls || canEnrolledDeviceLoad;
+
     return (
         <ProjectCard
             project={project}
@@ -152,11 +149,12 @@ export function GalleryProjectCard({
             forceCloseMinimizedSignal={forceCloseMinimizedSignal}
             forceCloseSignal={forceCloseSignal}
             availableWalls={availableWalls}
-            onLoadProject={canManageWalls ? handleLoadProject : undefined}
-            onWallRebootRequest={canManageWalls ? handleWallRebootRequest : undefined}
-            onWallUnbindRequest={canManageWalls ? handleWallUnbindRequest : undefined}
-            onControllerTokenRequest={canManageWalls ? handleControllerTokenRequest : undefined}
-            presetWallId={presetWallId}
+            onLoadProject={canLoad ? handleLoadProject : undefined}
+            onWallRebootRequest={canLoad ? handleWallRebootRequest : undefined}
+            onWallUnbindRequest={canLoad ? handleWallUnbindRequest : undefined}
+            onControllerTokenRequest={canLoad ? handleControllerTokenRequest : undefined}
+            presetWallId={wallId}
+            hideWallPicker={canEnrolledDeviceLoad}
         />
     );
 }

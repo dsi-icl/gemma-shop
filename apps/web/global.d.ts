@@ -3,6 +3,7 @@ import type { ControllerStateCreator } from '~/lib/controllerStore';
 import type { EditorEngine } from '~/lib/editorEngine';
 import type { EditorStateCreator } from '~/lib/editorStore';
 import type { GalleryEngine } from '~/lib/galleryEngine';
+import type { GalleryStateCreator } from '~/lib/galleryStore';
 import type { GSMessage, Layer, ScopeKey, ScopeState } from '~/lib/types';
 import type { WallEngine } from '~/lib/wallEngine';
 
@@ -22,6 +23,7 @@ declare global {
         __WALL_RELOADING__?: boolean;
         __EDITOR_STORE__?: EditorStateCreator;
         __CONTROLLER_STORE__?: ControllerStateCreator;
+        __GALLERY_STORE__?: GalleryStateCreator;
     }
 
     namespace NodeJS {
