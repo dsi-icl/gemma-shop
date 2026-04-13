@@ -369,7 +369,13 @@ handlers.set('bind_wall', ({ entry, data }) => {
     // Editors should route through request_bind_wall (approval gate).
     // Keep bind_wall for controllers and system/internal callers.
     void (async () => {
-        const source = entry.meta.specimen === 'gallery' ? 'gallery' : 'live';
+        const source =
+            entry.meta.specimen === 'gallery'
+                ? 'gallery'
+                : entry.meta.specimen === 'controller' &&
+                    wallBindingSources.get(data.wallId) === 'gallery'
+                  ? 'gallery'
+                  : 'live';
         await performLiveBind(data.wallId, data.projectId, data.commitId, data.slideId, source);
     })();
 });
