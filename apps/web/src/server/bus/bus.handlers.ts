@@ -510,7 +510,17 @@ handlers.set('bind_override_decision', ({ entry, data }) => {
     if (entry.meta.specimen !== 'gallery') return;
     if (entry.meta.wallId !== data.wallId) return;
 
-    const pending = clearPendingBindOverride(data.requestId);
+    let pending = clearPendingBindOverride(data.requestId);
+    // The gallery UI can act on a slightly stale requestId while a newer request
+    // for the same wall is already pending. In that case, apply the decision to
+    // the current wall-scoped pending request instead of silently dropping it.
+    // TO-DO review if the assumption of gallery stalness is trulye correct
+    if (!pending) {
+        const latestRequestId = pendingBindOverrideByWall.get(data.wallId);
+        if (latestRequestId) {
+            pending = clearPendingBindOverride(latestRequestId);
+        }
+    }
     if (!pending) return;
     if (pending.wallId !== data.wallId) return;
 
