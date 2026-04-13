@@ -4,7 +4,7 @@ type StoredEntry = {
     timestamps: number[];
 };
 
-const DEFAULT_LIMIT_PER_MINUTE = 200;
+const DEFAULT_LIMIT_PER_MINUTE = 1000;
 const RATE_LIMIT_PER_MINUTE = Math.max(
     1,
     Number(process.env.RATE_LIMIT_PER_MINUTE ?? DEFAULT_LIMIT_PER_MINUTE)
