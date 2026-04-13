@@ -255,7 +255,8 @@ function WallApp() {
                 setDeviceEnrollmentId(data.id);
             } else if (data.type === 'reboot') {
                 setBlackOverlayOpacity(1);
-                setTimeout(() => window.location.reload(), Math.random() * 1000 + 2000);
+                if (data.immediate) window.location.reload();
+                else setTimeout(() => window.location.reload(), Math.random() * 1000 + 2000);
             }
         });
         let frameId: number;

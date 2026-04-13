@@ -255,7 +255,7 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('clear_stage') }),
     z.object({ type: z.literal('ping') }),
     z.object({ type: z.literal('pong'), t0: z.number(), t1: z.number(), t2: z.number() }),
-    z.object({ type: z.literal('reboot') }),
+    z.object({ type: z.literal('reboot'), immediate: z.boolean().optional() }),
     z.object({
         type: z.literal('stage_save'),
         message: z.string(),

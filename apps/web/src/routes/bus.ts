@@ -478,7 +478,7 @@ process.__REBOOT_WALL__ = (wallId: string, node?: { c: number; r: number }) => {
 process.__REBOOT_DEVICE__ = (deviceId: string, publicKey?: string) => {
     const normalized = deviceId.trim();
     if (!normalized) return 0;
-    const payload = JSON.stringify({ type: 'reboot' } satisfies GSMessage);
+    const payload = JSON.stringify({ type: 'reboot', immediate: true } satisfies GSMessage);
     let sent = 0;
     for (const entry of peers.values()) {
         const peerDeviceId = entry.meta.authContext?.device?.id;
