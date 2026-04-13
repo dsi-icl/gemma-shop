@@ -118,11 +118,17 @@ function HomePage() {
         const handleLiveBindingStatus = (
             nextWallId: string,
             bound: boolean,
-            source?: 'live' | 'gallery'
+            source?: 'live' | 'gallery',
+            projectId?: string
         ) => {
             if (!wallId || nextWallId !== wallId) return;
             const isLiveBound = bound && source === 'live';
-            if (isLiveBound && !liveBoundForTargetRef.current) {
+            const isContinuationOfCurrentProject =
+                isLiveBound &&
+                typeof projectId === 'string' &&
+                projectId.length > 0 &&
+                lastGalleryBoundProjectRef.current === projectId;
+            if (isLiveBound && !liveBoundForTargetRef.current && !isContinuationOfCurrentProject) {
                 setLiveSessionRevision((v) => v + 1);
             }
             liveBoundForTargetRef.current = isLiveBound;
@@ -220,7 +226,8 @@ function HomePage() {
                         handleLiveBindingStatus(
                             targetWall.wallId,
                             targetWall.bound,
-                            targetWall.source
+                            targetWall.source,
+                            targetWall.projectId
                         );
                         const isGalleryBound =
                             targetWall.bound &&
@@ -228,6 +235,17 @@ function HomePage() {
                             Boolean(targetWall.projectId);
                         if (isGalleryBound && targetWall.projectId) {
                             updateCurrentGalleryBoundProject(targetWall.projectId);
+                        } else if (targetWall.bound && targetWall.source === 'live') {
+                            const isContinuation =
+                                typeof targetWall.projectId === 'string' &&
+                                targetWall.projectId.length > 0 &&
+                                lastGalleryBoundProjectRef.current === targetWall.projectId;
+                            if (!isContinuation) {
+                                const previouslyBoundProject = lastGalleryBoundProjectRef.current;
+                                if (previouslyBoundProject)
+                                    triggerSyncedCardClose(previouslyBoundProject);
+                                updateCurrentGalleryBoundProject(null);
+                            }
                         } else {
                             const previouslyBoundProject = lastGalleryBoundProjectRef.current;
                             if (previouslyBoundProject)
@@ -265,10 +283,16 @@ function HomePage() {
                         if (previouslyBoundProject) triggerSyncedCardClose(previouslyBoundProject);
                         updateCurrentGalleryBoundProject(null);
                     } else if (event.source === 'live') {
-                        updateCurrentGalleryBoundProject(null);
+                        const isContinuation =
+                            typeof event.projectId === 'string' &&
+                            event.projectId.length > 0 &&
+                            lastGalleryBoundProjectRef.current === event.projectId;
+                        if (!isContinuation) {
+                            updateCurrentGalleryBoundProject(null);
+                        }
                     }
                 }
-                handleLiveBindingStatus(event.wallId, event.bound, event.source);
+                handleLiveBindingStatus(event.wallId, event.bound, event.source, event.projectId);
             }),
             galleryEngine.onWallUnbound((event) => {
                 setWallBinding({
