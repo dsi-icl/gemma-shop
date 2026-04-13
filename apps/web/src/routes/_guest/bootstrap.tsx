@@ -46,7 +46,7 @@ const slidePanelVariants = {
     })
 };
 
-export const Route = createFileRoute('/_guest/bootstrap' as any)({
+export const Route = createFileRoute('/_guest/bootstrap')({
     loader: async () => {
         const status = await $bootstrapStatus();
         if (!status.requiresBootstrap) {
