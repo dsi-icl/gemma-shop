@@ -735,16 +735,18 @@ export async function handleHelloAuth(peer: Peer, data: Record<string, any>) {
         }
     }
 
-    if (!authenticated && parsed.proof.portalToken) {
+    if (parsed.proof.portalToken) {
         if (pending.hello.specimen === 'controller') {
             const validated = validatePortalToken(parsed.proof.portalToken);
             if (validated && validated.wallId === pending.hello.wallId) {
-                authenticated = true;
                 resolvedAuth.portal = { wallId: validated.wallId };
-            } else {
+                if (!authenticated) {
+                    authenticated = true;
+                }
+            } else if (!authenticated) {
                 console.warn(`[WS] Invalid controller portal token on peer ${peer.id}`);
             }
-        } else {
+        } else if (!authenticated) {
             console.warn(
                 `[WS] portalToken proof is only supported for controller peers (${peer.id})`
             );
