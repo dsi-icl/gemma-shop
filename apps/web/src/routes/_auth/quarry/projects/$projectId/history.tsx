@@ -127,6 +127,7 @@ function eventCollapseSignature(event: {
 function HistoryTab() {
     const { projectId } = Route.useParams();
     const queryClient = useQueryClient();
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const [outcomeFilter, setOutcomeFilter] =
         useState<(typeof OUTCOME_FILTERS)[number]['value']>('all');
     const [resourceFilter, setResourceFilter] =
@@ -202,70 +203,90 @@ function HistoryTab() {
     return (
         <div className="flex flex-col gap-4">
             <div className="sticky top-2 z-10 rounded-xl border bg-background/90 p-3 backdrop-blur">
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>Outcome</span>
-                        <Select
-                            items={OUTCOME_FILTERS.map((opt) => ({
-                                label: opt.label,
-                                value: opt.value
-                            }))}
-                            value={outcomeFilter}
-                            onValueChange={(value) =>
-                                setOutcomeFilter(value as (typeof OUTCOME_FILTERS)[number]['value'])
-                            }
-                        >
-                            <SelectTrigger size="sm" className="w-40 justify-start bg-background">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {OUTCOME_FILTERS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>Resource</span>
-                        <Select
-                            items={RESOURCE_FILTERS.map((opt) => ({
-                                label: opt.label,
-                                value: opt.value
-                            }))}
-                            value={resourceFilter}
-                            onValueChange={(value) =>
-                                setResourceFilter(
-                                    value as (typeof RESOURCE_FILTERS)[number]['value']
-                                )
-                            }
-                        >
-                            <SelectTrigger size="sm" className="w-40 justify-start bg-background">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {RESOURCE_FILTERS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                        Loaded {logs.length} event{logs.length === 1 ? '' : 's'}
-                    </span>
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-foreground">History Filters</span>
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                            void queryClient.resetQueries({ queryKey: queryOptions.queryKey });
-                        }}
+                        onClick={() => setFiltersOpen((prev) => !prev)}
                     >
-                        Refresh
+                        {filtersOpen ? 'Hide filters' : 'Show filters'}
                     </Button>
                 </div>
+                {filtersOpen ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>Outcome</span>
+                            <Select
+                                items={OUTCOME_FILTERS.map((opt) => ({
+                                    label: opt.label,
+                                    value: opt.value
+                                }))}
+                                value={outcomeFilter}
+                                onValueChange={(value) =>
+                                    setOutcomeFilter(
+                                        value as (typeof OUTCOME_FILTERS)[number]['value']
+                                    )
+                                }
+                            >
+                                <SelectTrigger
+                                    size="sm"
+                                    className="w-40 justify-start bg-background"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {OUTCOME_FILTERS.map((opt) => (
+                                        <SelectItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>Resource</span>
+                            <Select
+                                items={RESOURCE_FILTERS.map((opt) => ({
+                                    label: opt.label,
+                                    value: opt.value
+                                }))}
+                                value={resourceFilter}
+                                onValueChange={(value) =>
+                                    setResourceFilter(
+                                        value as (typeof RESOURCE_FILTERS)[number]['value']
+                                    )
+                                }
+                            >
+                                <SelectTrigger
+                                    size="sm"
+                                    className="w-40 justify-start bg-background"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {RESOURCE_FILTERS.map((opt) => (
+                                        <SelectItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                            Loaded {logs.length} event{logs.length === 1 ? '' : 's'}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                void queryClient.resetQueries({ queryKey: queryOptions.queryKey });
+                            }}
+                        >
+                            Refresh
+                        </Button>
+                    </div>
+                ) : null}
             </div>
             <div className="space-y-3">
                 {groupedLogs.map((group) => {

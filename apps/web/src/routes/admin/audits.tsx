@@ -115,6 +115,7 @@ function eventCollapseSignature(event: {
 
 function AdminAudits() {
     const queryClient = useQueryClient();
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const [outcomeFilter, setOutcomeFilter] =
         useState<(typeof OUTCOME_FILTERS)[number]['value']>('all');
     const [resourceFilter, setResourceFilter] =
@@ -191,132 +192,155 @@ function AdminAudits() {
     return (
         <div className="space-y-4">
             <div className="sticky top-2 z-10 rounded-xl border bg-background/90 p-3 backdrop-blur">
-                <div className="mb-3 flex items-center gap-2 text-xs font-medium text-foreground">
-                    <FunnelIcon size={14} />
-                    Audit Explorer Filters
-                </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Outcome</span>
-                        <Select
-                            items={OUTCOME_FILTERS.map((opt) => ({
-                                label: opt.label,
-                                value: opt.value
-                            }))}
-                            value={outcomeFilter}
-                            onValueChange={(value) =>
-                                setOutcomeFilter(value as (typeof OUTCOME_FILTERS)[number]['value'])
-                            }
-                        >
-                            <SelectTrigger size="sm" className="w-full justify-start bg-background">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {OUTCOME_FILTERS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                        <FunnelIcon size={14} />
+                        Audit Explorer Filters
                     </div>
-
-                    <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Resource</span>
-                        <Select
-                            items={RESOURCE_FILTERS.map((opt) => ({
-                                label: opt.label,
-                                value: opt.value
-                            }))}
-                            value={resourceFilter}
-                            onValueChange={(value) =>
-                                setResourceFilter(
-                                    value as (typeof RESOURCE_FILTERS)[number]['value']
-                                )
-                            }
-                        >
-                            <SelectTrigger size="sm" className="w-full justify-start bg-background">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {RESOURCE_FILTERS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Project ID</span>
-                        <Input
-                            value={projectIdInput}
-                            onChange={(e) => setProjectIdInput(e.currentTarget.value)}
-                            placeholder="Project ID"
-                            className="h-8 bg-background"
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Actor ID</span>
-                        <Input
-                            value={actorIdInput}
-                            onChange={(e) => setActorIdInput(e.currentTarget.value)}
-                            placeholder="Actor ID"
-                            className="h-8 bg-background"
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Operation</span>
-                        <Input
-                            value={operationInput}
-                            onChange={(e) => setOperationInput(e.currentTarget.value)}
-                            placeholder="Operation"
-                            className="h-8 bg-background"
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Reason Code</span>
-                        <Input
-                            value={reasonCodeInput}
-                            onChange={(e) => setReasonCodeInput(e.currentTarget.value)}
-                            placeholder="Reason Code"
-                            className="h-8 bg-background"
-                        />
-                    </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2">
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                            void queryClient.resetQueries({ queryKey: queryOptions.queryKey });
-                        }}
+                        onClick={() => setFiltersOpen((prev) => !prev)}
                     >
-                        Refresh
+                        {filtersOpen ? 'Hide filters' : 'Show filters'}
                     </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                            setOutcomeFilter('all');
-                            setResourceFilter('all');
-                            setProjectIdInput('');
-                            setActorIdInput('');
-                            setOperationInput('');
-                            setReasonCodeInput('');
-                        }}
-                    >
-                        Reset
-                    </Button>
-                    <span className="text-xs text-muted-foreground">
-                        Loaded {items.length} event{items.length === 1 ? '' : 's'}
-                    </span>
                 </div>
+                {filtersOpen ? (
+                    <>
+                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            <div className="space-y-1">
+                                <span className="text-xs text-muted-foreground">Outcome</span>
+                                <Select
+                                    items={OUTCOME_FILTERS.map((opt) => ({
+                                        label: opt.label,
+                                        value: opt.value
+                                    }))}
+                                    value={outcomeFilter}
+                                    onValueChange={(value) =>
+                                        setOutcomeFilter(
+                                            value as (typeof OUTCOME_FILTERS)[number]['value']
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger
+                                        size="sm"
+                                        className="w-full justify-start bg-background"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {OUTCOME_FILTERS.map((opt) => (
+                                            <SelectItem key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <span className="text-xs text-muted-foreground">Resource</span>
+                                <Select
+                                    items={RESOURCE_FILTERS.map((opt) => ({
+                                        label: opt.label,
+                                        value: opt.value
+                                    }))}
+                                    value={resourceFilter}
+                                    onValueChange={(value) =>
+                                        setResourceFilter(
+                                            value as (typeof RESOURCE_FILTERS)[number]['value']
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger
+                                        size="sm"
+                                        className="w-full justify-start bg-background"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {RESOURCE_FILTERS.map((opt) => (
+                                            <SelectItem key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <span className="text-xs text-muted-foreground">Project ID</span>
+                                <Input
+                                    value={projectIdInput}
+                                    onChange={(e) => setProjectIdInput(e.currentTarget.value)}
+                                    placeholder="Project ID"
+                                    className="h-8 bg-background"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <span className="text-xs text-muted-foreground">Actor ID</span>
+                                <Input
+                                    value={actorIdInput}
+                                    onChange={(e) => setActorIdInput(e.currentTarget.value)}
+                                    placeholder="Actor ID"
+                                    className="h-8 bg-background"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <span className="text-xs text-muted-foreground">Operation</span>
+                                <Input
+                                    value={operationInput}
+                                    onChange={(e) => setOperationInput(e.currentTarget.value)}
+                                    placeholder="Operation"
+                                    className="h-8 bg-background"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <span className="text-xs text-muted-foreground">Reason Code</span>
+                                <Input
+                                    value={reasonCodeInput}
+                                    onChange={(e) => setReasonCodeInput(e.currentTarget.value)}
+                                    placeholder="Reason Code"
+                                    className="h-8 bg-background"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    void queryClient.resetQueries({
+                                        queryKey: queryOptions.queryKey
+                                    });
+                                }}
+                            >
+                                Refresh
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    setOutcomeFilter('all');
+                                    setResourceFilter('all');
+                                    setProjectIdInput('');
+                                    setActorIdInput('');
+                                    setOperationInput('');
+                                    setReasonCodeInput('');
+                                }}
+                            >
+                                Reset
+                            </Button>
+                            <span className="text-xs text-muted-foreground">
+                                Loaded {items.length} event{items.length === 1 ? '' : 's'}
+                            </span>
+                        </div>
+                    </>
+                ) : null}
             </div>
 
             <div className="rounded-xl border bg-card p-3 text-xs text-muted-foreground">
