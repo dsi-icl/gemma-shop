@@ -611,7 +611,7 @@ function HomePage() {
                                         >
                                             <GalleryProjectCard
                                                 project={project}
-                                                allowWallActions={!enrollmentModeEnabled}
+                                                allowWallActions={!galleryEnrollmentGateActive}
                                                 autoOpenSignal={
                                                     autoOpenProjectId === project.id
                                                         ? autoOpenSignal
