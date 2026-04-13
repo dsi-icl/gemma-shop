@@ -946,6 +946,8 @@ function Controller() {
                                                             fill: layer.fill,
                                                             stroke: layer.strokeColor,
                                                             strokeWidth: layer.strokeWidth,
+                                                            lineCap: 'round' as const,
+                                                            lineJoin: 'round' as const,
                                                             listening: false as const
                                                         };
                                                         if (layer.shape === 'rectangle') {

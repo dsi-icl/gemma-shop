@@ -85,7 +85,7 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                                         key={`lin_${shape.numericId}`}
                                         points={shape.line.map((p) => p * stageScaleFactor)}
                                         stroke={shape.strokeColor}
-                                        strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                        strokeWidth={shape.strokeWidth * stageScaleFactor * 2}
                                         dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
                                         dashEnabled={true}
                                         tension={0.4}
@@ -105,7 +105,7 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                                             radius={(shape.config.width * stageScaleFactor) / 2}
                                             fill={shape.fill}
                                             stroke={shape.strokeColor}
-                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 2}
                                             dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
                                             lineCap="round"
                                             lineJoin="round"

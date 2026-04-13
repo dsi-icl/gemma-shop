@@ -90,7 +90,7 @@ export function ViewerSlatePreview({
                                         key={`lin_${shape.numericId}`}
                                         points={shape.line.map((p) => p * stageScaleFactor)}
                                         stroke={shape.strokeColor}
-                                        strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                        strokeWidth={shape.strokeWidth * stageScaleFactor * 2}
                                         dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
                                         dashEnabled={true}
                                         tension={0.4}
@@ -110,7 +110,7 @@ export function ViewerSlatePreview({
                                             radius={(shape.config.width * stageScaleFactor) / 2}
                                             fill="transparent"
                                             stroke={shape.strokeColor}
-                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 2}
                                             dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
                                             lineCap="round"
                                             lineJoin="round"
@@ -130,7 +130,7 @@ export function ViewerSlatePreview({
                                             rotation={shape.config.rotation}
                                             fill="transparent"
                                             stroke={shape.strokeColor}
-                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 4}
+                                            strokeWidth={shape.strokeWidth * stageScaleFactor * 2}
                                             dash={shape.strokeDash.map((d) => d * stageScaleFactor)}
                                             dashOffset={
                                                 ((shape.strokeDash[0] ?? 0) * stageScaleFactor) / 2
