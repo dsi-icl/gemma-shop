@@ -66,7 +66,8 @@ function labelize(raw: string | null | undefined): string {
     return raw
         .toLowerCase()
         .replace(/_/g, ' ')
-        .replace(/\b\w/g, (ch) => ch.toUpperCase());
+        .replace(/\b\w/g, (ch) => ch.toUpperCase())
+        .replaceAll('Csp', 'CSP');
 }
 
 function outcomeBadgeClass(outcome: string | null | undefined): string {
