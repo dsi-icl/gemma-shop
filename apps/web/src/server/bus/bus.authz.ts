@@ -140,7 +140,7 @@ export function isWsMessageAuthorized(
         return entry.meta.specimen === 'editor';
     }
     if (type === 'bind_override_decision') {
-        return entry.meta.specimen === 'gallery' && isAdminUser(entry);
+        return entry.meta.specimen === 'gallery' && (isAdminUser(entry) || isGalleryDevice(entry));
     }
     if (type === 'bind_wall') {
         if (entry.meta.specimen === 'controller')
