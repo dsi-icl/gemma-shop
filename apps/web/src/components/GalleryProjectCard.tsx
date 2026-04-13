@@ -39,7 +39,7 @@ export function GalleryProjectCard({
     const canEnrolledDeviceLoad = isEnrolledDevice && !Boolean(user) && allowWallActions;
     const { data: walls = [] } = useQuery({
         ...wallsQueryOptions(),
-        enabled: canUserManageWalls
+        enabled: canUserManageWalls || canEnrolledDeviceLoad
     });
 
     const availableWalls =
