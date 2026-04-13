@@ -685,8 +685,8 @@ function WallApp() {
                                 xmlns="http://www.w3.org/2000/svg"
                             >
                                 <circle
-                                    cx={layer.config.width / 2}
-                                    cy={layer.config.height / 2}
+                                    // cx={layer.config.width / 2}
+                                    // cy={layer.config.height / 2}
                                     r={layer.config.width / 2}
                                     fill={layer.fill}
                                     stroke={layer.strokeColor}
