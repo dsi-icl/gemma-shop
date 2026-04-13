@@ -402,7 +402,7 @@ export async function publishCustomRenderProject(
     const sentinel = await dbCol.commits.insert({
         projectId,
         parentId: null,
-        authorId: 'system',
+        authorEmail: userEmail,
         message: 'Published (custom render)',
         content: { slides: [{ id: crypto.randomUUID(), order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
@@ -435,7 +435,7 @@ export async function ensureMutableHead(
         const newHead = await dbCol.commits.insert({
             projectId,
             parentId: project.headCommitId,
-            authorId: 'system',
+            authorEmail: userEmail,
             message: 'HEAD',
             content: head?.content ?? { slides: [] },
             isAutoSave: false,
@@ -458,7 +458,7 @@ export async function ensureMutableHead(
     const newHead = await dbCol.commits.insert({
         projectId,
         parentId: null,
-        authorId: 'system',
+        authorEmail: userEmail,
         message: 'HEAD',
         content: { slides: [{ id: crypto.randomUUID(), order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
@@ -498,7 +498,7 @@ export async function createBranchHead(
     const branchHead = await dbCol.commits.insert({
         projectId,
         parentId: sourceCommitId,
-        authorId: 'system',
+        authorEmail: userEmail,
         message: 'HEAD',
         content: source.content ?? { slides: [] },
         isAutoSave: false,

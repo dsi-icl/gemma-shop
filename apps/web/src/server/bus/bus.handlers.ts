@@ -345,7 +345,12 @@ handlers.set('stage_save', ({ entry, data, scopeId }) => {
     const capturedScopeId = scopeId;
     const capturedEntry = entry;
 
-    saveScope(capturedScopeId, data.message, data.isAutoSave ?? false).then((result) => {
+    saveScope(
+        capturedScopeId,
+        data.message,
+        data.isAutoSave ?? false,
+        capturedEntry.meta.authContext?.user?.email ?? null
+    ).then((result) => {
         const response: GSMessage = {
             type: 'stage_save_response',
             success: result.success,

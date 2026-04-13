@@ -69,7 +69,7 @@ export interface CommitDocument {
     id: string;
     projectId: string;
     parentId: string | null;
-    authorId: string;
+    authorEmail: string | null;
     message: string;
     content: {
         slides: Array<{

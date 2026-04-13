@@ -187,6 +187,7 @@ function CommitsTab() {
                         <TableRow>
                             <TableHead className="w-6 px-0" />
                             <TableHead>Message</TableHead>
+                            <TableHead>Author</TableHead>
                             <TableHead>Date</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead />
@@ -206,6 +207,9 @@ function CommitsTab() {
                                         />
                                     </TableCell>
                                     <TableCell className="font-medium">{commit.message}</TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {commit.authorEmail ?? '-'}
+                                    </TableCell>
                                     <TableCell className="text-muted-foreground">
                                         <DateDisplay
                                             value={commit.updatedAt ?? commit.createdAt}

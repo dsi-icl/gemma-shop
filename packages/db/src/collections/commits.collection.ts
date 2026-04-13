@@ -9,14 +9,15 @@ type CommitInsertData = Omit<CommitDocument, '_id' | 'id' | 'createdAt' | 'updat
 
 export class CommitsCollection extends BaseCollection<CommitDocument> {
     readonly collectionName = 'commits';
-    readonly currentVersion = 1;
+    readonly currentVersion = 2;
 
     protected readonly migrations: MigrationMap = {
         0: (doc) => ({
             ...doc,
             createdAt: toEpoch(doc.createdAt ?? Date.now()),
             ...(doc.updatedAt != null ? { updatedAt: toEpoch(doc.updatedAt) } : {})
-        })
+        }),
+        1: (doc) => doc
     };
 
     constructor(db: Db) {
@@ -27,22 +28,30 @@ export class CommitsCollection extends BaseCollection<CommitDocument> {
         const base = super.fromDB(doc) as unknown as CommitDocument & {
             projectId: unknown;
             parentId: unknown;
-            authorId: unknown;
+            authorEmail: unknown;
         };
+        const rawAuthorEmail =
+            typeof base.authorEmail === 'string' && base.authorEmail.trim().length > 0
+                ? base.authorEmail.trim()
+                : null;
         return {
             ...base,
             projectId: String(base.projectId),
             parentId: base.parentId ? String(base.parentId) : null,
-            authorId: String(base.authorId)
+            authorEmail: rawAuthorEmail
         };
     }
 
     protected toRaw(data: CommitInsertData): Record<string, unknown> {
+        const authorEmail =
+            typeof data.authorEmail === 'string'
+                ? data.authorEmail.trim()
+                : (data.authorEmail ?? null);
         return {
             ...data,
             projectId: new OID(data.projectId),
             parentId: data.parentId ? new OID(data.parentId) : null,
-            authorId: new OID(data.authorId)
+            authorEmail: authorEmail && authorEmail.length > 0 ? authorEmail : null
         };
     }
 
