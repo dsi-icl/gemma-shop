@@ -11,7 +11,15 @@ import {
     useLayoutEffect,
     type DragEvent
 } from 'react';
-import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'react-konva';
+import {
+    Stage,
+    FastLayer,
+    Layer as KonvaLayer,
+    Transformer,
+    Rect,
+    Line,
+    Circle
+} from 'react-konva';
 import { toast } from 'sonner';
 
 import { getAssetDragMimeType, type AssetLibraryAsset } from '~/components/AssetLibrary';
@@ -84,6 +92,14 @@ export function EditorSlate() {
     const sortedLayers = useMemo(
         () => Array.from(layers.values()).sort((a, b) => a.config.zIndex - b.config.zIndex),
         [layers]
+    );
+    const backgroundLayer = useMemo(
+        () => sortedLayers.find((layer) => layer.type === 'background') ?? null,
+        [sortedLayers]
+    );
+    const foregroundLayers = useMemo(
+        () => sortedLayers.filter((layer) => layer.type !== 'background'),
+        [sortedLayers]
     );
     const selectedLayerIdSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
 
@@ -1207,6 +1223,15 @@ export function EditorSlate() {
                         scaleX={stageScaleFactor}
                         scaleY={stageScaleFactor}
                     >
+                        <FastLayer listening={false}>
+                            {backgroundLayer ? (
+                                <KonvaBackgroundLayer
+                                    key={`bg_${backgroundLayer.numericId}`}
+                                    layer={backgroundLayer}
+                                    previewScale={stageScaleFactor}
+                                />
+                            ) : null}
+                        </FastLayer>
                         <KonvaLayer>
                             {/* {Array.from({ length: COLS * ROWS }).map((_, i) => {
                             const col = i % COLS;
@@ -1235,7 +1260,7 @@ export function EditorSlate() {
                         })} */}
 
                             {/* oxlint-disable-next-line react-hooks-js/refs */}
-                            {sortedLayers.map((layer) => {
+                            {foregroundLayers.map((layer) => {
                                 const isHidden = !layer.config.visible;
                                 const isSelected = selectedLayerIdSet.has(
                                     layer.numericId.toString()
@@ -1264,15 +1289,6 @@ export function EditorSlate() {
                                         handleTransformEnd(e, layer.numericId)
                                 };
 
-                                if (layer.type === 'background') {
-                                    return (
-                                        <KonvaBackgroundLayer
-                                            key={`bg_${layer.numericId}`}
-                                            layer={layer}
-                                            previewScale={stageScaleFactor}
-                                        />
-                                    );
-                                }
                                 if (layer.type === 'image') {
                                     return (
                                         <KonvaStaticImage
