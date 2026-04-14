@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-konva';
 
 import { BACKGROUND_T_SPEED, renderBackgroundNoise } from '~/lib/backgroundNoise';
@@ -7,7 +7,7 @@ import type { Layer } from '~/lib/types';
 
 const WALL_W = COLS * SCREEN_W;
 const WALL_H = ROWS * SCREEN_H;
-const MAX_PREVIEW_W = 8192;
+const MAX_PREVIEW_W = 4096;
 
 type BackgroundLayer = Extract<Layer, { type: 'background' }>;
 
@@ -20,7 +20,7 @@ interface KonvaBackgroundLayerProps {
  * Static noise snapshot rendered as a Konva Image covering the full wall.
  * Non-interactive — click/drag pass through to layers below.
  */
-export function KonvaBackgroundLayer({ layer, previewScale }: KonvaBackgroundLayerProps) {
+function KonvaBackgroundLayerInner({ layer, previewScale }: KonvaBackgroundLayerProps) {
     const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
     const renderedWidthRef = useRef(0);
     const lastConfigKeyRef = useRef('');
@@ -87,3 +87,22 @@ export function KonvaBackgroundLayer({ layer, previewScale }: KonvaBackgroundLay
         />
     );
 }
+
+export const KonvaBackgroundLayer = memo(
+    KonvaBackgroundLayerInner,
+    (prev, next) =>
+        prev.previewScale === next.previewScale &&
+        prev.layer.backgroundColor === next.layer.backgroundColor &&
+        prev.layer.atmosphereColor === next.layer.atmosphereColor &&
+        prev.layer.motifColor1 === next.layer.motifColor1 &&
+        prev.layer.motifColor2 === next.layer.motifColor2 &&
+        prev.layer.noiseSeed === next.layer.noiseSeed &&
+        prev.layer.speedFactor === next.layer.speedFactor &&
+        prev.layer.config.cx === next.layer.config.cx &&
+        prev.layer.config.cy === next.layer.config.cy &&
+        prev.layer.config.width === next.layer.config.width &&
+        prev.layer.config.height === next.layer.config.height &&
+        prev.layer.config.rotation === next.layer.config.rotation &&
+        prev.layer.config.scaleX === next.layer.config.scaleX &&
+        prev.layer.config.scaleY === next.layer.config.scaleY
+);
