@@ -63,6 +63,22 @@ type UpdateData<TDoc extends BaseDoc> = Partial<
     Omit<TDoc, '_id' | 'id' | 'createdAt' | '_version'>
 >;
 
+function sanitizeBsonLike(value: unknown): unknown {
+    if (value instanceof OID) return value.toHexString();
+    if (Array.isArray(value)) return value.map((entry) => sanitizeBsonLike(entry));
+    if (!value || typeof value !== 'object') return value;
+    if (value instanceof Date) return value;
+
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return value;
+
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+        out[key] = sanitizeBsonLike(entry);
+    }
+    return out;
+}
+
 /**
  * Abstract base for all app-owned MongoDB collections.
  *
@@ -150,7 +166,7 @@ export abstract class BaseCollection<TDoc extends BaseDoc> {
     protected expose(doc: TDoc): PublicDoc<TDoc> {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { _id, _version, ...rest } = doc as TDoc & { _id: unknown; _version: unknown };
-        return rest as PublicDoc<TDoc>;
+        return sanitizeBsonLike(rest) as PublicDoc<TDoc>;
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────
