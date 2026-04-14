@@ -2,10 +2,19 @@ import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useLayoutEffect,
+    type DragEvent
+} from 'react';
 import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'react-konva';
 import { toast } from 'sonner';
 
+import { getAssetDragMimeType, type AssetLibraryAsset } from '~/components/AssetLibrary';
 import { EditorToolbar } from '~/components/EditorToolbar';
 import { KonvaBackgroundLayer } from '~/components/KonvaBackgroundLayer';
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
@@ -16,6 +25,7 @@ import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
 import { fitSizeToViewport, MIN_LAYER_DIMENSION } from '~/lib/fitSizeToViewport';
+import { isFontAsset } from '~/lib/mediaUtils';
 import { COLS, ROWS, SCREEN_H, SCREEN_W, SNAP_GRID } from '~/lib/stageConstants';
 import {
     getAngle,
@@ -130,6 +140,160 @@ export function EditorSlate() {
             slot.scrollTop = Math.max(0, Math.min(maxTop, slot.scrollTop + dy));
         }
     }, []);
+
+    const addDroppedAssetAsLayer = useCallback(
+        async (asset: AssetLibraryAsset, dropPoint: { x: number; y: number }) => {
+            if (!engine) return;
+            if (isFontAsset(asset)) return;
+
+            const isVideo =
+                asset.mimeType?.startsWith('video/') ||
+                /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name) ||
+                /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.url);
+            const isImage =
+                asset.mimeType?.startsWith('image/') ||
+                /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(asset.name) ||
+                /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(asset.url);
+
+            if (!isVideo && !isImage) return;
+
+            const store = useEditorStore.getState();
+            const numericId = store.allocateId();
+            const zIndex = store.allocateZIndex();
+
+            let mediaWidth = 800;
+            let mediaHeight = 600;
+            let duration = 0;
+
+            if (isVideo) {
+                try {
+                    const vid = document.createElement('video');
+                    vid.muted = true;
+                    vid.playsInline = true;
+                    vid.crossOrigin = 'anonymous';
+                    vid.src = `/api/assets/${asset.url}`;
+                    await new Promise<void>((resolve, reject) => {
+                        vid.onloadeddata = () => resolve();
+                        vid.onerror = () => reject(new Error('Failed to load video'));
+                    });
+                    mediaWidth = vid.videoWidth || mediaWidth;
+                    mediaHeight = vid.videoHeight || mediaHeight;
+                    duration = vid.duration || 0;
+                    vid.removeAttribute('src');
+                    vid.load();
+                } catch {
+                    // Keep defaults.
+                }
+            } else {
+                try {
+                    const img = new window.Image();
+                    img.crossOrigin = 'anonymous';
+                    img.src = `/api/assets/${asset.url}`;
+                    await new Promise<void>((resolve) => {
+                        img.onload = () => resolve();
+                        img.onerror = () => resolve();
+                    });
+                    mediaWidth = img.naturalWidth || mediaWidth;
+                    mediaHeight = img.naturalHeight || mediaHeight;
+                } catch {
+                    // Keep defaults.
+                }
+            }
+
+            const fitted = fitSizeToViewport(
+                mediaWidth,
+                mediaHeight,
+                store.insertionViewport.width,
+                store.insertionViewport.height
+            );
+
+            const config: Layer['config'] = {
+                cx: dropPoint.x,
+                cy: dropPoint.y,
+                width: fitted.width,
+                height: fitted.height,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                zIndex,
+                visible: true
+            };
+
+            const defaultPlayback: Extract<Layer, { type: 'video' }>['playback'] = {
+                status: 'paused',
+                anchorMediaTime: 0,
+                anchorServerTime: engine.getServerTime()
+            };
+
+            const layerBase = {
+                numericId,
+                url: `/api/assets/${asset.url}`,
+                config,
+                isUploading: false,
+                progress: 100
+            };
+
+            const layer: LayerWithEditorState = isVideo
+                ? {
+                      type: 'video',
+                      playback: defaultPlayback,
+                      rvfcActive: false,
+                      duration,
+                      loop: true,
+                      blurhash: asset.blurhash ?? '',
+                      ...layerBase
+                  }
+                : {
+                      type: 'image',
+                      blurhash: asset.blurhash ?? '',
+                      ...layerBase
+                  };
+
+            store.upsertLayer(layer);
+            store.toggleLayerSelection(numericId.toString(), false, false);
+
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'editor:asset_library_drop',
+                layer
+            });
+            store.markDirty();
+        },
+        [engine]
+    );
+
+    const handleStageDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
+        if (e.dataTransfer.types.includes(getAssetDragMimeType())) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    }, []);
+
+    const handleStageDrop = useCallback(
+        async (e: DragEvent<HTMLDivElement>) => {
+            const raw = e.dataTransfer.getData(getAssetDragMimeType());
+            if (!raw) return;
+            e.preventDefault();
+
+            let asset: AssetLibraryAsset | null = null;
+            try {
+                asset = JSON.parse(raw) as AssetLibraryAsset;
+            } catch {
+                return;
+            }
+            if (!asset) return;
+
+            const slot = stageSlot.current;
+            if (!slot) return;
+            const rect = slot.getBoundingClientRect();
+            const scale = Math.max(stageScaleFactor, 0.001);
+            const x = (slot.scrollLeft + (e.clientX - rect.left)) / scale;
+            const y = (slot.scrollTop + (e.clientY - rect.top)) / scale;
+
+            await addDroppedAssetAsLayer(asset, { x, y });
+        },
+        [addDroppedAssetAsLayer, stageScaleFactor]
+    );
 
     const syncInsertionCenter = useCallback(() => {
         const slot = stageSlot.current;
@@ -1024,6 +1188,8 @@ export function EditorSlate() {
                 <div
                     ref={stageSlot}
                     id="slate"
+                    onDragOver={handleStageDragOver}
+                    onDrop={handleStageDrop}
                     className="min-h-0 grow overflow-x-auto overflow-y-hidden border-b border-border bg-black"
                 >
                     <Stage

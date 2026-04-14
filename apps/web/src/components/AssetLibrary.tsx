@@ -16,7 +16,7 @@ import {
 } from '@repo/ui/components/dialog';
 import { ProjectImage } from '@repo/ui/components/project-image';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type DragEvent } from 'react';
 import { toast } from 'sonner';
 
 import { isFontAsset } from '~/lib/mediaUtils';
@@ -44,6 +44,12 @@ export type AssetLibraryAsset = {
     sizes?: number[];
     previewUrl?: string;
 };
+
+const ASSET_DRAG_MIME = 'application/x-gemma-asset';
+
+export function getAssetDragMimeType() {
+    return ASSET_DRAG_MIME;
+}
 
 export function AssetLibrary({
     projectId,
@@ -123,6 +129,13 @@ export function AssetLibrary({
     }, [projectId, queryClient]);
 
     const normalizeAssetUrl = (url: string) => url.replace(/^\/api\/assets\//, '');
+
+    const handleAssetDragStart = (e: DragEvent<HTMLDivElement>, asset: AssetLibraryAsset) => {
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData(ASSET_DRAG_MIME, JSON.stringify(asset));
+        // Fallback for environments that strip custom MIME types.
+        e.dataTransfer.setData('text/plain', asset.url);
+    };
 
     const uploadTrigger = (
         <button className="group relative flex aspect-square w-full max-w-25 cursor-pointer flex-col justify-center overflow-hidden rounded-md border border-border bg-background text-center align-middle transition-colors hover:border-primary">
@@ -305,6 +318,11 @@ export function AssetLibrary({
                                         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
                                         role="button"
                                         tabIndex={idx}
+                                        draggable={!isPicker}
+                                        onDragStart={(e) => {
+                                            if (isPicker) return;
+                                            handleAssetDragStart(e, asset);
+                                        }}
                                     >
                                         {cardContent}
                                     </div>
