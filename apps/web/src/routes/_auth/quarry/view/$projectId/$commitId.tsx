@@ -194,7 +194,16 @@ function CommitViewer() {
                                 onClick={handleEditFromVersion}
                                 disabled={branching}
                             >
-                                <GitBranchIcon /> Edit from this version
+                                {branching ? (
+                                    <>
+                                        <CircleNotchIcon className="animate-spin" />
+                                        Opening editor...
+                                    </>
+                                ) : (
+                                    <>
+                                        <GitBranchIcon /> Edit from this version
+                                    </>
+                                )}
                             </Button>
                         </div>
 

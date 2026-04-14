@@ -1,5 +1,6 @@
 import {
     ArrowUpIcon,
+    CircleNotchIcon,
     EyeIcon,
     GitBranchIcon,
     GlobeIcon,
@@ -20,8 +21,8 @@ import {
     TableRow
 } from '@repo/ui/components/table';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { $promoteBranchHead, $publishCommit } from '~/server/projects.fns';
@@ -145,6 +146,8 @@ function CommitsTab() {
     const { data: project } = useSuspenseQuery(projectQueryOptions(projectId));
     const { data: commits } = useSuspenseQuery(commitsQueryOptions(projectId));
     const queryClient = useQueryClient();
+    const navigate = useNavigate();
+    const [openingEditorForCommitId, setOpeningEditorForCommitId] = useState<string | null>(null);
 
     const publishMutation = useMutation({
         mutationFn: (commitId: string | null) => $publishCommit({ data: { projectId, commitId } }),
@@ -169,6 +172,23 @@ function CommitsTab() {
         () => topoSort(commits, project.headCommitId ?? null),
         [commits, project.headCommitId]
     );
+
+    const handleOpenEditor = async (input: { commitId: string; slideId: string }) => {
+        setOpeningEditorForCommitId(input.commitId);
+        try {
+            await navigate({
+                to: '/quarry/editor/$projectId/$commitId/$slideId',
+                params: {
+                    projectId,
+                    commitId: input.commitId,
+                    slideId: input.slideId
+                }
+            });
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to open editor');
+            setOpeningEditorForCommitId(null);
+        }
+    };
 
     if (commits.length === 0) {
         return (
@@ -280,21 +300,26 @@ function CommitsTab() {
                                         )}
                                         {commit.isMutableHead && commit.content?.slides?.[0]?.id ? (
                                             <Button
-                                                render={
-                                                    <Link
-                                                        to="/quarry/editor/$projectId/$commitId/$slideId"
-                                                        params={{
-                                                            projectId,
-                                                            commitId: commit.id,
-                                                            slideId: commit.content.slides[0].id
-                                                        }}
-                                                    />
-                                                }
                                                 variant="outline"
                                                 size="xs"
-                                                nativeButton={false}
+                                                onClick={() =>
+                                                    handleOpenEditor({
+                                                        commitId: commit.id,
+                                                        slideId: commit.content.slides[0].id
+                                                    })
+                                                }
+                                                disabled={openingEditorForCommitId !== null}
                                             >
-                                                <PencilSimpleIcon /> Edit
+                                                {openingEditorForCommitId === commit.id ? (
+                                                    <>
+                                                        <CircleNotchIcon className="animate-spin" />
+                                                        Opening...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <PencilSimpleIcon /> Edit
+                                                    </>
+                                                )}
                                             </Button>
                                         ) : null}
                                     </TableCell>
