@@ -94,6 +94,13 @@ export function ParametersPanel({
         [selectedLayer, markDirty]
     );
 
+    const selectedLeftX = selectedLayer
+        ? selectedLayer.config.cx - selectedLayer.config.width / 2
+        : null;
+    const selectedTopY = selectedLayer
+        ? selectedLayer.config.cy - selectedLayer.config.height / 2
+        : null;
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-muted/30">
             <button
@@ -122,18 +129,20 @@ export function ParametersPanel({
                                         label="X"
                                         className={'text-xs'}
                                         allowWheelScrub={true}
-                                        value={selectedLayer.config.cx}
+                                        value={selectedLeftX ?? 0}
                                         onInput={(e) => console.log(e)}
                                         onValueChange={(v) => {
-                                            if (v !== null) updateConfig('cx', v);
+                                            if (v === null || !selectedLayer) return;
+                                            updateConfig('cx', v + selectedLayer.config.width / 2);
                                         }}
                                     />
                                     <SideButtonNumberField
                                         label="Y"
                                         allowWheelScrub={true}
-                                        value={selectedLayer.config.cy}
+                                        value={selectedTopY ?? 0}
                                         onValueChange={(v) => {
-                                            if (v !== null) updateConfig('cy', v);
+                                            if (v === null || !selectedLayer) return;
+                                            updateConfig('cy', v + selectedLayer.config.height / 2);
                                         }}
                                     />
                                 </div>
