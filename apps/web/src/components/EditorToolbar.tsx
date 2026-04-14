@@ -17,6 +17,7 @@ import {
     ShapesIcon,
     TextTIcon,
     WarningCircleIcon,
+    WaveSineIcon,
     XIcon
 } from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
@@ -37,6 +38,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AppearanceToolbar } from '~/components/AppearanceToolbar';
+import { BackgroundLayerPanel } from '~/components/BackgroundLayerPanel';
 import { FilterPanel } from '~/components/FilterPanel';
 import { PlaybackControls } from '~/components/PlaybackControls';
 import { SlidesJsonDialog } from '~/components/SlidesJsonDialog';
@@ -81,6 +83,15 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         return id ? (s.layers.get(parseInt(id)) ?? null) : null;
     });
 
+    // Background layer — always accessible regardless of selection
+    const backgroundLayer = useEditorStore((s) => {
+        for (const layer of s.layers.values()) {
+            if (layer.type === 'background')
+                return layer as Extract<LayerWithEditorState, { type: 'background' }>;
+        }
+        return null;
+    });
+
     // Actions — stable references, never trigger re-renders
     const { toggleSnapping, toggleDrawing, toggleGrid, startTextEditing } = useEditorStore(
         useShallow((s) => ({
@@ -95,6 +106,8 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         addMapLayer,
         addWebLayer,
         addShapeLayer,
+        addBackgroundLayer,
+        removeLayer,
         bringToFront,
         sendToBack,
         clearStage,
@@ -106,6 +119,8 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
             addMapLayer: s.addMapLayer,
             addWebLayer: s.addWebLayer,
             addShapeLayer: s.addShapeLayer,
+            addBackgroundLayer: s.addBackgroundLayer,
+            removeLayer: s.removeLayer,
             bringToFront: s.bringToFront,
             sendToBack: s.sendToBack,
             clearStage: s.clearStage,
@@ -209,6 +224,45 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                     <TipButton tip="Add web layer" onClick={addWebLayer}>
                         <GlobeSimpleIcon />
                     </TipButton>
+                    <Popover>
+                        <PopoverTrigger nativeButton={false} render={<div />}>
+                            <TipButton
+                                tip={
+                                    backgroundLayer ? 'Background settings' : 'Add background layer'
+                                }
+                                variant={backgroundLayer ? 'outline' : 'ghost'}
+                            >
+                                <WaveSineIcon weight={backgroundLayer ? 'fill' : 'regular'} />
+                            </TipButton>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-3" side="bottom" align="start">
+                            {backgroundLayer ? (
+                                <div className="flex flex-col gap-3">
+                                    <p className="text-xs font-medium text-muted-foreground">
+                                        Background
+                                    </p>
+                                    <BackgroundLayerPanel activeLayer={backgroundLayer} />
+                                    <Separator />
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => removeLayer(backgroundLayer.numericId)}
+                                    >
+                                        Remove background
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-2">
+                                    <p className="text-xs text-muted-foreground">
+                                        No background layer on this slide.
+                                    </p>
+                                    <Button size="sm" onClick={addBackgroundLayer}>
+                                        Add background layer
+                                    </Button>
+                                </div>
+                            )}
+                        </PopoverContent>
+                    </Popover>
                     <TipButton
                         tip="Draw"
                         onClick={toggleDrawing}

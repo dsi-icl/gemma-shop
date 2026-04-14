@@ -61,6 +61,7 @@ export interface EditorState {
     addMapLayer: () => void;
     addShapeLayer: (shape: 'rectangle' | 'circle') => void;
     addWebLayer: () => void;
+    addBackgroundLayer: () => void;
     addLineLayer: (line: Array<number>) => void;
     clearStage: () => void;
     reboot: () => void;

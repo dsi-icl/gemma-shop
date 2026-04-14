@@ -66,6 +66,7 @@
         "react-konva": "catalog:",
         "react-map-gl": "catalog:",
         "sharp": "catalog:",
+        "simplex-noise": "catalog:",
         "sonner": "catalog:",
         "three": "catalog:",
         "y-websocket": "catalog:",

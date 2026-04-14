@@ -1,6 +1,7 @@
 import { EditorEngine } from './editorEngine';
 import type { EditorState, SliceHelpers } from './editorStore.types';
 import { fitSizeToViewport, MIN_LAYER_DIMENSION } from './fitSizeToViewport';
+import { COLS, ROWS, SCREEN_H, SCREEN_W } from './stageConstants';
 import type { Layer, LayerWithEditorState } from './types';
 
 type SliceSet = (
@@ -409,6 +410,52 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
             engine.sendJSON({
                 type: 'upsert_layer',
                 origin: 'editor:add_shape_layer',
+                layer: newLayer
+            });
+            get().markDirty();
+        },
+
+        addBackgroundLayer: () => {
+            const { layers } = get();
+            // Singleton: if one already exists, do nothing (settings accessible via toolbar popover)
+            const existing = Array.from(layers.values()).find((l) => l.type === 'background');
+            if (existing) return;
+
+            const numericId = helpers.allocateId();
+            const wallW = COLS * SCREEN_W;
+            const wallH = ROWS * SCREEN_H;
+
+            const newLayer: LayerWithEditorState = {
+                numericId,
+                type: 'background',
+                config: {
+                    cx: wallW / 2,
+                    cy: wallH / 2,
+                    width: wallW,
+                    height: wallH,
+                    rotation: 0,
+                    scaleX: 1,
+                    scaleY: 1,
+                    zIndex: 0,
+                    visible: true
+                },
+                backgroundColor: '#0a0a14',
+                atmosphereColor: '#1a1a3a',
+                motifColor1: '#2a1a4a',
+                motifColor2: '#0a2a3a',
+                noiseSeed: 0,
+                speedFactor: 1
+            };
+
+            set((s) => {
+                const newLayers = new Map(s.layers);
+                newLayers.set(numericId, newLayer);
+                return { layers: newLayers };
+            });
+            const engine = EditorEngine.getInstance();
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'editor:add_background_layer',
                 layer: newLayer
             });
             get().markDirty();

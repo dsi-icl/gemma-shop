@@ -12,7 +12,8 @@ import {
     RectangleIcon,
     ShapesIcon,
     CircleIcon,
-    GlobeIcon
+    GlobeIcon,
+    WaveSineIcon
 } from '@phosphor-icons/react';
 import { TipButton } from '@repo/ui/components/tip-button';
 import React from 'react';
@@ -56,6 +57,8 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
             }
             case 'line':
                 return <ScribbleIcon size={16} weight="bold" />;
+            case 'background':
+                return <WaveSineIcon size={16} weight="bold" />;
             default:
                 return <BugBeetleIcon size={16} weight="bold" />;
         }
@@ -87,6 +90,8 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
             }
             case 'line':
                 return 'Line';
+            case 'background':
+                return 'Background';
             default:
                 return 'Unknown Layer';
         }

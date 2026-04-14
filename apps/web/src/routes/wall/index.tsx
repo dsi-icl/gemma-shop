@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { useEffect, useState, useMemo, useRef, type CSSProperties } from 'react';
 
 import { MapWrapper } from '~/components/MapWrapper';
+import { WallBackgroundCanvas } from '~/components/WallBackgroundCanvas';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { toCssFilterString } from '~/lib/layerFilters';
 import { signedFetch } from '~/lib/signedFetch';
@@ -757,6 +758,11 @@ function WallApp() {
         );
     })();
 
+    const backgroundLayer = layers.find(
+        (l): l is Extract<LayerWithWallComponentState, { type: 'background' }> =>
+            l.type === 'background' && l.config.visible
+    );
+
     return (
         <div className="absolute z-50 m-0 block min-h-screen min-w-screen cursor-none overflow-hidden bg-black">
             {/* Visual Debugger: Shows the Screen ID in the corner */}
@@ -768,6 +774,13 @@ function WallApp() {
                     SCREEN&gt; C:{myViewport.x / SCREEN_W} R:{myViewport.y / SCREEN_H}
                 </div>
             ) : null}
+            {backgroundLayer && (
+                <WallBackgroundCanvas
+                    layer={backgroundLayer}
+                    col={myViewport.x / SCREEN_W}
+                    row={myViewport.y / SCREEN_H}
+                />
+            )}
             {stageContent}
             <div
                 className="pointer-events-none absolute inset-0 z-1000001 bg-black"

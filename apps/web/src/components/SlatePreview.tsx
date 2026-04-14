@@ -136,6 +136,22 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                                         />
                                     );
                             }
+                            if (shape.type === 'background') {
+                                return (
+                                    <Rect
+                                        key={`bg_${shape.numericId}`}
+                                        x={shape.config.cx * stageScaleFactor}
+                                        y={shape.config.cy * stageScaleFactor}
+                                        width={shape.config.width * stageScaleFactor}
+                                        height={shape.config.height * stageScaleFactor}
+                                        offsetX={(shape.config.width * stageScaleFactor) / 2}
+                                        offsetY={(shape.config.height * stageScaleFactor) / 2}
+                                        rotation={shape.config.rotation}
+                                        fill={shape.backgroundColor}
+                                        listening={false}
+                                    />
+                                );
+                            }
                             if (
                                 shape.type === 'image' ||
                                 shape.type === 'video' ||

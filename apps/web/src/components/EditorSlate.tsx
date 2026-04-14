@@ -7,6 +7,7 @@ import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'rea
 import { toast } from 'sonner';
 
 import { EditorToolbar } from '~/components/EditorToolbar';
+import { KonvaBackgroundLayer } from '~/components/KonvaBackgroundLayer';
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaTextLayer } from '~/components/KonvaTextLayer';
 import { KonvaVideo } from '~/components/KonvaVideo';
@@ -1094,6 +1095,14 @@ export function EditorSlate() {
                                         handleTransformEnd(e, layer.numericId)
                                 };
 
+                                if (layer.type === 'background') {
+                                    return (
+                                        <KonvaBackgroundLayer
+                                            key={`bg_${layer.numericId}`}
+                                            layer={layer}
+                                        />
+                                    );
+                                }
                                 if (layer.type === 'image') {
                                     return (
                                         <KonvaStaticImage

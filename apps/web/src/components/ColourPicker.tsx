@@ -66,7 +66,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
 export function ColorPickerPopover({ value, onChange, tip, variant, children }: ColorPickerProps) {
     return (
         <Popover>
-            <PopoverTrigger>
+            <PopoverTrigger nativeButton={false} render={<span className="inline-flex" />}>
                 <TipButton
                     tip={tip ?? 'Color'}
                     variant={variant ?? 'outline'}

@@ -21,6 +21,9 @@ export function LayerList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
     const sortedLayers = Array.from(layers.values()).sort(
         (a, b) => b.config.zIndex - a.config.zIndex
     );
+    // Background layer is managed via the toolbar popover — filter it from the list
+    const displayLayers = sortedLayers.filter((l) => l.type !== 'background');
+    const bgLayers = sortedLayers.filter((l) => l.type === 'background');
 
     const toggleCollapse = () => {
         if (collapsed) onExpand?.();
@@ -47,7 +50,7 @@ export function LayerList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
             {!collapsed && (
                 <div className="flex-1 space-y-1 overflow-y-auto p-2">
                     <DraggableList
-                        items={sortedLayers.map((layer) => ({
+                        items={displayLayers.map((layer) => ({
                             ...layer,
                             id: layer.numericId.toString()
                         }))}
@@ -60,7 +63,8 @@ export function LayerList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
                                 }
                                 return existingLayer;
                             });
-                            reorderLayers(newLayers.reverse());
+                            // Preserve background layers at z-index 0 (prepend to z-ordered array)
+                            reorderLayers([...bgLayers, ...newLayers.reverse()]);
                         }}
                         onSelect={toggleLayerSelection}
                         itemRenderer={(layer, { isSelected }) => (
