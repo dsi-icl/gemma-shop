@@ -1,4 +1,5 @@
 import Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import { useState, RefObject, useEffect } from 'react';
 import { Circle, KonvaNodeEvents, Layer, Line, Rect, Stage } from 'react-konva';
 
@@ -52,6 +53,13 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
         e.target.y(0);
     };
 
+    const handlePreviewWheel = (e: KonvaEventObject<WheelEvent>) => {
+        e.evt.preventDefault();
+        const slot = stageSlot.current;
+        if (!slot) return;
+        slot.scrollLeft += e.evt.deltaX + e.evt.deltaY;
+    };
+
     return (
         <div className="lineheig m-0 line-clamp-1 block overscroll-none p-0 text-center">
             <Stage
@@ -59,6 +67,7 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                 height={stageHeight * PREVIEW_SCALE}
                 scaleX={PREVIEW_SCALE}
                 scaleY={PREVIEW_SCALE}
+                onWheel={handlePreviewWheel}
                 onClick={(e) => {
                     let x =
                         (e.target.getStage()?.getPointerPosition()?.x ?? 0) / PREVIEW_SCALE -
