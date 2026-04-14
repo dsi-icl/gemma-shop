@@ -995,7 +995,7 @@ export function EditorSlate() {
         }
         if (
             (e.evt instanceof TouchEvent && e.evt.touches?.length === 1) ||
-            e.type === 'mousedown'
+            (e.evt instanceof MouseEvent && e.type === 'mousedown' && e.evt.button === 0)
         ) {
             const clickedOnEmpty = e.target === e.target.getStage();
             if (clickedOnEmpty && currentSelectedIds.length) {
@@ -1249,12 +1249,15 @@ export function EditorSlate() {
                                     isDrawing,
                                     isPinching,
                                     opacity: hiddenOpacity,
-                                    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) =>
+                                    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+                                        if (e.evt instanceof MouseEvent && e.evt.button !== 0)
+                                            return;
                                         toggleLayerSelection(
                                             layer.numericId.toString(),
                                             e.evt.shiftKey,
                                             e.evt.ctrlKey || e.evt.metaKey
-                                        ),
+                                        );
+                                    },
                                     onTransform: (e: KonvaEventObject<Event>) =>
                                         handleTransform(e, layer.numericId),
                                     onTransformEnd: (e: KonvaEventObject<Event>) =>
