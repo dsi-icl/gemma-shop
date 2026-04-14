@@ -224,45 +224,6 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                     <TipButton tip="Add web layer" onClick={addWebLayer}>
                         <GlobeSimpleIcon />
                     </TipButton>
-                    <Popover>
-                        <PopoverTrigger nativeButton={false} render={<div />}>
-                            <TipButton
-                                tip={
-                                    backgroundLayer ? 'Background settings' : 'Add background layer'
-                                }
-                                variant={backgroundLayer ? 'outline' : 'ghost'}
-                            >
-                                <WaveSineIcon weight={backgroundLayer ? 'fill' : 'regular'} />
-                            </TipButton>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-3" side="bottom" align="start">
-                            {backgroundLayer ? (
-                                <div className="flex flex-col gap-3">
-                                    <p className="text-xs font-medium text-muted-foreground">
-                                        Background
-                                    </p>
-                                    <BackgroundLayerPanel activeLayer={backgroundLayer} />
-                                    <Separator />
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={() => removeLayer(backgroundLayer.numericId)}
-                                    >
-                                        Remove background
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col gap-2">
-                                    <p className="text-xs text-muted-foreground">
-                                        No background layer on this slide.
-                                    </p>
-                                    <Button size="sm" onClick={addBackgroundLayer}>
-                                        Add background layer
-                                    </Button>
-                                </div>
-                            )}
-                        </PopoverContent>
-                    </Popover>
                     <TipButton
                         tip="Draw"
                         onClick={toggleDrawing}
@@ -382,6 +343,44 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 id="toolbar"
                 className="flex h-11 min-h-11 items-center gap-1 border-t border-b border-border bg-card/50 px-2 py-1"
             >
+                <Popover>
+                    <PopoverTrigger nativeButton={false} render={<div />}>
+                        <TipButton
+                            tip={backgroundLayer ? 'Background settings' : 'Add background layer'}
+                            variant={backgroundLayer ? 'outline' : 'ghost'}
+                        >
+                            <WaveSineIcon weight={backgroundLayer ? 'fill' : 'regular'} />
+                        </TipButton>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-3" side="bottom" align="start">
+                        {backgroundLayer ? (
+                            <div className="flex flex-col gap-3">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                    Background
+                                </p>
+                                <BackgroundLayerPanel activeLayer={backgroundLayer} />
+                                <Separator />
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => removeLayer(backgroundLayer.numericId)}
+                                >
+                                    Remove background
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-2">
+                                <p className="text-xs text-muted-foreground">
+                                    No background layer on this slide.
+                                </p>
+                                <Button size="sm" onClick={addBackgroundLayer}>
+                                    Add background layer
+                                </Button>
+                            </div>
+                        )}
+                    </PopoverContent>
+                </Popover>
+                <Separator orientation="vertical" className="mx-1 my-1 h-6" />
                 {activeLayer ? (
                     <span className="px-2 text-xs">{activeLayer.type}</span>
                 ) : (
