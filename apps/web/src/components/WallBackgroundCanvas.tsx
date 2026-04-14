@@ -3,8 +3,6 @@
 import { useEffect, useRef } from 'react';
 
 import {
-    BACKGROUND_RENDER_H,
-    BACKGROUND_RENDER_W,
     BACKGROUND_T_SPEED,
     BACKGROUND_TICK_MS,
     renderBackgroundNoise
@@ -51,8 +49,8 @@ export function WallBackgroundCanvas({ layer, col, row }: WallBackgroundCanvasPr
     return (
         <canvas
             ref={canvasRef}
-            width={BACKGROUND_RENDER_W}
-            height={BACKGROUND_RENDER_H}
+            width={SCREEN_W}
+            height={SCREEN_H}
             style={{
                 position: 'absolute',
                 top: 0,

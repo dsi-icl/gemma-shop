@@ -1,44 +1,72 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-konva';
 
 import { BACKGROUND_T_SPEED, renderBackgroundNoise } from '~/lib/backgroundNoise';
-import { COLS, ROWS } from '~/lib/stageConstants';
+import { COLS, ROWS, SCREEN_H, SCREEN_W } from '~/lib/stageConstants';
 import type { Layer } from '~/lib/types';
 
-// Canvas sized to wall aspect ratio (COLS:ROWS = 16:4) for accurate noise preview.
-// Width chosen to give reasonable resolution without excess pixel cost.
-const KONVA_PREVIEW_W = 320;
-const KONVA_PREVIEW_H = Math.round((KONVA_PREVIEW_W * ROWS) / COLS); // 80px
+const WALL_W = COLS * SCREEN_W;
+const WALL_H = ROWS * SCREEN_H;
+const MAX_PREVIEW_W = 8192;
 
 type BackgroundLayer = Extract<Layer, { type: 'background' }>;
 
 interface KonvaBackgroundLayerProps {
     layer: BackgroundLayer;
+    previewScale: number;
 }
 
 /**
  * Static noise snapshot rendered as a Konva Image covering the full wall.
  * Non-interactive — click/drag pass through to layers below.
  */
-export function KonvaBackgroundLayer({ layer }: KonvaBackgroundLayerProps) {
+export function KonvaBackgroundLayer({ layer, previewScale }: KonvaBackgroundLayerProps) {
     const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+    const renderedWidthRef = useRef(0);
+    const lastConfigKeyRef = useRef('');
+
+    const previewWidthBucket = useMemo(() => {
+        const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+        const requested = Math.round(WALL_W * Math.max(previewScale, 0.001) * dpr);
+        const minWidth = 1536;
+        const clamped = Math.max(minWidth, Math.min(MAX_PREVIEW_W, requested));
+        // Quantize so tiny scale jitter doesn't trigger redraws.
+        return Math.min(MAX_PREVIEW_W, Math.ceil(clamped / 256) * 256);
+    }, [previewScale]);
 
     useEffect(() => {
+        const configKey = [
+            layer.backgroundColor,
+            layer.atmosphereColor,
+            layer.motifColor1,
+            layer.motifColor2,
+            layer.noiseSeed,
+            layer.speedFactor
+        ].join('|');
+        const configChanged = configKey !== lastConfigKeyRef.current;
+        const needsSharperRaster = previewWidthBucket > renderedWidthRef.current;
+
+        if (!configChanged && !needsSharperRaster && canvas) return;
+
         const offscreen = document.createElement('canvas');
-        offscreen.width = KONVA_PREVIEW_W;
-        offscreen.height = KONVA_PREVIEW_H;
+        offscreen.width = Math.max(previewWidthBucket, renderedWidthRef.current || 0);
+        offscreen.height = Math.max(1, Math.round((offscreen.width * WALL_H) / WALL_W));
         // Use current wall-clock t (same formula as WallBackgroundCanvas) so
         // the preview matches what the wall is showing right now.
         const t = (Date.now() / 1000) * BACKGROUND_T_SPEED * layer.speedFactor;
         renderBackgroundNoise(offscreen, layer, 0, 0, t, COLS, ROWS);
+        renderedWidthRef.current = offscreen.width;
+        lastConfigKeyRef.current = configKey;
         setCanvas(offscreen);
     }, [
+        canvas,
         layer.backgroundColor,
         layer.atmosphereColor,
         layer.motifColor1,
         layer.motifColor2,
         layer.noiseSeed,
-        layer.speedFactor
+        layer.speedFactor,
+        previewWidthBucket
     ]);
 
     if (!canvas) return null;

@@ -1266,6 +1266,7 @@ export function EditorSlate() {
                                         <KonvaBackgroundLayer
                                             key={`bg_${layer.numericId}`}
                                             layer={layer}
+                                            previewScale={stageScaleFactor}
                                         />
                                     );
                                 }

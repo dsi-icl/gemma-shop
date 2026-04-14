@@ -2,7 +2,8 @@
 
 import { Input } from '@repo/ui/components/input';
 import { Slider } from '@repo/ui/components/slider';
-import { useCallback } from 'react';
+import { debounce } from '@tanstack/pacer';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { ColorPickerPopover } from '~/components/ColourPicker';
 import { EditorEngine } from '~/lib/editorEngine';
@@ -16,22 +17,40 @@ interface BackgroundLayerPanelProps {
 }
 
 export function BackgroundLayerPanel({ activeLayer }: BackgroundLayerPanelProps) {
+    const draftLayerRef = useRef<BackgroundLayer>(activeLayer);
+
+    useEffect(() => {
+        draftLayerRef.current = activeLayer;
+    }, [activeLayer]);
+
+    const applyBackgroundUpdate = useMemo(
+        () =>
+            debounce(
+                (nextLayer: BackgroundLayer) => {
+                    useEditorStore.setState((s) => {
+                        const newLayers = new Map(s.layers);
+                        newLayers.set(nextLayer.numericId, nextLayer);
+                        return { layers: newLayers };
+                    });
+                    EditorEngine.getInstance().sendJSON({
+                        type: 'upsert_layer',
+                        origin: 'editor:background_panel',
+                        layer: nextLayer
+                    });
+                    useEditorStore.getState().markDirty();
+                },
+                { wait: 220 }
+            ),
+        []
+    );
+
     const updateField = useCallback(
         <K extends keyof BackgroundLayer>(key: K, value: BackgroundLayer[K]) => {
-            const updated = { ...activeLayer, [key]: value } as BackgroundLayer;
-            useEditorStore.setState((s) => {
-                const newLayers = new Map(s.layers);
-                newLayers.set(activeLayer.numericId, updated);
-                return { layers: newLayers };
-            });
-            EditorEngine.getInstance().sendJSON({
-                type: 'upsert_layer',
-                origin: 'editor:background_panel',
-                layer: updated
-            });
-            useEditorStore.getState().markDirty();
+            const updated = { ...draftLayerRef.current, [key]: value } as BackgroundLayer;
+            draftLayerRef.current = updated;
+            applyBackgroundUpdate(updated);
         },
-        [activeLayer]
+        [applyBackgroundUpdate]
     );
 
     return (
