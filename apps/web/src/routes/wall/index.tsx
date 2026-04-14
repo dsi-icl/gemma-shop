@@ -76,6 +76,19 @@ function WallApp() {
     }, [searchParams]);
     const showVisualDebugger = useMemo(() => searchParams?.get('m') === 'dev', [searchParams]);
 
+    useEffect(() => {
+        const html = document.documentElement;
+        const body = document.body;
+        const prevHtmlCursor = html.style.cursor;
+        const prevBodyCursor = body.style.cursor;
+        html.style.cursor = 'none';
+        body.style.cursor = 'none';
+        return () => {
+            html.style.cursor = prevHtmlCursor;
+            body.style.cursor = prevBodyCursor;
+        };
+    }, []);
+
     const myViewport = useMemo<Viewport>(() => {
         if (!searchParams) return { x: 0, y: 0, w: SCREEN_W, h: SCREEN_H };
         const col = parseInt(searchParams.get('c') || '0');
@@ -563,6 +576,8 @@ function WallApp() {
                         ...commonProps.style,
                         width: `${layer.config.width / webScale}px`,
                         height: `${layer.config.height / webScale}px`,
+                        cursor: 'none',
+                        pointerEvents: 'none' as const,
                         transform: `scale(${webScale})`,
                         transformOrigin: '0 0'
                     }
@@ -727,6 +742,8 @@ function WallApp() {
                     left: customRenderCompat ? `${-myViewport.x}px` : 0,
                     width: customRenderCompat ? `${worldWidth}px` : `${SCREEN_W}px`,
                     height: customRenderCompat ? `${worldHeight}px` : `${SCREEN_H}px`,
+                    cursor: 'none',
+                    pointerEvents: 'none',
                     border: 'none'
                 }}
                 allow="autoplay; fullscreen"
@@ -741,7 +758,7 @@ function WallApp() {
     })();
 
     return (
-        <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">
+        <div className="absolute z-50 m-0 block min-h-screen min-w-screen cursor-none overflow-hidden bg-black">
             {/* Visual Debugger: Shows the Screen ID in the corner */}
             {showVisualDebugger ? (
                 <div
