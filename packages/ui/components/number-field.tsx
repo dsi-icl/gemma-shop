@@ -16,7 +16,6 @@ function SideButtonNumberField({
         <NumberField.Root
             {...props}
             id={id}
-            defaultValue={100}
             className={cn('flex flex-col items-start gap-1', className)}
         >
             <NumberField.ScrubArea className="cursor-ew-resize">
@@ -32,7 +31,11 @@ function SideButtonNumberField({
                 <NumberField.Decrement className="flex size-10 items-center justify-center rounded-tl-md rounded-bl-md border bg-clip-padding select-none">
                     <MinusIcon />
                 </NumberField.Decrement>
-                <NumberField.Input className="h-10 w-24 border-t border-b text-center text-base tabular-nums focus:z-1 focus:outline-2 focus:-outline-offset-1" />
+                <NumberField.Input
+                    className="h-10 w-24 border-t border-b text-center text-base tabular-nums focus:z-1 focus:outline-2 focus:-outline-offset-1"
+                    onKeyDownCapture={(event) => event.stopPropagation()}
+                    onKeyUpCapture={(event) => event.stopPropagation()}
+                />
                 <NumberField.Increment className="flex size-10 items-center justify-center rounded-tr-md rounded-br-md border bg-clip-padding select-none">
                     <PlusIcon />
                 </NumberField.Increment>

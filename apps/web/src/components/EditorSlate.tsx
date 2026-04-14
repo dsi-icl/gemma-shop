@@ -291,6 +291,11 @@ export function EditorSlate() {
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const isEditingInput =
+                target instanceof HTMLElement &&
+                (target.closest('input, textarea, select') !== null || target.isContentEditable);
+            if (isEditingInput) return;
             if (editingTextLayerId !== null) return;
             const store = useEditorStore.getState();
             if (!store.selectedLayerIds.length) return;
