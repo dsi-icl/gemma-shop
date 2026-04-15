@@ -60,6 +60,7 @@ import {
     getProject,
     getProjectCommits,
     listAssets,
+    listAssetsByUrlsForPicker,
     listKnownTags,
     listProjects,
     listPublishedProjects,
@@ -182,6 +183,42 @@ export const $listAssets = createServerFn({ method: 'GET' })
             throw new Error('Access denied');
         }
         return listAssets(data.projectId);
+    });
+
+export const $listAssetsByUrlsForPicker = createServerFn({ method: 'POST' })
+    .inputValidator(
+        z.object({
+            projectId: z.string(),
+            urls: z.array(z.string()).max(200)
+        })
+    )
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        const actor = actorFromAuthContext(context);
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$listAssetsByUrlsForPicker',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
+        const allowed = await canViewProject(actor, data.projectId);
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$listAssetsByUrlsForPicker',
+                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
+        return listAssetsByUrlsForPicker(data.projectId, data.urls);
     });
 
 export const $getProject = createServerFn({ method: 'GET' })

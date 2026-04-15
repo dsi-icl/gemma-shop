@@ -21,7 +21,10 @@ import { toast } from 'sonner';
 
 import { isFontAsset } from '~/lib/mediaUtils';
 import { $deleteAsset } from '~/server/projects.fns';
-import { projectAssetsQueryOptions } from '~/server/projects.queries';
+import {
+    projectAssetsQueryOptions,
+    projectPickerSelectedAssetsQueryOptions
+} from '~/server/projects.queries';
 
 import { AssetPreviewPortal, downloadAsset, isVideoAsset } from './AssetPreviewOverlay';
 import { UploadDialog } from './UploadDialog';
@@ -31,6 +34,7 @@ interface AssetLibraryProps {
     mode?: 'editor' | 'picker';
     pickerFilter?: 'image' | 'media';
     selectedAssetUrls?: string[];
+    includeSelectedSoftDeletedInPicker?: boolean;
     onSelectAsset?: (asset: AssetLibraryAsset) => void;
     onDeleteAsset?: (asset: AssetLibraryAsset) => Promise<void> | void;
 }
@@ -56,11 +60,24 @@ export function AssetLibrary({
     mode = 'editor',
     pickerFilter = 'media',
     selectedAssetUrls = [],
+    includeSelectedSoftDeletedInPicker = false,
     onSelectAsset,
     onDeleteAsset
 }: AssetLibraryProps) {
     const isPicker = mode === 'picker';
+    const normalizeAssetUrl = (url: string) => url.replace(/^\/api\/assets\//, '');
     const { data: assets = [] } = useQuery(projectAssetsQueryOptions(projectId));
+    const normalizedSelectedUrls = useMemo(
+        () =>
+            Array.from(
+                new Set(selectedAssetUrls.map((url) => url.replace(/^\/api\/assets\//, '')))
+            ),
+        [selectedAssetUrls]
+    );
+    const { data: selectedFallbackAssets = [] } = useQuery({
+        ...projectPickerSelectedAssetsQueryOptions(projectId, normalizedSelectedUrls),
+        enabled: isPicker && includeSelectedSoftDeletedInPicker && normalizedSelectedUrls.length > 0
+    });
     const sortedAssets = useMemo(() => {
         const media: typeof assets = [];
         const fonts: typeof assets = [];
@@ -78,14 +95,63 @@ export function AssetLibrary({
             previewUrl: asset.previewUrl ?? undefined
         }));
         if (!isPicker) return sorted;
-        if (pickerFilter === 'image')
-            return sorted.filter(
-                (asset) =>
-                    !isFontAsset(asset) &&
-                    !isVideoAsset(asset as { name: string; mimeType?: string })
-            );
-        return sorted.filter((asset) => !isFontAsset(asset));
-    }, [assets, isPicker, pickerFilter]);
+        const filteredSorted =
+            pickerFilter === 'image'
+                ? sorted.filter(
+                      (asset) =>
+                          !isFontAsset(asset) &&
+                          !isVideoAsset(asset as { name: string; mimeType?: string })
+                  )
+                : sorted.filter((asset) => !isFontAsset(asset));
+
+        if (!includeSelectedSoftDeletedInPicker || normalizedSelectedUrls.length === 0) {
+            return filteredSorted;
+        }
+
+        const mergedByUrl = new Map(
+            filteredSorted.map((asset) => [normalizeAssetUrl(asset.url), asset] as const)
+        );
+        const fallbackByUrl = new Map(
+            selectedFallbackAssets.map((asset) => [
+                normalizeAssetUrl(asset.url),
+                {
+                    id: asset.id,
+                    name: asset.name,
+                    url: asset.url,
+                    mimeType: asset.mimeType ?? undefined,
+                    blurhash: asset.blurhash ?? undefined,
+                    sizes: asset.sizes ?? undefined,
+                    previewUrl: asset.previewUrl ?? undefined
+                } satisfies AssetLibraryAsset
+            ])
+        );
+        for (const selectedUrl of normalizedSelectedUrls) {
+            if (mergedByUrl.has(selectedUrl)) continue;
+            const fallback = fallbackByUrl.get(selectedUrl);
+            if (fallback) {
+                mergedByUrl.set(selectedUrl, fallback);
+                continue;
+            }
+            mergedByUrl.set(selectedUrl, {
+                id: `missing:${selectedUrl}`,
+                name: selectedUrl,
+                url: selectedUrl,
+                mimeType: undefined,
+                blurhash: undefined,
+                sizes: undefined,
+                previewUrl: undefined
+            });
+        }
+
+        return Array.from(mergedByUrl.values());
+    }, [
+        assets,
+        includeSelectedSoftDeletedInPicker,
+        isPicker,
+        normalizedSelectedUrls,
+        pickerFilter,
+        selectedFallbackAssets
+    ]);
     const queryClient = useQueryClient();
     const [deleteTarget, setDeleteTarget] = useState<{
         id: string;
@@ -127,8 +193,6 @@ export function AssetLibrary({
             queryKey: projectAssetsQueryOptions(projectId).queryKey
         });
     }, [projectId, queryClient]);
-
-    const normalizeAssetUrl = (url: string) => url.replace(/^\/api\/assets\//, '');
 
     const handleAssetDragStart = (e: DragEvent<HTMLDivElement>, asset: AssetLibraryAsset) => {
         e.dataTransfer.effectAllowed = 'copy';

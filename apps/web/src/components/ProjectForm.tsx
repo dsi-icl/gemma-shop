@@ -574,6 +574,7 @@ export function ProjectForm({
                                     selectedAssetUrls={
                                         heroSelectionDraft ?? getNormalizedHeroSelection()
                                     }
+                                    includeSelectedSoftDeletedInPicker={true}
                                     onSelectAsset={(asset) => toggleHeroImage(asset.url)}
                                 />
                             </div>

@@ -187,6 +187,23 @@ export async function listAssets(projectId: string) {
     return [...projectDocs, ...publicAssets];
 }
 
+export async function listAssetsByUrlsForPicker(projectId: string, urls: string[]) {
+    const project = await getProject(projectId);
+    if (!project) throw new Error('Project not found');
+
+    const normalizedUrls = Array.from(
+        new Set(
+            urls
+                .map((value) => normalizeAssetFilename(value))
+                .filter((value): value is string => Boolean(value))
+        )
+    );
+
+    if (normalizedUrls.length === 0) return [];
+
+    return dbCol.assets.findByProjectOrPublicUrls(projectId, normalizedUrls, true);
+}
+
 export async function getProject(id: string) {
     const project = await dbCol.projects.findById(id);
     if (!project) return null;
