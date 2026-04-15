@@ -123,7 +123,7 @@ export function BackgroundLayerPanel({ activeLayer }: BackgroundLayerPanelProps)
                 <Slider
                     value={[activeLayer.speedFactor]}
                     min={0}
-                    max={5}
+                    max={20}
                     step={0.1}
                     onValueChange={(v) => {
                         const next = Array.isArray(v) ? (v[0] ?? 1) : v;
