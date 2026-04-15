@@ -20,6 +20,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Stage, Layer as KonvaLayer, Rect, Circle, Line } from 'react-konva';
 import { toast } from 'sonner';
 
+import { KonvaBackgroundLayer } from '~/components/KonvaBackgroundLayer';
 import { ReadOnlyMediaLayer, ReadOnlyTextLayer } from '~/components/ReadOnlyLayers';
 import { ViewerSlatePreview } from '~/components/ViewerSlatePreview';
 import { getDOGridLines } from '~/lib/editorHelpers';
@@ -77,6 +78,18 @@ function CommitViewer() {
     const sortedLayers = useMemo(
         () => [...activeLayers].sort((a, b) => a.config.zIndex - b.config.zIndex),
         [activeLayers]
+    );
+    const backgroundLayer = useMemo(
+        () =>
+            sortedLayers.find(
+                (layer): layer is Extract<LayerWithEditorState, { type: 'background' }> =>
+                    layer.type === 'background' && layer.config.visible
+            ) ?? null,
+        [sortedLayers]
+    );
+    const foregroundLayers = useMemo(
+        () => sortedLayers.filter((layer) => layer.type !== 'background'),
+        [sortedLayers]
     );
 
     useLayoutEffect(() => {
@@ -232,7 +245,14 @@ function CommitViewer() {
                                         scaleY={stageScaleFactor}
                                     >
                                         <KonvaLayer>
-                                            {sortedLayers
+                                            {backgroundLayer ? (
+                                                <KonvaBackgroundLayer
+                                                    key={`bg_${backgroundLayer.numericId}`}
+                                                    layer={backgroundLayer}
+                                                    previewScale={1}
+                                                />
+                                            ) : null}
+                                            {foregroundLayers
                                                 .filter((layer) => layer.config.visible)
                                                 .map((layer) => {
                                                     if (layer.type === 'image') {
