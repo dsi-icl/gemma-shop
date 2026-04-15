@@ -7,6 +7,7 @@ import {
     BACKGROUND_TICK_MS,
     renderBackgroundNoise
 } from '~/lib/backgroundNoise';
+import { renderBackgroundWaves } from '~/lib/backgroundWave';
 import { SCREEN_H, SCREEN_W } from '~/lib/stageConstants';
 import type { Layer } from '~/lib/types';
 
@@ -26,7 +27,11 @@ export function WallBackgroundCanvas({ layer, col, row }: WallBackgroundCanvasPr
             // t is derived from wall-clock time so all screens are always in sync.
             // Tiny increments mean adjacent frames are nearly identical → smooth drift.
             const t = (Date.now() / 1000) * BACKGROUND_T_SPEED * layer.speedFactor;
-            renderBackgroundNoise(canvasRef.current!, layer, col, row, t);
+            if (layer.backgroundType === 'waves') {
+                renderBackgroundWaves(canvasRef.current!, layer, col, row, t);
+            } else {
+                renderBackgroundNoise(canvasRef.current!, layer, col, row, t);
+            }
         };
 
         draw();
@@ -36,6 +41,7 @@ export function WallBackgroundCanvas({ layer, col, row }: WallBackgroundCanvasPr
         const id = setInterval(draw, tickMs);
         return () => clearInterval(id);
     }, [
+        layer.backgroundType,
         layer.backgroundColor,
         layer.atmosphereColor,
         layer.motifColor1,

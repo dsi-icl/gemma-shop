@@ -18,6 +18,7 @@ interface BackgroundLayerPanelProps {
 
 export function BackgroundLayerPanel({ activeLayer }: BackgroundLayerPanelProps) {
     const draftLayerRef = useRef<BackgroundLayer>(activeLayer);
+    const backgroundType = activeLayer.backgroundType ?? 'i-pattern';
 
     useEffect(() => {
         draftLayerRef.current = activeLayer;
@@ -55,6 +56,22 @@ export function BackgroundLayerPanel({ activeLayer }: BackgroundLayerPanelProps)
 
     return (
         <>
+            <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Background style</label>
+                <select
+                    value={backgroundType}
+                    onChange={(e) =>
+                        updateField(
+                            'backgroundType',
+                            e.target.value as BackgroundLayer['backgroundType']
+                        )
+                    }
+                    className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+                >
+                    <option value="i-pattern">I pattern</option>
+                    <option value="waves">Waves</option>
+                </select>
+            </div>
             <ColorPickerPopover
                 tip="Background colour"
                 value={activeLayer.backgroundColor}

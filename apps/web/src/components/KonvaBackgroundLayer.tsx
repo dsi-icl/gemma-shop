@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-konva';
 
 import { BACKGROUND_T_SPEED, renderBackgroundNoise } from '~/lib/backgroundNoise';
+import { renderBackgroundWaves } from '~/lib/backgroundWave';
 import { COLS, ROWS, SCREEN_H, SCREEN_W } from '~/lib/stageConstants';
 import type { Layer } from '~/lib/types';
 
@@ -36,6 +37,7 @@ function KonvaBackgroundLayerInner({ layer, previewScale }: KonvaBackgroundLayer
 
     useEffect(() => {
         const configKey = [
+            layer.backgroundType,
             layer.backgroundColor,
             layer.atmosphereColor,
             layer.motifColor1,
@@ -54,12 +56,17 @@ function KonvaBackgroundLayerInner({ layer, previewScale }: KonvaBackgroundLayer
         // Use current wall-clock t (same formula as WallBackgroundCanvas) so
         // the preview matches what the wall is showing right now.
         const t = (Date.now() / 1000) * BACKGROUND_T_SPEED * layer.speedFactor;
-        renderBackgroundNoise(offscreen, layer, 0, 0, t, COLS, ROWS);
+        if (layer.backgroundType === 'waves') {
+            renderBackgroundWaves(offscreen, layer, 0, 0, t, COLS, ROWS);
+        } else {
+            renderBackgroundNoise(offscreen, layer, 0, 0, t, COLS, ROWS);
+        }
         renderedWidthRef.current = offscreen.width;
         lastConfigKeyRef.current = configKey;
         setCanvas(offscreen);
     }, [
         canvas,
+        layer.backgroundType,
         layer.backgroundColor,
         layer.atmosphereColor,
         layer.motifColor1,
@@ -92,6 +99,7 @@ export const KonvaBackgroundLayer = memo(
     KonvaBackgroundLayerInner,
     (prev, next) =>
         prev.previewScale === next.previewScale &&
+        prev.layer.backgroundType === next.layer.backgroundType &&
         prev.layer.backgroundColor === next.layer.backgroundColor &&
         prev.layer.atmosphereColor === next.layer.atmosphereColor &&
         prev.layer.motifColor1 === next.layer.motifColor1 &&

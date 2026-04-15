@@ -439,6 +439,7 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
                     zIndex: 0,
                     visible: true
                 },
+                backgroundType: 'i-pattern',
                 backgroundColor: '#0a0a14',
                 atmosphereColor: '#1a1a3a',
                 motifColor1: '#2a1a4a',
