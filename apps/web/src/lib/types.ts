@@ -226,6 +226,9 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal('hydrate'),
         layers: LayerSchema.array(),
+        projectId: z.string().optional(),
+        commitId: z.string().optional(),
+        slideId: z.string().optional(),
         customRender: z
             .object({
                 url: z.string(),

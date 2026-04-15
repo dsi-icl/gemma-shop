@@ -19,6 +19,17 @@ import { WallEngine, type Viewport } from '~/lib/wallEngine';
 const HYDRATE_FADE_MS = 1000;
 const HYDRATE_IFRAME_TIMEOUT_MS = 2000;
 const warmedImageUrls = new Set<string>();
+type HydrateScopeContext = {
+    projectId?: string;
+    commitId?: string;
+    slideId?: string;
+};
+type HydrateStagePayload = {
+    layers: LayerWithWallComponentState[];
+    customRenderUrl?: string;
+    customRenderCompat: boolean;
+    customRenderProxy: boolean;
+} & HydrateScopeContext;
 
 export const Route = createFileRoute('/wall/')({
     head: () => ({
@@ -38,12 +49,7 @@ function WallApp() {
     const transitionPhaseRef = useRef<'visible' | 'fadingOut' | 'waitingIframes' | 'fadingIn'>(
         'visible'
     );
-    const queuedHydrateRef = useRef<{
-        layers: LayerWithWallComponentState[];
-        customRenderUrl?: string;
-        customRenderCompat: boolean;
-        customRenderProxy: boolean;
-    } | null>(null);
+    const queuedHydrateRef = useRef<HydrateStagePayload | null>(null);
     const fadeTimerRef = useRef<number | null>(null);
     const iframeGateRef = useRef<{
         cycle: number;
@@ -51,15 +57,10 @@ function WallApp() {
         loadedKeys: Set<string>;
         timeoutId: number | null;
     } | null>(null);
-    const stageHydrateRef = useRef<
-        | ((next: {
-              layers: LayerWithWallComponentState[];
-              customRenderUrl?: string;
-              customRenderCompat: boolean;
-              customRenderProxy: boolean;
-          }) => void)
-        | null
-    >(null);
+    const stageHydrateRef = useRef<((next: HydrateStagePayload) => void) | null>(null);
+    const lastHydrateContextRef = useRef<{ hasContent: boolean } & HydrateScopeContext>({
+        hasContent: false
+    });
     const [frameabilityByUrl, setFrameabilityByUrl] = useState<
         Record<string, { ok: boolean; reason?: string; fallback?: string }>
     >({});
@@ -129,6 +130,33 @@ function WallApp() {
         ).length;
     };
 
+    const hasHydrateContent = (next: HydrateStagePayload) =>
+        !!next.customRenderUrl || next.layers.some((layer) => layer.config.visible);
+
+    const shouldFadeHydrate = (next: HydrateStagePayload) => {
+        const prev = lastHydrateContextRef.current;
+        const nextHasContent = hasHydrateContent(next);
+
+        if (prev.hasContent !== nextHasContent) return true;
+        if (!prev.hasContent && !nextHasContent) return false;
+
+        return prev.projectId !== next.projectId || prev.commitId !== next.commitId;
+    };
+
+    const applyHydrateContent = (next: HydrateStagePayload) => {
+        engine?.layers.clear();
+        setLayers(next.layers);
+        setCustomRenderUrl(next.customRenderUrl);
+        setCustomRenderCompat(next.customRenderCompat);
+        setCustomRenderProxy(next.customRenderProxy);
+        lastHydrateContextRef.current = {
+            hasContent: hasHydrateContent(next),
+            projectId: next.projectId,
+            commitId: next.commitId,
+            slideId: next.slideId
+        };
+    };
+
     const beginFadeIn = () => {
         clearFadeTimer();
         clearIframeGate();
@@ -139,53 +167,30 @@ function WallApp() {
             const queued = queuedHydrateRef.current;
             if (!queued) return;
             queuedHydrateRef.current = null;
-            transitionPhaseRef.current = 'fadingOut';
-            setBlackOverlayOpacity(1);
-            fadeTimerRef.current = window.setTimeout(() => {
-                engine?.layers.clear();
-                setLayers(queued.layers);
-                setCustomRenderUrl(queued.customRenderUrl);
-                setCustomRenderCompat(queued.customRenderCompat);
-                setCustomRenderProxy(queued.customRenderProxy);
-                const expected = countExpectedGatedResources(queued.layers, queued.customRenderUrl);
-                if (expected <= 0) {
-                    beginFadeIn();
-                    return;
-                }
-                const cycle = Date.now();
-                setIframeGateCycle(cycle);
-                transitionPhaseRef.current = 'waitingIframes';
-                iframeGateRef.current = {
-                    cycle,
-                    expected,
-                    loadedKeys: new Set(),
-                    timeoutId: window.setTimeout(() => {
-                        beginFadeIn();
-                    }, HYDRATE_IFRAME_TIMEOUT_MS)
-                };
-            }, HYDRATE_FADE_MS);
+            stageHydrate(queued);
         }, HYDRATE_FADE_MS);
     };
 
-    const stageHydrate = (next: {
-        layers: LayerWithWallComponentState[];
-        customRenderUrl?: string;
-        customRenderCompat: boolean;
-        customRenderProxy: boolean;
-    }) => {
+    const stageHydrate = (next: HydrateStagePayload) => {
         if (transitionPhaseRef.current !== 'visible') {
             queuedHydrateRef.current = next;
             return;
         }
+
+        if (!shouldFadeHydrate(next)) {
+            clearFadeTimer();
+            clearIframeGate();
+            transitionPhaseRef.current = 'visible';
+            setBlackOverlayOpacity(0);
+            applyHydrateContent(next);
+            return;
+        }
+
         transitionPhaseRef.current = 'fadingOut';
         setBlackOverlayOpacity(1);
         clearFadeTimer();
         fadeTimerRef.current = window.setTimeout(() => {
-            engine?.layers.clear();
-            setLayers(next.layers);
-            setCustomRenderUrl(next.customRenderUrl);
-            setCustomRenderCompat(next.customRenderCompat);
-            setCustomRenderProxy(next.customRenderProxy);
+            applyHydrateContent(next);
             const expected = countExpectedGatedResources(next.layers, next.customRenderUrl);
             if (expected <= 0) {
                 beginFadeIn();
@@ -242,7 +247,10 @@ function WallApp() {
                     layers: data.layers,
                     customRenderUrl: data.customRender?.url,
                     customRenderCompat: Boolean(data.customRender?.compat),
-                    customRenderProxy: Boolean(data.customRender?.proxy)
+                    customRenderProxy: Boolean(data.customRender?.proxy),
+                    projectId: data.projectId,
+                    commitId: data.commitId,
+                    slideId: data.slideId
                 });
             } else if (data.type === 'upsert_layer') {
                 // Eagerly warm the browser cache for incoming image layers
