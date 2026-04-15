@@ -20,6 +20,7 @@ import {
     WaveSineIcon,
     XIcon
 } from '@phosphor-icons/react';
+import { useAuth } from '@repo/auth/tanstack/hooks';
 import { Button } from '@repo/ui/components/button';
 import {
     Dialog,
@@ -55,6 +56,9 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+
     // Project header — only changes on project load
     const { projectId, projectName, parentSaveMessage } = useEditorStore(
         useShallow((s) => ({
@@ -401,7 +405,8 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                                 <ArrowLineDownIcon />
                             </TipButton>
                         </div>
-                        {/* <FilterPanel activeLayer={activeLayer} /> */}
+                        {/* TODO: Switcher to guarding by "tester" role once multi-role is implemented */}
+                        {isAdmin ? <FilterPanel activeLayer={activeLayer} /> : null}
                     </>
                 )}
 
