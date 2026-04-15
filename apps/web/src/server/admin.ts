@@ -3,6 +3,7 @@ import { auth } from '@repo/auth/auth';
 import { createSmtpTransport } from '@repo/auth/smtp';
 import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
 import type { AuthContext } from '@repo/db/documents';
+import type { CollaboratorRole } from '@repo/db/schema';
 import { getRequest } from '@tanstack/react-start/server';
 
 import {
@@ -89,6 +90,47 @@ export async function adminListUsers() {
 export async function adminListProjects() {
     const projects = await dbCol.projects.find({}, { sort: { updatedAt: -1 } });
     return projects;
+}
+
+export async function adminUpdateProjectCollaborators(
+    input: {
+        projectId: string;
+        collaborators: Array<{ email: string; role: CollaboratorRole }>;
+    },
+    actorEmail: string,
+    auditContext?: AdminAuditContext
+) {
+    const project = await dbCol.projects.findById(input.projectId);
+    if (!project) throw new Error('Project not found');
+
+    const byEmail = new Map<string, { email: string; role: CollaboratorRole }>();
+    for (const entry of input.collaborators) {
+        const email = entry.email.trim().toLowerCase();
+        if (!email) continue;
+        byEmail.set(email, { email, role: entry.role });
+    }
+
+    if (!Array.from(byEmail.values()).some((c) => c.role === 'owner')) {
+        const ownerEmail = project.createdBy.trim().toLowerCase();
+        byEmail.set(ownerEmail, { email: ownerEmail, role: 'owner' });
+    }
+    const normalized = Array.from(byEmail.values());
+
+    const updated = await dbCol.projects.update(project.id, { collaborators: normalized });
+    if (!updated) throw new Error('Project not found');
+
+    await logAuditSuccess({
+        action: 'ADMIN_PROJECT_COLLABORATORS_UPDATED',
+        actorId: actorEmail,
+        projectId: project.id,
+        resourceType: 'project',
+        resourceId: project.id,
+        changes: { collaborators: normalized },
+        ...withAdminAuditContext(auditContext)
+    });
+
+    process.__BROADCAST_PROJECTS_CHANGED__?.(project.id);
+    return updated;
 }
 
 export async function adminListAuditsPage(input: {

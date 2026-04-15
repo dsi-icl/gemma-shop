@@ -1,5 +1,6 @@
 import { adminMiddleware } from '@repo/auth/tanstack/middleware';
 import type { AuthContext } from '@repo/db/documents';
+import { Collaborator } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
 
 import { z } from '~/lib/zod';
@@ -18,6 +19,7 @@ import {
     adminGetStats,
     adminListAuditsPage,
     adminListProjects,
+    adminUpdateProjectCollaborators,
     adminListPublicAssets,
     adminListUsers,
     adminListWalls,
@@ -56,6 +58,22 @@ export const $adminListUsers = createServerFn({ method: 'GET' })
 export const $adminListProjects = createServerFn({ method: 'GET' })
     .middleware([adminMiddleware])
     .handler(async () => adminListProjects());
+
+export const $adminUpdateProjectCollaborators = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            projectId: z.string(),
+            collaborators: z.array(Collaborator)
+        })
+    )
+    .handler(async ({ data, context }) =>
+        adminUpdateProjectCollaborators(
+            { projectId: data.projectId, collaborators: data.collaborators },
+            context.user.email,
+            buildAdminFnAuditContext(context, '$adminUpdateProjectCollaborators')
+        )
+    );
 
 const AuditOutcomeEnum = z.enum(['success', 'denied', 'failure', 'error']);
 const AuditResourceTypeEnum = z.enum([
