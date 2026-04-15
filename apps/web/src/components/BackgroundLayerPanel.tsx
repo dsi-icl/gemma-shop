@@ -72,35 +72,50 @@ export function BackgroundLayerPanel({ activeLayer }: BackgroundLayerPanelProps)
                     <option value="waves">Waves</option>
                 </select>
             </div>
-            <ColorPickerPopover
-                tip="Background colour"
-                value={activeLayer.backgroundColor}
-                onChange={(v) => updateField('backgroundColor', v)}
-            />
-            <ColorPickerPopover
-                tip="Atmosphere colour"
-                value={activeLayer.atmosphereColor}
-                onChange={(v) => updateField('atmosphereColor', v)}
-            />
-            <ColorPickerPopover
-                tip="Motif colour 1"
-                value={activeLayer.motifColor1}
-                onChange={(v) => updateField('motifColor1', v)}
-            />
-            <ColorPickerPopover
-                tip="Motif colour 2"
-                value={activeLayer.motifColor2}
-                onChange={(v) => updateField('motifColor2', v)}
-            />
-            <Input
-                type="number"
-                min={0}
-                max={9999}
-                value={activeLayer.noiseSeed}
-                onChange={(e) => updateField('noiseSeed', parseInt(e.target.value) || 0)}
-                className="h-7 w-20 text-xs"
-                placeholder="Seed"
-            />
+            <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Background color</label>
+                <ColorPickerPopover
+                    tip="Background colour"
+                    value={activeLayer.backgroundColor}
+                    onChange={(v) => updateField('backgroundColor', v)}
+                />
+            </div>
+            <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Atmosphere color</label>
+                <ColorPickerPopover
+                    tip="Atmosphere colour"
+                    value={activeLayer.atmosphereColor}
+                    onChange={(v) => updateField('atmosphereColor', v)}
+                />
+            </div>
+            <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Motif color 1</label>
+                <ColorPickerPopover
+                    tip="Motif colour 1"
+                    value={activeLayer.motifColor1}
+                    onChange={(v) => updateField('motifColor1', v)}
+                />
+            </div>
+            <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Motif color 2</label>
+                <ColorPickerPopover
+                    tip="Motif colour 2"
+                    value={activeLayer.motifColor2}
+                    onChange={(v) => updateField('motifColor2', v)}
+                />
+            </div>
+            <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Seed</label>
+                <Input
+                    type="number"
+                    min={0}
+                    max={9999}
+                    value={activeLayer.noiseSeed}
+                    onChange={(e) => updateField('noiseSeed', parseInt(e.target.value) || 0)}
+                    className="h-7 w-20 text-xs"
+                    placeholder="Seed"
+                />
+            </div>
             <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">
                     Speed ({activeLayer.speedFactor.toFixed(1)}×)
