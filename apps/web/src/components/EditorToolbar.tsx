@@ -401,7 +401,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                                 <ArrowLineDownIcon />
                             </TipButton>
                         </div>
-                        <FilterPanel activeLayer={activeLayer} />
+                        {/* <FilterPanel activeLayer={activeLayer} /> */}
                     </>
                 )}
 
