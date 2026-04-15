@@ -78,8 +78,8 @@ export function renderBackgroundWaves(
     ctx.fillRect(0, 0, w, h);
 
     // Dense ribbon bundle (>=10 lines), packed tightly.
-    const waveCount = 36;
-    const xStep = 7;
+    const waveCount = 60;
+    const xStep = 15;
     const phaseT = t * 160;
 
     const worldStartCol = col;
@@ -113,21 +113,21 @@ export function renderBackgroundWaves(
 
             // 3D ribbon effect: progressively increase wave excursion per line.
             // Front/deeper lines carry larger amplitude on the same backbone frequencies.
-            const ampGain = lerp(0.45, 1.7, Math.pow(depth, 1.05));
-            const highFreqGain = lerp(0.7, 2.4, Math.pow(depth, 1.24));
+            const ampGain = lerp(1.1, 2.15, Math.pow(depth, 2.05));
+            const highFreqGain = lerp(1.35, 8, Math.pow(depth, 2.24));
 
             // Stronger low-frequency backbone shared by all lines.
             const baseLowA = Math.sin(worldX * 0.11 - phaseT * 0.05 + depth * 0.9);
             const baseLowB = Math.sin(worldX * 0.26 + phaseT * 0.07 + depth * 2.3);
-            const low1 = baseLowA * lerp(24, 10, depth) * ampGain;
-            const low2 = baseLowB * lerp(20, 8, depth) * ampGain;
+            const low1 = baseLowA * lerp(40, 18, depth) * ampGain;
+            const low2 = baseLowB * lerp(34, 15, depth) * ampGain;
 
             // Mid/high components kept subtler so the low bands dominate the shape.
-            const baseAmp = lerp(18, 6, depth) * ampGain;
+            const baseAmp = lerp(31, 11, depth) * ampGain;
             const s1 = Math.sin(worldX * 0.72 + phaseT * 0.42 + depth * 5.1) * baseAmp;
             const s2 =
                 Math.sin(worldX * 2.35 + phaseT * 0.19 + depth * 9.7) *
-                (baseAmp * 0.34 * highFreqGain);
+                (baseAmp * 0.8 * highFreqGain);
             const s3 =
                 Math.sin(worldX * 8.8 - phaseT * 0.11 + depth * 15.3) *
                 (baseAmp * 0.1 * highFreqGain * 1.2);
