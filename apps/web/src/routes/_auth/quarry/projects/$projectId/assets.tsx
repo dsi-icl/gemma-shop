@@ -16,6 +16,13 @@ import type { AssetDocument } from '@repo/db/documents';
 type Asset = Omit<AssetDocument, '_id' | '_version'>;
 import { Button } from '@repo/ui/components/button';
 import { DateDisplay } from '@repo/ui/components/date-display';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogTitle
+} from '@repo/ui/components/dialog';
 import { ProjectImage } from '@repo/ui/components/project-image';
 import { useLocalStorageValue } from '@repo/ui/hooks/use-localstorage-value';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
@@ -82,6 +89,7 @@ function AssetsTab() {
         blurhash?: string | null;
         sizes?: number[] | null;
     } | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
     const displayedAssets = useMemo(() => {
         const sorted = sortAssetsFontsLast(assets ?? []);
@@ -97,6 +105,7 @@ function AssetsTab() {
                 queryKey: projectAssetsQueryOptions(projectId).queryKey
             });
             toast.success('Asset deleted');
+            setDeleteTarget(null);
         },
         onError: (e) => toast.error(e.message)
     });
@@ -129,6 +138,9 @@ function AssetsTab() {
     const handleDownload = (asset: { url: string; name: string }) => {
         downloadAsset(`/api/assets/${asset.url}`, asset.name);
     };
+    const handleDeleteClick = useCallback((asset: { id: string; name: string }) => {
+        setDeleteTarget({ id: asset.id, name: asset.name });
+    }, []);
 
     const uploadTrigger = <Button variant="outline">Upload assets</Button>;
     const getAssetTypeLabel = (asset: { mimeType?: string | null; name: string }) =>
@@ -251,9 +263,7 @@ function AssetsTab() {
                             <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() =>
-                                    deleteAssetMutation.mutate({ data: { id: asset.id } })
-                                }
+                                onClick={() => handleDeleteClick(asset)}
                                 disabled={deleteAssetMutation.isPending}
                                 title="Delete"
                             >
@@ -441,9 +451,7 @@ function AssetsTab() {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                deleteAssetMutation.mutate({
-                                                    data: { id: asset.id }
-                                                });
+                                                handleDeleteClick(asset);
                                             }}
                                             className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
                                             title="Delete"
@@ -480,9 +488,7 @@ function AssetsTab() {
                                 <Button
                                     variant="ghost"
                                     size="icon-sm"
-                                    onClick={() =>
-                                        deleteAssetMutation.mutate({ data: { id: asset.id } })
-                                    }
+                                    onClick={() => handleDeleteClick(asset)}
                                     disabled={deleteAssetMutation.isPending}
                                     title="Delete"
                                 >
@@ -545,9 +551,7 @@ function AssetsTab() {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                deleteAssetMutation.mutate({
-                                                    data: { id: asset.id }
-                                                });
+                                                handleDeleteClick(asset);
                                             }}
                                             className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
                                             title="Delete"
@@ -563,6 +567,37 @@ function AssetsTab() {
             )}
 
             <AssetPreviewPortal preview={preview} onClose={() => setPreview(null)} />
+            <Dialog
+                open={deleteTarget !== null}
+                onOpenChange={(open) => {
+                    if (!open) setDeleteTarget(null);
+                }}
+            >
+                <DialogContent className="w-80 p-5">
+                    <DialogTitle>Delete asset</DialogTitle>
+                    <DialogDescription className="mt-1">
+                        Are you sure you want to delete <strong>{deleteTarget?.name}</strong>?
+                    </DialogDescription>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <DialogClose>
+                            <Button variant="outline" size="sm">
+                                Cancel
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={deleteAssetMutation.isPending || !deleteTarget}
+                            onClick={() => {
+                                if (!deleteTarget) return;
+                                deleteAssetMutation.mutate({ data: { id: deleteTarget.id } });
+                            }}
+                        >
+                            {deleteAssetMutation.isPending ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
