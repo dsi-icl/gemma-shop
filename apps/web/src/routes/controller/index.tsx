@@ -520,7 +520,19 @@ function Controller() {
     const handleSlideSelect = useCallback(
         (slideId: string) => {
             const isAlreadyBound = binding.slideId === slideId;
+            const isSelectedSlide = activeSlideId === slideId || requestedSlideId === slideId;
+            const isLoadingSlide = pendingSlideId !== null;
             setRequestedSlideId(slideId);
+
+            // Re-click on currently selected slide triggers a refresh bind,
+            // but only when no slide change is already in flight.
+            if (isSelectedSlide && !isLoadingSlide) {
+                setPendingSlideId(slideId);
+                if (!engine || !binding.projectId || !binding.commitId) return;
+                lastRequestedBindRef.current = null;
+                engine.bindSlide(binding.projectId, binding.commitId, slideId);
+                return;
+            }
 
             if (isAlreadyBound) {
                 setActiveSlideId((prev) => (prev === slideId ? prev : slideId));
@@ -539,7 +551,15 @@ function Controller() {
             lastRequestedBindRef.current = bindKey;
             engine.bindSlide(binding.projectId, binding.commitId, slideId);
         },
-        [engine, binding.slideId, binding.projectId, binding.commitId]
+        [
+            engine,
+            binding.slideId,
+            binding.projectId,
+            binding.commitId,
+            activeSlideId,
+            requestedSlideId,
+            pendingSlideId
+        ]
     );
 
     const handleVideoCommand = useCallback(
