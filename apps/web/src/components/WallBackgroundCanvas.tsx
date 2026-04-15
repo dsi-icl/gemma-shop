@@ -23,11 +23,12 @@ export function WallBackgroundCanvas({ layer, col, row }: WallBackgroundCanvasPr
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
+        const isWaveBackground = layer.backgroundType === 'waves';
         const draw = () => {
             // t is derived from wall-clock time so all screens are always in sync.
             // Tiny increments mean adjacent frames are nearly identical → smooth drift.
             const t = (Date.now() / 1000) * BACKGROUND_T_SPEED * layer.speedFactor;
-            if (layer.backgroundType === 'waves') {
+            if (isWaveBackground) {
                 renderBackgroundWaves(canvasRef.current!, layer, col, row, t);
             } else {
                 renderBackgroundNoise(canvasRef.current!, layer, col, row, t);
@@ -35,9 +36,10 @@ export function WallBackgroundCanvas({ layer, col, row }: WallBackgroundCanvasPr
         };
 
         draw();
-        // Scale the redraw interval inversely with speedFactor so the
-        // animation stays smooth regardless of how fast the noise advances.
-        const tickMs = Math.max(200, BACKGROUND_TICK_MS / layer.speedFactor);
+        // Waves need a much higher redraw cadence to avoid visible stepping.
+        const baseTickMs = isWaveBackground ? 90 : BACKGROUND_TICK_MS;
+        const minTickMs = isWaveBackground ? 50 : 200;
+        const tickMs = Math.max(minTickMs, baseTickMs / Math.max(layer.speedFactor, 0.1));
         const id = setInterval(draw, tickMs);
         return () => clearInterval(id);
     }, [

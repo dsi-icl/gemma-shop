@@ -101,7 +101,7 @@ export function renderBackgroundWaves(
         const waveAlpha =
             lerp(0.4, 0.92, smoothstep(depth)) * (0.55 + (atmosphere[3] / 255) * 0.45);
         ctx.strokeStyle = toCssRgba(rowColor, waveAlpha);
-        ctx.lineWidth = lerp(0.8, 1.45, depth);
+        ctx.lineWidth = lerp(1.2, 2.1, depth);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
