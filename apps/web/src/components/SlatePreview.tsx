@@ -3,6 +3,7 @@ import type { KonvaEventObject } from 'konva/lib/Node';
 import { useState, RefObject, useEffect } from 'react';
 import { Circle, KonvaNodeEvents, Layer, Line, Rect, Stage } from 'react-konva';
 
+import { KonvaBackgroundLayer } from '~/components/KonvaBackgroundLayer';
 import { PreviewMediaLayer, PreviewTextLayer } from '~/components/PreviewLayers';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
@@ -146,18 +147,21 @@ export function SlatePreview({ stageSlot, stageInstance, stageScaleFactor }: Sla
                                     );
                             }
                             if (shape.type === 'background') {
+                                const previewBackgroundLayer = {
+                                    ...shape,
+                                    config: {
+                                        ...shape.config,
+                                        cx: shape.config.cx * stageScaleFactor,
+                                        cy: shape.config.cy * stageScaleFactor,
+                                        width: shape.config.width * stageScaleFactor,
+                                        height: shape.config.height * stageScaleFactor
+                                    }
+                                };
                                 return (
-                                    <Rect
+                                    <KonvaBackgroundLayer
                                         key={`bg_${shape.numericId}`}
-                                        x={shape.config.cx * stageScaleFactor}
-                                        y={shape.config.cy * stageScaleFactor}
-                                        width={shape.config.width * stageScaleFactor}
-                                        height={shape.config.height * stageScaleFactor}
-                                        offsetX={(shape.config.width * stageScaleFactor) / 2}
-                                        offsetY={(shape.config.height * stageScaleFactor) / 2}
-                                        rotation={shape.config.rotation}
-                                        fill={shape.backgroundColor}
-                                        listening={false}
+                                        layer={previewBackgroundLayer}
+                                        previewScale={stageScaleFactor * PREVIEW_SCALE}
                                     />
                                 );
                             }
