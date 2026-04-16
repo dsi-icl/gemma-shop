@@ -9,7 +9,7 @@ import {
 import { useTheme } from '@repo/ui/lib/theme-provider';
 
 const actionLabelClass =
-    'hidden xl:inline overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-200 ml-1 max-w-36 opacity-100 last-mouse:ml-0 last-mouse:max-w-0 last-mouse:opacity-0 last-mouse:group-hover/button:ml-1 last-mouse:group-hover/button:max-w-36 last-mouse:group-hover/button:opacity-100';
+    'hidden xl:inline overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-200 ml-0 max-w-0 opacity-0 last-touch:ml-1 last-touch:max-w-36 last-touch:opacity-100 group-hover/button:ml-1 group-hover/button:max-w-36 group-hover/button:opacity-100 group-focus-visible/button:ml-1 group-focus-visible/button:max-w-36 group-focus-visible/button:opacity-100';
 
 export function ThemeToggle() {
     const { theme, setTheme } = useTheme();
