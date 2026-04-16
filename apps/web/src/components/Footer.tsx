@@ -20,16 +20,12 @@ export function Footer() {
 
     return (
         <footer className="absolute bottom-0 left-0 flex w-full items-center justify-between gap-2 p-4 text-sm text-accent">
-            <span className="grow">
+            <span title="By Florian Guitton" className="grow">
                 © 2026 Data Science Imperial{' · '}Built with{' '}
-                <a
-                    title="By Florian Guitton"
-                    className="underline"
-                    href="mailto:f.guitton@imperial.ac.uk"
-                >
+                <a className="underline" href="mailto:f.guitton@imperial.ac.uk">
                     <HeartIcon weight="bold" className="mb-0.5 inline align-middle" />
                 </a>{' '}
-                by Florian
+                at DSI
                 {' · '}All rights reserved
                 {' · '}Build <code>{buildInfo.commitSha}</code>
                 {' · '}
