@@ -13,6 +13,13 @@ import authClient from '@repo/auth/auth-client';
 import { useAuthSuspense } from '@repo/auth/tanstack/hooks';
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Button } from '@repo/ui/components/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogTitle
+} from '@repo/ui/components/dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useRouter } from '@tanstack/react-router';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -87,11 +94,15 @@ function HeaderAuthSection() {
     const queryClient = useQueryClient();
     const router = useRouter();
     const navigate = useNavigate();
+    const [signOutDialogOpen, setSignOutDialogOpen] = useState(false);
+    const [isSigningOut, setIsSigningOut] = useState(false);
 
     const handleSignOut = async () => {
+        setIsSigningOut(true);
         await authClient.signOut({
             fetchOptions: {
                 onSuccess: async () => {
+                    setSignOutDialogOpen(false);
                     queryClient.setQueryData(authQueryOptions().queryKey, null);
                     await router.invalidate();
                     navigate({ to: '/' });
@@ -110,6 +121,7 @@ function HeaderAuthSection() {
                     toast.error(message);
                     queryClient.setQueryData(authQueryOptions().queryKey, null);
                     await router.invalidate();
+                    setIsSigningOut(false);
                 }
             }
         });
@@ -144,10 +156,33 @@ function HeaderAuthSection() {
                     </Button>
                 </Link>
             )}
-            <Button variant="outline" onClick={handleSignOut}>
+            <Button variant="outline" onClick={() => setSignOutDialogOpen(true)}>
                 <SignOutIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all" />
                 <span className="hidden lg:inline">{user.email}</span>
             </Button>
+            <Dialog open={signOutDialogOpen} onOpenChange={setSignOutDialogOpen}>
+                <DialogContent className="w-80 p-5">
+                    <DialogTitle>Log out</DialogTitle>
+                    <DialogDescription className="mt-1">
+                        Are you sure you want to log out of this account?
+                    </DialogDescription>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <DialogClose>
+                            <Button variant="outline" size="sm" disabled={isSigningOut}>
+                                Cancel
+                            </Button>
+                        </DialogClose>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleSignOut}
+                            disabled={isSigningOut}
+                        >
+                            {isSigningOut ? 'Logging out...' : 'Log out'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
