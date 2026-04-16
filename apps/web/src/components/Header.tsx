@@ -28,6 +28,9 @@ import { toast } from 'sonner';
 import { KeyboardToggle } from './KeyboardToggle';
 import { ThemeToggle } from './ThemeToggle';
 
+const actionLabelClass =
+    'hidden xl:inline overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-200 ml-1 max-w-36 opacity-100 last-mouse:ml-0 last-mouse:max-w-0 last-mouse:opacity-0 last-mouse:group-hover/button:ml-1 last-mouse:group-hover/button:max-w-36 last-mouse:group-hover/button:opacity-100';
+
 function FullscreenToggle() {
     const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -56,16 +59,17 @@ function FullscreenToggle() {
     return (
         <Button
             variant="outline"
-            size="icon"
             onClick={() => void toggleFullscreen()}
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            className="px-2 xl:px-3"
         >
             {isFullscreen ? (
                 <ArrowsInIcon className="h-[1.2rem] w-[1.2rem]" />
             ) : (
                 <ArrowsOutSimpleIcon className="h-[1.2rem] w-[1.2rem]" />
             )}
+            <span className={actionLabelClass}>{isFullscreen ? 'Windowed' : 'Fullscreen'}</span>
         </Button>
     );
 }
@@ -79,12 +83,13 @@ function RefreshPageButton() {
     return (
         <Button
             variant="outline"
-            size="icon"
             onClick={reloadPage}
             title="Refresh page"
             aria-label="Refresh page"
+            className="px-2 xl:px-3"
         >
             <ArrowClockwiseIcon className="h-[1.2rem] w-[1.2rem]" />
+            <span className={actionLabelClass}>Refresh</span>
         </Button>
     );
 }
@@ -132,6 +137,7 @@ function HeaderAuthSection() {
             <Link to="/login">
                 <Button variant="outline">
                     <UserIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all" />
+                    <span className={actionLabelClass}>Log in</span>
                 </Button>
             </Link>
         );
@@ -142,23 +148,33 @@ function HeaderAuthSection() {
             <Link to="/gallery">
                 <Button variant="outline">
                     <KanbanIcon className="h-[1.2rem] w-[1.2rem]" />
+                    <span className={actionLabelClass}>Gallery</span>
                 </Button>
             </Link>
             <Link to="/quarry">
                 <Button variant="outline">
                     <BookOpenUserIcon className="h-[1.2rem] w-[1.2rem]" />
+                    <span className={actionLabelClass}>Quarry</span>
                 </Button>
             </Link>
             {user.role === 'admin' && (
                 <Link to="/admin">
-                    <Button variant="outline" size="icon" title="Administration">
+                    <Button variant="outline" title="Administration" className="px-2 xl:px-3">
                         <CastleTurretIcon className="h-[1.2rem] w-[1.2rem]" />
+                        <span className={actionLabelClass}>Admin</span>
                     </Button>
                 </Link>
             )}
             <Button variant="outline" onClick={() => setSignOutDialogOpen(true)}>
                 <SignOutIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all" />
-                <span className="hidden lg:inline">{user.email}</span>
+                <span className={actionLabelClass}>Log out</span>
+                <span
+                    className={
+                        'ml-1 hidden max-w-80 overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,margin] duration-200 2xl:inline last-mouse:ml-0 last-mouse:max-w-0 last-mouse:opacity-0 last-mouse:group-hover/button:ml-1 last-mouse:group-hover/button:max-w-80 last-mouse:group-hover/button:opacity-100'
+                    }
+                >
+                    {user.email}
+                </span>
             </Button>
             <Dialog open={signOutDialogOpen} onOpenChange={setSignOutDialogOpen}>
                 <DialogContent className="w-80 p-5">

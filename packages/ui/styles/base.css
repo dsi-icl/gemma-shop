@@ -9,6 +9,7 @@
 @custom-variant touch (@media (hover: none));
 @custom-variant touch-only (&:is(.input-touch-only *));
 @custom-variant last-touch (&:is(.last-input-touch *));
+@custom-variant last-mouse (&:is(.last-input-mouse *));
 
 :root {
     color-scheme: light;

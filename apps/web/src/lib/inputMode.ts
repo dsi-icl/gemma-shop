@@ -95,3 +95,27 @@ function getTouchOnlySnapshot() {
 export function useIsTouchOnlyDevice() {
     return useSyncExternalStore(subscribeCapabilities, getTouchOnlySnapshot, () => false);
 }
+
+function getLastInputTypeSnapshot(): LastInputType {
+    if (typeof document === 'undefined') return 'mouse';
+    const classes = document.documentElement.classList;
+    if (classes.contains('last-input-touch')) return 'touch';
+    if (classes.contains('last-input-pen')) return 'pen';
+    if (classes.contains('last-input-keyboard')) return 'keyboard';
+    return 'mouse';
+}
+
+function subscribeLastInput(callback: () => void) {
+    if (typeof window === 'undefined') return () => {};
+    const onInput = () => callback();
+    window.addEventListener('pointerdown', onInput, { passive: true });
+    window.addEventListener('keydown', onInput, { passive: true });
+    return () => {
+        window.removeEventListener('pointerdown', onInput);
+        window.removeEventListener('keydown', onInput);
+    };
+}
+
+export function useLastInputType() {
+    return useSyncExternalStore(subscribeLastInput, getLastInputTypeSnapshot, () => 'mouse');
+}
