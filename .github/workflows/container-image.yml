@@ -4,7 +4,7 @@ on:
     push:
         branches:
             - develop
-            - master
+            - main
         tags:
             - 'v*'
     workflow_dispatch:
@@ -53,7 +53,7 @@ jobs:
               id: build
               uses: redhat-actions/buildah-build@v2
               with:
-                  image: ghcr.io/${{ steps.prep.outputs.owner_lc }}/gemma-shop
+                  image: ${{ steps.prep.outputs.owner_lc }}/gemma-shop
                   tags: |
                       sha-${{ github.sha }}
                       latest

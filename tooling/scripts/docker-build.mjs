@@ -29,7 +29,7 @@ const source =
     tryRun('git', ['remote', 'get-url', 'origin']).replace(
         /^git@github\.com:/,
         'https://github.com/'
-    ) || 'https://github.com/dsi-icl/gemma-cast';
+    ) || 'https://github.com/dsi-icl/gemma-shop';
 
 const image = process.env.IMAGE_NAME || 'gemma-shop:local';
 const buildSourceMaps = process.env.BUILD_SOURCEMAPS || 'false';
