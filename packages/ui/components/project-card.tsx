@@ -507,7 +507,7 @@ export function ProjectCard({
                 style={{
                     borderRadius: '12px'
                 }}
-                className="relative isolate flex w-full flex-col overflow-hidden border bg-card"
+                className="relative isolate flex min-h-full w-full flex-col overflow-hidden border bg-card"
             >
                 <MorphingDialogImage
                     src={project.imageUrl}
