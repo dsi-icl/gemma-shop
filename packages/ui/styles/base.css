@@ -7,6 +7,8 @@
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant touch (@media (hover: none));
+@custom-variant touch-only (&:is(.input-touch-only *));
+@custom-variant last-touch (&:is(.last-input-touch *));
 
 :root {
     color-scheme: light;

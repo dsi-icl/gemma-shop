@@ -531,7 +531,7 @@ export function ProjectForm({
                                                     e.stopPropagation();
                                                     removeImage(i);
                                                 }}
-                                                className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100"
+                                                className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 touch-only:opacity-100 last-touch:opacity-100"
                                             >
                                                 <TrashIcon className="size-3" />
                                             </button>

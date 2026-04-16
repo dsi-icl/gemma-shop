@@ -17,6 +17,7 @@ import {
 import extraHead from '~/assets/extraHead.json';
 import { Footer } from '~/components/Footer';
 import { Header } from '~/components/Header';
+import { useInputModeClasses } from '~/lib/inputMode';
 import { RootRouteContext } from '~/types';
 
 import appCss from '~/styles.css?url';
@@ -80,6 +81,7 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { readonly children: React.ReactNode }) {
+    useInputModeClasses();
     const pathname = useRouterState({
         select: (state) => state.location.pathname
     });
@@ -103,6 +105,14 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
                         'dark',
                         localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)
                     );
+                    const hasTouch = navigator.maxTouchPoints > 0 || window.matchMedia('(any-pointer: coarse)').matches;
+                    const hasHover = window.matchMedia('(any-hover: hover)').matches;
+                    const hasCoarsePointer = window.matchMedia('(any-pointer: coarse)').matches;
+                    document.documentElement.classList.toggle('input-has-touch', hasTouch);
+                    document.documentElement.classList.toggle('input-has-hover', hasHover);
+                    document.documentElement.classList.toggle('input-has-coarse-pointer', hasCoarsePointer);
+                    document.documentElement.classList.toggle('input-touch-only', hasTouch && !hasHover);
+                    document.documentElement.classList.add(hasTouch && !hasHover ? 'last-input-touch' : 'last-input-mouse');
                     const oldError = console.error; console.error = (...args) => {
                         if (args && typeof args[0] === 'string' && args[0].includes('A tree hydrated but some attributes of the server rendered HTML'))
                             return console.debug('Client and server tree have different attributes.');

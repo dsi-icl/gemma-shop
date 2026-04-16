@@ -1,14 +1,16 @@
 import { KeyboardIcon } from '@phosphor-icons/react';
 import { Button } from '@repo/ui/components/button';
-import { useIsTablet } from '@repo/ui/hooks/use-is-tablet';
 import { useLocalStorageToggle } from '@repo/ui/hooks/use-localstorage-toggle';
 import { cn } from '@repo/ui/lib/utils';
 
+import { useIsTouchOnlyDevice } from '~/lib/inputMode';
+
 export function KeyboardToggle() {
-    const isTablet = useIsTablet();
+    const isTouchOnly = useIsTouchOnlyDevice();
+
     const [showKeyboard, toggleKeyboard] = useLocalStorageToggle(
         'virtual-keyboard-display',
-        isTablet
+        isTouchOnly
     );
 
     return (
@@ -19,7 +21,7 @@ export function KeyboardToggle() {
             )}
         >
             <Button
-                variant={isTablet ? 'outline' : 'ghost'}
+                variant={isTouchOnly ? 'outline' : 'ghost'}
                 size="icon"
                 onClick={() => toggleKeyboard()}
             >
