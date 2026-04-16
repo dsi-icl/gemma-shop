@@ -10,6 +10,9 @@ on:
 permissions:
     contents: read
 
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
     quality-and-build:
         runs-on: ubuntu-latest
@@ -22,10 +25,10 @@ jobs:
             SERVER_CONFIG_ENCRYPTION_KEY: ci-test-config-key
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: Setup Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: '24'
 
@@ -63,10 +66,10 @@ jobs:
             TRUSTED_ORIGINS: http://127.0.0.1:3870
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: Setup Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: '24'
 

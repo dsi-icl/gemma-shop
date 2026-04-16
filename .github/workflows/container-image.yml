@@ -19,12 +19,15 @@ permissions:
     contents: read
     packages: write
 
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
     build-and-push:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
 
             - name: Normalize image owner
               id: prep
