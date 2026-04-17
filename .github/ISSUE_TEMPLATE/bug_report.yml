@@ -1,0 +1,114 @@
+name: Bug report
+description: Report something that is not working as expected.
+title: '[Bug]: '
+labels:
+    - bug
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for taking the time to report this.
+
+              You do not need technical knowledge to fill this in. Simple words are perfect.
+              If you are unsure about any field, write "Not sure" and continue.
+
+    - type: textarea
+      id: summary
+      attributes:
+          label: What went wrong?
+          description: Tell us what happened in 1-2 short sentences.
+          placeholder: 'Example: I edited a slide in the editor, but my text disappeared after refresh.'
+      validations:
+          required: true
+
+    - type: textarea
+      id: steps
+      attributes:
+          label: How can we reproduce it?
+          description: Please list the exact steps you took.
+          placeholder: |
+              1. Open ...
+              2. Click ...
+              3. Type ...
+              4. See error ...
+      validations:
+          required: true
+
+    - type: textarea
+      id: expected
+      attributes:
+          label: What did you expect to happen?
+          placeholder: 'Example: I expected the slide change to save and stay visible to my team.'
+      validations:
+          required: true
+
+    - type: textarea
+      id: actual
+      attributes:
+          label: What actually happened?
+          placeholder: 'Example: The editor reloaded and the slide returned to the old version.'
+      validations:
+          required: true
+
+    - type: dropdown
+      id: frequency
+      attributes:
+          label: How often does this happen?
+          options:
+              - Every time
+              - Sometimes
+              - Only once so far
+              - Not sure
+      validations:
+          required: true
+
+    - type: textarea
+      id: where
+      attributes:
+          label: Where did this happen?
+          description: Share the page or area name. If possible, paste the URL.
+          placeholder: 'Example: Quarry > Editor, or Quarry > Projects > Assets, https://...'
+
+    - type: input
+      id: time
+      attributes:
+          label: When did this happen?
+          description: Date/time and timezone if you know it.
+          placeholder: 'Example: 2026-04-17 around 14:30 (Europe/London)'
+
+    - type: textarea
+      id: screenshots
+      attributes:
+          label: Screenshots or screen recording (optional)
+          description: Drag and drop images/videos here. This is very helpful.
+
+    - type: input
+      id: device
+      attributes:
+          label: Device (optional)
+          description: Phone, tablet, or computer model.
+          placeholder: 'Example: iPhone 15, Windows laptop, MacBook Air'
+
+    - type: input
+      id: browser
+      attributes:
+          label: Browser or app (optional)
+          description: Include version if known.
+          placeholder: 'Example: Chrome 124, Safari, mobile app v2.3.1'
+
+    - type: textarea
+      id: impact
+      attributes:
+          label: How is this affecting you?
+          description: Helps us prioritize severity.
+          placeholder: 'Example: We cannot publish the project to wall screens, so the presentation is blocked.'
+
+    - type: checkboxes
+      id: checks
+      attributes:
+          label: Quick checks
+          options:
+              - label: I searched existing issues and did not find the same problem.
+                required: true
+              - label: I filled this form as clearly as I could.
+                required: true
