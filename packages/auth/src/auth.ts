@@ -1,5 +1,4 @@
 import '@tanstack/react-start/server-only';
-import { render } from '@react-email/render';
 import { db } from '@repo/db';
 import { getSmtpConfig } from '@repo/db/config';
 import { OtpEmail } from '@repo/emails/OtpEmail';
@@ -8,6 +7,7 @@ import { mongodbAdapter } from 'better-auth/adapters/mongodb';
 import { betterAuth } from 'better-auth/minimal';
 import { admin, emailOTP, testUtils } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
+import { render } from 'react-email';
 
 import { createSmtpTransport } from './smtp';
 

@@ -1,10 +1,10 @@
 import '@tanstack/react-start/server-only';
 import { randomBytes, createHash } from 'node:crypto';
 
-import { render } from '@react-email/render';
 import { createSmtpTransport } from '@repo/auth/smtp';
 import { getConfigValue, getSmtpConfig, setConfigValue } from '@repo/db/config';
 import { OtpEmail } from '@repo/emails/OtpEmail';
+import { render } from 'react-email';
 
 import { collections } from '~/server/collections';
 

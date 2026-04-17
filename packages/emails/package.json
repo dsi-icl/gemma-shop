@@ -10,7 +10,7 @@
         "export": "email export"
     },
     "dependencies": {
-        "@react-email/components": "catalog:"
+        "react-email": "catalog:"
     },
     "devDependencies": {
         "@react-email/preview-server": "catalog:",

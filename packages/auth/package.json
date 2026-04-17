@@ -7,7 +7,6 @@
         "./*": "./src/*.ts"
     },
     "dependencies": {
-        "@react-email/render": "catalog:",
         "@repo/emails": "workspace:*",
         "@repo/env": "workspace:*",
         "better-auth": "catalog:",
