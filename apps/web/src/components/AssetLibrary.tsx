@@ -43,6 +43,7 @@ export type AssetLibraryAsset = {
     id: string;
     name: string;
     url: string;
+    public?: boolean;
     mimeType?: string;
     blurhash?: string;
     sizes?: number[];
@@ -89,6 +90,7 @@ export function AssetLibrary({
             id: asset.id,
             name: asset.name,
             url: asset.url,
+            public: asset.public ?? false,
             mimeType: asset.mimeType ?? undefined,
             blurhash: asset.blurhash ?? undefined,
             sizes: asset.sizes ?? undefined,
@@ -118,6 +120,7 @@ export function AssetLibrary({
                     id: asset.id,
                     name: asset.name,
                     url: asset.url,
+                    public: asset.public ?? false,
                     mimeType: asset.mimeType ?? undefined,
                     blurhash: asset.blurhash ?? undefined,
                     sizes: asset.sizes ?? undefined,
@@ -136,6 +139,7 @@ export function AssetLibrary({
                 id: `missing:${selectedUrl}`,
                 name: selectedUrl,
                 url: selectedUrl,
+                public: false,
                 mimeType: undefined,
                 blurhash: undefined,
                 sizes: undefined,
@@ -333,16 +337,18 @@ export function AssetLibrary({
                                                 >
                                                     <DownloadIcon size={12} />
                                                 </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDeleteClick(asset);
-                                                    }}
-                                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
-                                                    title="Delete asset"
-                                                >
-                                                    <TrashIcon size={12} />
-                                                </button>
+                                                {!asset.public ? (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteClick(asset);
+                                                        }}
+                                                        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
+                                                        title="Delete asset"
+                                                    >
+                                                        <TrashIcon size={12} />
+                                                    </button>
+                                                ) : null}
                                             </div>
                                         )}
                                     </>

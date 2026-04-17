@@ -4,37 +4,8 @@ import { createServerFn } from '@tanstack/react-start';
 
 import { createUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 import { z } from '~/lib/zod';
-
-const CreateProjectInput = z.object({
-    name: z.string().min(1, 'Name is required'),
-    authorOrganisation: z.string().min(1, 'Author/Organisation is required'),
-    description: z.string().default(''),
-    tags: z.array(z.string()).default([]),
-    visibility: ProjectVisibility.default('private'),
-    heroImages: z.array(z.string()).default([]),
-    customControlUrl: z.string().optional(),
-    customRenderUrl: z.string().optional(),
-    customRenderCompat: z.boolean().default(false),
-    customRenderProxy: z.boolean().default(false),
-    collaborators: z.array(Collaborator).default([])
-});
-
-const UpdateProjectInput = z.object({
-    id: z.string(),
-    name: z.string().min(1, 'Name is required').optional(),
-    authorOrganisation: z.string().min(1, 'Author/Organisation is required').optional(),
-    description: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-    visibility: ProjectVisibility.optional(),
-    heroImages: z.array(z.string()).optional(),
-    customControlUrl: z.string().optional(),
-    customRenderUrl: z.string().optional(),
-    customRenderCompat: z.boolean().optional(),
-    customRenderProxy: z.boolean().optional(),
-    collaborators: z.array(Collaborator).optional(),
-    publishedCommitId: z.string().nullable().optional()
-});
 import { logAuditDenied, logAuditSuccess } from '~/server/audit';
+import { dbCol } from '~/server/collections';
 import {
     actorFromAuthContext,
     canEditProject,
@@ -72,6 +43,35 @@ import {
     updateProject
 } from './projects';
 
+const CreateProjectInput = z.object({
+    name: z.string().min(1, 'Name is required'),
+    authorOrganisation: z.string().min(1, 'Author/Organisation is required'),
+    description: z.string().default(''),
+    tags: z.array(z.string()).default([]),
+    visibility: ProjectVisibility.default('private'),
+    heroImages: z.array(z.string()).default([]),
+    customControlUrl: z.string().optional(),
+    customRenderUrl: z.string().optional(),
+    customRenderCompat: z.boolean().default(false),
+    customRenderProxy: z.boolean().default(false),
+    collaborators: z.array(Collaborator).default([])
+});
+
+const UpdateProjectInput = z.object({
+    id: z.string(),
+    name: z.string().min(1, 'Name is required').optional(),
+    authorOrganisation: z.string().min(1, 'Author/Organisation is required').optional(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    visibility: ProjectVisibility.optional(),
+    heroImages: z.array(z.string()).optional(),
+    customControlUrl: z.string().optional(),
+    customRenderUrl: z.string().optional(),
+    customRenderCompat: z.boolean().optional(),
+    customRenderProxy: z.boolean().optional(),
+    collaborators: z.array(Collaborator).optional(),
+    publishedCommitId: z.string().nullable().optional()
+});
 const AuditOutcomeEnum = z.enum(['success', 'denied', 'failure', 'error']);
 const AuditResourceTypeEnum = z.enum([
     'project',
@@ -371,6 +371,8 @@ export const $deleteAsset = createServerFn({ method: 'POST' })
     .inputValidator(z.object({ id: z.string() }))
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
+        const assetRecord = await dbCol.assets.findById(data.id);
+        if (!assetRecord) throw new Error('Asset not found');
         const projectId = await resolveProjectIdForAsset(data.id);
         if (!projectId) throw new Error('Asset not found');
         const actor = actorFromAuthContext(context);
@@ -379,6 +381,17 @@ export const $deleteAsset = createServerFn({ method: 'POST' })
                 context,
                 operation: '$deleteAsset',
                 reasonCode: 'MISSING_ACTOR',
+                projectId,
+                resourceType: 'asset',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
+        if (assetRecord.public && actor.role !== 'admin') {
+            await denyProjectFn({
+                context,
+                operation: '$deleteAsset',
+                reasonCode: 'PUBLIC_ASSET_DELETE_ADMIN_REQUIRED',
                 projectId,
                 resourceType: 'asset',
                 resourceId: data.id
