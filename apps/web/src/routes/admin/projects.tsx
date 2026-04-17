@@ -1,4 +1,4 @@
-import { PlusIcon, XIcon } from '@phosphor-icons/react';
+import { ArchiveIcon, MagnifyingGlassIcon, PlusIcon, XIcon } from '@phosphor-icons/react';
 import type { Collaborator, CollaboratorRole } from '@repo/db/schema';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
@@ -51,6 +51,8 @@ function AdminProjects() {
     const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
     const [email, setEmail] = useState('');
     const [role, setRole] = useState<CollaboratorRole>('viewer');
+    const [projectFilter, setProjectFilter] = useState('');
+    const [showArchived, setShowArchived] = useState(true);
 
     const roleItems = [
         { label: 'Viewer', value: 'viewer' },
@@ -62,6 +64,25 @@ function AdminProjects() {
         () => collaborators.filter((entry) => entry.role === 'owner').length,
         [collaborators]
     );
+    const filteredProjects = useMemo(() => {
+        const search = projectFilter.trim().toLowerCase();
+        return projects.filter((project: any) => {
+            if (!showArchived && project?.deletedAt) return false;
+            const name = String(project?.name ?? '').toLowerCase();
+            const owner = String(project?.createdBy ?? '').toLowerCase();
+            const organisation = String(project?.authorOrganisation ?? '').toLowerCase();
+            const tags = Array.isArray(project?.tags)
+                ? project.tags.some((tag: unknown) => String(tag).toLowerCase().includes(search))
+                : false;
+            if (!search) return true;
+            return (
+                name.includes(search) ||
+                owner.includes(search) ||
+                organisation.includes(search) ||
+                tags
+            );
+        });
+    }, [projects, projectFilter, showArchived]);
 
     const mutation = useMutation({
         mutationFn: async (nextCollaborators: Collaborator[]) => {
@@ -136,6 +157,26 @@ function AdminProjects() {
 
     return (
         <div className="space-y-4">
+            <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                    <MagnifyingGlassIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        placeholder="Search projects..."
+                        value={projectFilter}
+                        onChange={(e) => setProjectFilter(e.target.value)}
+                        className="pl-9"
+                    />
+                </div>
+                <Button
+                    variant={showArchived ? 'secondary' : 'outline'}
+                    size="sm"
+                    onClick={() => setShowArchived((prev) => !prev)}
+                >
+                    <ArchiveIcon />
+                    {showArchived ? 'Hide archived' : 'Show archived'}
+                </Button>
+            </div>
+
             <div className="overflow-hidden rounded-lg border border-border">
                 <table className="w-full text-sm">
                     <thead className="bg-muted/50 text-muted-foreground">
@@ -150,7 +191,7 @@ function AdminProjects() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                        {projects.map((project: any) => (
+                        {filteredProjects.map((project: any) => (
                             <tr key={project.id} className="hover:bg-muted/30">
                                 <td className="px-4 py-3 font-medium">{project.name}</td>
                                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
@@ -192,6 +233,16 @@ function AdminProjects() {
                                 </td>
                             </tr>
                         ))}
+                        {filteredProjects.length === 0 && (
+                            <tr>
+                                <td
+                                    className="px-4 py-8 text-center text-sm text-muted-foreground"
+                                    colSpan={7}
+                                >
+                                    No projects found
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
