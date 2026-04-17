@@ -19,7 +19,7 @@ export const Route = createFileRoute('/admin/users')({
 });
 
 function AdminUsers() {
-    const { data: users = [] } = useSuspenseQuery(adminUsersQueryOptions());
+    const { data: users } = useSuspenseQuery(adminUsersQueryOptions());
     const queryClient = useQueryClient();
 
     const banMutation = useMutation({

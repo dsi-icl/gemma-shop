@@ -26,7 +26,7 @@ export const Route = createFileRoute('/admin/devices')({
 });
 
 function AdminDevices() {
-    const { data: devices = [] } = useSuspenseQuery(adminDevicesQueryOptions());
+    const { data: devices } = useSuspenseQuery(adminDevicesQueryOptions());
     const queryClient = useQueryClient();
     const [deleteTargetDeviceId, setDeleteTargetDeviceId] = useState<string | null>(null);
     const deleteDeviceMutation = useMutation({

@@ -22,7 +22,7 @@ export const Route = createFileRoute('/admin/walls/')({
 });
 
 function AdminWalls() {
-    const { data: walls = [] } = useSuspenseQuery(adminWallsQueryOptions());
+    const { data: walls } = useSuspenseQuery(adminWallsQueryOptions());
     const navigate = useNavigate();
     const queryClient = useQueryClient();
 

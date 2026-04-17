@@ -27,7 +27,7 @@ function stringifyValue(value: unknown, type: string): string {
 
 function AdminConfig() {
     const queryClient = useQueryClient();
-    const { data: fields = [] } = useSuspenseQuery(adminConfigQueryOptions());
+    const { data: fields } = useSuspenseQuery(adminConfigQueryOptions());
 
     const initialValues = useMemo(() => {
         const out: Record<string, string> = {};

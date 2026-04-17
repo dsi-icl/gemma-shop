@@ -85,7 +85,7 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
                         className="h-7 px-2 text-xs"
                         onClick={(e) => {
                             e.stopPropagation();
-                            void addSlide();
+                            addSlide();
                         }}
                     >
                         <PlusIcon size={14} weight="bold" />

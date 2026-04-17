@@ -41,7 +41,7 @@ export const Route = createFileRoute('/admin/projects')({
 });
 
 function AdminProjects() {
-    const { data: projects = [] } = useSuspenseQuery(adminProjectsQueryOptions());
+    const { data: projects } = useSuspenseQuery(adminProjectsQueryOptions());
     const queryClient = useQueryClient();
     const [editingProject, setEditingProject] = useState<{
         id: string;

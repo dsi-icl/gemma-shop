@@ -36,7 +36,7 @@ export function GalleryProjectCard({
     const wallId = useGalleryStore((s) => s.wallId);
     const isEnrolledDevice = useGalleryStore((s) => s.isEnrolledDevice);
     const canUserManageWalls = Boolean(user) && allowWallActions;
-    const canEnrolledDeviceLoad = isEnrolledDevice && !Boolean(user) && allowWallActions;
+    const canEnrolledDeviceLoad = isEnrolledDevice && !user && allowWallActions;
     const { data: walls = [] } = useQuery({
         ...wallsQueryOptions(),
         enabled: canUserManageWalls || canEnrolledDeviceLoad

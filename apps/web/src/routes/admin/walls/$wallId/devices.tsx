@@ -48,7 +48,7 @@ export const Route = createFileRoute('/admin/walls/$wallId/devices')({
 function WallDevicesTab() {
     const { wallId } = Route.useParams();
     const queryClient = useQueryClient();
-    const { data: devices = [] } = useSuspenseQuery(adminDevicesForWallQueryOptions(wallId));
+    const { data: devices } = useSuspenseQuery(adminDevicesForWallQueryOptions(wallId));
     const { data: allDevices = [] } = useQuery(adminDevicesQueryOptions());
     const [scanDialogOpen, setScanDialogOpen] = useState(false);
     const [deleteTargetDeviceId, setDeleteTargetDeviceId] = useState<string | null>(null);

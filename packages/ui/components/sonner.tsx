@@ -11,7 +11,7 @@ import { useTheme } from '@repo/ui/lib/theme-provider';
 import { Toaster as Sonner, type ToasterProps } from 'sonner';
 
 const Toaster = ({ ...props }: ToasterProps) => {
-    const { theme = 'system' } = useTheme();
+    const { theme } = useTheme();
 
     return (
         <Sonner
