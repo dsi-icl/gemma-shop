@@ -102,6 +102,13 @@ export function EditorSlate() {
         [sortedLayers]
     );
     const selectedLayerIdSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
+    const selectedOutlineLayers = useMemo(
+        () =>
+            selectedLayerIds
+                .map((id) => layers.get(Number.parseInt(id, 10)))
+                .filter((layer): layer is LayerWithEditorState => Boolean(layer)),
+        [layers, selectedLayerIds]
+    );
 
     const autoScrollStageDuringDrag = useCallback((evt: Event) => {
         const slot = stageSlot.current;
@@ -1188,7 +1195,7 @@ export function EditorSlate() {
     }, []);
 
     useEffect(() => {
-        if (selectedLayerIds.length && trRef.current) {
+        if (selectedLayerIds.length === 1 && trRef.current) {
             const node = trRef.current.getStage()?.findOne(`#${selectedLayerIds[0]}`);
             if (node) {
                 trRef.current.nodes([node]);
@@ -1466,6 +1473,26 @@ export function EditorSlate() {
                                     lineJoin="round"
                                 />
                             )}
+                            {selectedOutlineLayers.length > 1
+                                ? selectedOutlineLayers.map((layer) => (
+                                      <Rect
+                                          key={`selbox_${layer.numericId}`}
+                                          x={layer.config.cx}
+                                          y={layer.config.cy}
+                                          width={layer.config.width}
+                                          height={layer.config.height}
+                                          offsetX={layer.config.width / 2}
+                                          offsetY={layer.config.height / 2}
+                                          rotation={layer.config.rotation}
+                                          scaleX={layer.config.scaleX}
+                                          scaleY={layer.config.scaleY}
+                                          stroke="#00a1ff"
+                                          strokeWidth={6}
+                                          opacity={1}
+                                          listening={false}
+                                      />
+                                  ))
+                                : null}
                             {showGrid && getDOGridLines(COLS * SCREEN_W, ROWS * SCREEN_H, 20)}
                             <Transformer
                                 ref={trRef}
