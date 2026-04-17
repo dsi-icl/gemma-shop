@@ -35,6 +35,7 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId/history'
 });
 
 const OUTCOME_FILTERS = [
+    { value: 'non_success', label: 'Non-success (issues)' },
     { value: 'all', label: 'All outcomes' },
     { value: 'success', label: 'Success' },
     { value: 'denied', label: 'Denied' },
@@ -43,6 +44,11 @@ const OUTCOME_FILTERS = [
 ] as const;
 const ALL_AUDIT_OUTCOMES: Array<'success' | 'denied' | 'failure' | 'error'> = [
     'success',
+    'denied',
+    'failure',
+    'error'
+];
+const NON_SUCCESS_AUDIT_OUTCOMES: Array<'denied' | 'failure' | 'error'> = [
     'denied',
     'failure',
     'error'
@@ -129,13 +135,18 @@ function HistoryTab() {
     const queryClient = useQueryClient();
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [outcomeFilter, setOutcomeFilter] =
-        useState<(typeof OUTCOME_FILTERS)[number]['value']>('all');
+        useState<(typeof OUTCOME_FILTERS)[number]['value']>('non_success');
     const [resourceFilter, setResourceFilter] =
         useState<(typeof RESOURCE_FILTERS)[number]['value']>('all');
 
     const filters = useMemo<AuditHistoryFilters>(
         () => ({
-            outcomes: outcomeFilter === 'all' ? ALL_AUDIT_OUTCOMES : [outcomeFilter],
+            outcomes:
+                outcomeFilter === 'all'
+                    ? ALL_AUDIT_OUTCOMES
+                    : outcomeFilter === 'non_success'
+                      ? NON_SUCCESS_AUDIT_OUTCOMES
+                      : [outcomeFilter],
             resourceTypes: resourceFilter === 'all' ? undefined : [resourceFilter]
         }),
         [outcomeFilter, resourceFilter]
