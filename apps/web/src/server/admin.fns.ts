@@ -24,6 +24,7 @@ import {
     adminListUsers,
     adminListWalls,
     adminSetUserBanStatus,
+    adminSetUserRole,
     adminSendSmtpTest,
     adminSetConfig,
     adminUpdateWallMetadata,
@@ -304,6 +305,24 @@ export const $adminSetUserBanStatus = createServerFn({ method: 'POST' })
         adminSetUserBanStatus({
             userId: data.userId,
             banned: data.banned,
+            actorEmail: context.user.email
+        })
+    );
+
+export const $adminSetUserRole = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            userId: z.string().optional().nullable(),
+            userEmail: z.string().optional().nullable(),
+            role: z.enum(['admin', 'user'])
+        })
+    )
+    .handler(async ({ data, context }) =>
+        adminSetUserRole({
+            userId: data.userId,
+            userEmail: data.userEmail,
+            role: data.role,
             actorEmail: context.user.email
         })
     );

@@ -5,6 +5,7 @@ import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/confi
 import type { AuthContext } from '@repo/db/documents';
 import type { CollaboratorRole } from '@repo/db/schema';
 import { getRequest } from '@tanstack/react-start/server';
+import { ObjectId } from 'mongodb';
 
 import {
     getBusRuntimeTelemetry,
@@ -81,8 +82,10 @@ export async function adminListUsers() {
 
     return userRecords.map((user) => {
         const { _id, ...userFields } = user;
-        void _id; // Better Auth's ObjectId — not exposed to the client
-        const id = String(userFields.id ?? '');
+        const id =
+            typeof userFields.id === 'string' && userFields.id.trim().length > 0
+                ? userFields.id.trim()
+                : _id.toHexString();
         return { ...userFields, id, isActiveSession: activeUserIds.has(id) };
     });
 }
@@ -553,6 +556,78 @@ export async function adminSetUserBanStatus(input: {
         resourceType: 'user',
         resourceId: userId,
         changes: { banned: input.banned }
+    });
+}
+
+export async function adminSetUserRole(input: {
+    userId?: string | null;
+    userEmail?: string | null;
+    role: 'admin' | 'user';
+    actorEmail: string;
+}) {
+    const userId = (input.userId ?? '').trim();
+    const userEmail = (input.userEmail ?? '').trim().toLowerCase();
+    if (!userId && !userEmail) throw new Error('User identifier is required');
+
+    let user = null;
+    if (userId) {
+        user = await collections.users.findOne(
+            { id: userId },
+            { projection: { _id: 1, email: 1, id: 1, role: 1 } }
+        );
+        if (!user && /^[0-9a-f]{24}$/i.test(userId)) {
+            user = await collections.users.findOne(
+                { _id: new ObjectId(userId) },
+                { projection: { _id: 1, email: 1, id: 1, role: 1 } }
+            );
+        }
+    }
+    if (!user && userEmail) {
+        user = await collections.users.findOne(
+            { email: userEmail },
+            { projection: { _id: 1, email: 1, id: 1, role: 1 } }
+        );
+    }
+
+    if (!user) throw new Error('User not found');
+    if (user.email === input.actorEmail) throw new Error('You cannot modify your own role');
+
+    const currentRole = user.role === 'admin' ? 'admin' : 'user';
+    if (currentRole === input.role) return;
+
+    if (currentRole === 'admin' && input.role === 'user') {
+        const adminCount = await collections.users.countDocuments({ role: 'admin' });
+        if (adminCount <= 1) {
+            throw new Error('Cannot demote the last remaining admin');
+        }
+    }
+
+    const headers = getRequest().headers;
+
+    const betterAuthUserId =
+        typeof user.id === 'string' && user.id.trim().length > 0 ? user.id.trim() : null;
+    if (betterAuthUserId) {
+        await auth.api.setRole({
+            headers,
+            body: { userId: betterAuthUserId, role: input.role }
+        });
+    } else {
+        await collections.users.updateOne(
+            { _id: user._id },
+            { $set: { role: input.role, updatedAt: new Date() } }
+        );
+    }
+
+    if (typeof user.email === 'string' && user.email.length > 0) {
+        await adminRecomputeBusAuthContext({ email: user.email });
+    }
+
+    await logAuditSuccess({
+        action: 'ADMIN_USER_ROLE_UPDATED',
+        actorId: input.actorEmail,
+        resourceType: 'user',
+        resourceId: betterAuthUserId ?? String(user._id),
+        changes: { role: input.role }
     });
 }
 

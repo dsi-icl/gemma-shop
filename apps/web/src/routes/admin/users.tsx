@@ -1,11 +1,21 @@
 import { ProhibitIcon, ShieldCheckIcon } from '@phosphor-icons/react';
+import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Button } from '@repo/ui/components/button';
 import { DateDisplay } from '@repo/ui/components/date-display';
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectTrigger,
+    SelectValue
+} from '@repo/ui/components/select';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { toast } from 'sonner';
 
-import { $adminSetUserBanStatus } from '~/server/admin.fns';
+import { $adminSetUserBanStatus, $adminSetUserRole } from '~/server/admin.fns';
 import { adminUsersQueryOptions } from '~/server/admin.queries';
 
 export const Route = createFileRoute('/admin/users')({
@@ -20,6 +30,7 @@ export const Route = createFileRoute('/admin/users')({
 
 function AdminUsers() {
     const { data: users } = useSuspenseQuery(adminUsersQueryOptions());
+    const { data: currentUser } = useSuspenseQuery(authQueryOptions());
     const queryClient = useQueryClient();
 
     const banMutation = useMutation({
@@ -29,6 +40,25 @@ function AdminUsers() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
             toast.success('User updated');
+        },
+        onError: (e: any) => toast.error(e.message)
+    });
+
+    const roleMutation = useMutation({
+        mutationFn: async ({
+            userId,
+            userEmail,
+            role
+        }: {
+            userId?: string;
+            userEmail: string;
+            role: 'admin' | 'user';
+        }) => {
+            await $adminSetUserRole({ data: { userId, userEmail, role } });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+            toast.success('User role updated');
         },
         onError: (e: any) => toast.error(e.message)
     });
@@ -51,12 +81,35 @@ function AdminUsers() {
                             <tr key={user.id} className="hover:bg-muted/30">
                                 <td className="px-4 py-3 font-mono text-xs">{user.email}</td>
                                 <td className="px-4 py-3">
-                                    <span
-                                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${user.role === `admin` ? `bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400` : `bg-muted text-muted-foreground`}`}
+                                    <Select
+                                        value={user.role === 'admin' ? 'admin' : 'user'}
+                                        onValueChange={(value) =>
+                                            roleMutation.mutate({
+                                                userId: user.id,
+                                                userEmail: user.email,
+                                                role: value as 'admin' | 'user'
+                                            })
+                                        }
+                                        disabled={
+                                            roleMutation.isPending ||
+                                            banMutation.isPending ||
+                                            user.email === currentUser?.email
+                                        }
                                     >
-                                        {user.role === 'admin' && <ShieldCheckIcon size={10} />}
-                                        {user.role ?? 'user'}
-                                    </span>
+                                        <SelectTrigger
+                                            className={`h-7 min-w-24 rounded-full border-0 px-2 py-0.5 text-xs font-medium ${user.role === `admin` ? `bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400` : `bg-muted text-muted-foreground`}`}
+                                        >
+                                            {user.role === 'admin' && <ShieldCheckIcon size={10} />}
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectGroup>
+                                                <SelectLabel>Role</SelectLabel>
+                                                <SelectItem value="user">User</SelectItem>
+                                                <SelectItem value="admin">Admin</SelectItem>
+                                            </SelectGroup>
+                                        </SelectContent>
+                                    </Select>
                                 </td>
                                 <td className="px-4 py-3 text-muted-foreground">
                                     <DateDisplay value={user.createdAt} />
@@ -87,7 +140,11 @@ function AdminUsers() {
                                                 banned: !user.banned
                                             })
                                         }
-                                        disabled={banMutation.isPending}
+                                        disabled={
+                                            banMutation.isPending ||
+                                            roleMutation.isPending ||
+                                            user.email === currentUser?.email
+                                        }
                                     >
                                         <ProhibitIcon size={14} />
                                         {user.banned ? 'Unban' : 'Ban'}
