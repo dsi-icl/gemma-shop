@@ -1,4 +1,10 @@
 import {
+    AlignBottomSimpleIcon,
+    AlignCenterHorizontalSimpleIcon,
+    AlignCenterVerticalSimpleIcon,
+    AlignLeftSimpleIcon,
+    AlignRightSimpleIcon,
+    AlignTopSimpleIcon,
     ArrowLineDownIcon,
     ArrowLineUpIcon,
     ArrowsClockwiseIcon,
@@ -71,6 +77,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     // Save / connection state — infrequent, independent
     const saveStatus = useEditorStore((s) => s.saveStatus);
     const boundWallId = useEditorStore((s) => s.boundWallId);
+    const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
 
     // Tool toggle state
     const { showGrid, isDrawing, isSnapping } = useEditorStore(
@@ -114,6 +121,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         removeLayer,
         bringToFront,
         sendToBack,
+        alignSelectedLayers,
         clearStage,
         reboot,
         saveProject
@@ -127,11 +135,13 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
             removeLayer: s.removeLayer,
             bringToFront: s.bringToFront,
             sendToBack: s.sendToBack,
+            alignSelectedLayers: s.alignSelectedLayers,
             clearStage: s.clearStage,
             reboot: s.reboot,
             saveProject: s.saveProject
         }))
     );
+    const isMultiLayerSelection = selectedLayerIds.length > 1;
 
     const engine = useMemo(
         () => (typeof window !== 'undefined' ? EditorEngine.getInstance() : null),
@@ -461,6 +471,36 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                         />
                     </>
                 )}
+
+                {isMultiLayerSelection ? (
+                    <div className="ml-auto flex items-center gap-0.5">
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
+                        <TipButton tip="Align left" onClick={() => alignSelectedLayers('left')}>
+                            <AlignLeftSimpleIcon />
+                        </TipButton>
+                        <TipButton
+                            tip="Align horizontal center"
+                            onClick={() => alignSelectedLayers('center-horizontal')}
+                        >
+                            <AlignCenterHorizontalSimpleIcon />
+                        </TipButton>
+                        <TipButton tip="Align right" onClick={() => alignSelectedLayers('right')}>
+                            <AlignRightSimpleIcon />
+                        </TipButton>
+                        <TipButton tip="Align top" onClick={() => alignSelectedLayers('top')}>
+                            <AlignTopSimpleIcon />
+                        </TipButton>
+                        <TipButton
+                            tip="Align vertical center"
+                            onClick={() => alignSelectedLayers('center-vertical')}
+                        >
+                            <AlignCenterVerticalSimpleIcon />
+                        </TipButton>
+                        <TipButton tip="Align bottom" onClick={() => alignSelectedLayers('bottom')}>
+                            <AlignBottomSimpleIcon />
+                        </TipButton>
+                    </div>
+                ) : null}
             </div>
             <SlidesJsonDialog open={jsonDialogOpen} onOpenChange={setJsonDialogOpen} />
             <Dialog open={clearStageDialogOpen} onOpenChange={setClearStageDialogOpen}>

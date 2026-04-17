@@ -227,6 +227,88 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
             get().markDirty();
         },
 
+        alignSelectedLayers: (
+            mode: 'left' | 'right' | 'top' | 'bottom' | 'center-horizontal' | 'center-vertical'
+        ) => {
+            const s = get();
+            const selectedNumericIds = s.selectedLayerIds
+                .map((id) => Number.parseInt(id, 10))
+                .filter((id) => Number.isFinite(id))
+                .map((id) => Number(id));
+            if (selectedNumericIds.length < 2) return;
+
+            const selectedLayers = selectedNumericIds
+                .map((id) => s.layers.get(id))
+                .filter((layer): layer is LayerWithEditorState => Boolean(layer));
+            if (selectedLayers.length < 2) return;
+
+            const boxes = selectedLayers.map((layer) => {
+                const width = Math.max(
+                    MIN_LAYER_DIMENSION,
+                    Math.abs(layer.config.width * layer.config.scaleX)
+                );
+                const height = Math.max(
+                    MIN_LAYER_DIMENSION,
+                    Math.abs(layer.config.height * layer.config.scaleY)
+                );
+                const left = layer.config.cx - width / 2;
+                const right = layer.config.cx + width / 2;
+                const top = layer.config.cy - height / 2;
+                const bottom = layer.config.cy + height / 2;
+                return { layer, width, height, left, right, top, bottom };
+            });
+
+            const groupLeft = Math.min(...boxes.map((box) => box.left));
+            const groupRight = Math.max(...boxes.map((box) => box.right));
+            const groupTop = Math.min(...boxes.map((box) => box.top));
+            const groupBottom = Math.max(...boxes.map((box) => box.bottom));
+            const groupCenterX = (groupLeft + groupRight) / 2;
+            const groupCenterY = (groupTop + groupBottom) / 2;
+
+            const newLayers = new Map(s.layers);
+            const updatedLayers: LayerWithEditorState[] = [];
+
+            for (const box of boxes) {
+                let newCx = box.layer.config.cx;
+                let newCy = box.layer.config.cy;
+
+                if (mode === 'left') {
+                    newCx = groupLeft + box.width / 2;
+                } else if (mode === 'right') {
+                    newCx = groupRight - box.width / 2;
+                } else if (mode === 'center-horizontal') {
+                    newCx = groupCenterX;
+                } else if (mode === 'top') {
+                    newCy = groupTop + box.height / 2;
+                } else if (mode === 'bottom') {
+                    newCy = groupBottom - box.height / 2;
+                } else if (mode === 'center-vertical') {
+                    newCy = groupCenterY;
+                }
+
+                if (newCx === box.layer.config.cx && newCy === box.layer.config.cy) continue;
+
+                const updatedLayer: LayerWithEditorState = {
+                    ...box.layer,
+                    config: {
+                        ...box.layer.config,
+                        cx: Math.round(newCx),
+                        cy: Math.round(newCy)
+                    }
+                };
+                newLayers.set(updatedLayer.numericId, updatedLayer);
+                updatedLayers.push(updatedLayer);
+            }
+
+            if (updatedLayers.length === 0) return;
+
+            set({ layers: newLayers });
+            for (const updatedLayer of updatedLayers) {
+                helpers.sendLayerUpdate(updatedLayer, 'editor:align_selected_layers');
+            }
+            get().markDirty();
+        },
+
         addTextLayer: () => {
             const { allocateId, allocateZIndex, insertionCenter, insertionViewport } = get();
             const numericId = allocateId();

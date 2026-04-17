@@ -957,6 +957,21 @@ export function EditorSlate() {
                 node.scaleY(updatedConfig.scaleY);
             }
 
+            const prevConfig = layerToUpdate.config;
+            const configChanged =
+                prevConfig.cx !== updatedConfig.cx ||
+                prevConfig.cy !== updatedConfig.cy ||
+                prevConfig.width !== updatedConfig.width ||
+                prevConfig.height !== updatedConfig.height ||
+                prevConfig.scaleX !== updatedConfig.scaleX ||
+                prevConfig.scaleY !== updatedConfig.scaleY ||
+                prevConfig.rotation !== updatedConfig.rotation;
+            if (!configChanged) {
+                node.setAttr('textTransformMode', undefined);
+                node.setAttr('lastActiveAnchor', undefined);
+                return;
+            }
+
             // Always broadcast the final authoritative transform after local snapping/baking.
             // This prevents walls from remaining on the last pre-snap binary frame.
             engine.broadcastBinaryMove(
@@ -976,7 +991,6 @@ export function EditorSlate() {
             node.setAttr('lastActiveAnchor', undefined);
 
             const store = useEditorStore.getState();
-            store.toggleLayerSelection(numericId.toString(), false, false);
             store.updateLayerConfig(numericId, updatedConfig);
 
             // Sync to server
@@ -1141,7 +1155,8 @@ export function EditorSlate() {
     const handleTouchEnd = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
         if (e.evt instanceof TouchEvent && e.evt.touches.length < 2) setIsPinching(false);
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
-        if (currentSelectedIds.length && trRef.current) {
+        const shouldFinalizeFromStage = e.evt instanceof TouchEvent && isPinching;
+        if (shouldFinalizeFromStage && currentSelectedIds.length && trRef.current) {
             const stage = trRef.current.getStage();
             const node = stage?.findOne<Konva.Shape>(`#${currentSelectedIds[0]}`);
             if (node)

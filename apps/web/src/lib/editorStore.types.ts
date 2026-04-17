@@ -57,6 +57,9 @@ export interface EditorState {
     deleteSelectedLayer: () => void;
     bringToFront: () => void;
     sendToBack: () => void;
+    alignSelectedLayers: (
+        mode: 'left' | 'right' | 'top' | 'bottom' | 'center-horizontal' | 'center-vertical'
+    ) => void;
     addTextLayer: () => void;
     addMapLayer: () => void;
     addShapeLayer: (shape: 'rectangle' | 'circle') => void;
