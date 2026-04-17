@@ -298,7 +298,7 @@ function HistoryTab() {
                     return (
                         <div
                             key={group.id}
-                            className="flex items-start gap-3 overflow-hidden rounded-xl border p-4 text-sm shadow-sm"
+                            className="flex items-start gap-3 overflow-hidden rounded-xl border p-4 text-sm shadow-sm select-text"
                         >
                             <ClockIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                             <div className="flex-1">

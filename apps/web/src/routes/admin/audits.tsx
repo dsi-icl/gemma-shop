@@ -363,7 +363,7 @@ function AdminAudits() {
                     return (
                         <div
                             key={group.id}
-                            className="overflow-hidden rounded-xl border bg-card p-4"
+                            className="overflow-hidden rounded-xl border bg-card p-4 select-text"
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex min-w-0 items-center gap-2">
