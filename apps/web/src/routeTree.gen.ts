@@ -26,6 +26,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as YjsSplatRouteImport } from './routes/yjs.$'
 import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
 import { Route as PlaygroundNoopRouteImport } from './routes/playground/noop'
+import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
 import { Route as LegalNoticesRouteImport } from './routes/legal/notices'
 import { Route as ApiWebScreenshotRouteImport } from './routes/api/web-screenshot'
 import { Route as ApiVersionRouteImport } from './routes/api/version'
@@ -143,6 +144,11 @@ const UploadProjectIdRoute = UploadProjectIdRouteImport.update({
 const PlaygroundNoopRoute = PlaygroundNoopRouteImport.update({
   id: '/playground/noop',
   path: '/playground/noop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
+  id: '/legal/privacy',
+  path: '/legal/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LegalNoticesRoute = LegalNoticesRouteImport.update({
@@ -352,6 +358,7 @@ export interface FileRoutesByFullPath {
   '/api/version': typeof ApiVersionRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
   '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/yjs/$': typeof YjsSplatRoute
@@ -403,6 +410,7 @@ export interface FileRoutesByTo {
   '/api/version': typeof ApiVersionRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
   '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/yjs/$': typeof YjsSplatRoute
@@ -456,6 +464,7 @@ export interface FileRoutesById {
   '/api/version': typeof ApiVersionRoute
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
   '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/yjs/$': typeof YjsSplatRoute
@@ -510,6 +519,7 @@ export interface FileRouteTypes {
     | '/api/version'
     | '/api/web-screenshot'
     | '/legal/notices'
+    | '/legal/privacy'
     | '/playground/noop'
     | '/upload/$projectId'
     | '/yjs/$'
@@ -561,6 +571,7 @@ export interface FileRouteTypes {
     | '/api/version'
     | '/api/web-screenshot'
     | '/legal/notices'
+    | '/legal/privacy'
     | '/playground/noop'
     | '/upload/$projectId'
     | '/yjs/$'
@@ -613,6 +624,7 @@ export interface FileRouteTypes {
     | '/api/version'
     | '/api/web-screenshot'
     | '/legal/notices'
+    | '/legal/privacy'
     | '/playground/noop'
     | '/upload/$projectId'
     | '/yjs/$'
@@ -659,6 +671,7 @@ export interface RootRouteChildren {
   ApiVersionRoute: typeof ApiVersionRoute
   ApiWebScreenshotRoute: typeof ApiWebScreenshotRoute
   LegalNoticesRoute: typeof LegalNoticesRoute
+  LegalPrivacyRoute: typeof LegalPrivacyRoute
   PlaygroundNoopRoute: typeof PlaygroundNoopRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
   YjsSplatRoute: typeof YjsSplatRoute
@@ -791,6 +804,13 @@ declare module '@tanstack/react-router' {
       path: '/playground/noop'
       fullPath: '/playground/noop'
       preLoaderRoute: typeof PlaygroundNoopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/privacy': {
+      id: '/legal/privacy'
+      path: '/legal/privacy'
+      fullPath: '/legal/privacy'
+      preLoaderRoute: typeof LegalPrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal/notices': {
@@ -1194,6 +1214,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiVersionRoute: ApiVersionRoute,
   ApiWebScreenshotRoute: ApiWebScreenshotRoute,
   LegalNoticesRoute: LegalNoticesRoute,
+  LegalPrivacyRoute: LegalPrivacyRoute,
   PlaygroundNoopRoute: PlaygroundNoopRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,
   YjsSplatRoute: YjsSplatRoute,

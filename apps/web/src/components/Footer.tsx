@@ -29,6 +29,10 @@ export function Footer() {
                 {' · '}All rights reserved
                 {' · '}Build <code>{buildInfo.commitSha}</code>
                 {' · '}
+                <Link className="underline" to="/legal/privacy">
+                    Privacy notice
+                </Link>
+                {' · '}
                 <Link className="underline" to="/legal/notices">
                     Third-party notices
                 </Link>
