@@ -2,7 +2,7 @@ import { createFileRoute, Outlet } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_auth/quarry/editor')({
     head: () => ({
-        meta: [{ title: 'Editor · Quarry · GemmaShop' }]
+        meta: [{ title: 'Editor · Projects · GemmaShop' }]
     }),
     component: AppLayout
 });

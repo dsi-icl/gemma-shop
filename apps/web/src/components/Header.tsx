@@ -156,7 +156,7 @@ function HeaderAuthSection() {
             <Link to="/quarry">
                 <Button variant="outline" className={actionButtonClass}>
                     <BookOpenUserIcon className="h-[1.2rem] w-[1.2rem]" />
-                    <span className={actionLabelClass}>Quarry</span>
+                    <span className={actionLabelClass}>Projects</span>
                 </Button>
             </Link>
             {user.role === 'admin' && (
