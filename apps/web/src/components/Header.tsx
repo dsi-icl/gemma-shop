@@ -30,6 +30,8 @@ import { ThemeToggle } from './ThemeToggle';
 
 const actionLabelClass =
     'hidden xl:inline overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-200 ml-0 max-w-0 opacity-0 last-touch:ml-1 last-touch:max-w-36 last-touch:opacity-100 group-hover/button:ml-1 group-hover/button:max-w-36 group-hover/button:opacity-100 group-focus-visible/button:ml-1 group-focus-visible/button:max-w-36 group-focus-visible/button:opacity-100';
+const actionButtonClass =
+    'px-2 xl:px-3 gap-0 last-touch:gap-1.5 group-hover/button:gap-1.5 group-focus-visible/button:gap-1.5';
 
 function FullscreenToggle() {
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -62,7 +64,7 @@ function FullscreenToggle() {
             onClick={() => void toggleFullscreen()}
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-            className="px-2 xl:px-3"
+            className={actionButtonClass}
         >
             {isFullscreen ? (
                 <ArrowsInIcon className="h-[1.2rem] w-[1.2rem]" />
@@ -86,7 +88,7 @@ function RefreshPageButton() {
             onClick={reloadPage}
             title="Refresh page"
             aria-label="Refresh page"
-            className="px-2 xl:px-3"
+            className={actionButtonClass}
         >
             <ArrowClockwiseIcon className="h-[1.2rem] w-[1.2rem]" />
             <span className={actionLabelClass}>Refresh</span>
@@ -135,7 +137,7 @@ function HeaderAuthSection() {
     if (!user) {
         return (
             <Link to="/login">
-                <Button variant="outline">
+                <Button variant="outline" className={actionButtonClass}>
                     <UserIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all" />
                     <span className={actionLabelClass}>Log in</span>
                 </Button>
@@ -146,33 +148,34 @@ function HeaderAuthSection() {
     return (
         <>
             <Link to="/gallery">
-                <Button variant="outline">
+                <Button variant="outline" className={actionButtonClass}>
                     <KanbanIcon className="h-[1.2rem] w-[1.2rem]" />
                     <span className={actionLabelClass}>Gallery</span>
                 </Button>
             </Link>
             <Link to="/quarry">
-                <Button variant="outline">
+                <Button variant="outline" className={actionButtonClass}>
                     <BookOpenUserIcon className="h-[1.2rem] w-[1.2rem]" />
                     <span className={actionLabelClass}>Quarry</span>
                 </Button>
             </Link>
             {user.role === 'admin' && (
                 <Link to="/admin">
-                    <Button variant="outline" title="Administration" className="px-2 xl:px-3">
+                    <Button variant="outline" title="Administration" className={actionButtonClass}>
                         <CastleTurretIcon className="h-[1.2rem] w-[1.2rem]" />
                         <span className={actionLabelClass}>Admin</span>
                     </Button>
                 </Link>
             )}
-            <Button variant="outline" onClick={() => setSignOutDialogOpen(true)}>
+            <Button
+                variant="outline"
+                onClick={() => setSignOutDialogOpen(true)}
+                className="px-2 xl:px-3"
+                title={`Log out (${user.email})`}
+            >
                 <SignOutIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all" />
-                <span className={actionLabelClass}>Log out</span>
-                <span
-                    className={
-                        'ml-0 hidden max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-[max-width,opacity,margin] duration-200 group-hover/button:ml-1 group-hover/button:max-w-80 group-hover/button:opacity-100 group-focus-visible/button:ml-1 group-focus-visible/button:max-w-80 group-focus-visible/button:opacity-100 2xl:inline last-touch:ml-1 last-touch:max-w-80 last-touch:opacity-100'
-                    }
-                >
+                <span className="hidden xl:inline">Log out</span>
+                <span className="ml-1 hidden max-w-48 truncate text-xs text-muted-foreground xl:inline">
                     {user.email}
                 </span>
             </Button>

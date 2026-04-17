@@ -10,17 +10,19 @@ import { useTheme } from '@repo/ui/lib/theme-provider';
 
 const actionLabelClass =
     'hidden xl:inline overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-200 ml-0 max-w-0 opacity-0 last-touch:ml-1 last-touch:max-w-36 last-touch:opacity-100 group-hover/button:ml-1 group-hover/button:max-w-36 group-hover/button:opacity-100 group-focus-visible/button:ml-1 group-focus-visible/button:max-w-36 group-focus-visible/button:opacity-100';
+const actionButtonClass =
+    'px-2 xl:px-3 gap-0 last-touch:gap-1.5 group-hover/button:gap-1.5 group-focus-visible/button:gap-1.5';
 
 export function ThemeToggle() {
     const { theme, setTheme } = useTheme();
 
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="outline" className="px-2 xl:px-3" />}>
-                <span className="relative block h-[1.2rem] w-[1.2rem]">
-                    <MoonIcon className="absolute inset-0 h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
-                    <SunIcon className="absolute inset-0 h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
-                </span>
+            <DropdownMenuTrigger
+                render={<Button variant="outline" className={actionButtonClass} />}
+            >
+                <MoonIcon className="block h-[1.2rem] w-[1.2rem] rotate-0 transition-all dark:hidden dark:-rotate-90" />
+                <SunIcon className="hidden h-[1.2rem] w-[1.2rem] rotate-90 transition-all dark:block dark:rotate-0" />
                 <span className={actionLabelClass}>Theme</span>
                 <span className="sr-only">Toggle theme</span>
             </DropdownMenuTrigger>
