@@ -1,0 +1,103 @@
+name: Feature request
+description: Propose a new feature or improvement.
+title: '[Feature]: '
+labels:
+    - enhancement
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for suggesting an improvement.
+
+              Keep it simple and practical. Clear examples help us prioritize.
+
+    - type: textarea
+      id: summary
+      attributes:
+          label: What feature do you want?
+          description: Describe the requested feature in 1-2 sentences.
+          placeholder: 'Example: Add bulk actions to the project list so admins can archive multiple projects at once.'
+      validations:
+          required: true
+
+    - type: textarea
+      id: problem
+      attributes:
+          label: What problem does this solve?
+          description: Explain the pain point today.
+          placeholder: 'Example: Managing many projects one by one takes too long and is error-prone.'
+      validations:
+          required: true
+
+    - type: textarea
+      id: proposal
+      attributes:
+          label: Proposed solution
+          description: Describe how you expect it to work.
+          placeholder: |
+              Example:
+              1. Add checkboxes in Admin > Projects list.
+              2. Show "Archive selected" action.
+              3. Ask for confirmation before applying.
+      validations:
+          required: true
+
+    - type: textarea
+      id: alternatives
+      attributes:
+          label: Alternatives considered (optional)
+          description: Any workaround or other approach you've tried?
+          placeholder: 'Example: We currently archive projects individually, but this is slow.'
+
+    - type: dropdown
+      id: audience
+      attributes:
+          label: Who benefits most?
+          options:
+              - Admin users
+              - Editors/collaborators
+              - Wall/controller operators
+              - Everyone
+              - Not sure
+      validations:
+          required: true
+
+    - type: dropdown
+      id: priority
+      attributes:
+          label: Priority
+          options:
+              - High (blocking current work)
+              - Medium (important improvement)
+              - Low (nice to have)
+      validations:
+          required: true
+
+    - type: textarea
+      id: success_criteria
+      attributes:
+          label: How will we know this is done?
+          description: List acceptance criteria in plain language.
+          placeholder: |
+              Example:
+              - I can select multiple projects in Admin > Projects.
+              - I can archive selected projects in one action.
+              - Archived projects are shown correctly with existing filters.
+      validations:
+          required: true
+
+    - type: textarea
+      id: context
+      attributes:
+          label: Additional context (optional)
+          description: Add screenshots, links, or related issues if helpful.
+
+    - type: checkboxes
+      id: checks
+      attributes:
+          label: Quick checks
+          options:
+              - label: I searched existing issues and did not find the same request.
+                required: true
+              - label: I explained the user problem and expected outcome.
+                required: true
