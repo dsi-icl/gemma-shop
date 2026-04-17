@@ -230,6 +230,7 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
         alignSelectedLayers: (
             mode: 'left' | 'right' | 'top' | 'bottom' | 'center-horizontal' | 'center-vertical'
         ) => {
+            const engine = EditorEngine.getInstance();
             const s = get();
             const selectedNumericIds = s.selectedLayerIds
                 .map((id) => Number.parseInt(id, 10))
@@ -304,7 +305,11 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
 
             set({ layers: newLayers });
             for (const updatedLayer of updatedLayers) {
-                helpers.sendLayerUpdate(updatedLayer, 'editor:align_selected_layers');
+                engine.sendJSON({
+                    type: 'upsert_layer',
+                    origin: 'editor:align_selected_layers',
+                    layer: updatedLayer
+                });
             }
             get().markDirty();
         },
@@ -622,6 +627,7 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
         },
 
         reorderLayers: (layers: LayerWithEditorState[]) => {
+            const engine = EditorEngine.getInstance();
             const updatedLayers = layers.map((layer, index) => ({
                 ...layer,
                 config: { ...layer.config, zIndex: index }
@@ -630,7 +636,11 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
             set({ layers: new Map(updatedLayers.map((l) => [l.numericId, l])) });
 
             updatedLayers.forEach((layer) => {
-                helpers.sendLayerUpdate(layer, 'editor:reorder_layers');
+                engine.sendJSON({
+                    type: 'upsert_layer',
+                    origin: 'editor:reorder_layers',
+                    layer
+                });
             });
             get().markDirty();
         }
