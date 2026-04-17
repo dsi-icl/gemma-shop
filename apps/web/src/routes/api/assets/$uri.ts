@@ -9,6 +9,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { createServerOnlyFn } from '@tanstack/react-start';
 
 import { ASSET_MIME_TYPES } from '~/lib/assetMime';
+import { PUBLIC_ASSET_PROJECT_ID } from '~/lib/constants';
 import { ASSET_DIR } from '~/lib/serverVariables';
 import { logAuditDenied, logAuditFailure } from '~/server/audit';
 import { dbCol } from '~/server/collections';
@@ -345,8 +346,10 @@ export const Route = createFileRoute('/api/assets/$uri')({
                         headers: isDev ? { 'X-Dev-Status-Message': 'Project Not Found' } : undefined
                     });
                 }
+                const isPublicAsset =
+                    assetRecord.public === true || projectId === PUBLIC_ASSET_PROJECT_ID;
 
-                if (!user && !device) {
+                if (!isPublicAsset && !user && !device) {
                     const project = await dbCol.projects.findById(projectId);
                     if (!project || project.deletedAt || project.visibility !== 'public') {
                         await logAssetDenied({
@@ -365,7 +368,7 @@ export const Route = createFileRoute('/api/assets/$uri')({
                     }
                 }
 
-                if (user && user.role !== 'admin') {
+                if (!isPublicAsset && user && user.role !== 'admin') {
                     const allowed = await canViewProject(
                         { email: user.email, role: user.role },
                         projectId
@@ -385,7 +388,7 @@ export const Route = createFileRoute('/api/assets/$uri')({
                     }
                 }
 
-                if (device) {
+                if (!isPublicAsset && device) {
                     const deviceWallId =
                         typeof device.wallId === 'string' && device.wallId.length > 0
                             ? device.wallId
