@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 
+import { guardPlaygroundDevOnly } from '~/lib/playgroundGuard';
+
 export const Route = createFileRoute('/playground/noop')({
+    beforeLoad: guardPlaygroundDevOnly,
     head: () => ({
         meta: [{ title: 'Disconnected · Playground · GemmaShop' }]
     }),

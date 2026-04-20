@@ -9,6 +9,8 @@ import {
 import { createFileRoute } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+import { guardPlaygroundDevOnly } from '~/lib/playgroundGuard';
+
 type WallScreen = {
     id: string;
     c: number;
@@ -32,6 +34,7 @@ const NATIVE_PREVIEW_WIDTH = 1920;
 const NATIVE_PREVIEW_HEIGHT = 1080;
 
 export const Route = createFileRoute('/playground/')({
+    beforeLoad: guardPlaygroundDevOnly,
     head: () => ({
         meta: [{ title: 'Playground · GemmaShop' }]
     }),

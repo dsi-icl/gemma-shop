@@ -1,7 +1,10 @@
 import { createFileRoute, useLocation } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { guardPlaygroundDevOnly } from '~/lib/playgroundGuard';
+
 export const Route = createFileRoute('/playground/anima')({
+    beforeLoad: guardPlaygroundDevOnly,
     head: () => ({
         meta: [{ title: 'Background Anima Playground · GemmaShop' }]
     }),
