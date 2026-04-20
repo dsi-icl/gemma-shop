@@ -26,6 +26,8 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as YjsSplatRouteImport } from './routes/yjs.$'
 import { Route as UploadProjectIdRouteImport } from './routes/upload/$projectId'
 import { Route as PlaygroundNoopRouteImport } from './routes/playground/noop'
+import { Route as PlaygroundBgRouteImport } from './routes/playground/bg'
+import { Route as PlaygroundAnimaRouteImport } from './routes/playground/anima'
 import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
 import { Route as LegalNoticesRouteImport } from './routes/legal/notices'
 import { Route as ApiWebScreenshotRouteImport } from './routes/api/web-screenshot'
@@ -144,6 +146,16 @@ const UploadProjectIdRoute = UploadProjectIdRouteImport.update({
 const PlaygroundNoopRoute = PlaygroundNoopRouteImport.update({
   id: '/playground/noop',
   path: '/playground/noop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlaygroundBgRoute = PlaygroundBgRouteImport.update({
+  id: '/playground/bg',
+  path: '/playground/bg',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlaygroundAnimaRoute = PlaygroundAnimaRouteImport.update({
+  id: '/playground/anima',
+  path: '/playground/anima',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
@@ -359,6 +371,8 @@ export interface FileRoutesByFullPath {
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
   '/legal/privacy': typeof LegalPrivacyRoute
+  '/playground/anima': typeof PlaygroundAnimaRoute
+  '/playground/bg': typeof PlaygroundBgRoute
   '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/yjs/$': typeof YjsSplatRoute
@@ -411,6 +425,8 @@ export interface FileRoutesByTo {
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
   '/legal/privacy': typeof LegalPrivacyRoute
+  '/playground/anima': typeof PlaygroundAnimaRoute
+  '/playground/bg': typeof PlaygroundBgRoute
   '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/yjs/$': typeof YjsSplatRoute
@@ -465,6 +481,8 @@ export interface FileRoutesById {
   '/api/web-screenshot': typeof ApiWebScreenshotRoute
   '/legal/notices': typeof LegalNoticesRoute
   '/legal/privacy': typeof LegalPrivacyRoute
+  '/playground/anima': typeof PlaygroundAnimaRoute
+  '/playground/bg': typeof PlaygroundBgRoute
   '/playground/noop': typeof PlaygroundNoopRoute
   '/upload/$projectId': typeof UploadProjectIdRoute
   '/yjs/$': typeof YjsSplatRoute
@@ -520,6 +538,8 @@ export interface FileRouteTypes {
     | '/api/web-screenshot'
     | '/legal/notices'
     | '/legal/privacy'
+    | '/playground/anima'
+    | '/playground/bg'
     | '/playground/noop'
     | '/upload/$projectId'
     | '/yjs/$'
@@ -572,6 +592,8 @@ export interface FileRouteTypes {
     | '/api/web-screenshot'
     | '/legal/notices'
     | '/legal/privacy'
+    | '/playground/anima'
+    | '/playground/bg'
     | '/playground/noop'
     | '/upload/$projectId'
     | '/yjs/$'
@@ -625,6 +647,8 @@ export interface FileRouteTypes {
     | '/api/web-screenshot'
     | '/legal/notices'
     | '/legal/privacy'
+    | '/playground/anima'
+    | '/playground/bg'
     | '/playground/noop'
     | '/upload/$projectId'
     | '/yjs/$'
@@ -672,6 +696,8 @@ export interface RootRouteChildren {
   ApiWebScreenshotRoute: typeof ApiWebScreenshotRoute
   LegalNoticesRoute: typeof LegalNoticesRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
+  PlaygroundAnimaRoute: typeof PlaygroundAnimaRoute
+  PlaygroundBgRoute: typeof PlaygroundBgRoute
   PlaygroundNoopRoute: typeof PlaygroundNoopRoute
   UploadProjectIdRoute: typeof UploadProjectIdRoute
   YjsSplatRoute: typeof YjsSplatRoute
@@ -804,6 +830,20 @@ declare module '@tanstack/react-router' {
       path: '/playground/noop'
       fullPath: '/playground/noop'
       preLoaderRoute: typeof PlaygroundNoopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/playground/bg': {
+      id: '/playground/bg'
+      path: '/playground/bg'
+      fullPath: '/playground/bg'
+      preLoaderRoute: typeof PlaygroundBgRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/playground/anima': {
+      id: '/playground/anima'
+      path: '/playground/anima'
+      fullPath: '/playground/anima'
+      preLoaderRoute: typeof PlaygroundAnimaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal/privacy': {
@@ -1215,6 +1255,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiWebScreenshotRoute: ApiWebScreenshotRoute,
   LegalNoticesRoute: LegalNoticesRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
+  PlaygroundAnimaRoute: PlaygroundAnimaRoute,
+  PlaygroundBgRoute: PlaygroundBgRoute,
   PlaygroundNoopRoute: PlaygroundNoopRoute,
   UploadProjectIdRoute: UploadProjectIdRoute,
   YjsSplatRoute: YjsSplatRoute,

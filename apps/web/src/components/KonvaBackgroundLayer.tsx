@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-konva';
 
 import { BACKGROUND_T_SPEED, renderBackgroundNoise } from '~/lib/backgroundNoise';
+import { renderBackgroundParticle } from '~/lib/backgroundParticle';
 import { renderBackgroundWaves } from '~/lib/backgroundWave';
 import { COLS, ROWS, SCREEN_H, SCREEN_W } from '~/lib/stageConstants';
 import type { Layer } from '~/lib/types';
@@ -58,6 +59,8 @@ function KonvaBackgroundLayerInner({ layer, previewScale }: KonvaBackgroundLayer
         const t = (Date.now() / 1000) * BACKGROUND_T_SPEED * layer.speedFactor;
         if (layer.backgroundType === 'waves') {
             renderBackgroundWaves(offscreen, layer, 0, 0, t, COLS, ROWS);
+        } else if (layer.backgroundType === 'particle') {
+            renderBackgroundParticle(offscreen, layer, 0, 0, t, COLS, ROWS);
         } else {
             renderBackgroundNoise(offscreen, layer, 0, 0, t, COLS, ROWS);
         }

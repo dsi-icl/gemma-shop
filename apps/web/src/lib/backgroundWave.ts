@@ -101,7 +101,7 @@ export function renderBackgroundWaves(
         const waveAlpha =
             lerp(0.4, 0.92, smoothstep(depth)) * (0.55 + (atmosphere[3] / 255) * 0.45);
         ctx.strokeStyle = toCssRgba(rowColor, waveAlpha);
-        ctx.lineWidth = lerp(1.2, 2.1, depth);
+        ctx.lineWidth = lerp(2, 3, depth);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
@@ -113,18 +113,18 @@ export function renderBackgroundWaves(
 
             // 3D ribbon effect: progressively increase wave excursion per line.
             // Front/deeper lines carry larger amplitude on the same backbone frequencies.
-            const ampGain = lerp(1.1, 2.15, Math.pow(depth, 2.05));
-            const highFreqGain = lerp(1.35, 8, Math.pow(depth, 2.24));
+            const ampGain = lerp(1.1, 4.15, Math.pow(depth, 2.05));
+            const highFreqGain = lerp(1.35, 18, Math.pow(depth, 2.24));
 
             // Stronger low-frequency backbone shared by all lines.
-            const baseLowA = Math.sin(worldX * 0.11 - phaseT * 0.05 + depth * 0.9);
-            const baseLowB = Math.sin(worldX * 0.26 + phaseT * 0.07 + depth * 2.3);
-            const low1 = baseLowA * lerp(40, 18, depth) * ampGain;
-            const low2 = baseLowB * lerp(34, 15, depth) * ampGain;
+            const baseLowA = Math.sin(worldX * 5.1 - phaseT * 0.05 + depth * 0.9);
+            const baseLowB = Math.sin(worldX * 5.66 + phaseT * 5.17 + depth * 5.3);
+            const low1 = baseLowA * lerp(20, 1, depth) * ampGain * 2;
+            const low2 = baseLowB * lerp(34, 5, depth) * ampGain;
 
             // Mid/high components kept subtler so the low bands dominate the shape.
-            const baseAmp = lerp(31, 11, depth) * ampGain;
-            const s1 = Math.sin(worldX * 0.72 + phaseT * 0.42 + depth * 5.1) * baseAmp;
+            const baseAmp = lerp(101, 11, depth) * ampGain;
+            const s1 = Math.sin(worldX * 0.72 + phaseT * 0.42 + depth * 5.1) * baseAmp * 5;
             const s2 =
                 Math.sin(worldX * 2.35 + phaseT * 0.19 + depth * 9.7) *
                 (baseAmp * 0.8 * highFreqGain);

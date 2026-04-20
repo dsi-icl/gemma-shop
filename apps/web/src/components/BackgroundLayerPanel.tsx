@@ -70,6 +70,7 @@ export function BackgroundLayerPanel({ activeLayer }: BackgroundLayerPanelProps)
                 >
                     <option value="i-pattern">I pattern</option>
                     <option value="waves">Waves</option>
+                    <option value="particle">Particle</option>
                 </select>
             </div>
             <div className="space-y-1">
