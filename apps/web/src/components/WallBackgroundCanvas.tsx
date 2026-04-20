@@ -7,6 +7,7 @@ import {
     BACKGROUND_TICK_MS,
     renderBackgroundNoise
 } from '~/lib/backgroundNoise';
+import { renderBackgroundParticle } from '~/lib/backgroundParticle';
 import { renderBackgroundWaves } from '~/lib/backgroundWave';
 import { SCREEN_H, SCREEN_W } from '~/lib/stageConstants';
 import type { Layer } from '~/lib/types';
@@ -24,21 +25,24 @@ export function WallBackgroundCanvas({ layer, col, row }: WallBackgroundCanvasPr
 
     useEffect(() => {
         const isWaveBackground = layer.backgroundType === 'waves';
+        const isParticleBackground = layer.backgroundType === 'particle';
         const draw = () => {
             // t is derived from wall-clock time so all screens are always in sync.
             // Tiny increments mean adjacent frames are nearly identical → smooth drift.
             const t = (Date.now() / 1000) * BACKGROUND_T_SPEED * layer.speedFactor;
             if (isWaveBackground) {
                 renderBackgroundWaves(canvasRef.current!, layer, col, row, t);
+            } else if (isParticleBackground) {
+                renderBackgroundParticle(canvasRef.current!, layer, col, row, t);
             } else {
                 renderBackgroundNoise(canvasRef.current!, layer, col, row, t);
             }
         };
 
         draw();
-        // Waves need a much higher redraw cadence to avoid visible stepping.
-        const baseTickMs = isWaveBackground ? 90 : BACKGROUND_TICK_MS;
-        const minTickMs = isWaveBackground ? 50 : 200;
+        // Waves and particles need higher redraw cadence to avoid visible stepping.
+        const baseTickMs = isWaveBackground ? 90 : isParticleBackground ? 85 : BACKGROUND_TICK_MS;
+        const minTickMs = isWaveBackground ? 50 : isParticleBackground ? 45 : 200;
         const tickMs = Math.max(minTickMs, baseTickMs / Math.max(layer.speedFactor, 0.1));
         const id = setInterval(draw, tickMs);
         return () => clearInterval(id);
