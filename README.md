@@ -20,7 +20,6 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
     - `wall`: render node
     - `controller`: wall binding/orchestration
     - `gallery`: presentation-aware public control/listing surface
-    - `roy`: specialized graph/telemetry client
 - Commit graph with mutable head + immutable snapshot history
 - Asset pipeline for image/video upload, processing, and live broadcast to editors
 
@@ -56,7 +55,7 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
 
 ### 1) WebSocket Bus (`apps/web/src/addons/routes/bus.ts` + `apps/web/src/lib/busState.ts`)
 
-- Tracks peers by role (`editor`, `wall`, `controller`, `gallery`, `roy`)
+- Tracks peers by role (`editor`, `wall`, `controller`, `gallery`)
 - Interns `(projectId, commitId, slideId)` into numeric `ScopeId`
 - Maintains in-memory scope layer state for fast relay/hydrate
 - Runs periodic loops:
