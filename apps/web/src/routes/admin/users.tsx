@@ -35,6 +35,7 @@ export const Route = createFileRoute('/admin/users')({
 function AdminUsers() {
     const { data: users } = useSuspenseQuery(adminUsersQueryOptions());
     const { data: currentUser } = useSuspenseQuery(authQueryOptions());
+    const isAdminActor = currentUser?.role === 'admin';
     const queryClient = useQueryClient();
 
     const banMutation = useMutation({
@@ -56,7 +57,7 @@ function AdminUsers() {
         }: {
             userId?: string;
             userEmail: string;
-            role: 'admin' | 'user';
+            role: 'admin' | 'operator' | 'user';
         }) => {
             await $adminSetUserRole({ data: { userId, userEmail, role } });
         },
@@ -108,38 +109,57 @@ function AdminUsers() {
                                 <tr key={user.id} className="hover:bg-muted/30">
                                     <td className="px-4 py-3 font-mono text-xs">{user.email}</td>
                                     <td className="px-4 py-3">
-                                        <Select
-                                            value={user.role === 'admin' ? 'admin' : 'user'}
-                                            onValueChange={(value) =>
-                                                roleMutation.mutate({
-                                                    userId: user.id,
-                                                    userEmail: user.email,
-                                                    role: value as 'admin' | 'user'
-                                                })
-                                            }
-                                            disabled={
-                                                roleMutation.isPending ||
-                                                trustedPublisherMutation.isPending ||
-                                                banMutation.isPending ||
-                                                isCurrentUser
-                                            }
-                                        >
-                                            <SelectTrigger
-                                                className={`h-7 min-w-24 rounded-full border-0 px-2 py-0.5 text-xs font-medium ${user.role === `admin` ? `bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400` : `bg-muted text-muted-foreground`}`}
+                                        {isAdminActor ? (
+                                            <Select
+                                                value={
+                                                    user.role === 'admin'
+                                                        ? 'admin'
+                                                        : user.role === 'operator'
+                                                          ? 'operator'
+                                                          : 'user'
+                                                }
+                                                onValueChange={(value) =>
+                                                    roleMutation.mutate({
+                                                        userId: user.id,
+                                                        userEmail: user.email,
+                                                        role: value as 'admin' | 'operator' | 'user'
+                                                    })
+                                                }
+                                                disabled={
+                                                    roleMutation.isPending ||
+                                                    trustedPublisherMutation.isPending ||
+                                                    banMutation.isPending ||
+                                                    isCurrentUser
+                                                }
                                             >
-                                                {user.role === 'admin' && (
-                                                    <ShieldCheckIcon size={10} />
-                                                )}
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectGroup>
-                                                    <SelectLabel>Role</SelectLabel>
-                                                    <SelectItem value="user">User</SelectItem>
-                                                    <SelectItem value="admin">Admin</SelectItem>
-                                                </SelectGroup>
-                                            </SelectContent>
-                                        </Select>
+                                                <SelectTrigger
+                                                    className={`h-7 min-w-24 rounded-full border-0 px-2 py-0.5 text-xs font-medium ${user.role === `admin` ? `bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400` : `bg-muted text-muted-foreground`}`}
+                                                >
+                                                    {user.role === 'admin' && (
+                                                        <ShieldCheckIcon size={10} />
+                                                    )}
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectGroup>
+                                                        <SelectLabel>Role</SelectLabel>
+                                                        <SelectItem value="user">User</SelectItem>
+                                                        <SelectItem value="operator">
+                                                            Operator
+                                                        </SelectItem>
+                                                        <SelectItem value="admin">Admin</SelectItem>
+                                                    </SelectGroup>
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <span className="inline-flex h-7 min-w-24 items-center justify-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                                                {user.role === 'admin'
+                                                    ? 'Admin'
+                                                    : user.role === 'operator'
+                                                      ? 'Operator'
+                                                      : 'User'}
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="px-4 py-3">
                                         <Select
@@ -187,25 +207,29 @@ function AdminUsers() {
                                         )}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <Button
-                                            variant={user.banned ? 'outline' : 'ghost'}
-                                            size="sm"
-                                            onClick={() =>
-                                                banMutation.mutate({
-                                                    userId: user.id,
-                                                    banned: !user.banned
-                                                })
-                                            }
-                                            disabled={
-                                                banMutation.isPending ||
-                                                trustedPublisherMutation.isPending ||
-                                                roleMutation.isPending ||
-                                                isCurrentUser
-                                            }
-                                        >
-                                            <ProhibitIcon size={14} />
-                                            {user.banned ? 'Unban' : 'Ban'}
-                                        </Button>
+                                        {isAdminActor ? (
+                                            <Button
+                                                variant={user.banned ? 'outline' : 'ghost'}
+                                                size="sm"
+                                                onClick={() =>
+                                                    banMutation.mutate({
+                                                        userId: user.id,
+                                                        banned: !user.banned
+                                                    })
+                                                }
+                                                disabled={
+                                                    banMutation.isPending ||
+                                                    trustedPublisherMutation.isPending ||
+                                                    roleMutation.isPending ||
+                                                    isCurrentUser
+                                                }
+                                            >
+                                                <ProhibitIcon size={14} />
+                                                {user.banned ? 'Unban' : 'Ban'}
+                                            </Button>
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">-</span>
+                                        )}
                                     </td>
                                 </tr>
                             );

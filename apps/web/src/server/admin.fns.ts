@@ -1,4 +1,4 @@
-import { adminMiddleware } from '@repo/auth/tanstack/middleware';
+import { adminMiddleware, operatorMiddleware } from '@repo/auth/tanstack/middleware';
 import type { AuthContext } from '@repo/db/documents';
 import { Collaborator } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
@@ -40,7 +40,7 @@ function authContextFromServerFnContext(context: unknown): AuthContext {
     if (c?.authContext) return c.authContext;
     const email = c?.user?.email;
     const role = c?.user?.role;
-    if (typeof email === 'string' && (role === 'admin' || role === 'user')) {
+    if (typeof email === 'string' && (role === 'admin' || role === 'operator' || role === 'user')) {
         return { user: { email, role } };
     }
     return { guest: true };
@@ -54,15 +54,15 @@ function buildAdminFnAuditContext(context: unknown, operation: string) {
 }
 
 export const $adminListUsers = createServerFn({ method: 'GET' })
-    .middleware([adminMiddleware])
+    .middleware([operatorMiddleware])
     .handler(async () => adminListUsers());
 
 export const $adminListProjects = createServerFn({ method: 'GET' })
-    .middleware([adminMiddleware])
+    .middleware([operatorMiddleware])
     .handler(async () => adminListProjects());
 
 export const $adminUpdateProjectCollaborators = createServerFn({ method: 'POST' })
-    .middleware([adminMiddleware])
+    .middleware([operatorMiddleware])
     .inputValidator(
         z.object({
             projectId: z.string(),
@@ -141,11 +141,11 @@ export const $adminListWalls = createServerFn({ method: 'GET' })
     .handler(async () => adminListWalls());
 
 export const $adminListPublicAssets = createServerFn({ method: 'GET' })
-    .middleware([adminMiddleware])
+    .middleware([operatorMiddleware])
     .handler(async () => adminListPublicAssets());
 
 export const $adminDeletePublicAsset = createServerFn({ method: 'POST' })
-    .middleware([adminMiddleware])
+    .middleware([operatorMiddleware])
     .inputValidator(z.object({ id: z.string() }))
     .handler(async ({ data, context }) => adminDeletePublicAsset(data.id, context.user.email));
 
@@ -189,7 +189,7 @@ export const $adminDeleteWall = createServerFn({ method: 'POST' })
     .handler(async ({ data }) => adminDeleteWall(data.wallId));
 
 export const $adminGetUploadToken = createServerFn({ method: 'POST' })
-    .middleware([adminMiddleware])
+    .middleware([operatorMiddleware])
     .handler(async ({ context }) => {
         const { createUploadToken } = await import('~/lib/uploadTokens');
         const { PUBLIC_ASSET_PROJECT_ID } = await import('~/lib/constants');
@@ -316,7 +316,7 @@ export const $adminSetUserRole = createServerFn({ method: 'POST' })
         z.object({
             userId: z.string().optional().nullable(),
             userEmail: z.string().optional().nullable(),
-            role: z.enum(['admin', 'user'])
+            role: z.enum(['admin', 'operator', 'user'])
         })
     )
     .handler(async ({ data, context }) =>
@@ -329,7 +329,7 @@ export const $adminSetUserRole = createServerFn({ method: 'POST' })
     );
 
 export const $adminSetUserTrustedPublisher = createServerFn({ method: 'POST' })
-    .middleware([adminMiddleware])
+    .middleware([operatorMiddleware])
     .inputValidator(
         z.object({
             userId: z.string(),

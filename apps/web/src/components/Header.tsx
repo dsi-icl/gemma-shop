@@ -159,7 +159,7 @@ function HeaderAuthSection() {
                     <span className={actionLabelClass}>Projects</span>
                 </Button>
             </Link>
-            {user.role === 'admin' && (
+            {(user.role === 'admin' || user.role === 'operator') && (
                 <Link to="/admin">
                     <Button variant="outline" title="Administration" className={actionButtonClass}>
                         <CastleTurretIcon className="h-[1.2rem] w-[1.2rem]" />

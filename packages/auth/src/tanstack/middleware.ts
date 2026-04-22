@@ -73,3 +73,24 @@ export const adminMiddleware = createMiddleware().server(async ({ next, context 
         }
     });
 });
+
+export const operatorMiddleware = createMiddleware().server(async ({ next, context }) => {
+    const user = await _getUser();
+
+    if (!user) {
+        setResponseStatus(401);
+        throw new Error('Unauthorized');
+    }
+
+    if (user.role !== 'admin' && user.role !== 'operator') {
+        setResponseStatus(403);
+        throw new Error('Forbidden');
+    }
+
+    return next({
+        context: {
+            ...(context ?? {}),
+            user
+        }
+    });
+});

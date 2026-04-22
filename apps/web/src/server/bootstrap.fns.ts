@@ -167,10 +167,16 @@ export const $verifyBootstrapOtpAndFinalize = createServerFn({ method: 'POST' })
 export const $finalizeFirstAdminForCurrentUser = createServerFn({ method: 'POST' })
     .middleware([freshAuthMiddleware])
     .handler(async ({ context }) => {
+        const role: NonNullable<AuthContext['user']>['role'] =
+            context.user.role === 'admin'
+                ? 'admin'
+                : context.user.role === 'operator'
+                  ? 'operator'
+                  : 'user';
         const authContext: AuthContext = {
             user: {
                 email: context.user.email,
-                role: context.user.role === 'admin' ? 'admin' : 'user'
+                role
             }
         };
         const auditContext = buildBootstrapAuditContext({

@@ -100,7 +100,7 @@ function authContextFromServerFnContext(context: unknown): AuthContext {
     if (c?.authContext) return c.authContext;
     const email = c?.user?.email;
     const role = c?.user?.role;
-    if (typeof email === 'string' && (role === 'admin' || role === 'user')) {
+    if (typeof email === 'string' && (role === 'admin' || role === 'operator' || role === 'user')) {
         return { user: { email, role } };
     }
     return { guest: true };

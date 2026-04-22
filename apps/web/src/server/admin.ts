@@ -562,7 +562,7 @@ export async function adminSetUserBanStatus(input: {
 export async function adminSetUserRole(input: {
     userId?: string | null;
     userEmail?: string | null;
-    role: 'admin' | 'user';
+    role: 'admin' | 'operator' | 'user';
     actorEmail: string;
 }) {
     const userId = (input.userId ?? '').trim();
@@ -592,10 +592,11 @@ export async function adminSetUserRole(input: {
     if (!user) throw new Error('User not found');
     if (user.email === input.actorEmail) throw new Error('You cannot modify your own role');
 
-    const currentRole = user.role === 'admin' ? 'admin' : 'user';
+    const currentRole =
+        user.role === 'admin' ? 'admin' : user.role === 'operator' ? 'operator' : 'user';
     if (currentRole === input.role) return;
 
-    if (currentRole === 'admin' && input.role === 'user') {
+    if (currentRole === 'admin' && input.role !== 'admin') {
         const adminCount = await collections.users.countDocuments({ role: 'admin' });
         if (adminCount <= 1) {
             throw new Error('Cannot demote the last remaining admin');

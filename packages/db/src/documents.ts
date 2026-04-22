@@ -156,7 +156,7 @@ export interface AuthContext {
     guest?: boolean;
     user?: {
         email: string;
-        role: 'admin' | 'user';
+        role: 'admin' | 'operator' | 'user';
         trustedPublisher?: boolean;
     };
     device?: {
