@@ -110,6 +110,16 @@ export const auth = betterAuth({
         enabled: false
     },
     database: mongodbAdapter(db),
+    user: {
+        additionalFields: {
+            trustedPublisher: {
+                type: 'boolean',
+                required: false,
+                defaultValue: false,
+                input: false
+            }
+        }
+    },
 
     // https://www.better-auth.com/docs/integrations/tanstack#usage-tips
     plugins: [

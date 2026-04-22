@@ -7,6 +7,7 @@ import { dbCol } from '~/server/collections';
 type Actor = {
     email: string;
     role?: string;
+    trustedPublisher?: boolean;
 };
 
 function isAdmin(role: string | null | undefined): boolean {
@@ -53,6 +54,11 @@ export async function ownsProject(actor: Actor, projectId: string): Promise<bool
     return hasCollaboratorRole(project, actor.email, ['owner']);
 }
 
+export function canPublishProject(actor: Actor): boolean {
+    if (isAdmin(actor.role)) return true;
+    return actor.trustedPublisher === true;
+}
+
 export async function resolveProjectIdForCommit(commitId: string): Promise<string | null> {
     if (!commitId) return null;
     const commit = await dbCol.commits.findById(commitId);
@@ -73,9 +79,17 @@ export function resolveProjectIdForUploadToken(token: string): string | null {
 }
 
 export function actorFromAuthContext(authContext: {
-    user?: { email?: string | null; role?: string | null } | null;
+    user?: {
+        email?: string | null;
+        role?: string | null;
+        trustedPublisher?: boolean | null;
+    } | null;
 }): Actor | null {
     const email = authContext.user?.email;
     if (!email) return null;
-    return { email, role: authContext.user?.role ?? undefined };
+    return {
+        email,
+        role: authContext.user?.role ?? undefined,
+        trustedPublisher: authContext.user?.trustedPublisher === true
+    };
 }

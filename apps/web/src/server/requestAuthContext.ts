@@ -222,7 +222,8 @@ export async function resolveAuthContextFromRequest(request: Request) {
             user: session?.user
                 ? {
                       email: session.user.email,
-                      role: session.user.role === 'admin' ? ('admin' as const) : ('user' as const)
+                      role: session.user.role === 'admin' ? ('admin' as const) : ('user' as const),
+                      trustedPublisher: Boolean(session.user.trustedPublisher)
                   }
                 : undefined
         }

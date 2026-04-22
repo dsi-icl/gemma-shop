@@ -20,6 +20,7 @@ export interface UserDocument {
     name?: string | null;
     image?: string | null;
     role?: string | null;
+    trustedPublisher?: boolean | null;
     banned?: boolean | null;
     emailVerified?: boolean | null;
     createdAt: Date;
@@ -156,6 +157,7 @@ export interface AuthContext {
     user?: {
         email: string;
         role: 'admin' | 'user';
+        trustedPublisher?: boolean;
     };
     device?: {
         id: string;

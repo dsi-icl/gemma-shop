@@ -7,6 +7,7 @@ import {
     GlobeXIcon,
     PencilSimpleIcon
 } from '@phosphor-icons/react';
+import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import type { PublicDoc } from '@repo/db/collections';
 import type { CommitDocument } from '@repo/db/documents';
 import { Badge } from '@repo/ui/components/badge';
@@ -143,6 +144,7 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId/commits'
 
 function CommitsTab() {
     const { projectId } = Route.useParams();
+    const { data: user } = useSuspenseQuery(authQueryOptions());
     const { data: project } = useSuspenseQuery(projectQueryOptions(projectId));
     const { data: commits } = useSuspenseQuery(commitsQueryOptions(projectId));
     const queryClient = useQueryClient();
@@ -172,6 +174,7 @@ function CommitsTab() {
         () => topoSort(commits, project.headCommitId ?? null),
         [commits, project.headCommitId]
     );
+    const canPublish = user?.role === 'admin' || user?.trustedPublisher === true;
 
     const handleOpenEditor = async (input: { commitId: string; slideId: string }) => {
         setOpeningEditorForCommitId(input.commitId);
@@ -279,25 +282,28 @@ function CommitsTab() {
                                                     <ArrowUpIcon /> Promote
                                                 </Button>
                                             )}
-                                        {isPublished ? (
-                                            <Button
-                                                variant="outline"
-                                                size="xs"
-                                                onClick={() => publishMutation.mutate(null)}
-                                                disabled={publishMutation.isPending}
-                                            >
-                                                <GlobeXIcon /> Unpublish
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                variant="outline"
-                                                size="xs"
-                                                onClick={() => publishMutation.mutate(commit.id)}
-                                                disabled={publishMutation.isPending}
-                                            >
-                                                <GlobeIcon /> Publish
-                                            </Button>
-                                        )}
+                                        {canPublish &&
+                                            (isPublished ? (
+                                                <Button
+                                                    variant="outline"
+                                                    size="xs"
+                                                    onClick={() => publishMutation.mutate(null)}
+                                                    disabled={publishMutation.isPending}
+                                                >
+                                                    <GlobeXIcon /> Unpublish
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    variant="outline"
+                                                    size="xs"
+                                                    onClick={() =>
+                                                        publishMutation.mutate(commit.id)
+                                                    }
+                                                    disabled={publishMutation.isPending}
+                                                >
+                                                    <GlobeIcon /> Publish
+                                                </Button>
+                                            ))}
                                         {commit.isMutableHead && commit.content?.slides?.[0]?.id ? (
                                             <Button
                                                 variant="outline"

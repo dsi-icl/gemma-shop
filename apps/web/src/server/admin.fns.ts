@@ -24,6 +24,7 @@ import {
     adminListUsers,
     adminListWalls,
     adminSetUserBanStatus,
+    adminSetUserTrustedPublisher,
     adminSetUserRole,
     adminSendSmtpTest,
     adminSetConfig,
@@ -323,6 +324,22 @@ export const $adminSetUserRole = createServerFn({ method: 'POST' })
             userId: data.userId,
             userEmail: data.userEmail,
             role: data.role,
+            actorEmail: context.user.email
+        })
+    );
+
+export const $adminSetUserTrustedPublisher = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            userId: z.string(),
+            trustedPublisher: z.boolean()
+        })
+    )
+    .handler(async ({ data, context }) =>
+        adminSetUserTrustedPublisher({
+            userId: data.userId,
+            trustedPublisher: data.trustedPublisher,
             actorEmail: context.user.email
         })
     );

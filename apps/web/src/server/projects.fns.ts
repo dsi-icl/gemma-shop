@@ -1,4 +1,4 @@
-import { authMiddleware } from '@repo/auth/tanstack/middleware';
+import { authMiddleware, freshAuthMiddleware } from '@repo/auth/tanstack/middleware';
 import { Collaborator, ProjectVisibility } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
 
@@ -9,6 +9,7 @@ import { dbCol } from '~/server/collections';
 import {
     actorFromAuthContext,
     canEditProject,
+    canPublishProject,
     canViewProject,
     ownsProject,
     resolveProjectIdForAsset,
@@ -454,7 +455,7 @@ export const $restoreProject = createServerFn({ method: 'POST' })
 
 export const $publishCommit = createServerFn({ method: 'POST' })
     .inputValidator(z.object({ projectId: z.string(), commitId: z.string().nullable() }))
-    .middleware([authMiddleware])
+    .middleware([freshAuthMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
         if (!actor) {
@@ -479,6 +480,17 @@ export const $publishCommit = createServerFn({ method: 'POST' })
                 resourceId: data.projectId
             });
             throw new Error('Access denied');
+        }
+        if (data.commitId !== null && !canPublishProject(actor)) {
+            await denyProjectFn({
+                context,
+                operation: '$publishCommit',
+                reasonCode: 'PROJECT_PUBLISH_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Publish access denied');
         }
         return publishCommit(
             data.projectId,
@@ -490,7 +502,7 @@ export const $publishCommit = createServerFn({ method: 'POST' })
 
 export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
     .inputValidator(z.object({ projectId: z.string() }))
-    .middleware([authMiddleware])
+    .middleware([freshAuthMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
         if (!actor) {
@@ -515,6 +527,17 @@ export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
                 resourceId: data.projectId
             });
             throw new Error('Access denied');
+        }
+        if (!canPublishProject(actor)) {
+            await denyProjectFn({
+                context,
+                operation: '$publishCustomRenderProject',
+                reasonCode: 'PROJECT_PUBLISH_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Publish access denied');
         }
         return publishCustomRenderProject(
             data.projectId,

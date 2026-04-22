@@ -631,6 +631,67 @@ export async function adminSetUserRole(input: {
     });
 }
 
+export async function adminSetUserTrustedPublisher(input: {
+    userId: string;
+    trustedPublisher: boolean;
+    actorEmail: string;
+}) {
+    const userId = input.userId.trim();
+    if (!userId) throw new Error('User ID is required');
+
+    let user = await collections.users.findOne(
+        { id: userId },
+        { projection: { _id: 1, email: 1, id: 1, trustedPublisher: 1 } }
+    );
+    if (!user && /^[0-9a-f]{24}$/i.test(userId)) {
+        user = await collections.users.findOne(
+            { _id: new ObjectId(userId) },
+            { projection: { _id: 1, email: 1, id: 1, trustedPublisher: 1 } }
+        );
+    }
+
+    if (!user) throw new Error('User not found');
+
+    const current = user.trustedPublisher === true;
+    if (current === input.trustedPublisher) return;
+
+    const headers = getRequest().headers;
+    const betterAuthUserId =
+        typeof user.id === 'string' && user.id.trim().length > 0 ? user.id.trim() : null;
+
+    if (betterAuthUserId) {
+        await auth.api.adminUpdateUser({
+            headers,
+            body: {
+                userId: betterAuthUserId,
+                data: { trustedPublisher: input.trustedPublisher }
+            }
+        });
+    } else {
+        await collections.users.updateOne(
+            { _id: user._id },
+            {
+                $set: {
+                    trustedPublisher: input.trustedPublisher,
+                    updatedAt: new Date()
+                }
+            }
+        );
+    }
+
+    if (typeof user.email === 'string' && user.email.length > 0) {
+        await adminRecomputeBusAuthContext({ email: user.email });
+    }
+
+    await logAuditSuccess({
+        action: 'ADMIN_USER_TRUSTED_PUBLISHER_UPDATED',
+        actorId: input.actorEmail,
+        resourceType: 'user',
+        resourceId: betterAuthUserId ?? String(user._id),
+        changes: { trustedPublisher: input.trustedPublisher }
+    });
+}
+
 export async function adminListPublicAssets() {
     const assets = await dbCol.assets.findPublic(false, { sort: { createdAt: -1 } });
     return assets;
