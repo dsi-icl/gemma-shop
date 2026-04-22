@@ -21,6 +21,7 @@ export interface UserDocument {
     image?: string | null;
     role?: string | null;
     trustedPublisher?: boolean | null;
+    lastSeen?: Date | null;
     banned?: boolean | null;
     emailVerified?: boolean | null;
     createdAt: Date;

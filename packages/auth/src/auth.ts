@@ -158,6 +158,11 @@ export const auth = betterAuth({
                 required: false,
                 defaultValue: false,
                 input: false
+            },
+            lastSeen: {
+                type: 'date',
+                required: false,
+                input: false
             }
         }
     },

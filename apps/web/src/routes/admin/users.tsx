@@ -138,6 +138,7 @@ function AdminUsers() {
                             <th className="px-4 py-3 text-left font-medium">Role</th>
                             <th className="px-4 py-3 text-left font-medium">Publishing</th>
                             <th className="px-4 py-3 text-left font-medium">Created</th>
+                            <th className="px-4 py-3 text-left font-medium">Last seen</th>
                             <th className="px-4 py-3 text-left font-medium">Status</th>
                             <th className="px-4 py-3 text-left font-medium">Actions</th>
                         </tr>
@@ -239,6 +240,9 @@ function AdminUsers() {
                                     </td>
                                     <td className="px-4 py-3 text-muted-foreground">
                                         <DateDisplay value={user.createdAt} />
+                                    </td>
+                                    <td className="px-4 py-3 text-muted-foreground">
+                                        <DateDisplay value={user.lastSeen} fallback="Never" />
                                     </td>
                                     <td className="px-4 py-3">
                                         {user.banned ? (
