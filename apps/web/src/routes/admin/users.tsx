@@ -1,4 +1,11 @@
-import { ProhibitIcon, ShieldCheckIcon } from '@phosphor-icons/react';
+import {
+    ChatCenteredSlashIcon,
+    ChatCenteredTextIcon,
+    GearIcon,
+    ProhibitIcon,
+    ShieldCheckIcon,
+    UserIcon
+} from '@phosphor-icons/react';
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Button } from '@repo/ui/components/button';
 import { DateDisplay } from '@repo/ui/components/date-display';
@@ -8,8 +15,7 @@ import {
     SelectGroup,
     SelectItem,
     SelectLabel,
-    SelectTrigger,
-    SelectValue
+    SelectTrigger
 } from '@repo/ui/components/select';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
@@ -85,6 +91,43 @@ function AdminUsers() {
         onError: (e: any) => toast.error(e.message)
     });
 
+    const getRoleView = (
+        role: unknown
+    ): { value: 'admin' | 'operator' | 'user'; label: string } => {
+        if (role === 'admin') return { value: 'admin', label: 'Admin' };
+        if (role === 'operator') return { value: 'operator', label: 'Operator' };
+        return { value: 'user', label: 'User' };
+    };
+
+    const roleIcon = (role: 'admin' | 'operator' | 'user') => {
+        if (role === 'admin') return <ShieldCheckIcon size={10} />;
+        if (role === 'operator') return <GearIcon size={10} />;
+        return <UserIcon size={10} />;
+    };
+
+    const roleOptions: Array<{ value: 'admin' | 'operator' | 'user'; label: string }> = [
+        { value: 'user', label: 'User' },
+        { value: 'operator', label: 'Operator' },
+        { value: 'admin', label: 'Admin' }
+    ];
+
+    const getPublishingView = (
+        trustedPublisher: unknown
+    ): { value: 'trusted' | 'blocked'; label: string } => {
+        if (trustedPublisher === true) return { value: 'trusted', label: 'Trusted' };
+        return { value: 'blocked', label: 'Blocked' };
+    };
+
+    const publishingIcon = (value: 'trusted' | 'blocked') => {
+        if (value === 'trusted') return <ChatCenteredTextIcon size={10} />;
+        return <ChatCenteredSlashIcon size={10} />;
+    };
+
+    const publishingOptions: Array<{ value: 'trusted' | 'blocked'; label: string }> = [
+        { value: 'blocked', label: 'Blocked' },
+        { value: 'trusted', label: 'Trusted' }
+    ];
+
     return (
         <div>
             <div className="overflow-hidden rounded-lg border border-border">
@@ -101,6 +144,8 @@ function AdminUsers() {
                     </thead>
                     <tbody className="divide-y divide-border">
                         {users.map((user: any) => {
+                            const roleView = getRoleView(user.role);
+                            const publishingView = getPublishingView(user.trustedPublisher);
                             const isCurrentUser =
                                 typeof user?.id === 'string' &&
                                 typeof currentUser?.id === 'string' &&
@@ -111,13 +156,7 @@ function AdminUsers() {
                                     <td className="px-4 py-3">
                                         {isAdminActor ? (
                                             <Select
-                                                value={
-                                                    user.role === 'admin'
-                                                        ? 'admin'
-                                                        : user.role === 'operator'
-                                                          ? 'operator'
-                                                          : 'user'
-                                                }
+                                                value={roleView.value}
                                                 onValueChange={(value) =>
                                                     roleMutation.mutate({
                                                         userId: user.id,
@@ -135,39 +174,38 @@ function AdminUsers() {
                                                 <SelectTrigger
                                                     className={`h-7 min-w-24 rounded-full border-0 px-2 py-0.5 text-xs font-medium ${user.role === `admin` ? `bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400` : `bg-muted text-muted-foreground`}`}
                                                 >
-                                                    {user.role === 'admin' && (
-                                                        <ShieldCheckIcon size={10} />
-                                                    )}
-                                                    <SelectValue />
+                                                    <span className="inline-flex items-center gap-1">
+                                                        {roleIcon(roleView.value)}
+                                                        {roleView.label}
+                                                    </span>
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectGroup>
                                                         <SelectLabel>Role</SelectLabel>
-                                                        <SelectItem value="user">User</SelectItem>
-                                                        <SelectItem value="operator">
-                                                            Operator
-                                                        </SelectItem>
-                                                        <SelectItem value="admin">Admin</SelectItem>
+                                                        {roleOptions.map((option) => (
+                                                            <SelectItem
+                                                                key={option.value}
+                                                                value={option.value}
+                                                            >
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    {roleIcon(option.value)}
+                                                                    {option.label}
+                                                                </span>
+                                                            </SelectItem>
+                                                        ))}
                                                     </SelectGroup>
                                                 </SelectContent>
                                             </Select>
                                         ) : (
-                                            <span className="inline-flex h-7 min-w-24 items-center justify-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                                {user.role === 'admin'
-                                                    ? 'Admin'
-                                                    : user.role === 'operator'
-                                                      ? 'Operator'
-                                                      : 'User'}
+                                            <span className="inline-flex h-7 min-w-24 items-center justify-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                                                {roleIcon(roleView.value)}
+                                                {roleView.label}
                                             </span>
                                         )}
                                     </td>
                                     <td className="px-4 py-3">
                                         <Select
-                                            value={
-                                                user.trustedPublisher === true
-                                                    ? 'trusted'
-                                                    : 'blocked'
-                                            }
+                                            value={publishingView.value}
                                             onValueChange={(value) =>
                                                 trustedPublisherMutation.mutate({
                                                     userId: user.id,
@@ -176,13 +214,25 @@ function AdminUsers() {
                                             }
                                         >
                                             <SelectTrigger className="h-7 min-w-28 rounded-full border-0 bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                                <SelectValue />
+                                                <span className="inline-flex items-center gap-1">
+                                                    {publishingIcon(publishingView.value)}
+                                                    {publishingView.label}
+                                                </span>
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectGroup>
                                                     <SelectLabel>Publishing</SelectLabel>
-                                                    <SelectItem value="blocked">Blocked</SelectItem>
-                                                    <SelectItem value="trusted">Trusted</SelectItem>
+                                                    {publishingOptions.map((option) => (
+                                                        <SelectItem
+                                                            key={option.value}
+                                                            value={option.value}
+                                                        >
+                                                            <span className="inline-flex items-center gap-1">
+                                                                {publishingIcon(option.value)}
+                                                                {option.label}
+                                                            </span>
+                                                        </SelectItem>
+                                                    ))}
                                                 </SelectGroup>
                                             </SelectContent>
                                         </Select>
