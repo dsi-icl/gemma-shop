@@ -14,6 +14,10 @@ function isAdmin(role: string | null | undefined): boolean {
     return role === 'admin';
 }
 
+function isOperator(role: string | null | undefined): boolean {
+    return role === 'operator';
+}
+
 function hasProjectMembership(
     project: Pick<ProjectDocument, 'createdBy' | 'collaborators'>,
     email: string
@@ -56,6 +60,7 @@ export async function ownsProject(actor: Actor, projectId: string): Promise<bool
 
 export function canPublishProject(actor: Actor): boolean {
     if (isAdmin(actor.role)) return true;
+    if (isOperator(actor.role)) return true;
     return actor.trustedPublisher === true;
 }
 

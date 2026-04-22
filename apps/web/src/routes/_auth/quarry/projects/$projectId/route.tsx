@@ -9,6 +9,7 @@ import {
     PencilSimpleIcon,
     UsersIcon
 } from '@phosphor-icons/react';
+import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
@@ -110,11 +111,14 @@ function getTabFromPath(pathname: string): TabKey {
 
 function ProjectLayout() {
     const { projectId } = Route.useParams();
+    const { data: user } = useSuspenseQuery(authQueryOptions());
     const { data: project } = useSuspenseQuery(projectQueryOptions(projectId));
     const location = useLocation();
     const navigate = useNavigate();
     const currentTab = getTabFromPath(location.pathname);
     const hasCustomRender = !!project.customRenderUrl;
+    const canPublish =
+        user?.role === 'admin' || user?.role === 'operator' || user?.trustedPublisher === true;
     const tabs = hasCustomRender
         ? ALL_TABS.filter((t) => !CUSTOM_RENDER_HIDDEN_TABS.has(t.key))
         : ALL_TABS;
@@ -209,6 +213,7 @@ function ProjectLayout() {
                             </Button>
                         )}
                         {hasCustomRender &&
+                            canPublish &&
                             (project.publishedCommitId ? (
                                 <Button
                                     variant="outline"

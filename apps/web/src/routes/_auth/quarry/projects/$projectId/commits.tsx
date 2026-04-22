@@ -174,7 +174,8 @@ function CommitsTab() {
         () => topoSort(commits, project.headCommitId ?? null),
         [commits, project.headCommitId]
     );
-    const canPublish = user?.role === 'admin' || user?.trustedPublisher === true;
+    const canPublish =
+        user?.role === 'admin' || user?.role === 'operator' || user?.trustedPublisher === true;
 
     const handleOpenEditor = async (input: { commitId: string; slideId: string }) => {
         setOpeningEditorForCommitId(input.commitId);
