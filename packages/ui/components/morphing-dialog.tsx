@@ -406,7 +406,7 @@ function MorphingDialogContent({
         if (typeof document !== 'undefined') {
             if (document.body.getAttribute('data-takeover-lock') === '1') return;
         }
-        if (isOpen && state !== 'minimized') close();
+        if (isOpen && state === 'expanded') close();
     });
 
     const stateClassName =
