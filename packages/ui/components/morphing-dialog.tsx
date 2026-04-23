@@ -828,7 +828,10 @@ function MorphingDialogClose({ className, variants }: MorphingDialogCloseProps) 
             type="button"
             aria-label="Close dialog"
             key={`dialog-close-${uniqueId}`}
-            className={cn('absolute top-6 right-6 z-30', className)}
+            className={cn(
+                'absolute top-6 right-6 z-30 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,1)]',
+                className
+            )}
             initial="initial"
             animate="animate"
             exit="exit"
@@ -848,7 +851,10 @@ function MorphingDialogMinimize({ className, variants }: MorphingDialogCloseProp
             onClick={minimize}
             type="button"
             aria-label="Minimize dialog"
-            className={cn('absolute top-6 right-16 z-30', className)}
+            className={cn(
+                'absolute top-6 right-16 z-30 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,1)]',
+                className
+            )}
             initial="initial"
             animate="animate"
             exit="exit"

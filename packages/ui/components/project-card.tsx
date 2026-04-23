@@ -400,7 +400,7 @@ function ProjectCardDialogBody({
                     disabled={isRefreshingController}
                     type="button"
                     aria-label="Minimize dialog"
-                    className="absolute top-6 right-26 z-10"
+                    className="absolute top-6 right-26 z-10 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,1)]"
                     initial="initial"
                     animate="animate"
                     exit="exit"
