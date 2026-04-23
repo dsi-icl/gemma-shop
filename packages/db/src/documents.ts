@@ -159,6 +159,7 @@ export interface AuthContext {
         email: string;
         role: 'admin' | 'operator' | 'user';
         trustedPublisher?: boolean;
+        impersonatedBy?: string;
     };
     device?: {
         id: string;

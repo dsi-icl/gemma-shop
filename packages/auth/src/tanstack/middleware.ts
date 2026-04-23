@@ -1,7 +1,12 @@
 import { createMiddleware } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 
-import { _getUser } from './functions';
+import { _getAuthSession } from './functions';
+
+function normalizeRole(role: unknown): 'admin' | 'operator' | 'user' {
+    if (role === 'admin' || role === 'operator') return role;
+    return 'user';
+}
 
 /**
  * Middleware to force authentication on server requests (including server functions), and add the user to the context.
@@ -11,7 +16,8 @@ import { _getUser } from './functions';
  * @see https://better-auth.com/docs/concepts/session-management#cookie-cache
  */
 export const authMiddleware = createMiddleware().server(async ({ next, context }) => {
-    const user = await _getUser();
+    const authSession = await _getAuthSession();
+    const user = authSession?.user ?? null;
 
     if (!user) {
         setResponseStatus(401);
@@ -21,7 +27,18 @@ export const authMiddleware = createMiddleware().server(async ({ next, context }
     return next({
         context: {
             ...(context ?? {}),
-            user
+            user,
+            authContext: {
+                user: {
+                    email: user.email,
+                    role: normalizeRole(user.role),
+                    ...(user.trustedPublisher === true ? { trustedPublisher: true } : {}),
+                    ...(typeof authSession?.session?.impersonatedBy === 'string' &&
+                    authSession.session.impersonatedBy.length > 0
+                        ? { impersonatedBy: authSession.session.impersonatedBy }
+                        : {})
+                }
+            }
         }
     });
 });
@@ -34,11 +51,12 @@ export const authMiddleware = createMiddleware().server(async ({ next, context }
  * @see https://better-auth.com/docs/concepts/session-management#cookie-cache
  */
 export const freshAuthMiddleware = createMiddleware().server(async ({ next, context }) => {
-    const user = await _getUser({
+    const authSession = await _getAuthSession({
         // ensure session is fresh
         // https://better-auth.com/docs/concepts/session-management#cookie-cache
         disableCookieCache: true
     });
+    const user = authSession?.user ?? null;
 
     if (!user) {
         setResponseStatus(401);
@@ -48,13 +66,25 @@ export const freshAuthMiddleware = createMiddleware().server(async ({ next, cont
     return next({
         context: {
             ...(context ?? {}),
-            user
+            user,
+            authContext: {
+                user: {
+                    email: user.email,
+                    role: normalizeRole(user.role),
+                    ...(user.trustedPublisher === true ? { trustedPublisher: true } : {}),
+                    ...(typeof authSession?.session?.impersonatedBy === 'string' &&
+                    authSession.session.impersonatedBy.length > 0
+                        ? { impersonatedBy: authSession.session.impersonatedBy }
+                        : {})
+                }
+            }
         }
     });
 });
 
 export const adminMiddleware = createMiddleware().server(async ({ next, context }) => {
-    const user = await _getUser();
+    const authSession = await _getAuthSession();
+    const user = authSession?.user ?? null;
 
     if (!user) {
         setResponseStatus(401);
@@ -69,13 +99,25 @@ export const adminMiddleware = createMiddleware().server(async ({ next, context 
     return next({
         context: {
             ...(context ?? {}),
-            user
+            user,
+            authContext: {
+                user: {
+                    email: user.email,
+                    role: normalizeRole(user.role),
+                    ...(user.trustedPublisher === true ? { trustedPublisher: true } : {}),
+                    ...(typeof authSession?.session?.impersonatedBy === 'string' &&
+                    authSession.session.impersonatedBy.length > 0
+                        ? { impersonatedBy: authSession.session.impersonatedBy }
+                        : {})
+                }
+            }
         }
     });
 });
 
 export const operatorMiddleware = createMiddleware().server(async ({ next, context }) => {
-    const user = await _getUser();
+    const authSession = await _getAuthSession();
+    const user = authSession?.user ?? null;
 
     if (!user) {
         setResponseStatus(401);
@@ -90,7 +132,18 @@ export const operatorMiddleware = createMiddleware().server(async ({ next, conte
     return next({
         context: {
             ...(context ?? {}),
-            user
+            user,
+            authContext: {
+                user: {
+                    email: user.email,
+                    role: normalizeRole(user.role),
+                    ...(user.trustedPublisher === true ? { trustedPublisher: true } : {}),
+                    ...(typeof authSession?.session?.impersonatedBy === 'string' &&
+                    authSession.session.impersonatedBy.length > 0
+                        ? { impersonatedBy: authSession.session.impersonatedBy }
+                        : {})
+                }
+            }
         }
     });
 });

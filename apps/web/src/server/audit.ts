@@ -60,6 +60,7 @@ function normalizeAuthContext(input?: AuthContext | null): AuthContext | null {
             ? input.user.role
             : null;
     const userTrustedPublisher = Boolean(input.user?.trustedPublisher);
+    const impersonatedBy = cleanString(input.user?.impersonatedBy);
 
     const deviceId = cleanString(input.device?.id);
     const deviceKind =
@@ -80,7 +81,8 @@ function normalizeAuthContext(input?: AuthContext | null): AuthContext | null {
                   user: {
                       email: userEmail,
                       role: userRole,
-                      ...(userTrustedPublisher ? { trustedPublisher: true } : {})
+                      ...(userTrustedPublisher ? { trustedPublisher: true } : {}),
+                      ...(impersonatedBy ? { impersonatedBy } : {})
                   }
               }
             : {}),

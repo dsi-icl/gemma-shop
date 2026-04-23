@@ -17,6 +17,7 @@ import {
 import extraHead from '~/assets/extraHead.json';
 import { Footer } from '~/components/Footer';
 import { Header } from '~/components/Header';
+import { ImpersonationBanner } from '~/components/ImpersonationBanner';
 import { useInputModeClasses } from '~/lib/inputMode';
 import { RootRouteContext } from '~/types';
 
@@ -123,6 +124,7 @@ function RootDocument({ children }: { readonly children: React.ReactNode }) {
                     {children}
                     {!isWall ? (
                         <>
+                            <ImpersonationBanner />
                             <Header />
                             <Footer />
                         </>

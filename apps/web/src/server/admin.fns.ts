@@ -1,4 +1,8 @@
-import { adminMiddleware, operatorMiddleware } from '@repo/auth/tanstack/middleware';
+import {
+    adminMiddleware,
+    authMiddleware,
+    operatorMiddleware
+} from '@repo/auth/tanstack/middleware';
 import type { AuthContext } from '@repo/db/documents';
 import { Collaborator } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
@@ -26,6 +30,8 @@ import {
     adminSetUserBanStatus,
     adminSetUserTrustedPublisher,
     adminSetUserRole,
+    adminImpersonateUser,
+    adminStopImpersonation,
     adminSendSmtpTest,
     adminSetConfig,
     adminUpdateWallMetadata,
@@ -341,5 +347,29 @@ export const $adminSetUserTrustedPublisher = createServerFn({ method: 'POST' })
             userId: data.userId,
             trustedPublisher: data.trustedPublisher,
             actorEmail: context.user.email
+        })
+    );
+
+export const $adminImpersonateUser = createServerFn({ method: 'POST' })
+    .middleware([adminMiddleware])
+    .inputValidator(
+        z.object({
+            userId: z.string()
+        })
+    )
+    .handler(async ({ data, context }) =>
+        adminImpersonateUser({
+            userId: data.userId,
+            actorEmail: context.user.email,
+            actorRole: typeof context.user.role === 'string' ? context.user.role : undefined
+        })
+    );
+
+export const $adminStopImpersonation = createServerFn({ method: 'POST' })
+    .middleware([authMiddleware])
+    .handler(async ({ context }) =>
+        adminStopImpersonation({
+            currentEmail: context.user.email,
+            currentRole: typeof context.user.role === 'string' ? context.user.role : undefined
         })
     );

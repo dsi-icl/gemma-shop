@@ -4,7 +4,7 @@ import { createSmtpTransport } from '@repo/auth/smtp';
 import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
 import type { AuthContext } from '@repo/db/documents';
 import type { CollaboratorRole } from '@repo/db/schema';
-import { getRequest } from '@tanstack/react-start/server';
+import { getRequest, setResponseHeader } from '@tanstack/react-start/server';
 import { ObjectId } from 'mongodb';
 
 import {
@@ -44,6 +44,38 @@ function withAdminAuditContext(auditContext?: AdminAuditContext) {
 
 function escapeRegex(input: string): string {
     return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function forwardSetCookieHeaders(result: unknown) {
+    const headers =
+        result && typeof result === 'object' && 'headers' in (result as Record<string, unknown>)
+            ? ((result as { headers?: unknown }).headers ?? null)
+            : null;
+    const getSetCookie =
+        headers &&
+        typeof headers === 'object' &&
+        typeof (headers as { getSetCookie?: unknown }).getSetCookie === 'function'
+            ? ((headers as { getSetCookie: () => string[] }).getSetCookie() ?? [])
+            : [];
+    if (Array.isArray(getSetCookie) && getSetCookie.length > 0) {
+        setResponseHeader('Set-Cookie', getSetCookie);
+    }
+}
+
+async function resolveUserByBetterAuthId(userId: string) {
+    const normalized = userId.trim();
+    if (!normalized) return null;
+    let user = await collections.users.findOne(
+        { id: normalized },
+        { projection: { id: 1, email: 1, role: 1 } }
+    );
+    if (!user && /^[0-9a-f]{24}$/i.test(normalized)) {
+        user = await collections.users.findOne(
+            { _id: new ObjectId(normalized) },
+            { projection: { id: 1, email: 1, role: 1 } }
+        );
+    }
+    return user;
 }
 
 async function findWallById(identifier: string) {
@@ -690,6 +722,128 @@ export async function adminSetUserTrustedPublisher(input: {
         resourceType: 'user',
         resourceId: betterAuthUserId ?? String(user._id),
         changes: { trustedPublisher: input.trustedPublisher }
+    });
+}
+
+export async function adminImpersonateUser(input: {
+    userId: string;
+    actorEmail: string;
+    actorRole?: string;
+}) {
+    const userId = input.userId.trim();
+    if (!userId) throw new Error('User ID is required');
+
+    const targetUser = await resolveUserByBetterAuthId(userId);
+    if (!targetUser) throw new Error('User not found');
+    if (targetUser.email === input.actorEmail) throw new Error('You cannot impersonate yourself');
+
+    const headers = getRequest().headers;
+    const result = await auth.api.impersonateUser({
+        headers,
+        body: { userId },
+        returnHeaders: true
+    });
+    forwardSetCookieHeaders(result);
+
+    const impersonator = await collections.users.findOne(
+        { email: input.actorEmail.toLowerCase() },
+        { projection: { id: 1, email: 1, role: 1 } }
+    );
+    const actorId = `user:${input.actorEmail.toLowerCase()}`;
+
+    await logAuditSuccess({
+        action: 'ADMIN_USER_IMPERSONATION_STARTED',
+        actorId,
+        resourceType: 'user',
+        resourceId: userId,
+        authContext: {
+            user: {
+                email: input.actorEmail.toLowerCase(),
+                role:
+                    input.actorRole === 'admin'
+                        ? 'admin'
+                        : input.actorRole === 'operator'
+                          ? 'operator'
+                          : 'user'
+            }
+        },
+        changes: {
+            targetUserId: userId,
+            targetUserEmail: typeof targetUser.email === 'string' ? targetUser.email : null,
+            impersonatorUserId: typeof impersonator?.id === 'string' ? impersonator.id : null,
+            impersonatorEmail: input.actorEmail.toLowerCase()
+        }
+    });
+}
+
+export async function adminStopImpersonation(input: {
+    currentEmail: string;
+    currentRole?: string;
+}) {
+    const headers = getRequest().headers;
+    const sessionRaw = await auth.api.getSession({ headers });
+    const authSession =
+        sessionRaw &&
+        typeof sessionRaw === 'object' &&
+        'response' in (sessionRaw as Record<string, unknown>)
+            ? ((sessionRaw as { response?: unknown }).response ?? null)
+            : sessionRaw;
+    const sessionRecord =
+        authSession && typeof authSession === 'object'
+            ? ((authSession as { session?: unknown }).session ?? null)
+            : null;
+    const impersonatedBy =
+        sessionRecord && typeof sessionRecord === 'object'
+            ? ((sessionRecord as { impersonatedBy?: unknown }).impersonatedBy ?? null)
+            : null;
+
+    if (typeof impersonatedBy !== 'string' || impersonatedBy.length === 0) {
+        throw new Error('No active impersonation session');
+    }
+
+    const impersonator = await resolveUserByBetterAuthId(impersonatedBy);
+
+    const stopResult = await auth.api.stopImpersonating({
+        headers,
+        returnHeaders: true
+    });
+    forwardSetCookieHeaders(stopResult);
+
+    const restoredUser =
+        stopResult &&
+        typeof stopResult === 'object' &&
+        'response' in (stopResult as Record<string, unknown>)
+            ? (((stopResult as { response?: { user?: { email?: unknown } } }).response?.user
+                  ?.email as string | undefined) ?? null)
+            : null;
+
+    await logAuditSuccess({
+        action: 'ADMIN_USER_IMPERSONATION_ENDED',
+        actorId:
+            typeof impersonator?.email === 'string'
+                ? `user:${impersonator.email.toLowerCase()}`
+                : `user:${input.currentEmail.toLowerCase()}`,
+        resourceType: 'user',
+        resourceId: typeof impersonator?.id === 'string' ? impersonator.id : impersonatedBy,
+        authContext: {
+            user: {
+                email: input.currentEmail.toLowerCase(),
+                role:
+                    input.currentRole === 'admin'
+                        ? 'admin'
+                        : input.currentRole === 'operator'
+                          ? 'operator'
+                          : 'user',
+                impersonatedBy
+            }
+        },
+        changes: {
+            impersonatorUserId:
+                typeof impersonator?.id === 'string' ? impersonator.id : impersonatedBy,
+            impersonatorEmail: typeof impersonator?.email === 'string' ? impersonator.email : null,
+            impersonatedUserEmail: input.currentEmail.toLowerCase(),
+            restoredUserEmail: restoredUser
+        }
     });
 }
 

@@ -1,7 +1,9 @@
 import {
     ChatCenteredSlashIcon,
     ChatCenteredTextIcon,
+    DotsThreeVerticalIcon,
     GearIcon,
+    PersonSimpleRunIcon,
     ProhibitIcon,
     ShieldCheckIcon,
     UserIcon
@@ -9,6 +11,12 @@ import {
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Button } from '@repo/ui/components/button';
 import { DateDisplay } from '@repo/ui/components/date-display';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger
+} from '@repo/ui/components/dropdown-menu';
 import {
     Select,
     SelectContent,
@@ -18,10 +26,11 @@ import {
     SelectTrigger
 } from '@repo/ui/components/select';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router';
 import { toast } from 'sonner';
 
 import {
+    $adminImpersonateUser,
     $adminSetUserBanStatus,
     $adminSetUserRole,
     $adminSetUserTrustedPublisher
@@ -43,6 +52,8 @@ function AdminUsers() {
     const { data: currentUser } = useSuspenseQuery(authQueryOptions());
     const isAdminActor = currentUser?.role === 'admin';
     const queryClient = useQueryClient();
+    const router = useRouter();
+    const navigate = useNavigate();
 
     const banMutation = useMutation({
         mutationFn: async ({ userId, banned }: { userId: string; banned: boolean }) => {
@@ -89,6 +100,23 @@ function AdminUsers() {
             toast.success('Trusted publisher status updated');
         },
         onError: (e: any) => toast.error(e.message)
+    });
+
+    const impersonateMutation = useMutation({
+        mutationFn: async ({ userId }: { userId: string }) => {
+            await $adminImpersonateUser({ data: { userId } });
+        },
+        onSuccess: async () => {
+            await queryClient.cancelQueries();
+            queryClient.clear();
+            await router.invalidate();
+            if (typeof window !== 'undefined') {
+                window.location.assign('/');
+                return;
+            }
+            navigate({ to: '/' });
+        },
+        onError: (e: any) => toast.error(e.message ?? 'Could not start impersonation')
     });
 
     const getRoleView = (
@@ -262,25 +290,51 @@ function AdminUsers() {
                                     </td>
                                     <td className="px-4 py-3">
                                         {isAdminActor ? (
-                                            <Button
-                                                variant={user.banned ? 'outline' : 'ghost'}
-                                                size="sm"
-                                                onClick={() =>
-                                                    banMutation.mutate({
-                                                        userId: user.id,
-                                                        banned: !user.banned
-                                                    })
-                                                }
-                                                disabled={
-                                                    banMutation.isPending ||
-                                                    trustedPublisherMutation.isPending ||
-                                                    roleMutation.isPending ||
-                                                    isCurrentUser
-                                                }
-                                            >
-                                                <ProhibitIcon size={14} />
-                                                {user.banned ? 'Unban' : 'Ban'}
-                                            </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger
+                                                    className="rounded-lg p-1 hover:bg-muted"
+                                                    disabled={
+                                                        banMutation.isPending ||
+                                                        trustedPublisherMutation.isPending ||
+                                                        roleMutation.isPending ||
+                                                        impersonateMutation.isPending
+                                                    }
+                                                >
+                                                    <DotsThreeVerticalIcon className="size-4" />
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem
+                                                        onClick={() =>
+                                                            banMutation.mutate({
+                                                                userId: user.id,
+                                                                banned: !user.banned
+                                                            })
+                                                        }
+                                                        disabled={isCurrentUser}
+                                                        variant={
+                                                            user.banned ? 'default' : 'destructive'
+                                                        }
+                                                    >
+                                                        <ProhibitIcon size={14} />
+                                                        {user.banned ? 'Unban' : 'Ban'}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() =>
+                                                            impersonateMutation.mutate({
+                                                                userId: user.id
+                                                            })
+                                                        }
+                                                        disabled={
+                                                            isCurrentUser ||
+                                                            roleView.value === 'admin' ||
+                                                            user.banned
+                                                        }
+                                                    >
+                                                        <PersonSimpleRunIcon size={14} />
+                                                        Impersonate
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         ) : (
                                             <span className="text-xs text-muted-foreground">-</span>
                                         )}

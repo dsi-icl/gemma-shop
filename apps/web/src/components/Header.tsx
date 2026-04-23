@@ -11,7 +11,7 @@ import {
 } from '@phosphor-icons/react';
 import authClient from '@repo/auth/auth-client';
 import { useAuthSuspense } from '@repo/auth/tanstack/hooks';
-import { authQueryOptions } from '@repo/auth/tanstack/queries';
+import { authQueryOptions, authSessionQueryOptions } from '@repo/auth/tanstack/queries';
 import { Button } from '@repo/ui/components/button';
 import {
     Dialog,
@@ -20,10 +20,12 @@ import {
     DialogDescription,
     DialogTitle
 } from '@repo/ui/components/dialog';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useRouter } from '@tanstack/react-router';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+
+import { $adminStopImpersonation } from '~/server/admin.fns';
 
 import { KeyboardToggle } from './KeyboardToggle';
 import { ThemeToggle } from './ThemeToggle';
@@ -98,14 +100,38 @@ function RefreshPageButton() {
 
 function HeaderAuthSection() {
     const { user } = useAuthSuspense();
+    const { data: sessionData } = useQuery(authSessionQueryOptions());
     const queryClient = useQueryClient();
     const router = useRouter();
     const navigate = useNavigate();
     const [signOutDialogOpen, setSignOutDialogOpen] = useState(false);
     const [isSigningOut, setIsSigningOut] = useState(false);
+    const impersonatedBy =
+        sessionData?.session && typeof sessionData.session === 'object'
+            ? (sessionData.session as { impersonatedBy?: unknown }).impersonatedBy
+            : null;
+    const isImpersonating = typeof impersonatedBy === 'string' && impersonatedBy.length > 0;
 
     const handleSignOut = async () => {
         setIsSigningOut(true);
+        if (isImpersonating) {
+            try {
+                await $adminStopImpersonation();
+                await queryClient.cancelQueries();
+                queryClient.clear();
+                await router.invalidate();
+                if (typeof window !== 'undefined') {
+                    window.location.assign('/admin/users');
+                    return;
+                }
+                navigate({ to: '/admin/users' });
+                return;
+            } catch (e: any) {
+                toast.error(e?.message ?? 'Could not end impersonation');
+                setIsSigningOut(false);
+                return;
+            }
+        }
         await authClient.signOut({
             fetchOptions: {
                 onSuccess: async () => {
@@ -171,19 +197,23 @@ function HeaderAuthSection() {
                 variant="outline"
                 onClick={() => setSignOutDialogOpen(true)}
                 className="px-2 xl:px-3"
-                title={`Log out (${user.email})`}
+                title={`${isImpersonating ? 'End impersonation' : 'Log out'} (${user.email})`}
             >
                 <SignOutIcon className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all" />
-                <span className="hidden xl:inline">Log out</span>
+                <span className="hidden xl:inline">
+                    {isImpersonating ? 'End impersonation' : 'Log out'}
+                </span>
                 <span className="ml-1 hidden max-w-48 truncate text-xs text-muted-foreground xl:inline">
                     {user.email}
                 </span>
             </Button>
             <Dialog open={signOutDialogOpen} onOpenChange={setSignOutDialogOpen}>
                 <DialogContent className="w-80 p-5">
-                    <DialogTitle>Log out</DialogTitle>
+                    <DialogTitle>{isImpersonating ? 'End impersonation' : 'Log out'}</DialogTitle>
                     <DialogDescription className="mt-1">
-                        Are you sure you want to log out of this account?
+                        {isImpersonating
+                            ? 'Are you sure you want to end impersonation and return to your account?'
+                            : 'Are you sure you want to log out of this account?'}
                     </DialogDescription>
                     <div className="mt-4 flex justify-end gap-2">
                         <DialogClose>
@@ -197,7 +227,13 @@ function HeaderAuthSection() {
                             onClick={handleSignOut}
                             disabled={isSigningOut}
                         >
-                            {isSigningOut ? 'Logging out...' : 'Log out'}
+                            {isSigningOut
+                                ? isImpersonating
+                                    ? 'Ending...'
+                                    : 'Logging out...'
+                                : isImpersonating
+                                  ? 'End impersonation'
+                                  : 'Log out'}
                         </Button>
                     </div>
                 </DialogContent>
@@ -207,6 +243,7 @@ function HeaderAuthSection() {
 }
 
 export function Header() {
+    const { data: sessionData } = useQuery(authSessionQueryOptions());
     const searchStr = useLocation({
         select: (location) => location.searchStr
     });
@@ -215,11 +252,18 @@ export function Header() {
         const params = new URLSearchParams(searchStr);
         return params.get('l');
     }, [searchStr]);
+    const impersonatedBy =
+        sessionData?.session && typeof sessionData.session === 'object'
+            ? (sessionData.session as { impersonatedBy?: unknown }).impersonatedBy
+            : null;
+    const isImpersonating = typeof impersonatedBy === 'string' && impersonatedBy.length > 0;
 
     if (mountLocation === 'gallery' || mountLocation === 'wall') return null;
 
     return (
-        <header className="absolute top-0 left-0 flex w-full items-center justify-end gap-2 p-4">
+        <header
+            className={`absolute left-0 flex w-full items-center justify-end gap-2 p-4 ${isImpersonating ? 'top-10' : 'top-0'}`}
+        >
             <Link to="/" className="flex flex-row gap-3 font-mono">
                 Gemma Shop
             </Link>
