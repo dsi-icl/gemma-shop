@@ -242,15 +242,19 @@ export const $getProject = createServerFn({ method: 'GET' })
         }
         const allowed = await canViewProject(actor, data.id);
         if (!allowed) {
-            await denyProjectFn({
-                context,
-                operation: '$getProject',
-                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
-                projectId: data.id,
-                resourceType: 'project',
-                resourceId: data.id
-            });
-            throw new Error('Access denied');
+            const isPublicPublishedProject =
+                project.visibility === 'public' && Boolean(project.publishedCommitId);
+            if (!isPublicPublishedProject) {
+                await denyProjectFn({
+                    context,
+                    operation: '$getProject',
+                    reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                    projectId: data.id,
+                    resourceType: 'project',
+                    resourceId: data.id
+                });
+                throw new Error('Access denied');
+            }
         }
         return project;
     });
@@ -261,6 +265,7 @@ export const $getCommit = createServerFn({ method: 'GET' })
     .handler(async ({ context, data }) => {
         const commit = await getCommit(data.id);
         if (!commit) throw new Error('Commit not found');
+        const commitProjectId = String(commit.projectId);
         const actor = actorFromAuthContext(context);
         if (!actor) {
             await denyProjectFn({
@@ -272,17 +277,22 @@ export const $getCommit = createServerFn({ method: 'GET' })
             });
             throw new Error('Access denied');
         }
-        const allowed = await canViewProject(actor, commit.projectId);
+        const allowed = await canViewProject(actor, commitProjectId);
         if (!allowed) {
-            await denyProjectFn({
-                context,
-                operation: '$getCommit',
-                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
-                projectId: commit.projectId,
-                resourceType: 'commit',
-                resourceId: data.id
-            });
-            throw new Error('Access denied');
+            const project = await getProject(commitProjectId);
+            const isPublishedCommitOfPublicProject =
+                project?.visibility === 'public' && project.publishedCommitId === commit.id;
+            if (!isPublishedCommitOfPublicProject) {
+                await denyProjectFn({
+                    context,
+                    operation: '$getCommit',
+                    reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                    projectId: commitProjectId,
+                    resourceType: 'commit',
+                    resourceId: data.id
+                });
+                throw new Error('Access denied');
+            }
         }
         return commit;
     });
