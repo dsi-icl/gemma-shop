@@ -295,14 +295,22 @@ function MorphingDialogTrigger({
         if (consumeTriggerCloseGuard()) {
             return;
         }
-        setState((prev) => (prev === 'closed' ? 'expanded' : 'closed'));
+        setState((prev) => {
+            if (prev === 'closed') return 'expanded';
+            if (prev === 'minimized') return 'fullscreen';
+            return 'closed';
+        });
     }, [consumeTriggerCloseGuard, setState]);
 
     const handleKeyDown = useCallback(
         (event: React.KeyboardEvent) => {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
-                setState((prev) => (prev === 'closed' ? 'expanded' : 'closed'));
+                setState((prev) => {
+                    if (prev === 'closed') return 'expanded';
+                    if (prev === 'minimized') return 'fullscreen';
+                    return 'closed';
+                });
             }
         },
         [setState]
