@@ -641,7 +641,7 @@ export type MorphingDialogImageProps = {
     style?: React.CSSProperties;
 };
 
-function RotatingProjectImages({
+export function RotatingProjectImages({
     images,
     alt
 }: {
@@ -759,6 +759,45 @@ function MorphingDialogImage({
     );
 }
 
+export type NonMorphingDialogImageProps = MorphingDialogImageProps;
+
+function NonMorphingDialogImage({
+    src,
+    blurhash,
+    sizes,
+    images,
+    alt,
+    className,
+    style,
+    state = 'opened'
+}: NonMorphingDialogImageProps) {
+    const normalizedImages =
+        images && images.length > 0
+            ? images.filter((image) => Boolean(image.src))
+            : src
+              ? [{ src, blurhash, sizes }]
+              : [];
+
+    if (normalizedImages.length === 0) {
+        return (
+            <AnimatedBlurPattern
+                key={src}
+                seed={alt}
+                height={200}
+                animate={state === 'closed'}
+                className={className}
+                style={style}
+            />
+        );
+    }
+
+    return (
+        <div className={cn('relative isolate z-0 overflow-hidden', className)} style={style}>
+            <RotatingProjectImages images={normalizedImages} alt={alt} />
+        </div>
+    );
+}
+
 export type MorphingDialogCloseProps = {
     className?: string;
     variants?: {
@@ -823,5 +862,6 @@ export {
     MorphingDialogSubtitle,
     MorphingDialogDescription,
     MorphingDialogImage,
+    NonMorphingDialogImage,
     MorphingDialogMinimize
 };

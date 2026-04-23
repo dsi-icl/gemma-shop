@@ -17,6 +17,7 @@ import {
     MorphingDialogDescription,
     MorphingDialogImage,
     MorphingDialogMinimize,
+    NonMorphingDialogImage,
     MorphingDialogSubtitle,
     MorphingDialogTitle,
     MorphingDialogTrigger,
@@ -503,6 +504,40 @@ export function ProjectCard({
                 duration: 0.25
             }}
         >
+            <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-xl border border-border/70 bg-card/60">
+                <NonMorphingDialogImage
+                    src={project.imageUrl}
+                    blurhash={project.blurhash}
+                    sizes={project.sizes}
+                    images={project.images}
+                    alt={project.name}
+                    state={'closed'}
+                    className="h-48 w-full object-cover"
+                />
+                <div className="flex w-full grow flex-col justify-between p-3">
+                    <div>
+                        <div className="flex items-start justify-between">
+                            <div className="text-left">
+                                <div>{project.name}</div>
+                                <div className="text-sm">{project.author}</div>
+                            </div>
+                            <span
+                                aria-hidden="true"
+                                className="relative ml-1 flex h-6 w-6 shrink-0 scale-100 items-center justify-center rounded-lg border"
+                            >
+                                <EyeIcon size={12} />
+                            </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                            {project.tags.slice(0, 3).map((tag) => (
+                                <Badge key={tag} variant="secondary" className="text-xs">
+                                    {tag}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
             <MorphingDialogTrigger
                 style={{
                     borderRadius: '12px'

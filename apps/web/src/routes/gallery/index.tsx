@@ -623,6 +623,7 @@ function HomePage() {
                                     {filteredProjects.map((project) => (
                                         <motion.div
                                             key={project.id}
+                                            className="relative"
                                             layout
                                             initial={{ opacity: 0, scale: 0.95 }}
                                             animate={{ opacity: 1, scale: 1 }}
