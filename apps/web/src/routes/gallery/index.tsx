@@ -431,6 +431,7 @@ function HomePage() {
                 tags: p.tags,
                 publishedCommitId: p.publishedCommitId,
                 customControlUrl: (p as { customControlUrl?: string }).customControlUrl,
+                customRenderUrl: (p as { customRenderUrl?: string | null }).customRenderUrl,
                 imageUrl: p.heroImages[0] ?? '',
                 blurhash: (p as { heroImageBlurhash?: string }).heroImageBlurhash,
                 sizes: (p as { heroImageSizes?: number[] }).heroImageSizes,

@@ -23,6 +23,7 @@ import {
     MorphingDialogTrigger,
     useMorphingDialog
 } from './morphing-dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 export interface Project {
     name: string;
@@ -38,6 +39,7 @@ export interface Project {
         sizes?: number[];
     }>;
     customControlUrl?: string;
+    customRenderUrl?: string | null;
 }
 
 interface ProjectCardProps {
@@ -59,6 +61,8 @@ interface ProjectCardProps {
     onWallUnbindRequest?: (wallId: string) => Promise<boolean | void> | boolean | void;
     onControllerTokenRequest?: (wallId: string) => Promise<string | null | void>;
     onActiveWallIdChange?: (wallId: string | null) => void;
+    previewHref?: string;
+    previewDisabledReason?: string;
 }
 
 function buildControllerUrl(
@@ -114,7 +118,9 @@ function ProjectCardDialogBody({
     onActiveWallIdChange,
     availableWalls = [],
     presetWallId,
-    hideWallPicker = false
+    hideWallPicker = false,
+    previewHref,
+    previewDisabledReason
 }: ProjectCardProps) {
     const { state, fullscreen } = useMorphingDialog();
     const loadInFlightRef = useRef(false);
@@ -127,6 +133,8 @@ function ProjectCardDialogBody({
     const [refreshRebootDone, setRefreshRebootDone] = useState(false);
     const [refreshIframeLoaded, setRefreshIframeLoaded] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [previewReasonTooltipOpen, setPreviewReasonTooltipOpen] = useState(false);
+    const previewTooltipPinnedRef = useRef(false);
 
     const hasController = Boolean(activeWallId);
     const isFullscreen = state === 'fullscreen';
@@ -269,6 +277,20 @@ function ProjectCardDialogBody({
         setIsRefreshingController(false);
     }, [isRefreshingController, refreshRebootDone, refreshIframeLoaded]);
 
+    const handleOpenPreview = useCallback(() => {
+        if (!previewHref) return;
+        window.open(previewHref, '_blank', 'noopener,noreferrer');
+    }, [previewHref]);
+    const togglePinnedPreviewReasonTooltip = useCallback(() => {
+        previewTooltipPinnedRef.current = !previewTooltipPinnedRef.current;
+        setPreviewReasonTooltipOpen(previewTooltipPinnedRef.current);
+    }, []);
+    const previewState: 'enabled' | 'disabled' | 'hidden' = previewHref
+        ? 'enabled'
+        : previewDisabledReason
+          ? 'disabled'
+          : 'hidden';
+
     return (
         <>
             <div
@@ -370,19 +392,86 @@ function ProjectCardDialogBody({
 
                             {!isFullscreen ? (
                                 onLoadProject ? (
-                                    <Button
-                                        className="mt-5 w-full"
-                                        onClick={handleLoadButton}
-                                        disabled={isLoadingWall}
-                                    >
-                                        {isLoadingWall ? (
-                                            <CircleNotchIcon className="animate-spin" />
-                                        ) : (
-                                            <>
-                                                Load project <ArrowRightIcon />
-                                            </>
-                                        )}
-                                    </Button>
+                                    <div className="mt-5 flex items-center gap-2">
+                                        <Button
+                                            className="min-w-0 flex-1"
+                                            onClick={handleLoadButton}
+                                            disabled={isLoadingWall}
+                                        >
+                                            {isLoadingWall ? (
+                                                <CircleNotchIcon className="animate-spin" />
+                                            ) : (
+                                                <>
+                                                    Load project <ArrowRightIcon />
+                                                </>
+                                            )}
+                                        </Button>
+                                        {previewState === 'enabled' ? (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={handleOpenPreview}
+                                                className="shrink-0"
+                                            >
+                                                Preview
+                                            </Button>
+                                        ) : null}
+                                        {previewState === 'disabled' ? (
+                                            <Tooltip
+                                                open={previewReasonTooltipOpen}
+                                                onOpenChange={(nextOpen) => {
+                                                    if (
+                                                        previewTooltipPinnedRef.current &&
+                                                        !nextOpen
+                                                    ) {
+                                                        return;
+                                                    }
+                                                    if (!nextOpen) {
+                                                        previewTooltipPinnedRef.current = false;
+                                                    }
+                                                    setPreviewReasonTooltipOpen(nextOpen);
+                                                }}
+                                            >
+                                                <TooltipTrigger
+                                                    render={
+                                                        <span
+                                                            className="inline-flex shrink-0 cursor-not-allowed"
+                                                            role="button"
+                                                            tabIndex={0}
+                                                            onClick={(event) => {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                                togglePinnedPreviewReasonTooltip();
+                                                            }}
+                                                            onKeyDown={(event) => {
+                                                                if (
+                                                                    event.key === 'Enter' ||
+                                                                    event.key === ' '
+                                                                ) {
+                                                                    event.preventDefault();
+                                                                    event.stopPropagation();
+                                                                    togglePinnedPreviewReasonTooltip();
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                disabled
+                                                                className="pointer-events-none shrink-0"
+                                                            >
+                                                                Preview
+                                                            </Button>
+                                                        </span>
+                                                    }
+                                                />
+                                                <TooltipContent side="top">
+                                                    {previewDisabledReason ??
+                                                        'Preview is currently unavailable for this project.'}
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        ) : null}
+                                    </div>
                                 ) : (
                                     <p className="mt-5 text-xs text-muted-foreground">
                                         Sign in to load this project on a wall.
@@ -430,7 +519,9 @@ export function ProjectCard({
     onControllerTokenRequest,
     availableWalls,
     presetWallId,
-    hideWallPicker
+    hideWallPicker,
+    previewHref,
+    previewDisabledReason
 }: ProjectCardProps) {
     const activeWallIdRef = useRef<string | null>(null);
     const prevDialogStateRef = useRef<'closed' | 'expanded' | 'fullscreen' | 'minimized'>('closed');
@@ -521,12 +612,6 @@ export function ProjectCard({
                                 <div>{project.name}</div>
                                 <div className="text-sm">{project.author}</div>
                             </div>
-                            <span
-                                aria-hidden="true"
-                                className="relative ml-1 flex h-6 w-6 shrink-0 scale-100 items-center justify-center rounded-lg border"
-                            >
-                                <EyeIcon size={12} />
-                            </span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1">
                             {project.tags.slice(0, 3).map((tag) => (
@@ -562,12 +647,6 @@ export function ProjectCard({
                                     {project.author}
                                 </MorphingDialogSubtitle>
                             </div>
-                            <span
-                                aria-hidden="true"
-                                className="relative ml-1 flex h-6 w-6 shrink-0 scale-100 items-center justify-center rounded-lg border"
-                            >
-                                <EyeIcon size={12} />
-                            </span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1">
                             {project.tags.slice(0, 3).map((tag) => (
@@ -590,6 +669,8 @@ export function ProjectCard({
                 >
                     <ProjectCardDialogBody
                         project={project}
+                        previewHref={previewHref}
+                        previewDisabledReason={previewDisabledReason}
                         presetWallId={presetWallId}
                         availableWalls={availableWalls}
                         hideWallPicker={hideWallPicker}
