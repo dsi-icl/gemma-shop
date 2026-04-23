@@ -19,6 +19,7 @@ interface BackgroundLayerPanelProps {
 export function BackgroundLayerPanel({ activeLayer }: BackgroundLayerPanelProps) {
     const draftLayerRef = useRef<BackgroundLayer>(activeLayer);
     const backgroundType = activeLayer.backgroundType ?? 'i-pattern';
+    const isSolidBackground = backgroundType === 'solid';
 
     useEffect(() => {
         draftLayerRef.current = activeLayer;
@@ -68,6 +69,7 @@ export function BackgroundLayerPanel({ activeLayer }: BackgroundLayerPanelProps)
                     }
                     className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
                 >
+                    <option value="solid">Solid</option>
                     <option value="i-pattern">I pattern</option>
                     <option value="waves">Waves</option>
                     <option value="particle">Particle</option>
@@ -81,57 +83,63 @@ export function BackgroundLayerPanel({ activeLayer }: BackgroundLayerPanelProps)
                     onChange={(v) => updateField('backgroundColor', v)}
                 />
             </div>
-            <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Atmosphere color</label>
-                <ColorPickerPopover
-                    tip="Atmosphere colour"
-                    value={activeLayer.atmosphereColor}
-                    onChange={(v) => updateField('atmosphereColor', v)}
-                />
-            </div>
-            <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Motif color 1</label>
-                <ColorPickerPopover
-                    tip="Motif colour 1"
-                    value={activeLayer.motifColor1}
-                    onChange={(v) => updateField('motifColor1', v)}
-                />
-            </div>
-            <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Motif color 2</label>
-                <ColorPickerPopover
-                    tip="Motif colour 2"
-                    value={activeLayer.motifColor2}
-                    onChange={(v) => updateField('motifColor2', v)}
-                />
-            </div>
-            <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Seed</label>
-                <Input
-                    type="number"
-                    min={0}
-                    max={9999}
-                    value={activeLayer.noiseSeed}
-                    onChange={(e) => updateField('noiseSeed', parseInt(e.target.value) || 0)}
-                    className="h-7 w-20 text-xs"
-                    placeholder="Seed"
-                />
-            </div>
-            <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">
-                    Speed ({activeLayer.speedFactor.toFixed(1)}×)
-                </label>
-                <Slider
-                    value={[activeLayer.speedFactor]}
-                    min={0}
-                    max={20}
-                    step={0.1}
-                    onValueChange={(v) => {
-                        const next = Array.isArray(v) ? (v[0] ?? 1) : v;
-                        updateField('speedFactor', next);
-                    }}
-                />
-            </div>
+            {!isSolidBackground ? (
+                <>
+                    <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Atmosphere color</label>
+                        <ColorPickerPopover
+                            tip="Atmosphere colour"
+                            value={activeLayer.atmosphereColor}
+                            onChange={(v) => updateField('atmosphereColor', v)}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Motif color 1</label>
+                        <ColorPickerPopover
+                            tip="Motif colour 1"
+                            value={activeLayer.motifColor1}
+                            onChange={(v) => updateField('motifColor1', v)}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Motif color 2</label>
+                        <ColorPickerPopover
+                            tip="Motif colour 2"
+                            value={activeLayer.motifColor2}
+                            onChange={(v) => updateField('motifColor2', v)}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Seed</label>
+                        <Input
+                            type="number"
+                            min={0}
+                            max={9999}
+                            value={activeLayer.noiseSeed}
+                            onChange={(e) =>
+                                updateField('noiseSeed', parseInt(e.target.value) || 0)
+                            }
+                            className="h-7 w-20 text-xs"
+                            placeholder="Seed"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">
+                            Speed ({activeLayer.speedFactor.toFixed(1)}×)
+                        </label>
+                        <Slider
+                            value={[activeLayer.speedFactor]}
+                            min={0}
+                            max={20}
+                            step={0.1}
+                            onValueChange={(v) => {
+                                const next = Array.isArray(v) ? (v[0] ?? 1) : v;
+                                updateField('speedFactor', next);
+                            }}
+                        />
+                    </div>
+                </>
+            ) : null}
         </>
     );
 }

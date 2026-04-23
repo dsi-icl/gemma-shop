@@ -24,6 +24,16 @@ export function WallBackgroundCanvas({ layer, col, row }: WallBackgroundCanvasPr
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
+        if (layer.backgroundType === 'solid') {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            ctx.fillStyle = layer.backgroundColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            return;
+        }
+
         const isWaveBackground = layer.backgroundType === 'waves';
         const isParticleBackground = layer.backgroundType === 'particle';
         const draw = () => {

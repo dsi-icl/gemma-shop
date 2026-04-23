@@ -118,7 +118,9 @@ const LayerSchema = z.discriminatedUnion('type', [
     z
         .object({
             type: z.literal('background'),
-            backgroundType: z.enum(['i-pattern', 'waves', 'particle']).default('i-pattern'),
+            backgroundType: z
+                .enum(['solid', 'i-pattern', 'waves', 'particle'])
+                .default('i-pattern'),
             backgroundColor: z.string().default('#0a0a14'),
             atmosphereColor: z.string().default('#1a1a3a'),
             motifColor1: z.string().default('#2a1a4a'),

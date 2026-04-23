@@ -57,7 +57,13 @@ function KonvaBackgroundLayerInner({ layer, previewScale }: KonvaBackgroundLayer
         // Use current wall-clock t (same formula as WallBackgroundCanvas) so
         // the preview matches what the wall is showing right now.
         const t = (Date.now() / 1000) * BACKGROUND_T_SPEED * layer.speedFactor;
-        if (layer.backgroundType === 'waves') {
+        if (layer.backgroundType === 'solid') {
+            const ctx = offscreen.getContext('2d');
+            if (ctx) {
+                ctx.fillStyle = layer.backgroundColor;
+                ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+            }
+        } else if (layer.backgroundType === 'waves') {
             renderBackgroundWaves(offscreen, layer, 0, 0, t, COLS, ROWS);
         } else if (layer.backgroundType === 'particle') {
             renderBackgroundParticle(offscreen, layer, 0, 0, t, COLS, ROWS);
