@@ -251,6 +251,16 @@ The notices are generated from tree-shaken modules detected in production bundle
 - A dedicated authorization flow is still required for controller sessions (and likely other public runtime surfaces), so unauthenticated clients cannot access private assets/configuration.
 - Recommendation: introduce scoped, short-lived controller/session tokens with explicit asset permissions and origin constraints, then apply the same pattern consistently across other public endpoints.
 
+### Access Control Audit Note (Public/Published vs Membership)
+
+- Do not conflate `membership access` (`canViewProject`: owner/collaborator/admin) with `public/published access` (limited read access for logged-in users when content is public and published).
+- Any endpoint using `canViewProject` should be reviewed when used by gallery/public preview flows, to confirm whether strict membership is intended or a scoped public/published exception is required.
+- Re-audit these endpoints when changing auth rules:
+
+1. `apps/web/src/server/projects.fns.ts`: `$getProject`, `$getCommit`, `$listAssets`, `$listAssetsByUrlsForPicker`, `$getProjectCommits`, `$getAudits`, `$getAuditsPage`.
+2. `apps/web/src/server/bus/bus.peers.ts`: websocket editor session checks in `registerEditorPeer` and `recomputePeerAuthContexts`.
+3. `apps/web/src/routes/api/assets/$uri.ts`: public/published fallback logic must stay aligned with gallery preview requirements and not regress to strict membership-only checks.
+
 ### CSP rationale (apps/web/src/start.ts)
 
 - CSP is set server-side in middleware and uses a per-request nonce for script execution.
