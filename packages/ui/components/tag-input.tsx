@@ -15,6 +15,7 @@ type TagInputProps = {
 };
 
 const DEFAULT_STORAGE_KEY = 'gemma.tags.history';
+const TAG_DELIMITER_KEYS = new Set(['.', ',', ';', '/']);
 
 function normalizeTag(raw: string): string {
     return raw.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -123,7 +124,7 @@ export function TagInput({
             return;
         }
 
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' || TAG_DELIMITER_KEYS.has(e.key)) {
             e.preventDefault();
             if (activeIndex >= 0 && activeIndex < filteredSuggestions.length) {
                 addTag(filteredSuggestions[activeIndex]);
