@@ -26,8 +26,6 @@ body:
           label: What problem does this solve?
           description: Explain the pain point today.
           placeholder: 'Example: Managing many projects one by one takes too long and is error-prone.'
-      validations:
-          required: true
 
     - type: textarea
       id: proposal
@@ -39,8 +37,6 @@ body:
               1. Add checkboxes in Admin > Projects list.
               2. Show "Archive selected" action.
               3. Ask for confirmation before applying.
-      validations:
-          required: true
 
     - type: textarea
       id: alternatives
@@ -54,10 +50,10 @@ body:
       attributes:
           label: Who benefits most?
           options:
-              - Admin users
               - Editors/collaborators
               - Wall/controller operators
               - Everyone
+              - Admin users
               - Not sure
       validations:
           required: true
@@ -83,8 +79,6 @@ body:
               - I can select multiple projects in Admin > Projects.
               - I can archive selected projects in one action.
               - Archived projects are shown correctly with existing filters.
-      validations:
-          required: true
 
     - type: textarea
       id: context

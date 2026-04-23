@@ -39,16 +39,12 @@ body:
       attributes:
           label: What did you expect to happen?
           placeholder: 'Example: I expected the slide change to save and stay visible to my team.'
-      validations:
-          required: true
 
     - type: textarea
       id: actual
       attributes:
           label: What actually happened?
           placeholder: 'Example: The editor reloaded and the slide returned to the old version.'
-      validations:
-          required: true
 
     - type: dropdown
       id: frequency
