@@ -232,9 +232,12 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                     <TipButton tip="Add text layer" onClick={addTextLayer}>
                         <TextTIcon />
                     </TipButton>
-                    <TipButton tip="Add map layer" onClick={addMapLayer}>
-                        <MapPinIcon />
-                    </TipButton>
+                    {/* TODO: Switcher to guarding by "tester" role once multi-role is implemented */}
+                    {isAdmin ? (
+                        <TipButton tip="Add map layer" onClick={addMapLayer}>
+                            <MapPinIcon />
+                        </TipButton>
+                    ) : null}
                     <TipButton tip="Add web layer" onClick={addWebLayer}>
                         <GlobeSimpleIcon />
                     </TipButton>
