@@ -27,6 +27,7 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
     const renameSlide = useEditorStore((s) => s.renameSlide);
     const projectId = useEditorStore((s) => s.projectId);
     const navigate = useNavigate();
+    const sortedSlides = [...slides].sort((a, b) => a.order - b.order);
 
     const handleDelete = async (slideId: string) => {
         const isActive = activeSlideId === slideId;
@@ -101,7 +102,7 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
             {!collapsed && (
                 <div className="flex-1 space-y-1 overflow-y-auto p-2">
                     <DraggableList
-                        items={slides.sort((a, b) => a.order - b.order)}
+                        items={sortedSlides}
                         selectedIds={selectedSlides}
                         onReorder={reorderSlides}
                         onSelect={handleSelect}
