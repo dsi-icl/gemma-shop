@@ -48,6 +48,20 @@ export function ParametersPanel({
             { wait: 500 }
         )
     );
+    const throttledConfigUpdate = useRef(
+        throttle(
+            (layer: LayerWithEditorState) => {
+                const engine = EditorEngine.getInstance();
+                engine.sendJSON({
+                    type: 'upsert_layer',
+                    origin: 'editor:parameters',
+                    layer
+                });
+                markDirty();
+            },
+            { wait: 100 }
+        )
+    );
 
     const updateWebProperty = useCallback(
         (field: 'url' | 'scale', value: string | number) => {
@@ -67,7 +81,6 @@ export function ParametersPanel({
 
     const updateConfig = useCallback(
         (field: keyof LayerWithEditorState['config'], value: number) => {
-            console.log('updateConfig', field, value);
             if (!selectedLayer) return;
             const newConfig = { ...selectedLayer.config, [field]: value };
             const updatedLayer = { ...selectedLayer, config: newConfig };
@@ -78,18 +91,7 @@ export function ParametersPanel({
                 return { layers: newLayers };
             });
 
-            throttle(
-                () => {
-                    const engine = EditorEngine.getInstance();
-                    engine.sendJSON({
-                        type: 'upsert_layer',
-                        origin: 'editor:parameters',
-                        layer: updatedLayer
-                    });
-                    markDirty();
-                },
-                { wait: 100 }
-            );
+            throttledConfigUpdate.current(updatedLayer);
         },
         [selectedLayer, markDirty]
     );
