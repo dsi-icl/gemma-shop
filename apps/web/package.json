@@ -33,6 +33,7 @@
         "@repo/db": "workspace:*",
         "@repo/env": "workspace:*",
         "@repo/ui": "workspace:*",
+        "@rsbuild/core": "catalog:",
         "@tanstack/react-form-start": "catalog:",
         "@tanstack/react-query": "catalog:",
         "@tanstack/react-router": "catalog:",
