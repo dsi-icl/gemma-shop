@@ -15,6 +15,7 @@ import { logAuditDenied, logAuditFailure } from '~/server/audit';
 import { dbCol } from '~/server/collections';
 import { canViewProject } from '~/server/projectAuthz';
 import type { AuthContext } from '~/server/requestAuthContext';
+import { resolveWallMediaCookieAuthContext } from '~/server/wallMediaCookie';
 
 const isDev = process.env.NODE_ENV === 'development';
 async function logAssetDenied(input: {
@@ -154,7 +155,8 @@ const getResponse = createServerOnlyFn(
         request,
         authContext,
         projectId,
-        resourceId
+        resourceId,
+        cacheControl
     }: {
         uri: string;
         range: string | null;
@@ -163,6 +165,7 @@ const getResponse = createServerOnlyFn(
         authContext: AuthContext;
         projectId: string | null;
         resourceId: string | null;
+        cacheControl: string;
     }) => {
         const requestedFilename = basename(decodeURIComponent(uri));
         let resolvedFilename = requestedFilename;
@@ -240,7 +243,7 @@ const getResponse = createServerOnlyFn(
                 headers: {
                     'Access-Control-Allow-Origin': '*',
                     ETag: etag,
-                    'Cache-Control': 'public, max-age=31536000, immutable'
+                    'Cache-Control': cacheControl
                 }
             });
         }
@@ -256,7 +259,7 @@ const getResponse = createServerOnlyFn(
             'Access-Control-Allow-Origin': '*',
             'Content-Type': contentType,
             ETag: etag,
-            'Cache-Control': 'public, max-age=31536000, immutable',
+            'Cache-Control': cacheControl,
             'Accept-Ranges': 'bytes'
         };
 
@@ -305,8 +308,18 @@ export const Route = createFileRoute('/api/assets/$uri')({
         handlers: {
             GET: async ({ request, params, context }) => {
                 const { uri } = params ?? {};
-                const authContext: AuthContext = ((context ?? {}) as { authContext?: AuthContext })
+                let authContext: AuthContext = ((context ?? {}) as { authContext?: AuthContext })
                     .authContext ?? { guest: true };
+                if (!authContext.user && !authContext.device) {
+                    const mediaCookieDevice = await resolveWallMediaCookieAuthContext(request);
+                    if (mediaCookieDevice) {
+                        authContext = {
+                            ...authContext,
+                            guest: undefined,
+                            device: mediaCookieDevice
+                        };
+                    }
+                }
                 if (typeof uri !== 'string' || uri.length === 0) {
                     await logAssetNotFound({
                         request,
@@ -348,6 +361,7 @@ export const Route = createFileRoute('/api/assets/$uri')({
                 }
                 const isPublicAsset =
                     assetRecord.public === true || projectId === PUBLIC_ASSET_PROJECT_ID;
+                let cacheControl = 'public, max-age=31536000, immutable';
 
                 if (!isPublicAsset) {
                     const project = await dbCol.projects.findById(projectId);
@@ -368,6 +382,7 @@ export const Route = createFileRoute('/api/assets/$uri')({
                     }
 
                     if (project.visibility !== 'public' || !project.publishedCommitId) {
+                        cacheControl = 'private, max-age=31536000, immutable';
                         if (!user && !device) {
                             await logAssetDenied({
                                 request,
@@ -459,7 +474,8 @@ export const Route = createFileRoute('/api/assets/$uri')({
                     request,
                     authContext,
                     projectId,
-                    resourceId: requestedFilename
+                    resourceId: requestedFilename,
+                    cacheControl
                 });
             }
         }

@@ -18,6 +18,7 @@ import { WallEngine, type Viewport } from '~/lib/wallEngine';
 
 const HYDRATE_FADE_MS = 1000;
 const HYDRATE_IFRAME_TIMEOUT_MS = 2000;
+const WALL_MEDIA_COOKIE_REFRESH_MS = 60 * 60 * 1000;
 const warmedImageUrls = new Set<string>();
 type HydrateScopeContext = {
     projectId?: string;
@@ -231,6 +232,46 @@ function WallApp() {
             window.__WALL_RELOADING__ = false;
         }
     }, [engine]);
+
+    useEffect(() => {
+        if (!engine || !wallId) return;
+        let refreshTimer: number | null = null;
+        let cancelled = false;
+
+        const refreshMediaCookie = () => {
+            if (cancelled) return;
+            if (refreshTimer !== null) {
+                window.clearTimeout(refreshTimer);
+                refreshTimer = null;
+            }
+            signedFetch(
+                '/api/wall/media-cookie',
+                { method: 'POST' },
+                { deviceKind: 'wall', wallId }
+            )
+                .then((res) => {
+                    if (!res.ok) throw new Error(`Media cookie refresh failed: ${res.status}`);
+                })
+                .catch((error) => {
+                    console.warn('[Wall] Failed to refresh media auth cookie', error);
+                })
+                .finally(() => {
+                    if (!cancelled) {
+                        refreshTimer = window.setTimeout(
+                            refreshMediaCookie,
+                            WALL_MEDIA_COOKIE_REFRESH_MS
+                        );
+                    }
+                });
+        };
+
+        const unsubscribe = engine.onReady(refreshMediaCookie);
+        return () => {
+            cancelled = true;
+            unsubscribe();
+            if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+        };
+    }, [engine, wallId]);
 
     useEffect(() => {
         const unsubscribe = engine?.subscribeToLayoutUpdates((data) => {
@@ -471,7 +512,7 @@ function WallApp() {
         return () => {
             cancelled = true;
         };
-    }, [layers, frameabilityByUrl]);
+    }, [layers, frameabilityByUrl, wallId]);
 
     if (deviceEnrollmentId) {
         return (
