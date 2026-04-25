@@ -12,7 +12,7 @@ export function hasAssetVariants(sizes: number[] | undefined): sizes is number[]
     return Array.isArray(sizes) && sizes.length > 0;
 }
 
-const DEFAULT_VARIANT_WIDTHS = [50, 200, 800, 1600];
+const DEFAULT_VARIANT_WIDTHS = [50, 200, 800, 1600, 2400, 3200];
 
 export function selectAssetVariantSrc({
     src,

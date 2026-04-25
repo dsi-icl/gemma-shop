@@ -5,7 +5,7 @@ import sharp from 'sharp';
 
 import { ASSET_DIR } from './serverVariables';
 
-const VARIANT_WIDTHS = [50, 200, 800, 1600];
+const VARIANT_WIDTHS = [50, 200, 800, 1600, 2400, 3200];
 
 /** Compute a blurhash from an image file on disk */
 export async function computeBlurhash(imagePath: string): Promise<string | null> {
