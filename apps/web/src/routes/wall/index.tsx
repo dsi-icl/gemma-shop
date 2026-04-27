@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { useEffect, useState, useMemo, useRef, type CSSProperties } from 'react';
 
 import { MapWrapper } from '~/components/MapWrapper';
+import { WallBackgroundCanvas } from '~/components/WallBackgroundCanvas';
 import { getOrCreateDeviceIdentity } from '~/lib/deviceIdentity';
 import { toCssFilterString } from '~/lib/layerFilters';
 import { signedFetch } from '~/lib/signedFetch';
@@ -17,7 +18,19 @@ import { WallEngine, type Viewport } from '~/lib/wallEngine';
 
 const HYDRATE_FADE_MS = 1000;
 const HYDRATE_IFRAME_TIMEOUT_MS = 2000;
+const WALL_MEDIA_COOKIE_REFRESH_MS = 60 * 60 * 1000;
 const warmedImageUrls = new Set<string>();
+type HydrateScopeContext = {
+    projectId?: string;
+    commitId?: string;
+    slideId?: string;
+};
+type HydrateStagePayload = {
+    layers: LayerWithWallComponentState[];
+    customRenderUrl?: string;
+    customRenderCompat: boolean;
+    customRenderProxy: boolean;
+} & HydrateScopeContext;
 
 export const Route = createFileRoute('/wall/')({
     head: () => ({
@@ -37,12 +50,7 @@ function WallApp() {
     const transitionPhaseRef = useRef<'visible' | 'fadingOut' | 'waitingIframes' | 'fadingIn'>(
         'visible'
     );
-    const queuedHydrateRef = useRef<{
-        layers: LayerWithWallComponentState[];
-        customRenderUrl?: string;
-        customRenderCompat: boolean;
-        customRenderProxy: boolean;
-    } | null>(null);
+    const queuedHydrateRef = useRef<HydrateStagePayload | null>(null);
     const fadeTimerRef = useRef<number | null>(null);
     const iframeGateRef = useRef<{
         cycle: number;
@@ -50,15 +58,10 @@ function WallApp() {
         loadedKeys: Set<string>;
         timeoutId: number | null;
     } | null>(null);
-    const stageHydrateRef = useRef<
-        | ((next: {
-              layers: LayerWithWallComponentState[];
-              customRenderUrl?: string;
-              customRenderCompat: boolean;
-              customRenderProxy: boolean;
-          }) => void)
-        | null
-    >(null);
+    const stageHydrateRef = useRef<((next: HydrateStagePayload) => void) | null>(null);
+    const lastHydrateContextRef = useRef<{ hasContent: boolean } & HydrateScopeContext>({
+        hasContent: false
+    });
     const [frameabilityByUrl, setFrameabilityByUrl] = useState<
         Record<string, { ok: boolean; reason?: string; fallback?: string }>
     >({});
@@ -75,6 +78,19 @@ function WallApp() {
         return !searchParams.has('w') || !searchParams.has('c') || !searchParams.has('r');
     }, [searchParams]);
     const showVisualDebugger = useMemo(() => searchParams?.get('m') === 'dev', [searchParams]);
+
+    useEffect(() => {
+        const html = document.documentElement;
+        const body = document.body;
+        const prevHtmlCursor = html.style.cursor;
+        const prevBodyCursor = body.style.cursor;
+        html.style.cursor = 'none';
+        body.style.cursor = 'none';
+        return () => {
+            html.style.cursor = prevHtmlCursor;
+            body.style.cursor = prevBodyCursor;
+        };
+    }, []);
 
     const myViewport = useMemo<Viewport>(() => {
         if (!searchParams) return { x: 0, y: 0, w: SCREEN_W, h: SCREEN_H };
@@ -115,6 +131,33 @@ function WallApp() {
         ).length;
     };
 
+    const hasHydrateContent = (next: HydrateStagePayload) =>
+        !!next.customRenderUrl || next.layers.some((layer) => layer.config.visible);
+
+    const shouldFadeHydrate = (next: HydrateStagePayload) => {
+        const prev = lastHydrateContextRef.current;
+        const nextHasContent = hasHydrateContent(next);
+
+        if (prev.hasContent !== nextHasContent) return true;
+        if (!prev.hasContent && !nextHasContent) return false;
+
+        return prev.projectId !== next.projectId || prev.commitId !== next.commitId;
+    };
+
+    const applyHydrateContent = (next: HydrateStagePayload) => {
+        engine?.layers.clear();
+        setLayers(next.layers);
+        setCustomRenderUrl(next.customRenderUrl);
+        setCustomRenderCompat(next.customRenderCompat);
+        setCustomRenderProxy(next.customRenderProxy);
+        lastHydrateContextRef.current = {
+            hasContent: hasHydrateContent(next),
+            projectId: next.projectId,
+            commitId: next.commitId,
+            slideId: next.slideId
+        };
+    };
+
     const beginFadeIn = () => {
         clearFadeTimer();
         clearIframeGate();
@@ -125,53 +168,30 @@ function WallApp() {
             const queued = queuedHydrateRef.current;
             if (!queued) return;
             queuedHydrateRef.current = null;
-            transitionPhaseRef.current = 'fadingOut';
-            setBlackOverlayOpacity(1);
-            fadeTimerRef.current = window.setTimeout(() => {
-                engine?.layers.clear();
-                setLayers(queued.layers);
-                setCustomRenderUrl(queued.customRenderUrl);
-                setCustomRenderCompat(queued.customRenderCompat);
-                setCustomRenderProxy(queued.customRenderProxy);
-                const expected = countExpectedGatedResources(queued.layers, queued.customRenderUrl);
-                if (expected <= 0) {
-                    beginFadeIn();
-                    return;
-                }
-                const cycle = Date.now();
-                setIframeGateCycle(cycle);
-                transitionPhaseRef.current = 'waitingIframes';
-                iframeGateRef.current = {
-                    cycle,
-                    expected,
-                    loadedKeys: new Set(),
-                    timeoutId: window.setTimeout(() => {
-                        beginFadeIn();
-                    }, HYDRATE_IFRAME_TIMEOUT_MS)
-                };
-            }, HYDRATE_FADE_MS);
+            stageHydrate(queued);
         }, HYDRATE_FADE_MS);
     };
 
-    const stageHydrate = (next: {
-        layers: LayerWithWallComponentState[];
-        customRenderUrl?: string;
-        customRenderCompat: boolean;
-        customRenderProxy: boolean;
-    }) => {
+    const stageHydrate = (next: HydrateStagePayload) => {
         if (transitionPhaseRef.current !== 'visible') {
             queuedHydrateRef.current = next;
             return;
         }
+
+        if (!shouldFadeHydrate(next)) {
+            clearFadeTimer();
+            clearIframeGate();
+            transitionPhaseRef.current = 'visible';
+            setBlackOverlayOpacity(0);
+            applyHydrateContent(next);
+            return;
+        }
+
         transitionPhaseRef.current = 'fadingOut';
         setBlackOverlayOpacity(1);
         clearFadeTimer();
         fadeTimerRef.current = window.setTimeout(() => {
-            engine?.layers.clear();
-            setLayers(next.layers);
-            setCustomRenderUrl(next.customRenderUrl);
-            setCustomRenderCompat(next.customRenderCompat);
-            setCustomRenderProxy(next.customRenderProxy);
+            applyHydrateContent(next);
             const expected = countExpectedGatedResources(next.layers, next.customRenderUrl);
             if (expected <= 0) {
                 beginFadeIn();
@@ -214,6 +234,46 @@ function WallApp() {
     }, [engine]);
 
     useEffect(() => {
+        if (!engine || !wallId) return;
+        let refreshTimer: number | null = null;
+        let cancelled = false;
+
+        const refreshMediaCookie = () => {
+            if (cancelled) return;
+            if (refreshTimer !== null) {
+                window.clearTimeout(refreshTimer);
+                refreshTimer = null;
+            }
+            signedFetch(
+                '/api/wall/media-cookie',
+                { method: 'POST' },
+                { deviceKind: 'wall', wallId }
+            )
+                .then((res) => {
+                    if (!res.ok) throw new Error(`Media cookie refresh failed: ${res.status}`);
+                })
+                .catch((error) => {
+                    console.warn('[Wall] Failed to refresh media auth cookie', error);
+                })
+                .finally(() => {
+                    if (!cancelled) {
+                        refreshTimer = window.setTimeout(
+                            refreshMediaCookie,
+                            WALL_MEDIA_COOKIE_REFRESH_MS
+                        );
+                    }
+                });
+        };
+
+        const unsubscribe = engine.onReady(refreshMediaCookie);
+        return () => {
+            cancelled = true;
+            unsubscribe();
+            if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+        };
+    }, [engine, wallId]);
+
+    useEffect(() => {
         const unsubscribe = engine?.subscribeToLayoutUpdates((data) => {
             if (data.type === 'hydrate') {
                 // Eagerly warm the browser cache for image URLs before React mounts them
@@ -228,7 +288,10 @@ function WallApp() {
                     layers: data.layers,
                     customRenderUrl: data.customRender?.url,
                     customRenderCompat: Boolean(data.customRender?.compat),
-                    customRenderProxy: Boolean(data.customRender?.proxy)
+                    customRenderProxy: Boolean(data.customRender?.proxy),
+                    projectId: data.projectId,
+                    commitId: data.commitId,
+                    slideId: data.slideId
                 });
             } else if (data.type === 'upsert_layer') {
                 // Eagerly warm the browser cache for incoming image layers
@@ -295,24 +358,33 @@ function WallApp() {
 
                 // 3. Calculate the true dynamic bounding box of the rotated rectangle
                 const cullingPadding = getCullingPadding(layer, effectivePos);
-                const radiusX =
-                    (sw / 2) * Math.abs(Math.cos(rad)) +
-                    (sh / 2) * Math.abs(Math.sin(rad)) +
-                    cullingPadding;
-                const radiusY =
-                    (sw / 2) * Math.abs(Math.sin(rad)) +
-                    (sh / 2) * Math.abs(Math.cos(rad)) +
-                    cullingPadding;
+                const isCircleShape = layer.type === 'shape' && layer.shape === 'circle';
+                const radiusX = isCircleShape
+                    ? Math.max(sw, sh) / 2 + cullingPadding
+                    : (sw / 2) * Math.abs(Math.cos(rad)) +
+                      (sh / 2) * Math.abs(Math.sin(rad)) +
+                      cullingPadding;
+                const radiusY = isCircleShape
+                    ? Math.max(sw, sh) / 2 + cullingPadding
+                    : (sw / 2) * Math.abs(Math.sin(rad)) +
+                      (sh / 2) * Math.abs(Math.cos(rad)) +
+                      cullingPadding;
 
                 // Protect against network NaN poisoning
                 if (isNaN(radiusX) || isNaN(radiusY)) return;
 
                 // 4. Evaluate against the screen viewport
+                const cullCx = isCircleShape
+                    ? effectivePos.cx - effectivePos.width / 2
+                    : effectivePos.cx;
+                const cullCy = isCircleShape
+                    ? effectivePos.cy - effectivePos.height / 2
+                    : effectivePos.cy;
                 const isVisible =
-                    effectivePos.cx + radiusX > myViewport.x &&
-                    effectivePos.cx - radiusX < myViewport.x + myViewport.w &&
-                    effectivePos.cy + radiusY > myViewport.y &&
-                    effectivePos.cy - radiusY < myViewport.y + myViewport.h;
+                    cullCx + radiusX > myViewport.x &&
+                    cullCx - radiusX < myViewport.x + myViewport.w &&
+                    cullCy + radiusY > myViewport.y &&
+                    cullCy - radiusY < myViewport.y + myViewport.h;
 
                 if (isVisible) {
                     const localX = effectivePos.cx - effectivePos.width / 2 - myViewport.x;
@@ -440,7 +512,7 @@ function WallApp() {
         return () => {
             cancelled = true;
         };
-    }, [layers, frameabilityByUrl]);
+    }, [layers, frameabilityByUrl, wallId]);
 
     if (deviceEnrollmentId) {
         return (
@@ -563,6 +635,8 @@ function WallApp() {
                         ...commonProps.style,
                         width: `${layer.config.width / webScale}px`,
                         height: `${layer.config.height / webScale}px`,
+                        cursor: 'none',
+                        pointerEvents: 'none' as const,
                         transform: `scale(${webScale})`,
                         transformOrigin: '0 0'
                     }
@@ -685,8 +759,6 @@ function WallApp() {
                                 xmlns="http://www.w3.org/2000/svg"
                             >
                                 <circle
-                                    // cx={layer.config.width / 2}
-                                    // cy={layer.config.height / 2}
                                     r={layer.config.width / 2}
                                     fill={layer.fill}
                                     stroke={layer.strokeColor}
@@ -727,6 +799,8 @@ function WallApp() {
                     left: customRenderCompat ? `${-myViewport.x}px` : 0,
                     width: customRenderCompat ? `${worldWidth}px` : `${SCREEN_W}px`,
                     height: customRenderCompat ? `${worldHeight}px` : `${SCREEN_H}px`,
+                    cursor: 'none',
+                    pointerEvents: 'none',
                     border: 'none'
                 }}
                 allow="autoplay; fullscreen"
@@ -740,8 +814,13 @@ function WallApp() {
         );
     })();
 
+    const backgroundLayer = layers.find(
+        (l): l is Extract<LayerWithWallComponentState, { type: 'background' }> =>
+            l.type === 'background' && l.config.visible
+    );
+
     return (
-        <div className="absolute z-50 m-0 block min-h-screen min-w-screen overflow-hidden bg-black">
+        <div className="absolute z-50 m-0 block min-h-screen min-w-screen cursor-none overflow-hidden bg-black">
             {/* Visual Debugger: Shows the Screen ID in the corner */}
             {showVisualDebugger ? (
                 <div
@@ -751,6 +830,13 @@ function WallApp() {
                     SCREEN&gt; C:{myViewport.x / SCREEN_W} R:{myViewport.y / SCREEN_H}
                 </div>
             ) : null}
+            {backgroundLayer && (
+                <WallBackgroundCanvas
+                    layer={backgroundLayer}
+                    col={myViewport.x / SCREEN_W}
+                    row={myViewport.y / SCREEN_H}
+                />
+            )}
             {stageContent}
             <div
                 className="pointer-events-none absolute inset-0 z-1000001 bg-black"

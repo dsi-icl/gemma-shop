@@ -1,9 +1,48 @@
-import { authMiddleware } from '@repo/auth/tanstack/middleware';
+import { authMiddleware, freshAuthMiddleware } from '@repo/auth/tanstack/middleware';
 import { Collaborator, ProjectVisibility } from '@repo/db/schema';
 import { createServerFn } from '@tanstack/react-start';
 
 import { createUploadToken, validateUploadToken } from '~/lib/uploadTokens';
 import { z } from '~/lib/zod';
+import { logAuditDenied, logAuditSuccess } from '~/server/audit';
+import { dbCol } from '~/server/collections';
+import {
+    actorFromAuthContext,
+    canEditProject,
+    canPublishProject,
+    canViewProject,
+    ownsProject,
+    resolveProjectIdForAsset,
+    resolveProjectIdForCommit,
+    resolveProjectIdForUploadToken
+} from '~/server/projectAuthz';
+import type { AuthContext } from '~/server/requestAuthContext';
+
+import {
+    archiveProject,
+    copySlideInCommit,
+    createBranchHead,
+    createProject,
+    deleteAsset,
+    deleteSlideFromCommit,
+    ensureMutableHead,
+    getAudits,
+    getAuditsPage,
+    getCommit,
+    getProject,
+    getProjectCommits,
+    listAssets,
+    listAssetsByUrlsForPicker,
+    listKnownTags,
+    listProjects,
+    listPublishedProjects,
+    promoteBranchHead,
+    publishCommit,
+    publishCustomRenderProject,
+    restoreProject,
+    revokeUploadTokenForActor,
+    updateProject
+} from './projects';
 
 const CreateProjectInput = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -34,43 +73,6 @@ const UpdateProjectInput = z.object({
     collaborators: z.array(Collaborator).optional(),
     publishedCommitId: z.string().nullable().optional()
 });
-import { logAuditDenied, logAuditSuccess } from '~/server/audit';
-import {
-    actorFromAuthContext,
-    canEditProject,
-    canViewProject,
-    ownsProject,
-    resolveProjectIdForAsset,
-    resolveProjectIdForCommit,
-    resolveProjectIdForUploadToken
-} from '~/server/projectAuthz';
-import type { AuthContext } from '~/server/requestAuthContext';
-
-import {
-    archiveProject,
-    copySlideInCommit,
-    createBranchHead,
-    createProject,
-    deleteAsset,
-    deleteSlideFromCommit,
-    ensureMutableHead,
-    getAudits,
-    getAuditsPage,
-    getCommit,
-    getProject,
-    getProjectCommits,
-    listAssets,
-    listKnownTags,
-    listProjects,
-    listPublishedProjects,
-    promoteBranchHead,
-    publishCommit,
-    publishCustomRenderProject,
-    restoreProject,
-    revokeUploadTokenForActor,
-    updateProject
-} from './projects';
-
 const AuditOutcomeEnum = z.enum(['success', 'denied', 'failure', 'error']);
 const AuditResourceTypeEnum = z.enum([
     'project',
@@ -98,7 +100,7 @@ function authContextFromServerFnContext(context: unknown): AuthContext {
     if (c?.authContext) return c.authContext;
     const email = c?.user?.email;
     const role = c?.user?.role;
-    if (typeof email === 'string' && (role === 'admin' || role === 'user')) {
+    if (typeof email === 'string' && (role === 'admin' || role === 'operator' || role === 'user')) {
         return { user: { email, role } };
     }
     return { guest: true };
@@ -184,6 +186,42 @@ export const $listAssets = createServerFn({ method: 'GET' })
         return listAssets(data.projectId);
     });
 
+export const $listAssetsByUrlsForPicker = createServerFn({ method: 'POST' })
+    .inputValidator(
+        z.object({
+            projectId: z.string(),
+            urls: z.array(z.string()).max(200)
+        })
+    )
+    .middleware([authMiddleware])
+    .handler(async ({ context, data }) => {
+        const actor = actorFromAuthContext(context);
+        if (!actor) {
+            await denyProjectFn({
+                context,
+                operation: '$listAssetsByUrlsForPicker',
+                reasonCode: 'MISSING_ACTOR',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
+        const allowed = await canViewProject(actor, data.projectId);
+        if (!allowed) {
+            await denyProjectFn({
+                context,
+                operation: '$listAssetsByUrlsForPicker',
+                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Access denied');
+        }
+        return listAssetsByUrlsForPicker(data.projectId, data.urls);
+    });
+
 export const $getProject = createServerFn({ method: 'GET' })
     .inputValidator(z.object({ id: z.string() }))
     .middleware([authMiddleware])
@@ -204,15 +242,19 @@ export const $getProject = createServerFn({ method: 'GET' })
         }
         const allowed = await canViewProject(actor, data.id);
         if (!allowed) {
-            await denyProjectFn({
-                context,
-                operation: '$getProject',
-                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
-                projectId: data.id,
-                resourceType: 'project',
-                resourceId: data.id
-            });
-            throw new Error('Access denied');
+            const isPublicPublishedProject =
+                project.visibility === 'public' && Boolean(project.publishedCommitId);
+            if (!isPublicPublishedProject) {
+                await denyProjectFn({
+                    context,
+                    operation: '$getProject',
+                    reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                    projectId: data.id,
+                    resourceType: 'project',
+                    resourceId: data.id
+                });
+                throw new Error('Access denied');
+            }
         }
         return project;
     });
@@ -223,6 +265,7 @@ export const $getCommit = createServerFn({ method: 'GET' })
     .handler(async ({ context, data }) => {
         const commit = await getCommit(data.id);
         if (!commit) throw new Error('Commit not found');
+        const commitProjectId = String(commit.projectId);
         const actor = actorFromAuthContext(context);
         if (!actor) {
             await denyProjectFn({
@@ -234,17 +277,22 @@ export const $getCommit = createServerFn({ method: 'GET' })
             });
             throw new Error('Access denied');
         }
-        const allowed = await canViewProject(actor, commit.projectId);
+        const allowed = await canViewProject(actor, commitProjectId);
         if (!allowed) {
-            await denyProjectFn({
-                context,
-                operation: '$getCommit',
-                reasonCode: 'PROJECT_VIEW_FORBIDDEN',
-                projectId: commit.projectId,
-                resourceType: 'commit',
-                resourceId: data.id
-            });
-            throw new Error('Access denied');
+            const project = await getProject(commitProjectId);
+            const isPublishedCommitOfPublicProject =
+                project?.visibility === 'public' && project.publishedCommitId === commit.id;
+            if (!isPublishedCommitOfPublicProject) {
+                await denyProjectFn({
+                    context,
+                    operation: '$getCommit',
+                    reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                    projectId: commitProjectId,
+                    resourceType: 'commit',
+                    resourceId: data.id
+                });
+                throw new Error('Access denied');
+            }
         }
         return commit;
     });
@@ -334,6 +382,8 @@ export const $deleteAsset = createServerFn({ method: 'POST' })
     .inputValidator(z.object({ id: z.string() }))
     .middleware([authMiddleware])
     .handler(async ({ context, data }) => {
+        const assetRecord = await dbCol.assets.findById(data.id);
+        if (!assetRecord) throw new Error('Asset not found');
         const projectId = await resolveProjectIdForAsset(data.id);
         if (!projectId) throw new Error('Asset not found');
         const actor = actorFromAuthContext(context);
@@ -342,6 +392,17 @@ export const $deleteAsset = createServerFn({ method: 'POST' })
                 context,
                 operation: '$deleteAsset',
                 reasonCode: 'MISSING_ACTOR',
+                projectId,
+                resourceType: 'asset',
+                resourceId: data.id
+            });
+            throw new Error('Access denied');
+        }
+        if (assetRecord.public && actor.role !== 'admin') {
+            await denyProjectFn({
+                context,
+                operation: '$deleteAsset',
+                reasonCode: 'PUBLIC_ASSET_DELETE_ADMIN_REQUIRED',
                 projectId,
                 resourceType: 'asset',
                 resourceId: data.id
@@ -404,7 +465,7 @@ export const $restoreProject = createServerFn({ method: 'POST' })
 
 export const $publishCommit = createServerFn({ method: 'POST' })
     .inputValidator(z.object({ projectId: z.string(), commitId: z.string().nullable() }))
-    .middleware([authMiddleware])
+    .middleware([freshAuthMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
         if (!actor) {
@@ -429,6 +490,17 @@ export const $publishCommit = createServerFn({ method: 'POST' })
                 resourceId: data.projectId
             });
             throw new Error('Access denied');
+        }
+        if (data.commitId !== null && !canPublishProject(actor)) {
+            await denyProjectFn({
+                context,
+                operation: '$publishCommit',
+                reasonCode: 'PROJECT_PUBLISH_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Publish access denied');
         }
         return publishCommit(
             data.projectId,
@@ -440,7 +512,7 @@ export const $publishCommit = createServerFn({ method: 'POST' })
 
 export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
     .inputValidator(z.object({ projectId: z.string() }))
-    .middleware([authMiddleware])
+    .middleware([freshAuthMiddleware])
     .handler(async ({ context, data }) => {
         const actor = actorFromAuthContext(context);
         if (!actor) {
@@ -465,6 +537,17 @@ export const $publishCustomRenderProject = createServerFn({ method: 'POST' })
                 resourceId: data.projectId
             });
             throw new Error('Access denied');
+        }
+        if (!canPublishProject(actor)) {
+            await denyProjectFn({
+                context,
+                operation: '$publishCustomRenderProject',
+                reasonCode: 'PROJECT_PUBLISH_FORBIDDEN',
+                projectId: data.projectId,
+                resourceType: 'project',
+                resourceId: data.projectId
+            });
+            throw new Error('Publish access denied');
         }
         return publishCustomRenderProject(
             data.projectId,

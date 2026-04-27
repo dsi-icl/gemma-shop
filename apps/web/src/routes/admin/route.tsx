@@ -11,6 +11,7 @@ import {
 } from '@phosphor-icons/react';
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import {
     createFileRoute,
     Outlet,
@@ -20,13 +21,13 @@ import {
     useRouterState
 } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
 
 import { SubHeaderSlotOutlet, SubHeaderSlotProvider } from '~/lib/subHeaderSlot';
 import { $finalizeFirstAdminForCurrentUser } from '~/server/bootstrap.fns';
 
 export const Route = createFileRoute('/admin')({
-    beforeLoad: async ({ context }) => {
+    beforeLoad: async ({ context, location }) => {
         let user = await context.queryClient.ensureQueryData({
             ...authQueryOptions(),
             revalidateIfStale: true
@@ -39,7 +40,17 @@ export const Route = createFileRoute('/admin')({
                 ...authQueryOptions()
             });
         }
-        if (user?.role !== 'admin') throw redirect({ to: '/quarry' });
+        const role = user?.role;
+        if (role !== 'admin' && role !== 'operator') throw redirect({ to: '/quarry' });
+        if (role === 'operator') {
+            const pathname = location.pathname.replace(/\/+$/, '') || '/admin';
+            const allowed =
+                pathname === '/admin' ||
+                pathname === '/admin/users' ||
+                pathname === '/admin/projects' ||
+                pathname === '/admin/assets';
+            if (!allowed) throw redirect({ to: '/admin/users' });
+        }
         return { user };
     },
     component: AdminLayout,
@@ -48,7 +59,7 @@ export const Route = createFileRoute('/admin')({
     })
 });
 
-const NAV = [
+const ADMIN_NAV = [
     { to: '/admin/users', label: 'Users', icon: UsersIcon },
     { to: '/admin/projects', label: 'Projects', icon: FolderIcon },
     { to: '/admin/audits', label: 'Audits', icon: ActivityIcon },
@@ -58,6 +69,10 @@ const NAV = [
     { to: '/admin/config', label: 'Config', icon: GearIcon },
     { to: '/admin/stats', label: 'Stats', icon: ChartBarIcon }
 ] as const;
+
+const OPERATOR_NAV = ADMIN_NAV.filter(
+    (tab) => tab.to === '/admin/users' || tab.to === '/admin/projects' || tab.to === '/admin/assets'
+);
 
 const TAB_ORDER = {
     users: 0,
@@ -119,8 +134,10 @@ function getTabFromPath(pathname: string): AdminTabKey {
 }
 
 function AdminLayout() {
+    const { data: user } = useSuspenseQuery(authQueryOptions());
     const location = useLocation();
     const navigate = useNavigate();
+    const nav = useMemo(() => (user?.role === 'operator' ? OPERATOR_NAV : ADMIN_NAV), [user?.role]);
     const currentTab = getTabFromPath(location.pathname);
     const resolvedPathname = useRouterState({
         select: (s) => s.location.pathname
@@ -138,14 +155,14 @@ function AdminLayout() {
                     <Tabs
                         value={currentTab}
                         onValueChange={(value) => {
-                            const tab = NAV.find((t) => t.to.split('/').pop() === value);
+                            const tab = nav.find((t) => t.to.split('/').pop() === value);
                             if (!tab) return;
                             navigate({ to: tab.to as any });
                         }}
                         className="mb-0"
                     >
                         <TabsList variant="line">
-                            {NAV.map(({ to, label, icon: Icon }) => {
+                            {nav.map(({ to, label, icon: Icon }) => {
                                 const key = to.split('/').pop() as AdminTabKey;
                                 return (
                                     <TabsTrigger key={to} value={key}>

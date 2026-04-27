@@ -9,11 +9,13 @@ import { createFileRoute } from '@tanstack/react-router';
 import { createServerOnlyFn } from '@tanstack/react-start';
 
 import { ASSET_MIME_TYPES } from '~/lib/assetMime';
+import { PUBLIC_ASSET_PROJECT_ID } from '~/lib/constants';
 import { ASSET_DIR } from '~/lib/serverVariables';
 import { logAuditDenied, logAuditFailure } from '~/server/audit';
 import { dbCol } from '~/server/collections';
 import { canViewProject } from '~/server/projectAuthz';
 import type { AuthContext } from '~/server/requestAuthContext';
+import { resolveWallMediaCookieAuthContext } from '~/server/wallMediaCookie';
 
 const isDev = process.env.NODE_ENV === 'development';
 async function logAssetDenied(input: {
@@ -153,7 +155,8 @@ const getResponse = createServerOnlyFn(
         request,
         authContext,
         projectId,
-        resourceId
+        resourceId,
+        cacheControl
     }: {
         uri: string;
         range: string | null;
@@ -162,6 +165,7 @@ const getResponse = createServerOnlyFn(
         authContext: AuthContext;
         projectId: string | null;
         resourceId: string | null;
+        cacheControl: string;
     }) => {
         const requestedFilename = basename(decodeURIComponent(uri));
         let resolvedFilename = requestedFilename;
@@ -239,7 +243,7 @@ const getResponse = createServerOnlyFn(
                 headers: {
                     'Access-Control-Allow-Origin': '*',
                     ETag: etag,
-                    'Cache-Control': 'public, max-age=31536000, immutable'
+                    'Cache-Control': cacheControl
                 }
             });
         }
@@ -255,7 +259,7 @@ const getResponse = createServerOnlyFn(
             'Access-Control-Allow-Origin': '*',
             'Content-Type': contentType,
             ETag: etag,
-            'Cache-Control': 'public, max-age=31536000, immutable',
+            'Cache-Control': cacheControl,
             'Accept-Ranges': 'bytes'
         };
 
@@ -304,8 +308,18 @@ export const Route = createFileRoute('/api/assets/$uri')({
         handlers: {
             GET: async ({ request, params, context }) => {
                 const { uri } = params ?? {};
-                const authContext: AuthContext = ((context ?? {}) as { authContext?: AuthContext })
+                let authContext: AuthContext = ((context ?? {}) as { authContext?: AuthContext })
                     .authContext ?? { guest: true };
+                if (!authContext.user && !authContext.device) {
+                    const mediaCookieDevice = await resolveWallMediaCookieAuthContext(request);
+                    if (mediaCookieDevice) {
+                        authContext = {
+                            ...authContext,
+                            guest: undefined,
+                            device: mediaCookieDevice
+                        };
+                    }
+                }
                 if (typeof uri !== 'string' || uri.length === 0) {
                     await logAssetNotFound({
                         request,
@@ -345,84 +359,108 @@ export const Route = createFileRoute('/api/assets/$uri')({
                         headers: isDev ? { 'X-Dev-Status-Message': 'Project Not Found' } : undefined
                     });
                 }
+                const isPublicAsset =
+                    assetRecord.public === true || projectId === PUBLIC_ASSET_PROJECT_ID;
+                let cacheControl = 'public, max-age=31536000, immutable';
 
-                if (!user && !device) {
+                if (!isPublicAsset) {
                     const project = await dbCol.projects.findById(projectId);
-                    if (!project || project.deletedAt || project.visibility !== 'public') {
-                        await logAssetDenied({
+                    if (!project || project.deletedAt) {
+                        await logAssetNotFound({
                             request,
                             authContext,
-                            reasonCode: 'UNAUTHORIZED_GUEST',
+                            reasonCode: 'ASSET_PROJECT_NOT_FOUND',
                             projectId,
                             resourceId: requestedFilename
                         });
                         return new Response('Not Found', {
                             status: 404,
                             headers: isDev
-                                ? { 'X-Dev-Status-Message': 'Unauthorized Guest' }
-                                : undefined
-                        });
-                    }
-                }
-
-                if (user && user.role !== 'admin') {
-                    const allowed = await canViewProject(
-                        { email: user.email, role: user.role },
-                        projectId
-                    );
-                    if (!allowed && !device) {
-                        await logAssetDenied({
-                            request,
-                            authContext,
-                            reasonCode: 'PROJECT_VIEW_FORBIDDEN',
-                            projectId,
-                            resourceId: requestedFilename
-                        });
-                        return new Response('Not Found', {
-                            status: 404,
-                            headers: isDev ? { 'X-Dev-Status-Message': 'Unauthorized' } : undefined
-                        });
-                    }
-                }
-
-                if (device) {
-                    const deviceWallId =
-                        typeof device.wallId === 'string' && device.wallId.length > 0
-                            ? device.wallId
-                            : null;
-
-                    if (!deviceWallId) {
-                        await logAssetDenied({
-                            request,
-                            authContext,
-                            reasonCode: 'DEVICE_WALL_ID_MISSING',
-                            projectId,
-                            resourceId: requestedFilename
-                        });
-                        return new Response('Not Found', {
-                            status: 404,
-                            headers: isDev
-                                ? { 'X-Dev-Status-Message': 'Unauthorized Device' }
+                                ? { 'X-Dev-Status-Message': 'Project Not Found' }
                                 : undefined
                         });
                     }
 
-                    const wall = await dbCol.walls.findByWallId(deviceWallId);
-                    if (!wall || wall.boundProjectId !== projectId) {
-                        await logAssetDenied({
-                            request,
-                            authContext,
-                            reasonCode: 'DEVICE_WALL_NOT_BOUND_TO_PROJECT',
-                            projectId,
-                            resourceId: requestedFilename,
-                            details: { wallId: deviceWallId }
-                        });
-                        return new Response('Not Found', {
-                            status: 404,
-                            headers: isDev
-                                ? { 'X-Dev-Status-Message': 'Unauthorized Wall' }
-                                : undefined
-                        });
+                    if (project.visibility !== 'public' || !project.publishedCommitId) {
+                        cacheControl = 'private, max-age=31536000, immutable';
+                        if (!user && !device) {
+                            await logAssetDenied({
+                                request,
+                                authContext,
+                                reasonCode: 'UNAUTHORIZED_GUEST',
+                                projectId,
+                                resourceId: requestedFilename
+                            });
+                            return new Response('Not Found', {
+                                status: 404,
+                                headers: isDev
+                                    ? { 'X-Dev-Status-Message': 'Unauthorized Guest' }
+                                    : undefined
+                            });
+                        }
+
+                        if (user && user.role !== 'admin') {
+                            const allowed = await canViewProject(
+                                { email: user.email, role: user.role },
+                                projectId
+                            );
+                            if (!allowed && !device) {
+                                await logAssetDenied({
+                                    request,
+                                    authContext,
+                                    reasonCode: 'PROJECT_VIEW_FORBIDDEN',
+                                    projectId,
+                                    resourceId: requestedFilename
+                                });
+                                return new Response('Not Found', {
+                                    status: 404,
+                                    headers: isDev
+                                        ? { 'X-Dev-Status-Message': 'Unauthorized' }
+                                        : undefined
+                                });
+                            }
+                        }
+
+                        if (device) {
+                            const deviceWallId =
+                                typeof device.wallId === 'string' && device.wallId.length > 0
+                                    ? device.wallId
+                                    : null;
+
+                            if (!deviceWallId) {
+                                await logAssetDenied({
+                                    request,
+                                    authContext,
+                                    reasonCode: 'DEVICE_WALL_ID_MISSING',
+                                    projectId,
+                                    resourceId: requestedFilename
+                                });
+                                return new Response('Not Found', {
+                                    status: 404,
+                                    headers: isDev
+                                        ? { 'X-Dev-Status-Message': 'Unauthorized Device' }
+                                        : undefined
+                                });
+                            }
+
+                            const wall = await dbCol.walls.findByWallId(deviceWallId);
+                            if (!wall || wall.boundProjectId !== projectId) {
+                                await logAssetDenied({
+                                    request,
+                                    authContext,
+                                    reasonCode: 'DEVICE_WALL_NOT_BOUND_TO_PROJECT',
+                                    projectId,
+                                    resourceId: requestedFilename,
+                                    details: { wallId: deviceWallId }
+                                });
+                                return new Response('Not Found', {
+                                    status: 404,
+                                    headers: isDev
+                                        ? { 'X-Dev-Status-Message': 'Unauthorized Wall' }
+                                        : undefined
+                                });
+                            }
+                        }
                     }
                 }
 
@@ -436,7 +474,8 @@ export const Route = createFileRoute('/api/assets/$uri')({
                     request,
                     authContext,
                     projectId,
-                    resourceId: requestedFilename
+                    resourceId: requestedFilename,
+                    cacheControl
                 });
             }
         }

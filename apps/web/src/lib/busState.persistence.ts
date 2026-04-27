@@ -229,7 +229,8 @@ export async function buildSlidesSnapshot(
 export async function saveScope(
     scopeId: ScopeId,
     message: string,
-    isAutoSave: boolean
+    isAutoSave: boolean,
+    authorEmail?: string | null
 ): Promise<{ success: boolean; commitId?: string; error?: string }> {
     const scope = scopedState.get(scopeId);
     if (!scope) return { success: false, error: 'Scope not found' };
@@ -264,7 +265,10 @@ export async function saveScope(
         const snapshot = await dbCol.commits.insert({
             projectId: scope.projectId,
             parentId: currentHead?.parentId ?? null,
-            authorId: 'system', // TODO: session user
+            authorEmail:
+                typeof authorEmail === 'string' && authorEmail.trim().length > 0
+                    ? authorEmail.trim()
+                    : null,
             message,
             content: { slides: updatedSlides },
             isAutoSave: false,

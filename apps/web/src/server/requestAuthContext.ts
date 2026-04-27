@@ -214,15 +214,42 @@ async function resolveDeviceContextFromRequest(request: Request) {
 }
 
 export async function resolveAuthContextFromRequest(request: Request) {
-    const session = await auth.api.getSession({
+    const raw = await auth.api.getSession({
         headers: request.headers
     });
+    const session =
+        raw && typeof raw === 'object' && 'response' in (raw as Record<string, unknown>)
+            ? ((raw as { response?: unknown }).response ?? null)
+            : raw;
+    const user =
+        session && typeof session === 'object'
+            ? ((session as { user?: unknown }).user ?? null)
+            : null;
+    const authSession =
+        session && typeof session === 'object'
+            ? ((session as { session?: unknown }).session ?? null)
+            : null;
+    const impersonatedBy =
+        authSession && typeof authSession === 'object'
+            ? ((authSession as { impersonatedBy?: unknown }).impersonatedBy ?? null)
+            : null;
     return {
         authContext: {
-            user: session?.user
+            user: user
                 ? {
-                      email: session.user.email,
-                      role: session.user.role === 'admin' ? ('admin' as const) : ('user' as const)
+                      email: (user as { email: string }).email,
+                      role:
+                          (user as { role?: unknown }).role === 'admin'
+                              ? ('admin' as const)
+                              : (user as { role?: unknown }).role === 'operator'
+                                ? ('operator' as const)
+                                : ('user' as const),
+                      trustedPublisher: Boolean(
+                          (user as { trustedPublisher?: unknown }).trustedPublisher
+                      ),
+                      ...(typeof impersonatedBy === 'string' && impersonatedBy.length > 0
+                          ? { impersonatedBy }
+                          : {})
                   }
                 : undefined
         }

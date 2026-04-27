@@ -12,7 +12,8 @@ import {
     RectangleIcon,
     ShapesIcon,
     CircleIcon,
-    GlobeIcon
+    GlobeIcon,
+    WaveSineIcon
 } from '@phosphor-icons/react';
 import { TipButton } from '@repo/ui/components/tip-button';
 import React from 'react';
@@ -56,6 +57,8 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
             }
             case 'line':
                 return <ScribbleIcon size={16} weight="bold" />;
+            case 'background':
+                return <WaveSineIcon size={16} weight="bold" />;
             default:
                 return <BugBeetleIcon size={16} weight="bold" />;
         }
@@ -87,6 +90,8 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
             }
             case 'line':
                 return 'Line';
+            case 'background':
+                return 'Background';
             default:
                 return 'Unknown Layer';
         }
@@ -109,7 +114,7 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                     tip={isHidden ? 'Show layer' : 'Hide layer'}
                     variant="ghost"
                     onClick={() => toggleLayerVisibility(layer.numericId)}
-                    className="opacity-0 group-hover:opacity-100 touch:opacity-100"
+                    className="opacity-0 group-hover:opacity-100 touch-only:opacity-100 last-touch:opacity-100"
                 >
                     {isHidden ? <EyeSlashIcon /> : <EyeIcon />}
                 </TipButton>
@@ -117,7 +122,7 @@ export function LayerItem({ layer, isSelected }: LayerItemProps) {
                     tip="Delete layer"
                     variant="destructive"
                     onClick={() => removeLayer(layer.numericId)}
-                    className="opacity-0 group-hover:opacity-100 touch:opacity-100"
+                    className="opacity-0 group-hover:opacity-100 touch-only:opacity-100 last-touch:opacity-100"
                 >
                     <TrashIcon />
                 </TipButton>

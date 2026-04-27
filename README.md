@@ -20,7 +20,6 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
     - `wall`: render node
     - `controller`: wall binding/orchestration
     - `gallery`: presentation-aware public control/listing surface
-    - `roy`: specialized graph/telemetry client
 - Commit graph with mutable head + immutable snapshot history
 - Asset pipeline for image/video upload, processing, and live broadcast to editors
 
@@ -56,7 +55,7 @@ Gemma Shop lets multiple users edit decks in real time and publish synchronized 
 
 ### 1) WebSocket Bus (`apps/web/src/addons/routes/bus.ts` + `apps/web/src/lib/busState.ts`)
 
-- Tracks peers by role (`editor`, `wall`, `controller`, `gallery`, `roy`)
+- Tracks peers by role (`editor`, `wall`, `controller`, `gallery`)
 - Interns `(projectId, commitId, slideId)` into numeric `ScopeId`
 - Maintains in-memory scope layer state for fast relay/hydrate
 - Runs periodic loops:
@@ -251,6 +250,16 @@ The notices are generated from tree-shaken modules detected in production bundle
 - Controller endpoints are intentionally public-facing for wall operation flows, but this currently means custom/public controller paths may attempt to access protected app assets without an explicit authz contract.
 - A dedicated authorization flow is still required for controller sessions (and likely other public runtime surfaces), so unauthenticated clients cannot access private assets/configuration.
 - Recommendation: introduce scoped, short-lived controller/session tokens with explicit asset permissions and origin constraints, then apply the same pattern consistently across other public endpoints.
+
+### Access Control Audit Note (Public/Published vs Membership)
+
+- Do not conflate `membership access` (`canViewProject`: owner/collaborator/admin) with `public/published access` (limited read access for logged-in users when content is public and published).
+- Any endpoint using `canViewProject` should be reviewed when used by gallery/public preview flows, to confirm whether strict membership is intended or a scoped public/published exception is required.
+- Re-audit these endpoints when changing auth rules:
+
+1. `apps/web/src/server/projects.fns.ts`: `$getProject`, `$getCommit`, `$listAssets`, `$listAssetsByUrlsForPicker`, `$getProjectCommits`, `$getAudits`, `$getAuditsPage`.
+2. `apps/web/src/server/bus/bus.peers.ts`: websocket editor session checks in `registerEditorPeer` and `recomputePeerAuthContexts`.
+3. `apps/web/src/routes/api/assets/$uri.ts`: public/published fallback logic must stay aligned with gallery preview requirements and not regress to strict membership-only checks.
 
 ### CSP rationale (apps/web/src/start.ts)
 

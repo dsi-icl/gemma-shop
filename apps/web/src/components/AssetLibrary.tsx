@@ -16,12 +16,15 @@ import {
 } from '@repo/ui/components/dialog';
 import { ProjectImage } from '@repo/ui/components/project-image';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type DragEvent } from 'react';
 import { toast } from 'sonner';
 
 import { isFontAsset } from '~/lib/mediaUtils';
 import { $deleteAsset } from '~/server/projects.fns';
-import { projectAssetsQueryOptions } from '~/server/projects.queries';
+import {
+    projectAssetsQueryOptions,
+    projectPickerSelectedAssetsQueryOptions
+} from '~/server/projects.queries';
 
 import { AssetPreviewPortal, downloadAsset, isVideoAsset } from './AssetPreviewOverlay';
 import { UploadDialog } from './UploadDialog';
@@ -31,6 +34,7 @@ interface AssetLibraryProps {
     mode?: 'editor' | 'picker';
     pickerFilter?: 'image' | 'media';
     selectedAssetUrls?: string[];
+    includeSelectedSoftDeletedInPicker?: boolean;
     onSelectAsset?: (asset: AssetLibraryAsset) => void;
     onDeleteAsset?: (asset: AssetLibraryAsset) => Promise<void> | void;
 }
@@ -39,22 +43,42 @@ export type AssetLibraryAsset = {
     id: string;
     name: string;
     url: string;
+    public?: boolean;
     mimeType?: string;
     blurhash?: string;
     sizes?: number[];
     previewUrl?: string;
 };
 
+const ASSET_DRAG_MIME = 'application/x-gemma-asset';
+
+export function getAssetDragMimeType() {
+    return ASSET_DRAG_MIME;
+}
+
 export function AssetLibrary({
     projectId,
     mode = 'editor',
     pickerFilter = 'media',
     selectedAssetUrls = [],
+    includeSelectedSoftDeletedInPicker = false,
     onSelectAsset,
     onDeleteAsset
 }: AssetLibraryProps) {
     const isPicker = mode === 'picker';
+    const normalizeAssetUrl = (url: string) => url.replace(/^\/api\/assets\//, '');
     const { data: assets = [] } = useQuery(projectAssetsQueryOptions(projectId));
+    const normalizedSelectedUrls = useMemo(
+        () =>
+            Array.from(
+                new Set(selectedAssetUrls.map((url) => url.replace(/^\/api\/assets\//, '')))
+            ),
+        [selectedAssetUrls]
+    );
+    const { data: selectedFallbackAssets = [] } = useQuery({
+        ...projectPickerSelectedAssetsQueryOptions(projectId, normalizedSelectedUrls),
+        enabled: isPicker && includeSelectedSoftDeletedInPicker && normalizedSelectedUrls.length > 0
+    });
     const sortedAssets = useMemo(() => {
         const media: typeof assets = [];
         const fonts: typeof assets = [];
@@ -66,20 +90,72 @@ export function AssetLibrary({
             id: asset.id,
             name: asset.name,
             url: asset.url,
+            public: asset.public ?? false,
             mimeType: asset.mimeType ?? undefined,
             blurhash: asset.blurhash ?? undefined,
             sizes: asset.sizes ?? undefined,
             previewUrl: asset.previewUrl ?? undefined
         }));
         if (!isPicker) return sorted;
-        if (pickerFilter === 'image')
-            return sorted.filter(
-                (asset) =>
-                    !isFontAsset(asset) &&
-                    !isVideoAsset(asset as { name: string; mimeType?: string })
-            );
-        return sorted.filter((asset) => !isFontAsset(asset));
-    }, [assets, isPicker, pickerFilter]);
+        const filteredSorted =
+            pickerFilter === 'image'
+                ? sorted.filter(
+                      (asset) =>
+                          !isFontAsset(asset) &&
+                          !isVideoAsset(asset as { name: string; mimeType?: string })
+                  )
+                : sorted.filter((asset) => !isFontAsset(asset));
+
+        if (!includeSelectedSoftDeletedInPicker || normalizedSelectedUrls.length === 0) {
+            return filteredSorted;
+        }
+
+        const mergedByUrl = new Map(
+            filteredSorted.map((asset) => [normalizeAssetUrl(asset.url), asset] as const)
+        );
+        const fallbackByUrl = new Map(
+            selectedFallbackAssets.map((asset) => [
+                normalizeAssetUrl(asset.url),
+                {
+                    id: asset.id,
+                    name: asset.name,
+                    url: asset.url,
+                    public: asset.public ?? false,
+                    mimeType: asset.mimeType ?? undefined,
+                    blurhash: asset.blurhash ?? undefined,
+                    sizes: asset.sizes ?? undefined,
+                    previewUrl: asset.previewUrl ?? undefined
+                } satisfies AssetLibraryAsset
+            ])
+        );
+        for (const selectedUrl of normalizedSelectedUrls) {
+            if (mergedByUrl.has(selectedUrl)) continue;
+            const fallback = fallbackByUrl.get(selectedUrl);
+            if (fallback) {
+                mergedByUrl.set(selectedUrl, fallback);
+                continue;
+            }
+            mergedByUrl.set(selectedUrl, {
+                id: `missing:${selectedUrl}`,
+                name: selectedUrl,
+                url: selectedUrl,
+                public: false,
+                mimeType: undefined,
+                blurhash: undefined,
+                sizes: undefined,
+                previewUrl: undefined
+            });
+        }
+
+        return Array.from(mergedByUrl.values());
+    }, [
+        assets,
+        includeSelectedSoftDeletedInPicker,
+        isPicker,
+        normalizedSelectedUrls,
+        pickerFilter,
+        selectedFallbackAssets
+    ]);
     const queryClient = useQueryClient();
     const [deleteTarget, setDeleteTarget] = useState<{
         id: string;
@@ -122,7 +198,12 @@ export function AssetLibrary({
         });
     }, [projectId, queryClient]);
 
-    const normalizeAssetUrl = (url: string) => url.replace(/^\/api\/assets\//, '');
+    const handleAssetDragStart = (e: DragEvent<HTMLDivElement>, asset: AssetLibraryAsset) => {
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData(ASSET_DRAG_MIME, JSON.stringify(asset));
+        // Fallback for environments that strip custom MIME types.
+        e.dataTransfer.setData('text/plain', asset.url);
+    };
 
     const uploadTrigger = (
         <button className="group relative flex aspect-square w-full max-w-25 cursor-pointer flex-col justify-center overflow-hidden rounded-md border border-border bg-background text-center align-middle transition-colors hover:border-primary">
@@ -212,7 +293,7 @@ export function AssetLibrary({
                                                 />
                                             </div>
                                         )}
-                                        <div className="absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100">
+                                        <div className="absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/60 to-transparent px-1 pt-3 pb-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch-only:opacity-100 last-touch:opacity-100">
                                             <span className="block truncate text-[10px] text-white">
                                                 {asset.name}
                                             </span>
@@ -224,7 +305,7 @@ export function AssetLibrary({
                                                 </span>
                                             ) : null
                                         ) : (
-                                            <div className="absolute top-0.5 right-0.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100">
+                                            <div className="absolute top-0.5 right-0.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch-only:opacity-100 last-touch:opacity-100">
                                                 {!isFont ? (
                                                     <button
                                                         onClick={(e) => {
@@ -256,16 +337,18 @@ export function AssetLibrary({
                                                 >
                                                     <DownloadIcon size={12} />
                                                 </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDeleteClick(asset);
-                                                    }}
-                                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
-                                                    title="Delete asset"
-                                                >
-                                                    <TrashIcon size={12} />
-                                                </button>
+                                                {!asset.public ? (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteClick(asset);
+                                                        }}
+                                                        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded bg-black/60 text-white hover:bg-destructive"
+                                                        title="Delete asset"
+                                                    >
+                                                        <TrashIcon size={12} />
+                                                    </button>
+                                                ) : null}
                                             </div>
                                         )}
                                     </>
@@ -305,6 +388,11 @@ export function AssetLibrary({
                                         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
                                         role="button"
                                         tabIndex={idx}
+                                        draggable={!isPicker}
+                                        onDragStart={(e) => {
+                                            if (isPicker) return;
+                                            handleAssetDragStart(e, asset);
+                                        }}
                                     >
                                         {cardContent}
                                     </div>

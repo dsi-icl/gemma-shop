@@ -90,7 +90,7 @@ export function SlideItem({
                                 setEditValue(slide.name);
                                 setEditing(true);
                             }}
-                            className="opacity-0 group-hover:opacity-100 touch:opacity-100"
+                            className="opacity-0 group-hover:opacity-100 touch-only:opacity-100 last-touch:opacity-100"
                         >
                             <PencilSimpleIcon size={16} />
                         </TipButton>
@@ -103,7 +103,7 @@ export function SlideItem({
                                 e.stopPropagation();
                                 onCopySlide(slide);
                             }}
-                            className="opacity-0 group-hover:opacity-100 touch:opacity-100"
+                            className="opacity-0 group-hover:opacity-100 touch-only:opacity-100 last-touch:opacity-100"
                         >
                             <CopyIcon size={16} />
                         </TipButton>
@@ -116,7 +116,7 @@ export function SlideItem({
                                 e.stopPropagation();
                                 onDeleteSlide(slide.id);
                             }}
-                            className="opacity-0 group-hover:opacity-100 touch:opacity-100"
+                            className="opacity-0 group-hover:opacity-100 touch-only:opacity-100 last-touch:opacity-100"
                         >
                             <TrashIcon size={16} />
                         </TipButton>

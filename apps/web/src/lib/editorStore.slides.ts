@@ -85,8 +85,9 @@ export function createSlideSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
         },
 
         reorderSlides: (slides: Slide[]) => {
-            set({ slides });
-            helpers.broadcastSlides(slides);
+            const normalized = slides.map((slide, index) => ({ ...slide, order: index }));
+            set({ slides: normalized });
+            helpers.broadcastSlides(normalized);
             get().markDirty();
         },
 

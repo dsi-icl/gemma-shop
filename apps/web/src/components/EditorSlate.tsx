@@ -2,11 +2,29 @@ import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
-import { Stage, Layer as KonvaLayer, Transformer, Rect, Line, Circle } from 'react-konva';
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useLayoutEffect,
+    type DragEvent
+} from 'react';
+import {
+    Stage,
+    FastLayer,
+    Layer as KonvaLayer,
+    Transformer,
+    Rect,
+    Line,
+    Circle
+} from 'react-konva';
 import { toast } from 'sonner';
 
+import { getAssetDragMimeType, type AssetLibraryAsset } from '~/components/AssetLibrary';
 import { EditorToolbar } from '~/components/EditorToolbar';
+import { KonvaBackgroundLayer } from '~/components/KonvaBackgroundLayer';
 import { KonvaStaticImage } from '~/components/KonvaStaticImage';
 import { KonvaTextLayer } from '~/components/KonvaTextLayer';
 import { KonvaVideo } from '~/components/KonvaVideo';
@@ -15,6 +33,7 @@ import { EditorEngine } from '~/lib/editorEngine';
 import { getDOGridLines } from '~/lib/editorHelpers';
 import { useEditorStore } from '~/lib/editorStore';
 import { fitSizeToViewport, MIN_LAYER_DIMENSION } from '~/lib/fitSizeToViewport';
+import { isFontAsset } from '~/lib/mediaUtils';
 import { COLS, ROWS, SCREEN_H, SCREEN_W, SNAP_GRID } from '~/lib/stageConstants';
 import {
     getAngle,
@@ -74,7 +93,22 @@ export function EditorSlate() {
         () => Array.from(layers.values()).sort((a, b) => a.config.zIndex - b.config.zIndex),
         [layers]
     );
+    const backgroundLayer = useMemo(
+        () => sortedLayers.find((layer) => layer.type === 'background') ?? null,
+        [sortedLayers]
+    );
+    const foregroundLayers = useMemo(
+        () => sortedLayers.filter((layer) => layer.type !== 'background'),
+        [sortedLayers]
+    );
     const selectedLayerIdSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
+    const selectedOutlineLayers = useMemo(
+        () =>
+            selectedLayerIds
+                .map((id) => layers.get(Number.parseInt(id, 10)))
+                .filter((layer): layer is LayerWithEditorState => Boolean(layer)),
+        [layers, selectedLayerIds]
+    );
 
     const autoScrollStageDuringDrag = useCallback((evt: Event) => {
         const slot = stageSlot.current;
@@ -129,6 +163,160 @@ export function EditorSlate() {
             slot.scrollTop = Math.max(0, Math.min(maxTop, slot.scrollTop + dy));
         }
     }, []);
+
+    const addDroppedAssetAsLayer = useCallback(
+        async (asset: AssetLibraryAsset, dropPoint: { x: number; y: number }) => {
+            if (!engine) return;
+            if (isFontAsset(asset)) return;
+
+            const isVideo =
+                asset.mimeType?.startsWith('video/') ||
+                /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.name) ||
+                /\.(mp4|mov|webm|avi|mkv)$/i.test(asset.url);
+            const isImage =
+                asset.mimeType?.startsWith('image/') ||
+                /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(asset.name) ||
+                /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(asset.url);
+
+            if (!isVideo && !isImage) return;
+
+            const store = useEditorStore.getState();
+            const numericId = store.allocateId();
+            const zIndex = store.allocateZIndex();
+
+            let mediaWidth = 800;
+            let mediaHeight = 600;
+            let duration = 0;
+
+            if (isVideo) {
+                try {
+                    const vid = document.createElement('video');
+                    vid.muted = true;
+                    vid.playsInline = true;
+                    vid.crossOrigin = 'anonymous';
+                    vid.src = `/api/assets/${asset.url}`;
+                    await new Promise<void>((resolve, reject) => {
+                        vid.onloadeddata = () => resolve();
+                        vid.onerror = () => reject(new Error('Failed to load video'));
+                    });
+                    mediaWidth = vid.videoWidth || mediaWidth;
+                    mediaHeight = vid.videoHeight || mediaHeight;
+                    duration = vid.duration || 0;
+                    vid.removeAttribute('src');
+                    vid.load();
+                } catch {
+                    // Keep defaults.
+                }
+            } else {
+                try {
+                    const img = new window.Image();
+                    img.crossOrigin = 'anonymous';
+                    img.src = `/api/assets/${asset.url}`;
+                    await new Promise<void>((resolve) => {
+                        img.onload = () => resolve();
+                        img.onerror = () => resolve();
+                    });
+                    mediaWidth = img.naturalWidth || mediaWidth;
+                    mediaHeight = img.naturalHeight || mediaHeight;
+                } catch {
+                    // Keep defaults.
+                }
+            }
+
+            const fitted = fitSizeToViewport(
+                mediaWidth,
+                mediaHeight,
+                store.insertionViewport.width,
+                store.insertionViewport.height
+            );
+
+            const config: Layer['config'] = {
+                cx: dropPoint.x,
+                cy: dropPoint.y,
+                width: fitted.width,
+                height: fitted.height,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                zIndex,
+                visible: true
+            };
+
+            const defaultPlayback: Extract<Layer, { type: 'video' }>['playback'] = {
+                status: 'paused',
+                anchorMediaTime: 0,
+                anchorServerTime: engine.getServerTime()
+            };
+
+            const layerBase = {
+                numericId,
+                url: `/api/assets/${asset.url}`,
+                config,
+                isUploading: false,
+                progress: 100
+            };
+
+            const layer: LayerWithEditorState = isVideo
+                ? {
+                      type: 'video',
+                      playback: defaultPlayback,
+                      rvfcActive: false,
+                      duration,
+                      loop: true,
+                      blurhash: asset.blurhash ?? '',
+                      ...layerBase
+                  }
+                : {
+                      type: 'image',
+                      blurhash: asset.blurhash ?? '',
+                      ...layerBase
+                  };
+
+            store.upsertLayer(layer);
+            store.toggleLayerSelection(numericId.toString(), false, false);
+
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'editor:asset_library_drop',
+                layer
+            });
+            store.markDirty();
+        },
+        [engine]
+    );
+
+    const handleStageDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
+        if (e.dataTransfer.types.includes(getAssetDragMimeType())) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    }, []);
+
+    const handleStageDrop = useCallback(
+        async (e: DragEvent<HTMLDivElement>) => {
+            const raw = e.dataTransfer.getData(getAssetDragMimeType());
+            if (!raw) return;
+            e.preventDefault();
+
+            let asset: AssetLibraryAsset | null = null;
+            try {
+                asset = JSON.parse(raw) as AssetLibraryAsset;
+            } catch {
+                return;
+            }
+            if (!asset) return;
+
+            const slot = stageSlot.current;
+            if (!slot) return;
+            const rect = slot.getBoundingClientRect();
+            const scale = Math.max(stageScaleFactor, 0.001);
+            const x = (slot.scrollLeft + (e.clientX - rect.left)) / scale;
+            const y = (slot.scrollTop + (e.clientY - rect.top)) / scale;
+
+            await addDroppedAssetAsLayer(asset, { x, y });
+        },
+        [addDroppedAssetAsLayer, stageScaleFactor]
+    );
 
     const syncInsertionCenter = useCallback(() => {
         const slot = stageSlot.current;
@@ -291,6 +479,11 @@ export function EditorSlate() {
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const isEditingInput =
+                target instanceof HTMLElement &&
+                (target.closest('input, textarea, select') !== null || target.isContentEditable);
+            if (isEditingInput) return;
             if (editingTextLayerId !== null) return;
             const store = useEditorStore.getState();
             if (!store.selectedLayerIds.length) return;
@@ -771,6 +964,21 @@ export function EditorSlate() {
                 node.scaleY(updatedConfig.scaleY);
             }
 
+            const prevConfig = layerToUpdate.config;
+            const configChanged =
+                prevConfig.cx !== updatedConfig.cx ||
+                prevConfig.cy !== updatedConfig.cy ||
+                prevConfig.width !== updatedConfig.width ||
+                prevConfig.height !== updatedConfig.height ||
+                prevConfig.scaleX !== updatedConfig.scaleX ||
+                prevConfig.scaleY !== updatedConfig.scaleY ||
+                prevConfig.rotation !== updatedConfig.rotation;
+            if (!configChanged) {
+                node.setAttr('textTransformMode', undefined);
+                node.setAttr('lastActiveAnchor', undefined);
+                return;
+            }
+
             // Always broadcast the final authoritative transform after local snapping/baking.
             // This prevents walls from remaining on the last pre-snap binary frame.
             engine.broadcastBinaryMove(
@@ -790,7 +998,6 @@ export function EditorSlate() {
             node.setAttr('lastActiveAnchor', undefined);
 
             const store = useEditorStore.getState();
-            store.toggleLayerSelection(numericId.toString(), false, false);
             store.updateLayerConfig(numericId, updatedConfig);
 
             // Sync to server
@@ -825,7 +1032,7 @@ export function EditorSlate() {
         }
         if (
             (e.evt instanceof TouchEvent && e.evt.touches?.length === 1) ||
-            e.type === 'mousedown'
+            (e.evt instanceof MouseEvent && e.type === 'mousedown' && e.evt.button === 0)
         ) {
             const clickedOnEmpty = e.target === e.target.getStage();
             if (clickedOnEmpty && currentSelectedIds.length) {
@@ -955,7 +1162,8 @@ export function EditorSlate() {
     const handleTouchEnd = (e: KonvaEventObject<TouchEvent | MouseEvent>) => {
         if (e.evt instanceof TouchEvent && e.evt.touches.length < 2) setIsPinching(false);
         const currentSelectedIds = useEditorStore.getState().selectedLayerIds;
-        if (currentSelectedIds.length && trRef.current) {
+        const shouldFinalizeFromStage = e.evt instanceof TouchEvent && isPinching;
+        if (shouldFinalizeFromStage && currentSelectedIds.length && trRef.current) {
             const stage = trRef.current.getStage();
             const node = stage?.findOne<Konva.Shape>(`#${currentSelectedIds[0]}`);
             if (node)
@@ -987,7 +1195,7 @@ export function EditorSlate() {
     }, []);
 
     useEffect(() => {
-        if (selectedLayerIds.length && trRef.current) {
+        if (selectedLayerIds.length === 1 && trRef.current) {
             const node = trRef.current.getStage()?.findOne(`#${selectedLayerIds[0]}`);
             if (node) {
                 trRef.current.nodes([node]);
@@ -1018,6 +1226,8 @@ export function EditorSlate() {
                 <div
                     ref={stageSlot}
                     id="slate"
+                    onDragOver={handleStageDragOver}
+                    onDrop={handleStageDrop}
                     className="min-h-0 grow overflow-x-auto overflow-y-hidden border-b border-border bg-black"
                 >
                     <Stage
@@ -1035,6 +1245,15 @@ export function EditorSlate() {
                         scaleX={stageScaleFactor}
                         scaleY={stageScaleFactor}
                     >
+                        <FastLayer listening={false}>
+                            {backgroundLayer ? (
+                                <KonvaBackgroundLayer
+                                    key={`bg_${backgroundLayer.numericId}`}
+                                    layer={backgroundLayer}
+                                    previewScale={stageScaleFactor}
+                                />
+                            ) : null}
+                        </FastLayer>
                         <KonvaLayer>
                             {/* {Array.from({ length: COLS * ROWS }).map((_, i) => {
                             const col = i % COLS;
@@ -1063,7 +1282,7 @@ export function EditorSlate() {
                         })} */}
 
                             {/* oxlint-disable-next-line react-hooks-js/refs */}
-                            {sortedLayers.map((layer) => {
+                            {foregroundLayers.map((layer) => {
                                 const isHidden = !layer.config.visible;
                                 const isSelected = selectedLayerIdSet.has(
                                     layer.numericId.toString()
@@ -1077,12 +1296,15 @@ export function EditorSlate() {
                                     isDrawing,
                                     isPinching,
                                     opacity: hiddenOpacity,
-                                    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) =>
+                                    onSelect: (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+                                        if (e.evt instanceof MouseEvent && e.evt.button !== 0)
+                                            return;
                                         toggleLayerSelection(
                                             layer.numericId.toString(),
                                             e.evt.shiftKey,
                                             e.evt.ctrlKey || e.evt.metaKey
-                                        ),
+                                        );
+                                    },
                                     onTransform: (e: KonvaEventObject<Event>) =>
                                         handleTransform(e, layer.numericId),
                                     onTransformEnd: (e: KonvaEventObject<Event>) =>
@@ -1251,6 +1473,26 @@ export function EditorSlate() {
                                     lineJoin="round"
                                 />
                             )}
+                            {selectedOutlineLayers.length > 1
+                                ? selectedOutlineLayers.map((layer) => (
+                                      <Rect
+                                          key={`selbox_${layer.numericId}`}
+                                          x={layer.config.cx}
+                                          y={layer.config.cy}
+                                          width={layer.config.width}
+                                          height={layer.config.height}
+                                          offsetX={layer.config.width / 2}
+                                          offsetY={layer.config.height / 2}
+                                          rotation={layer.config.rotation}
+                                          scaleX={layer.config.scaleX}
+                                          scaleY={layer.config.scaleY}
+                                          stroke="#00a1ff"
+                                          strokeWidth={6}
+                                          opacity={1}
+                                          listening={false}
+                                      />
+                                  ))
+                                : null}
                             {showGrid && getDOGridLines(COLS * SCREEN_W, ROWS * SCREEN_H, 20)}
                             <Transformer
                                 ref={trRef}

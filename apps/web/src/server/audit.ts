@@ -54,7 +54,13 @@ function normalizeAuthContext(input?: AuthContext | null): AuthContext | null {
 
     const userEmail = cleanString(input.user?.email);
     const userRole =
-        input.user?.role === 'admin' || input.user?.role === 'user' ? input.user.role : null;
+        input.user?.role === 'admin' ||
+        input.user?.role === 'operator' ||
+        input.user?.role === 'user'
+            ? input.user.role
+            : null;
+    const userTrustedPublisher = Boolean(input.user?.trustedPublisher);
+    const impersonatedBy = cleanString(input.user?.impersonatedBy);
 
     const deviceId = cleanString(input.device?.id);
     const deviceKind =
@@ -70,7 +76,16 @@ function normalizeAuthContext(input?: AuthContext | null): AuthContext | null {
 
     const normalized: AuthContext = {
         ...(guest ? { guest: true } : {}),
-        ...(userEmail && userRole ? { user: { email: userEmail, role: userRole } } : {}),
+        ...(userEmail && userRole
+            ? {
+                  user: {
+                      email: userEmail,
+                      role: userRole,
+                      ...(userTrustedPublisher ? { trustedPublisher: true } : {}),
+                      ...(impersonatedBy ? { impersonatedBy } : {})
+                  }
+              }
+            : {}),
         ...(deviceId && deviceKind
             ? {
                   device: {

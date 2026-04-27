@@ -1,5 +1,6 @@
 import {
     ArrowLeftIcon,
+    CircleNotchIcon,
     ClockIcon,
     FolderIcon,
     GlobeIcon,
@@ -23,6 +24,7 @@ import {
     useRouterState
 } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { SubHeaderSlotOutlet, SubHeaderSlotProvider } from '~/lib/subHeaderSlot';
@@ -129,10 +131,13 @@ function ProjectLayout() {
     const navigate = useNavigate();
     const currentTab = getTabFromPath(location.pathname);
     const hasCustomRender = !!project.customRenderUrl;
+    const canPublish =
+        user?.role === 'admin' || user?.role === 'operator' || user?.trustedPublisher === true;
     const tabs = (
         hasCustomRender ? ALL_TABS.filter((t) => !CUSTOM_RENDER_HIDDEN_TABS.has(t.key)) : ALL_TABS
     ).filter((t) => t.key !== 'controller' || user?.role === 'admin');
     const queryClient = useQueryClient();
+    const [openingEditor, setOpeningEditor] = useState(false);
 
     const publishCustomRender = useMutation({
         mutationFn: () => $publishCustomRenderProject({ data: { projectId } }),
@@ -179,27 +184,50 @@ function ProjectLayout() {
                                 variant="default"
                                 size="sm"
                                 className="ml-auto"
+                                disabled={openingEditor}
                                 onClick={async () => {
-                                    const headCommitId = await $ensureMutableHead({
-                                        data: { projectId }
-                                    });
-                                    const commit = await $getCommit({ data: { id: headCommitId } });
-                                    const firstSlideId =
-                                        commit?.content?.slides?.[0]?.id ?? 'default';
-                                    navigate({
-                                        to: '/quarry/editor/$projectId/$commitId/$slideId',
-                                        params: {
-                                            projectId,
-                                            commitId: headCommitId,
-                                            slideId: firstSlideId
-                                        }
-                                    });
+                                    setOpeningEditor(true);
+                                    try {
+                                        const headCommitId = await $ensureMutableHead({
+                                            data: { projectId }
+                                        });
+                                        const commit = await $getCommit({
+                                            data: { id: headCommitId }
+                                        });
+                                        const firstSlideId =
+                                            commit?.content?.slides?.[0]?.id ?? 'default';
+                                        await navigate({
+                                            to: '/quarry/editor/$projectId/$commitId/$slideId',
+                                            params: {
+                                                projectId,
+                                                commitId: headCommitId,
+                                                slideId: firstSlideId
+                                            }
+                                        });
+                                    } catch (error) {
+                                        toast.error(
+                                            error instanceof Error
+                                                ? error.message
+                                                : 'Failed to open editor'
+                                        );
+                                        setOpeningEditor(false);
+                                    }
                                 }}
                             >
-                                <PencilSimpleIcon weight="bold" /> Edit
+                                {openingEditor ? (
+                                    <>
+                                        <CircleNotchIcon className="animate-spin" />
+                                        Opening editor...
+                                    </>
+                                ) : (
+                                    <>
+                                        <PencilSimpleIcon weight="bold" /> Edit
+                                    </>
+                                )}
                             </Button>
                         )}
                         {hasCustomRender &&
+                            canPublish &&
                             (project.publishedCommitId ? (
                                 <Button
                                     variant="outline"

@@ -116,6 +116,10 @@ export class WallEngine {
         return () => this.layoutCallbacks.delete(callback);
     }
 
+    public onReady(callback: () => void) {
+        return this.bus.onReady(callback);
+    }
+
     public registerLayer(layer: LayerWithWallComponentState, el: HTMLElement) {
         let layerPtr = this.layers.get(layer.numericId);
         if (!layerPtr) {

@@ -1,5 +1,5 @@
 import '@tanstack/react-start/server-only';
-import type { Db } from 'mongodb';
+import type { Db, Document } from 'mongodb';
 
 import type { WallDocument } from '../documents';
 import { type MigrationMap, type PublicDoc, toEpoch, BaseCollection } from './_base';
@@ -19,6 +19,24 @@ export class WallsCollection extends BaseCollection<WallDocument> {
 
     constructor(db: Db) {
         super(db.collection('walls'));
+    }
+
+    protected fromDB(doc: Document): WallDocument {
+        const base = super.fromDB(doc) as unknown as WallDocument & {
+            wallId: unknown;
+            name: unknown;
+            boundProjectId?: unknown;
+            boundCommitId?: unknown;
+            boundSlideId?: unknown;
+        };
+        return {
+            ...base,
+            wallId: typeof base.wallId === 'string' ? base.wallId : String(base.wallId ?? ''),
+            name: typeof base.name === 'string' ? base.name : String(base.name ?? ''),
+            boundProjectId: base.boundProjectId ? String(base.boundProjectId) : null,
+            boundCommitId: base.boundCommitId ? String(base.boundCommitId) : null,
+            boundSlideId: base.boundSlideId ? String(base.boundSlideId) : null
+        };
     }
 
     async findByWallId(wallId: string): Promise<PublicDoc<WallDocument> | null> {

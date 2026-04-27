@@ -24,6 +24,7 @@ export const Route = createFileRoute('/admin/audits')({
 });
 
 const OUTCOME_FILTERS = [
+    { value: 'non_success', label: 'Non-success (issues)' },
     { value: 'all', label: 'All outcomes' },
     { value: 'success', label: 'Success' },
     { value: 'denied', label: 'Denied' },
@@ -32,6 +33,11 @@ const OUTCOME_FILTERS = [
 ] as const;
 const ALL_AUDIT_OUTCOMES: Array<'success' | 'denied' | 'failure' | 'error'> = [
     'success',
+    'denied',
+    'failure',
+    'error'
+];
+const NON_SUCCESS_AUDIT_OUTCOMES: Array<'denied' | 'failure' | 'error'> = [
     'denied',
     'failure',
     'error'
@@ -117,7 +123,7 @@ function AdminAudits() {
     const queryClient = useQueryClient();
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [outcomeFilter, setOutcomeFilter] =
-        useState<(typeof OUTCOME_FILTERS)[number]['value']>('all');
+        useState<(typeof OUTCOME_FILTERS)[number]['value']>('non_success');
     const [resourceFilter, setResourceFilter] =
         useState<(typeof RESOURCE_FILTERS)[number]['value']>('all');
     const [projectIdInput, setProjectIdInput] = useState('');
@@ -127,7 +133,12 @@ function AdminAudits() {
 
     const filters = useMemo<AdminAuditFilters>(
         () => ({
-            outcomes: outcomeFilter === 'all' ? ALL_AUDIT_OUTCOMES : [outcomeFilter],
+            outcomes:
+                outcomeFilter === 'all'
+                    ? ALL_AUDIT_OUTCOMES
+                    : outcomeFilter === 'non_success'
+                      ? NON_SUCCESS_AUDIT_OUTCOMES
+                      : [outcomeFilter],
             resourceTypes: resourceFilter === 'all' ? undefined : [resourceFilter],
             projectId: projectIdInput.trim() || undefined,
             actorId: actorIdInput.trim() || undefined,
@@ -325,7 +336,7 @@ function AdminAudits() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
-                                    setOutcomeFilter('all');
+                                    setOutcomeFilter('non_success');
                                     setResourceFilter('all');
                                     setProjectIdInput('');
                                     setActorIdInput('');
@@ -363,7 +374,7 @@ function AdminAudits() {
                     return (
                         <div
                             key={group.id}
-                            className="overflow-hidden rounded-xl border bg-card p-4"
+                            className="overflow-hidden rounded-xl border bg-card p-4 select-text"
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex min-w-0 items-center gap-2">

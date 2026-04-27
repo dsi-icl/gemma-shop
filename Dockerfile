@@ -33,13 +33,13 @@ ARG KEEP_SOURCE_MAPS=false
 ARG OCI_CREATED=unknown
 ARG OCI_VERSION=dev
 ARG OCI_REVISION=unknown
-ARG OCI_SOURCE=https://github.com/dsi-icl/gemma-cast
+ARG OCI_SOURCE=https://github.com/dsi-icl/gemma-shop
 
 LABEL org.opencontainers.image.title="gemma-shop" \
       org.opencontainers.image.description="Collaborative multi-tenant presentation system for large video walls" \
-      org.opencontainers.image.url="https://github.com/dsi-icl/gemma-cast" \
+      org.opencontainers.image.url="https://github.com/dsi-icl/gemma-shop" \
       org.opencontainers.image.source="${OCI_SOURCE}" \
-      org.opencontainers.image.documentation="https://github.com/dsi-icl/gemma-cast#readme" \
+      org.opencontainers.image.documentation="https://github.com/dsi-icl/gemma-shop#readme" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${OCI_VERSION}" \
       org.opencontainers.image.revision="${OCI_REVISION}" \

@@ -431,6 +431,7 @@ function HomePage() {
                 tags: p.tags,
                 publishedCommitId: p.publishedCommitId,
                 customControlUrl: (p as { customControlUrl?: string }).customControlUrl,
+                customRenderUrl: (p as { customRenderUrl?: string | null }).customRenderUrl,
                 imageUrl: p.heroImages[0] ?? '',
                 blurhash: (p as { heroImageBlurhash?: string }).heroImageBlurhash,
                 sizes: (p as { heroImageSizes?: number[] }).heroImageSizes,
@@ -623,6 +624,7 @@ function HomePage() {
                                     {filteredProjects.map((project) => (
                                         <motion.div
                                             key={project.id}
+                                            className="relative"
                                             layout
                                             initial={{ opacity: 0, scale: 0.95 }}
                                             animate={{ opacity: 1, scale: 1 }}

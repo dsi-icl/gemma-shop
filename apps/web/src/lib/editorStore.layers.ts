@@ -1,6 +1,7 @@
 import { EditorEngine } from './editorEngine';
 import type { EditorState, SliceHelpers } from './editorStore.types';
 import { fitSizeToViewport, MIN_LAYER_DIMENSION } from './fitSizeToViewport';
+import { COLS, ROWS, SCREEN_H, SCREEN_W } from './stageConstants';
 import type { Layer, LayerWithEditorState } from './types';
 
 type SliceSet = (
@@ -226,6 +227,93 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
             get().markDirty();
         },
 
+        alignSelectedLayers: (
+            mode: 'left' | 'right' | 'top' | 'bottom' | 'center-horizontal' | 'center-vertical'
+        ) => {
+            const engine = EditorEngine.getInstance();
+            const s = get();
+            const selectedNumericIds = s.selectedLayerIds
+                .map((id) => Number.parseInt(id, 10))
+                .filter((id) => Number.isFinite(id))
+                .map((id) => Number(id));
+            if (selectedNumericIds.length < 2) return;
+
+            const selectedLayers = selectedNumericIds
+                .map((id) => s.layers.get(id))
+                .filter((layer): layer is LayerWithEditorState => Boolean(layer));
+            if (selectedLayers.length < 2) return;
+
+            const boxes = selectedLayers.map((layer) => {
+                const width = Math.max(
+                    MIN_LAYER_DIMENSION,
+                    Math.abs(layer.config.width * layer.config.scaleX)
+                );
+                const height = Math.max(
+                    MIN_LAYER_DIMENSION,
+                    Math.abs(layer.config.height * layer.config.scaleY)
+                );
+                const left = layer.config.cx - width / 2;
+                const right = layer.config.cx + width / 2;
+                const top = layer.config.cy - height / 2;
+                const bottom = layer.config.cy + height / 2;
+                return { layer, width, height, left, right, top, bottom };
+            });
+
+            const groupLeft = Math.min(...boxes.map((box) => box.left));
+            const groupRight = Math.max(...boxes.map((box) => box.right));
+            const groupTop = Math.min(...boxes.map((box) => box.top));
+            const groupBottom = Math.max(...boxes.map((box) => box.bottom));
+            const groupCenterX = (groupLeft + groupRight) / 2;
+            const groupCenterY = (groupTop + groupBottom) / 2;
+
+            const newLayers = new Map(s.layers);
+            const updatedLayers: LayerWithEditorState[] = [];
+
+            for (const box of boxes) {
+                let newCx = box.layer.config.cx;
+                let newCy = box.layer.config.cy;
+
+                if (mode === 'left') {
+                    newCx = groupLeft + box.width / 2;
+                } else if (mode === 'right') {
+                    newCx = groupRight - box.width / 2;
+                } else if (mode === 'center-horizontal') {
+                    newCx = groupCenterX;
+                } else if (mode === 'top') {
+                    newCy = groupTop + box.height / 2;
+                } else if (mode === 'bottom') {
+                    newCy = groupBottom - box.height / 2;
+                } else if (mode === 'center-vertical') {
+                    newCy = groupCenterY;
+                }
+
+                if (newCx === box.layer.config.cx && newCy === box.layer.config.cy) continue;
+
+                const updatedLayer: LayerWithEditorState = {
+                    ...box.layer,
+                    config: {
+                        ...box.layer.config,
+                        cx: Math.round(newCx),
+                        cy: Math.round(newCy)
+                    }
+                };
+                newLayers.set(updatedLayer.numericId, updatedLayer);
+                updatedLayers.push(updatedLayer);
+            }
+
+            if (updatedLayers.length === 0) return;
+
+            set({ layers: newLayers });
+            for (const updatedLayer of updatedLayers) {
+                engine.sendJSON({
+                    type: 'upsert_layer',
+                    origin: 'editor:align_selected_layers',
+                    layer: updatedLayer
+                });
+            }
+            get().markDirty();
+        },
+
         addTextLayer: () => {
             const { allocateId, allocateZIndex, insertionCenter, insertionViewport } = get();
             const numericId = allocateId();
@@ -414,6 +502,53 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
             get().markDirty();
         },
 
+        addBackgroundLayer: () => {
+            const { layers } = get();
+            // Singleton: if one already exists, do nothing (settings accessible via toolbar popover)
+            const existing = Array.from(layers.values()).find((l) => l.type === 'background');
+            if (existing) return;
+
+            const numericId = helpers.allocateId();
+            const wallW = COLS * SCREEN_W;
+            const wallH = ROWS * SCREEN_H;
+
+            const newLayer: LayerWithEditorState = {
+                numericId,
+                type: 'background',
+                config: {
+                    cx: wallW / 2,
+                    cy: wallH / 2,
+                    width: wallW,
+                    height: wallH,
+                    rotation: 0,
+                    scaleX: 1,
+                    scaleY: 1,
+                    zIndex: 0,
+                    visible: true
+                },
+                backgroundType: 'i-pattern',
+                backgroundColor: '#0a0a14',
+                atmosphereColor: '#1a1a3a',
+                motifColor1: '#2a1a4a',
+                motifColor2: '#0a2a3a',
+                noiseSeed: 0,
+                speedFactor: 1
+            };
+
+            set((s) => {
+                const newLayers = new Map(s.layers);
+                newLayers.set(numericId, newLayer);
+                return { layers: newLayers };
+            });
+            const engine = EditorEngine.getInstance();
+            engine.sendJSON({
+                type: 'upsert_layer',
+                origin: 'editor:add_background_layer',
+                layer: newLayer
+            });
+            get().markDirty();
+        },
+
         addLineLayer: (line: Array<number>) => {
             const { allocateId, allocateZIndex, strokeColor, strokeDash, strokeWidth } = get();
             const numericId = allocateId();
@@ -492,6 +627,7 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
         },
 
         reorderLayers: (layers: LayerWithEditorState[]) => {
+            const engine = EditorEngine.getInstance();
             const updatedLayers = layers.map((layer, index) => ({
                 ...layer,
                 config: { ...layer.config, zIndex: index }
@@ -500,7 +636,11 @@ export function createLayerSlice(set: SliceSet, get: SliceGet, helpers: SliceHel
             set({ layers: new Map(updatedLayers.map((l) => [l.numericId, l])) });
 
             updatedLayers.forEach((layer) => {
-                helpers.sendLayerUpdate(layer, 'editor:reorder_layers');
+                engine.sendJSON({
+                    type: 'upsert_layer',
+                    origin: 'editor:reorder_layers',
+                    layer
+                });
             });
             get().markDirty();
         }

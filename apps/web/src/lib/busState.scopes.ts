@@ -106,6 +106,9 @@ export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string 
         return JSON.stringify({
             type: 'hydrate',
             layers: Array.from(scope.layers.values()),
+            projectId: scope.projectId,
+            commitId: scope.commitId,
+            slideId: scope.slideId,
             ...(scope.customRenderUrl
                 ? {
                       customRender: {
@@ -130,6 +133,9 @@ export function getWallHydratePayload(scopeId: ScopeId, wallId: string): string 
     return JSON.stringify({
         type: 'hydrate',
         layers: Array.from(mergedByNumericId.values()),
+        projectId: scope.projectId,
+        commitId: scope.commitId,
+        slideId: scope.slideId,
         ...(scope.customRenderUrl
             ? {
                   customRender: {

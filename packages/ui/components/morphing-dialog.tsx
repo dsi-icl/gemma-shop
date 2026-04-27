@@ -295,14 +295,22 @@ function MorphingDialogTrigger({
         if (consumeTriggerCloseGuard()) {
             return;
         }
-        setState((prev) => (prev === 'closed' ? 'expanded' : 'closed'));
+        setState((prev) => {
+            if (prev === 'closed') return 'expanded';
+            if (prev === 'minimized') return 'fullscreen';
+            return 'closed';
+        });
     }, [consumeTriggerCloseGuard, setState]);
 
     const handleKeyDown = useCallback(
         (event: React.KeyboardEvent) => {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
-                setState((prev) => (prev === 'closed' ? 'expanded' : 'closed'));
+                setState((prev) => {
+                    if (prev === 'closed') return 'expanded';
+                    if (prev === 'minimized') return 'fullscreen';
+                    return 'closed';
+                });
             }
         },
         [setState]
@@ -398,7 +406,7 @@ function MorphingDialogContent({
         if (typeof document !== 'undefined') {
             if (document.body.getAttribute('data-takeover-lock') === '1') return;
         }
-        if (isOpen && state !== 'minimized') close();
+        if (isOpen && state === 'expanded') close();
     });
 
     const stateClassName =
@@ -641,7 +649,7 @@ export type MorphingDialogImageProps = {
     style?: React.CSSProperties;
 };
 
-function RotatingProjectImages({
+export function RotatingProjectImages({
     images,
     alt
 }: {
@@ -759,6 +767,45 @@ function MorphingDialogImage({
     );
 }
 
+export type NonMorphingDialogImageProps = MorphingDialogImageProps;
+
+function NonMorphingDialogImage({
+    src,
+    blurhash,
+    sizes,
+    images,
+    alt,
+    className,
+    style,
+    state = 'opened'
+}: NonMorphingDialogImageProps) {
+    const normalizedImages =
+        images && images.length > 0
+            ? images.filter((image) => Boolean(image.src))
+            : src
+              ? [{ src, blurhash, sizes }]
+              : [];
+
+    if (normalizedImages.length === 0) {
+        return (
+            <AnimatedBlurPattern
+                key={src}
+                seed={alt}
+                height={200}
+                animate={state === 'closed'}
+                className={className}
+                style={style}
+            />
+        );
+    }
+
+    return (
+        <div className={cn('relative isolate z-0 overflow-hidden', className)} style={style}>
+            <RotatingProjectImages images={normalizedImages} alt={alt} />
+        </div>
+    );
+}
+
 export type MorphingDialogCloseProps = {
     className?: string;
     variants?: {
@@ -781,7 +828,10 @@ function MorphingDialogClose({ className, variants }: MorphingDialogCloseProps) 
             type="button"
             aria-label="Close dialog"
             key={`dialog-close-${uniqueId}`}
-            className={cn('absolute top-6 right-6 z-30', className)}
+            className={cn(
+                'absolute top-6 right-6 z-30 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,1)]',
+                className
+            )}
             initial="initial"
             animate="animate"
             exit="exit"
@@ -801,7 +851,10 @@ function MorphingDialogMinimize({ className, variants }: MorphingDialogCloseProp
             onClick={minimize}
             type="button"
             aria-label="Minimize dialog"
-            className={cn('absolute top-6 right-16 z-30', className)}
+            className={cn(
+                'absolute top-6 right-16 z-30 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,1)]',
+                className
+            )}
             initial="initial"
             animate="animate"
             exit="exit"
@@ -823,5 +876,6 @@ export {
     MorphingDialogSubtitle,
     MorphingDialogDescription,
     MorphingDialogImage,
+    NonMorphingDialogImage,
     MorphingDialogMinimize
 };

@@ -2,87 +2,114 @@
 
 ## Purpose
 
-This document gives a high-level map of Gemma Shop runtime structure, ownership boundaries, and where to start for deep dives.
+This document gives a high-level map of the Gemma Shop runtime, boundaries, and entry points.
 
-Detailed flow-level analysis lives in [BUS_PIPING.md](./BUS_PIPING.md).
+For transport and state-flow detail, see [BUS_PIPING.md](./BUS_PIPING.md).
 
 ## System At A Glance
 
-Gemma Shop is a collaborative slide system with four realtime client roles:
+Gemma Shop is a collaborative slide platform with four realtime roles:
 
 - `editor`: authoring and stage editing
-- `wall`: render node endpoint
-- `controller`: wall control and slide navigation
-- `roy`: specialist/graph client
+- `wall`: rendering node endpoint
+- `controller`: wall control and playback/navigation
+- `gallery`: public wall-binding and project display surface
 
-Core behavior:
+Core capabilities:
 
-- live multi-client editing over WebSocket bus
-- scope-based state model (`projectId + commitId + slideId`)
-- commit-backed persistence with mutable head + snapshots
-- asset upload and live asset events
-- YJS co-bus for collaborative text layer editing
+- realtime collaboration over `/bus`
+- scope-based state (`projectId + commitId + slideId`)
+- commit-backed persistence and autosave
+- upload/transcode pipeline with live asset events
+- Yjs co-bus for text collaboration
 
 ## Main Runtime Components
 
 ## 1) Realtime Bus
 
-- WS route: `apps/web/src/addons/routes/bus.ts`
-- State/runtime store: `apps/web/src/lib/busState.ts`
+- route: `apps/web/src/routes/bus.ts`
+- runtime state: `apps/web/src/lib/busState.ts`
+- handler modules: `apps/web/src/server/bus/*.ts`
 
 Responsibilities:
 
-- peer registration and routing
-- bind/unbind walls to scopes
-- hydrate fanout to walls/editors/controllers
-- playback sync (binary and JSON)
-- autosave, stale-peer reaping, wall unbind grace
+- peer handshake and registration
+- authorization/rate-limit enforcement
+- scope hydration and layer fanout
+- wall bind/unbind orchestration
+- playback synchronization (JSON + binary)
+- process bridges for cross-route/server-function fanout
 
 ## 2) YJS Co-Bus (Text Collaboration)
 
-- WS route: `apps/web/src/addons/routes/yjs/[...].ts`
+- route: `apps/web/src/routes/yjs.$.ts`
+- orchestration: `apps/web/src/server/yjs/yjs.session.ts`
+- shared doc/persistence: `apps/web/src/server/yjs/yjs.doc.ts`
 
 Responsibilities:
 
-- collaborative CRDT updates for text layers
-- awareness sync
-- ydoc persistence in Mongo
-- bridge updates back into main bus via `__YJS_UPSERT_LAYER__`
+- CRDT sync and awareness per text-layer doc
+- persistence to `ydocs`
+- Yjs->HTML conversion
+- bridge updates into `/bus` via `__YJS_UPSERT_LAYER__`
 
 ## 3) Editor Domain
 
-- client engine: `apps/web/src/lib/editorEngine.ts`
-- state store: `apps/web/src/lib/editorStore.ts`
+- engine: `apps/web/src/lib/editorEngine.ts`
+- store: `apps/web/src/lib/editorStore.ts`
+- primary UI routes: `apps/web/src/routes/_auth/quarry/editor/*`
 
 Responsibilities:
 
-- sends editing commands (`upsert_layer`, `delete_layer`, `seed_scope`, `update_slides`)
-- tracks local selection/tooling state
-- reacts to hydrate/fanout updates
+- emits authoring commands (`upsert_layer`, `delete_layer`, `seed_scope`, `update_slides`)
+- joins/leaves scopes
+- handles hydrate, playback, and bind-override result events
 
-## 4) Wall + Controller Domains
+## 4) Wall Domain
 
-- wall engine: `apps/web/src/lib/wallEngine.ts`
-- controller engine: `apps/web/src/lib/controllerEngine.ts`
+- engine: `apps/web/src/lib/wallEngine.ts`
+- route: `apps/web/src/routes/wall/index.tsx`
 
 Responsibilities:
 
-- wall render + playback state application
-- controller-driven bind/navigation and playback controls
-- controller transient overlays
+- render hydrated layer state
+- apply movement/playback updates with clock sync
+- reflect custom render configuration from binding state
 
-## 5) Upload Pipeline
+## 5) Controller Domain
+
+- engine: `apps/web/src/lib/controllerEngine.ts`
+- route: `apps/web/src/routes/controller/index.tsx`
+
+Responsibilities:
+
+- wall-aware bind/navigation commands
+- playback control and slide snapshots
+- transient draw overlays (`controller:add_line_layer`)
+
+## 6) Gallery Domain
+
+- engine: `apps/web/src/lib/galleryEngine.ts`
+- route: `apps/web/src/routes/gallery/index.tsx`
+
+Responsibilities:
+
+- consume `gallery_state` and incremental wall/project events
+- initiate/observe gallery-source binding actions
+- approve/deny editor takeover requests (`bind_override_*`)
+- keep project cards in sync with wall binding changes
+
+## 7) Upload and Asset Pipeline
 
 - route: `apps/web/src/routes/api/uploads/$.ts`
 
 Responsibilities:
 
-- tus upload ingestion
-- media processing (image variants, video transcode/preview)
+- upload ingestion and processing
 - asset metadata persistence
-- bridge events into realtime bus (`__BROADCAST_EDITORS__`, `__BROADCAST_ASSET_ADDED__`)
+- realtime progress and `asset_added` events via bus bridges
 
-## 6) Persistence Domain
+## 8) Server/Persistence Domain
 
 - server modules: `apps/web/src/server/*.ts`
 - db package: `packages/db`
@@ -93,26 +120,25 @@ Key collections:
 - `commits`
 - `assets`
 - `walls`
+- `devices`
 - `ydocs`
 
 ## Scope Model (Short)
 
-- Canonical scope label: `e:${projectId}:${commitId}:${slideId}`
-- Runtime scope key: numeric `ScopeId` via interning
-- Wall binding: `wallId -> scopeId`
-- Commit fanout index: `commitId -> set(scopeId)`
-- YJS doc key: `${projectId}_${commitId}_${slideId}_${layerId}`
-
-See [BUS_PIPING.md](./BUS_PIPING.md) for detailed lifecycle semantics.
+- canonical scope label: `e:${projectId}:${commitId}:${slideId}`
+- runtime scope key: interned numeric `ScopeId`
+- wall binding: `wallId -> scopeId` (+ `boundSource: live|gallery`)
+- commit fanout index: `commitId -> Set<ScopeId>`
+- Yjs doc key: `${projectId}_${commitId}_${slideId}_${layerId}`
 
 ## Runtime Boundaries
 
-- In-memory bus state is process-local.
-- Server function paths and WS routes may diverge in multi-worker deployments unless routing/runtime is constrained.
+- bus state is in-memory and process-local
+- HTTP/server-function calls and websocket handlers must share runtime affinity (or externalize state) for strong cross-path consistency
 
 ## Where To Start
 
-1. Read [BUS_PIPING.md](./BUS_PIPING.md) for transport/state details.
-2. Trace client intents from `editorStore.ts` or `controller/index.tsx` into `bus.ts` handlers.
-3. Validate persistence implications in `server/walls.ts`, `server/admin.ts`, and `server/projects.ts`.
-4. For text sync issues, inspect YJS route flush + bridge flow first.
+1. Read [BUS_PIPING.md](./BUS_PIPING.md) for protocol and lifecycle details.
+2. Validate message contracts in `apps/web/src/lib/types.ts`.
+3. Trace role-specific behavior from engines (`editorEngine`, `wallEngine`, `controllerEngine`, `galleryEngine`) into `/bus` handlers.
+4. For text sync issues, start with Yjs route/session and the `__YJS_UPSERT_LAYER__` bridge.

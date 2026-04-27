@@ -45,7 +45,11 @@ function ControllerEditor() {
             <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
                 Save
             </Button>
-            <textarea value={html} onChange={(e) => setHtml(e.target.value)} />
+            <textarea
+                value={html}
+                onChange={(e) => setHtml(e.target.value)}
+                className="h-[70vh] w-full resize-none rounded border border-border bg-background p-3 font-mono text-sm"
+            />
         </div>
     );
 }

@@ -1,11 +1,13 @@
 import {
     ArrowUpIcon,
+    CircleNotchIcon,
     EyeIcon,
     GitBranchIcon,
     GlobeIcon,
     GlobeXIcon,
     PencilSimpleIcon
 } from '@phosphor-icons/react';
+import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import type { PublicDoc } from '@repo/db/collections';
 import type { CommitDocument } from '@repo/db/documents';
 import { Badge } from '@repo/ui/components/badge';
@@ -20,8 +22,8 @@ import {
     TableRow
 } from '@repo/ui/components/table';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { $promoteBranchHead, $publishCommit } from '~/server/projects.fns';
@@ -142,9 +144,12 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId/commits'
 
 function CommitsTab() {
     const { projectId } = Route.useParams();
+    const { data: user } = useSuspenseQuery(authQueryOptions());
     const { data: project } = useSuspenseQuery(projectQueryOptions(projectId));
     const { data: commits } = useSuspenseQuery(commitsQueryOptions(projectId));
     const queryClient = useQueryClient();
+    const navigate = useNavigate();
+    const [openingEditorForCommitId, setOpeningEditorForCommitId] = useState<string | null>(null);
 
     const publishMutation = useMutation({
         mutationFn: (commitId: string | null) => $publishCommit({ data: { projectId, commitId } }),
@@ -169,6 +174,25 @@ function CommitsTab() {
         () => topoSort(commits, project.headCommitId ?? null),
         [commits, project.headCommitId]
     );
+    const canPublish =
+        user?.role === 'admin' || user?.role === 'operator' || user?.trustedPublisher === true;
+
+    const handleOpenEditor = async (input: { commitId: string; slideId: string }) => {
+        setOpeningEditorForCommitId(input.commitId);
+        try {
+            await navigate({
+                to: '/quarry/editor/$projectId/$commitId/$slideId',
+                params: {
+                    projectId,
+                    commitId: input.commitId,
+                    slideId: input.slideId
+                }
+            });
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to open editor');
+            setOpeningEditorForCommitId(null);
+        }
+    };
 
     if (commits.length === 0) {
         return (
@@ -187,6 +211,7 @@ function CommitsTab() {
                         <TableRow>
                             <TableHead className="w-6 px-0" />
                             <TableHead>Message</TableHead>
+                            <TableHead>Author</TableHead>
                             <TableHead>Date</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead />
@@ -206,6 +231,9 @@ function CommitsTab() {
                                         />
                                     </TableCell>
                                     <TableCell className="font-medium">{commit.message}</TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {commit.authorEmail ?? '-'}
+                                    </TableCell>
                                     <TableCell className="text-muted-foreground">
                                         <DateDisplay
                                             value={commit.updatedAt ?? commit.createdAt}
@@ -255,42 +283,50 @@ function CommitsTab() {
                                                     <ArrowUpIcon /> Promote
                                                 </Button>
                                             )}
-                                        {isPublished ? (
-                                            <Button
-                                                variant="outline"
-                                                size="xs"
-                                                onClick={() => publishMutation.mutate(null)}
-                                                disabled={publishMutation.isPending}
-                                            >
-                                                <GlobeXIcon /> Unpublish
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                variant="outline"
-                                                size="xs"
-                                                onClick={() => publishMutation.mutate(commit.id)}
-                                                disabled={publishMutation.isPending}
-                                            >
-                                                <GlobeIcon /> Publish
-                                            </Button>
-                                        )}
+                                        {canPublish &&
+                                            (isPublished ? (
+                                                <Button
+                                                    variant="outline"
+                                                    size="xs"
+                                                    onClick={() => publishMutation.mutate(null)}
+                                                    disabled={publishMutation.isPending}
+                                                >
+                                                    <GlobeXIcon /> Unpublish
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    variant="outline"
+                                                    size="xs"
+                                                    onClick={() =>
+                                                        publishMutation.mutate(commit.id)
+                                                    }
+                                                    disabled={publishMutation.isPending}
+                                                >
+                                                    <GlobeIcon /> Publish
+                                                </Button>
+                                            ))}
                                         {commit.isMutableHead && commit.content?.slides?.[0]?.id ? (
                                             <Button
-                                                render={
-                                                    <Link
-                                                        to="/quarry/editor/$projectId/$commitId/$slideId"
-                                                        params={{
-                                                            projectId,
-                                                            commitId: commit.id,
-                                                            slideId: commit.content.slides[0].id
-                                                        }}
-                                                    />
-                                                }
                                                 variant="outline"
                                                 size="xs"
-                                                nativeButton={false}
+                                                onClick={() =>
+                                                    handleOpenEditor({
+                                                        commitId: commit.id,
+                                                        slideId: commit.content.slides[0].id
+                                                    })
+                                                }
+                                                disabled={openingEditorForCommitId !== null}
                                             >
-                                                <PencilSimpleIcon /> Edit
+                                                {openingEditorForCommitId === commit.id ? (
+                                                    <>
+                                                        <CircleNotchIcon className="animate-spin" />
+                                                        Opening...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <PencilSimpleIcon /> Edit
+                                                    </>
+                                                )}
                                             </Button>
                                         ) : null}
                                     </TableCell>

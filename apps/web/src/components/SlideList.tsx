@@ -1,4 +1,5 @@
-import { CaretDownIcon, SlideshowIcon } from '@phosphor-icons/react';
+import { CaretDownIcon, PlusIcon, SlideshowIcon } from '@phosphor-icons/react';
+import { Button } from '@repo/ui/components/button';
 import { useNavigate } from '@tanstack/react-router';
 
 import { useEditorStore } from '~/lib/editorStore';
@@ -21,10 +22,12 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
     const toggleSlideSelection = useEditorStore((s) => s.toggleSlideSelection);
     const switchSlide = useEditorStore((s) => s.switchSlide);
     const copySlide = useEditorStore((s) => s.copySlide);
+    const addSlide = useEditorStore((s) => s.addSlide);
     const deleteSlide = useEditorStore((s) => s.deleteSlide);
     const renameSlide = useEditorStore((s) => s.renameSlide);
     const projectId = useEditorStore((s) => s.projectId);
     const navigate = useNavigate();
+    const sortedSlides = [...slides].sort((a, b) => a.order - b.order);
 
     const handleDelete = async (slideId: string) => {
         const isActive = activeSlideId === slideId;
@@ -76,17 +79,30 @@ export function SlideList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
                 >
                     <SlideshowIcon size={18} weight="bold" /> Slides
                 </h2>
-                <CaretDownIcon
-                    size={14}
-                    weight="bold"
-                    className={`text-muted-foreground transition-transform ${collapsed ? '' : 'rotate-180'}`}
-                />
+                <div className="flex items-center gap-2">
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            addSlide();
+                        }}
+                    >
+                        <PlusIcon size={14} weight="bold" />
+                    </Button>
+                    <CaretDownIcon
+                        size={14}
+                        weight="bold"
+                        className={`text-muted-foreground transition-transform ${collapsed ? '' : 'rotate-180'}`}
+                    />
+                </div>
             </button>
 
             {!collapsed && (
                 <div className="flex-1 space-y-1 overflow-y-auto p-2">
                     <DraggableList
-                        items={slides.sort((a, b) => a.order - b.order)}
+                        items={sortedSlides}
                         selectedIds={selectedSlides}
                         onReorder={reorderSlides}
                         onSelect={handleSelect}

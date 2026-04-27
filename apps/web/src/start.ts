@@ -10,6 +10,7 @@ import {
     getClientIpFromHeaders
 } from '~/server/rateLimit';
 import { resolveRequestAuthContext } from '~/server/requestAuthContext';
+import { touchUserLastSeenThrottled } from '~/server/user-last-seen';
 
 const startRateLimitMiddleware = createMiddleware().server(async ({ next, request }) => {
     const method = request.method.toUpperCase();
@@ -121,6 +122,7 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
 
 const authContextMiddleware = createMiddleware().server(async ({ next, request, context }) => {
     const { authContext } = await resolveRequestAuthContext(request);
+    touchUserLastSeenThrottled(authContext.user?.email);
     return next({
         context: {
             nonce: undefined,

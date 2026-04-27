@@ -61,6 +61,22 @@ export class AssetsCollection extends BaseCollection<AssetDocument> {
         return this.find(filter, options);
     }
 
+    async findByProjectOrPublicUrls(
+        projectId: string | ObjectId,
+        urls: string[],
+        includeDeleted = false
+    ): Promise<PublicDoc<AssetDocument>[]> {
+        if (urls.length === 0) return [];
+        const filter: Record<string, unknown> = {
+            url: { $in: urls },
+            hidden: { $ne: true },
+            $or: [{ projectId: new OID(projectId) }, { public: true }]
+        };
+        if (!includeDeleted) filter.deletedAt = { $exists: false };
+        const records = await this.raw.find(filter).toArray();
+        return records.map((r) => this.expose(this.fromDB(r)));
+    }
+
     /**
      * Fetch blurhash and sizes metadata for a list of asset URLs.
      * Projection-only query — avoids loading full asset documents for hero image display.

@@ -28,6 +28,7 @@ interface DraggableListProps<T extends DraggableItem> {
     selectedIds: string[];
     onReorder: (items: T[]) => void;
     onSelect: (id: string, shiftKey: boolean, ctrlKey: boolean) => void;
+    onItemDoubleClick?: (item: T) => void;
     itemRenderer: (item: T, props: { isSelected: boolean }) => React.ReactNode;
     overlayRenderer: (item: T) => React.ReactNode;
     multiDragLabel?: (count: number) => React.ReactNode;
@@ -37,11 +38,13 @@ function SortableItem<T extends DraggableItem>({
     item,
     selectedIds,
     onSelect,
+    onItemDoubleClick,
     itemRenderer
 }: {
     item: T;
     selectedIds: string[];
     onSelect: (id: string, shiftKey: boolean, ctrlKey: boolean) => void;
+    onItemDoubleClick?: (item: T) => void;
     itemRenderer: (item: T, props: { isSelected: boolean }) => React.ReactNode;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -67,6 +70,15 @@ function SortableItem<T extends DraggableItem>({
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
         onSelect(item.id, e.shiftKey, e.ctrlKey || e.metaKey);
     };
+    const handleDoubleClick = () => {
+        onItemDoubleClick?.(item);
+    };
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect(item.id, e.shiftKey, e.ctrlKey || e.metaKey);
+        }
+    };
 
     return (
         <div
@@ -75,6 +87,11 @@ function SortableItem<T extends DraggableItem>({
             {...attributes}
             {...listeners}
             onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
+            onKeyDown={handleKeyDown}
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+            role="button"
+            tabIndex={0}
             className="cursor-grab active:cursor-grabbing"
         >
             {itemRenderer(item, { isSelected })}
@@ -87,6 +104,7 @@ export function DraggableList<T extends DraggableItem>({
     selectedIds,
     onReorder,
     onSelect,
+    onItemDoubleClick,
     itemRenderer,
     overlayRenderer,
     multiDragLabel
@@ -162,6 +180,7 @@ export function DraggableList<T extends DraggableItem>({
                         item={item}
                         selectedIds={selectedIds}
                         onSelect={onSelect}
+                        onItemDoubleClick={onItemDoubleClick}
                         itemRenderer={itemRenderer}
                     />
                 ))}

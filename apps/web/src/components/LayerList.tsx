@@ -1,6 +1,7 @@
 import { CaretDownIcon, StackSimpleIcon } from '@phosphor-icons/react';
 
 import { useEditorStore } from '~/lib/editorStore';
+import { COLS, ROWS, SCREEN_H, SCREEN_W } from '~/lib/stageConstants';
 
 import { DraggableList } from './DraggableList';
 import { LayerItem } from './LayerItem';
@@ -21,10 +22,37 @@ export function LayerList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
     const sortedLayers = Array.from(layers.values()).sort(
         (a, b) => b.config.zIndex - a.config.zIndex
     );
+    // Background layer is managed via the toolbar popover — filter it from the list
+    const displayLayers = sortedLayers.filter((l) => l.type !== 'background');
+    const bgLayers = sortedLayers.filter((l) => l.type === 'background');
 
     const toggleCollapse = () => {
         if (collapsed) onExpand?.();
         else onCollapse?.();
+    };
+    const goToLayer = (layerId: string) => {
+        const numericId = Number.parseInt(layerId, 10);
+        if (!Number.isFinite(numericId)) return;
+        const layer = layers.get(numericId);
+        if (!layer) return;
+
+        const slate = document.getElementById('slate');
+        if (!(slate instanceof HTMLDivElement)) return;
+
+        const logicalWidth = COLS * SCREEN_W;
+        const logicalHeight = ROWS * SCREEN_H;
+        const scaleX = slate.scrollWidth / Math.max(1, logicalWidth);
+        const scaleY = slate.scrollHeight / Math.max(1, logicalHeight);
+        const targetLeft = layer.config.cx * scaleX - slate.clientWidth / 2;
+        const targetTop = layer.config.cy * scaleY - slate.clientHeight / 2;
+        const maxLeft = Math.max(0, slate.scrollWidth - slate.clientWidth);
+        const maxTop = Math.max(0, slate.scrollHeight - slate.clientHeight);
+
+        slate.scrollTo({
+            left: Math.max(0, Math.min(maxLeft, targetLeft)),
+            top: Math.max(0, Math.min(maxTop, targetTop)),
+            behavior: 'smooth'
+        });
     };
 
     return (
@@ -47,7 +75,7 @@ export function LayerList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
             {!collapsed && (
                 <div className="flex-1 space-y-1 overflow-y-auto p-2">
                     <DraggableList
-                        items={sortedLayers.map((layer) => ({
+                        items={displayLayers.map((layer) => ({
                             ...layer,
                             id: layer.numericId.toString()
                         }))}
@@ -60,9 +88,11 @@ export function LayerList({ collapsed, onCollapse, onExpand, titleBarSize = 48 }
                                 }
                                 return existingLayer;
                             });
-                            reorderLayers(newLayers.reverse());
+                            // Preserve background layers at z-index 0 (prepend to z-ordered array)
+                            reorderLayers([...bgLayers, ...newLayers.reverse()]);
                         }}
                         onSelect={toggleLayerSelection}
+                        onItemDoubleClick={(item) => goToLayer(item.id)}
                         itemRenderer={(layer, { isSelected }) => (
                             <LayerItem layer={layer} isSelected={isSelected} />
                         )}

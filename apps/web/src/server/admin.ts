@@ -3,7 +3,9 @@ import { auth } from '@repo/auth/auth';
 import { createSmtpTransport } from '@repo/auth/smtp';
 import { getSmtpConfig, listConfigEntries, setConfigValue } from '@repo/db/config';
 import type { AuthContext } from '@repo/db/documents';
-import { getRequest } from '@tanstack/react-start/server';
+import type { CollaboratorRole } from '@repo/db/schema';
+import { getRequest, setResponseHeader } from '@tanstack/react-start/server';
+import { ObjectId } from 'mongodb';
 
 import {
     getBusRuntimeTelemetry,
@@ -44,6 +46,38 @@ function escapeRegex(input: string): string {
     return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function forwardSetCookieHeaders(result: unknown) {
+    const headers =
+        result && typeof result === 'object' && 'headers' in (result as Record<string, unknown>)
+            ? ((result as { headers?: unknown }).headers ?? null)
+            : null;
+    const getSetCookie =
+        headers &&
+        typeof headers === 'object' &&
+        typeof (headers as { getSetCookie?: unknown }).getSetCookie === 'function'
+            ? ((headers as { getSetCookie: () => string[] }).getSetCookie() ?? [])
+            : [];
+    if (Array.isArray(getSetCookie) && getSetCookie.length > 0) {
+        setResponseHeader('Set-Cookie', getSetCookie);
+    }
+}
+
+async function resolveUserByBetterAuthId(userId: string) {
+    const normalized = userId.trim();
+    if (!normalized) return null;
+    let user = await collections.users.findOne(
+        { id: normalized },
+        { projection: { id: 1, email: 1, role: 1 } }
+    );
+    if (!user && /^[0-9a-f]{24}$/i.test(normalized)) {
+        user = await collections.users.findOne(
+            { _id: new ObjectId(normalized) },
+            { projection: { id: 1, email: 1, role: 1 } }
+        );
+    }
+    return user;
+}
+
 async function findWallById(identifier: string) {
     const normalized = identifier.trim();
     if (!normalized) return null;
@@ -80,8 +114,10 @@ export async function adminListUsers() {
 
     return userRecords.map((user) => {
         const { _id, ...userFields } = user;
-        void _id; // Better Auth's ObjectId — not exposed to the client
-        const id = String(userFields.id ?? '');
+        const id =
+            typeof userFields.id === 'string' && userFields.id.trim().length > 0
+                ? userFields.id.trim()
+                : _id.toHexString();
         return { ...userFields, id, isActiveSession: activeUserIds.has(id) };
     });
 }
@@ -89,6 +125,47 @@ export async function adminListUsers() {
 export async function adminListProjects() {
     const projects = await dbCol.projects.find({}, { sort: { updatedAt: -1 } });
     return projects;
+}
+
+export async function adminUpdateProjectCollaborators(
+    input: {
+        projectId: string;
+        collaborators: Array<{ email: string; role: CollaboratorRole }>;
+    },
+    actorEmail: string,
+    auditContext?: AdminAuditContext
+) {
+    const project = await dbCol.projects.findById(input.projectId);
+    if (!project) throw new Error('Project not found');
+
+    const byEmail = new Map<string, { email: string; role: CollaboratorRole }>();
+    for (const entry of input.collaborators) {
+        const email = entry.email.trim().toLowerCase();
+        if (!email) continue;
+        byEmail.set(email, { email, role: entry.role });
+    }
+
+    if (!Array.from(byEmail.values()).some((c) => c.role === 'owner')) {
+        const ownerEmail = project.createdBy.trim().toLowerCase();
+        byEmail.set(ownerEmail, { email: ownerEmail, role: 'owner' });
+    }
+    const normalized = Array.from(byEmail.values());
+
+    const updated = await dbCol.projects.update(project.id, { collaborators: normalized });
+    if (!updated) throw new Error('Project not found');
+
+    await logAuditSuccess({
+        action: 'ADMIN_PROJECT_COLLABORATORS_UPDATED',
+        actorId: actorEmail,
+        projectId: project.id,
+        resourceType: 'project',
+        resourceId: project.id,
+        changes: { collaborators: normalized },
+        ...withAdminAuditContext(auditContext)
+    });
+
+    process.__BROADCAST_PROJECTS_CHANGED__?.(project.id);
+    return updated;
 }
 
 export async function adminListAuditsPage(input: {
@@ -511,6 +588,262 @@ export async function adminSetUserBanStatus(input: {
         resourceType: 'user',
         resourceId: userId,
         changes: { banned: input.banned }
+    });
+}
+
+export async function adminSetUserRole(input: {
+    userId?: string | null;
+    userEmail?: string | null;
+    role: 'admin' | 'operator' | 'user';
+    actorEmail: string;
+}) {
+    const userId = (input.userId ?? '').trim();
+    const userEmail = (input.userEmail ?? '').trim().toLowerCase();
+    if (!userId && !userEmail) throw new Error('User identifier is required');
+
+    let user = null;
+    if (userId) {
+        user = await collections.users.findOne(
+            { id: userId },
+            { projection: { _id: 1, email: 1, id: 1, role: 1 } }
+        );
+        if (!user && /^[0-9a-f]{24}$/i.test(userId)) {
+            user = await collections.users.findOne(
+                { _id: new ObjectId(userId) },
+                { projection: { _id: 1, email: 1, id: 1, role: 1 } }
+            );
+        }
+    }
+    if (!user && userEmail) {
+        user = await collections.users.findOne(
+            { email: userEmail },
+            { projection: { _id: 1, email: 1, id: 1, role: 1 } }
+        );
+    }
+
+    if (!user) throw new Error('User not found');
+    if (user.email === input.actorEmail) throw new Error('You cannot modify your own role');
+
+    const currentRole =
+        user.role === 'admin' ? 'admin' : user.role === 'operator' ? 'operator' : 'user';
+    if (currentRole === input.role) return;
+
+    if (currentRole === 'admin' && input.role !== 'admin') {
+        const adminCount = await collections.users.countDocuments({ role: 'admin' });
+        if (adminCount <= 1) {
+            throw new Error('Cannot demote the last remaining admin');
+        }
+    }
+
+    const headers = getRequest().headers;
+
+    const betterAuthUserId =
+        typeof user.id === 'string' && user.id.trim().length > 0 ? user.id.trim() : null;
+    if (betterAuthUserId) {
+        await auth.api.setRole({
+            headers,
+            body: { userId: betterAuthUserId, role: input.role }
+        });
+    } else {
+        await collections.users.updateOne(
+            { _id: user._id },
+            { $set: { role: input.role, updatedAt: new Date() } }
+        );
+    }
+
+    if (typeof user.email === 'string' && user.email.length > 0) {
+        await adminRecomputeBusAuthContext({ email: user.email });
+    }
+
+    await logAuditSuccess({
+        action: 'ADMIN_USER_ROLE_UPDATED',
+        actorId: input.actorEmail,
+        resourceType: 'user',
+        resourceId: betterAuthUserId ?? String(user._id),
+        changes: { role: input.role }
+    });
+}
+
+export async function adminSetUserTrustedPublisher(input: {
+    userId: string;
+    trustedPublisher: boolean;
+    actorEmail: string;
+}) {
+    const userId = input.userId.trim();
+    if (!userId) throw new Error('User ID is required');
+
+    let user = await collections.users.findOne(
+        { id: userId },
+        { projection: { _id: 1, email: 1, id: 1, trustedPublisher: 1 } }
+    );
+    if (!user && /^[0-9a-f]{24}$/i.test(userId)) {
+        user = await collections.users.findOne(
+            { _id: new ObjectId(userId) },
+            { projection: { _id: 1, email: 1, id: 1, trustedPublisher: 1 } }
+        );
+    }
+
+    if (!user) throw new Error('User not found');
+
+    const current = user.trustedPublisher === true;
+    if (current === input.trustedPublisher) return;
+
+    const headers = getRequest().headers;
+    const betterAuthUserId =
+        typeof user.id === 'string' && user.id.trim().length > 0 ? user.id.trim() : null;
+
+    if (betterAuthUserId) {
+        await auth.api.adminUpdateUser({
+            headers,
+            body: {
+                userId: betterAuthUserId,
+                data: { trustedPublisher: input.trustedPublisher }
+            }
+        });
+    } else {
+        await collections.users.updateOne(
+            { _id: user._id },
+            {
+                $set: {
+                    trustedPublisher: input.trustedPublisher,
+                    updatedAt: new Date()
+                }
+            }
+        );
+    }
+
+    if (typeof user.email === 'string' && user.email.length > 0) {
+        await adminRecomputeBusAuthContext({ email: user.email });
+    }
+
+    await logAuditSuccess({
+        action: 'ADMIN_USER_TRUSTED_PUBLISHER_UPDATED',
+        actorId: input.actorEmail,
+        resourceType: 'user',
+        resourceId: betterAuthUserId ?? String(user._id),
+        changes: { trustedPublisher: input.trustedPublisher }
+    });
+}
+
+export async function adminImpersonateUser(input: {
+    userId: string;
+    actorEmail: string;
+    actorRole?: string;
+}) {
+    const userId = input.userId.trim();
+    if (!userId) throw new Error('User ID is required');
+
+    const targetUser = await resolveUserByBetterAuthId(userId);
+    if (!targetUser) throw new Error('User not found');
+    if (targetUser.email === input.actorEmail) throw new Error('You cannot impersonate yourself');
+
+    const headers = getRequest().headers;
+    const result = await auth.api.impersonateUser({
+        headers,
+        body: { userId },
+        returnHeaders: true
+    });
+    forwardSetCookieHeaders(result);
+
+    const impersonator = await collections.users.findOne(
+        { email: input.actorEmail.toLowerCase() },
+        { projection: { id: 1, email: 1, role: 1 } }
+    );
+    const actorId = `user:${input.actorEmail.toLowerCase()}`;
+
+    await logAuditSuccess({
+        action: 'ADMIN_USER_IMPERSONATION_STARTED',
+        actorId,
+        resourceType: 'user',
+        resourceId: userId,
+        authContext: {
+            user: {
+                email: input.actorEmail.toLowerCase(),
+                role:
+                    input.actorRole === 'admin'
+                        ? 'admin'
+                        : input.actorRole === 'operator'
+                          ? 'operator'
+                          : 'user'
+            }
+        },
+        changes: {
+            targetUserId: userId,
+            targetUserEmail: typeof targetUser.email === 'string' ? targetUser.email : null,
+            impersonatorUserId: typeof impersonator?.id === 'string' ? impersonator.id : null,
+            impersonatorEmail: input.actorEmail.toLowerCase()
+        }
+    });
+}
+
+export async function adminStopImpersonation(input: {
+    currentEmail: string;
+    currentRole?: string;
+}) {
+    const headers = getRequest().headers;
+    const sessionRaw = await auth.api.getSession({ headers });
+    const authSession =
+        sessionRaw &&
+        typeof sessionRaw === 'object' &&
+        'response' in (sessionRaw as Record<string, unknown>)
+            ? ((sessionRaw as { response?: unknown }).response ?? null)
+            : sessionRaw;
+    const sessionRecord =
+        authSession && typeof authSession === 'object'
+            ? ((authSession as { session?: unknown }).session ?? null)
+            : null;
+    const impersonatedBy =
+        sessionRecord && typeof sessionRecord === 'object'
+            ? ((sessionRecord as { impersonatedBy?: unknown }).impersonatedBy ?? null)
+            : null;
+
+    if (typeof impersonatedBy !== 'string' || impersonatedBy.length === 0) {
+        throw new Error('No active impersonation session');
+    }
+
+    const impersonator = await resolveUserByBetterAuthId(impersonatedBy);
+
+    const stopResult = await auth.api.stopImpersonating({
+        headers,
+        returnHeaders: true
+    });
+    forwardSetCookieHeaders(stopResult);
+
+    const restoredUser =
+        stopResult &&
+        typeof stopResult === 'object' &&
+        'response' in (stopResult as Record<string, unknown>)
+            ? (((stopResult as { response?: { user?: { email?: unknown } } }).response?.user
+                  ?.email as string | undefined) ?? null)
+            : null;
+
+    await logAuditSuccess({
+        action: 'ADMIN_USER_IMPERSONATION_ENDED',
+        actorId:
+            typeof impersonator?.email === 'string'
+                ? `user:${impersonator.email.toLowerCase()}`
+                : `user:${input.currentEmail.toLowerCase()}`,
+        resourceType: 'user',
+        resourceId: typeof impersonator?.id === 'string' ? impersonator.id : impersonatedBy,
+        authContext: {
+            user: {
+                email: input.currentEmail.toLowerCase(),
+                role:
+                    input.currentRole === 'admin'
+                        ? 'admin'
+                        : input.currentRole === 'operator'
+                          ? 'operator'
+                          : 'user',
+                impersonatedBy
+            }
+        },
+        changes: {
+            impersonatorUserId:
+                typeof impersonator?.id === 'string' ? impersonator.id : impersonatedBy,
+            impersonatorEmail: typeof impersonator?.email === 'string' ? impersonator.email : null,
+            impersonatedUserEmail: input.currentEmail.toLowerCase(),
+            restoredUserEmail: restoredUser
+        }
     });
 }
 

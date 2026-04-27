@@ -1,4 +1,10 @@
 import {
+    AlignBottomSimpleIcon,
+    AlignCenterHorizontalSimpleIcon,
+    AlignCenterVerticalSimpleIcon,
+    AlignLeftSimpleIcon,
+    AlignRightSimpleIcon,
+    AlignTopSimpleIcon,
     ArrowLineDownIcon,
     ArrowLineUpIcon,
     ArrowsClockwiseIcon,
@@ -17,8 +23,10 @@ import {
     ShapesIcon,
     TextTIcon,
     WarningCircleIcon,
+    WaveSineIcon,
     XIcon
 } from '@phosphor-icons/react';
+import { useAuth } from '@repo/auth/tanstack/hooks';
 import { Button } from '@repo/ui/components/button';
 import {
     Dialog,
@@ -37,6 +45,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AppearanceToolbar } from '~/components/AppearanceToolbar';
+import { BackgroundLayerPanel } from '~/components/BackgroundLayerPanel';
 import { FilterPanel } from '~/components/FilterPanel';
 import { PlaybackControls } from '~/components/PlaybackControls';
 import { SlidesJsonDialog } from '~/components/SlidesJsonDialog';
@@ -53,6 +62,9 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+
     // Project header — only changes on project load
     const { projectId, projectName, parentSaveMessage } = useEditorStore(
         useShallow((s) => ({
@@ -65,6 +77,7 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
     // Save / connection state — infrequent, independent
     const saveStatus = useEditorStore((s) => s.saveStatus);
     const boundWallId = useEditorStore((s) => s.boundWallId);
+    const selectedLayerIds = useEditorStore((s) => s.selectedLayerIds);
 
     // Tool toggle state
     const { showGrid, isDrawing, isSnapping } = useEditorStore(
@@ -81,6 +94,15 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         return id ? (s.layers.get(parseInt(id)) ?? null) : null;
     });
 
+    // Background layer — always accessible regardless of selection
+    const backgroundLayer = useEditorStore((s) => {
+        for (const layer of s.layers.values()) {
+            if (layer.type === 'background')
+                return layer as Extract<LayerWithEditorState, { type: 'background' }>;
+        }
+        return null;
+    });
+
     // Actions — stable references, never trigger re-renders
     const { toggleSnapping, toggleDrawing, toggleGrid, startTextEditing } = useEditorStore(
         useShallow((s) => ({
@@ -95,8 +117,11 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
         addMapLayer,
         addWebLayer,
         addShapeLayer,
+        addBackgroundLayer,
+        removeLayer,
         bringToFront,
         sendToBack,
+        alignSelectedLayers,
         clearStage,
         reboot,
         saveProject
@@ -106,13 +131,17 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
             addMapLayer: s.addMapLayer,
             addWebLayer: s.addWebLayer,
             addShapeLayer: s.addShapeLayer,
+            addBackgroundLayer: s.addBackgroundLayer,
+            removeLayer: s.removeLayer,
             bringToFront: s.bringToFront,
             sendToBack: s.sendToBack,
+            alignSelectedLayers: s.alignSelectedLayers,
             clearStage: s.clearStage,
             reboot: s.reboot,
             saveProject: s.saveProject
         }))
     );
+    const isMultiLayerSelection = selectedLayerIds.length > 1;
 
     const engine = useMemo(
         () => (typeof window !== 'undefined' ? EditorEngine.getInstance() : null),
@@ -203,9 +232,12 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                     <TipButton tip="Add text layer" onClick={addTextLayer}>
                         <TextTIcon />
                     </TipButton>
-                    <TipButton tip="Add map layer" onClick={addMapLayer}>
-                        <MapPinIcon />
-                    </TipButton>
+                    {/* TODO: Switcher to guarding by "tester" role once multi-role is implemented */}
+                    {isAdmin ? (
+                        <TipButton tip="Add map layer" onClick={addMapLayer}>
+                            <MapPinIcon />
+                        </TipButton>
+                    ) : null}
                     <TipButton tip="Add web layer" onClick={addWebLayer}>
                         <GlobeSimpleIcon />
                     </TipButton>
@@ -328,6 +360,44 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                 id="toolbar"
                 className="flex h-11 min-h-11 items-center gap-1 border-t border-b border-border bg-card/50 px-2 py-1"
             >
+                <Popover>
+                    <PopoverTrigger nativeButton={false} render={<div />}>
+                        <TipButton
+                            tip={backgroundLayer ? 'Background settings' : 'Add background layer'}
+                            variant={backgroundLayer ? 'outline' : 'ghost'}
+                        >
+                            <WaveSineIcon weight={backgroundLayer ? 'fill' : 'regular'} />
+                        </TipButton>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-3" side="bottom" align="start">
+                        {backgroundLayer ? (
+                            <div className="flex flex-col gap-3">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                    Background
+                                </p>
+                                <BackgroundLayerPanel activeLayer={backgroundLayer} />
+                                <Separator />
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => removeLayer(backgroundLayer.numericId)}
+                                >
+                                    Remove background
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-2">
+                                <p className="text-xs text-muted-foreground">
+                                    No background layer on this slide.
+                                </p>
+                                <Button size="sm" onClick={addBackgroundLayer}>
+                                    Add background layer
+                                </Button>
+                            </div>
+                        )}
+                    </PopoverContent>
+                </Popover>
+                <Separator orientation="vertical" className="mx-1 my-1 h-6" />
                 {activeLayer ? (
                     <span className="px-2 text-xs">{activeLayer.type}</span>
                 ) : (
@@ -348,7 +418,8 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                                 <ArrowLineDownIcon />
                             </TipButton>
                         </div>
-                        <FilterPanel activeLayer={activeLayer} />
+                        {/* TODO: Switcher to guarding by "tester" role once multi-role is implemented */}
+                        {isAdmin ? <FilterPanel activeLayer={activeLayer} /> : null}
                     </>
                 )}
 
@@ -403,6 +474,36 @@ export function EditorToolbar({ fileInputRef, onUpload }: EditorToolbarProps) {
                         />
                     </>
                 )}
+
+                {isMultiLayerSelection ? (
+                    <div className="ml-auto flex items-center gap-0.5">
+                        <Separator orientation="vertical" className="mx-1 my-1 h-6" />
+                        <TipButton tip="Align left" onClick={() => alignSelectedLayers('left')}>
+                            <AlignLeftSimpleIcon />
+                        </TipButton>
+                        <TipButton
+                            tip="Align horizontal center"
+                            onClick={() => alignSelectedLayers('center-horizontal')}
+                        >
+                            <AlignCenterHorizontalSimpleIcon />
+                        </TipButton>
+                        <TipButton tip="Align right" onClick={() => alignSelectedLayers('right')}>
+                            <AlignRightSimpleIcon />
+                        </TipButton>
+                        <TipButton tip="Align top" onClick={() => alignSelectedLayers('top')}>
+                            <AlignTopSimpleIcon />
+                        </TipButton>
+                        <TipButton
+                            tip="Align vertical center"
+                            onClick={() => alignSelectedLayers('center-vertical')}
+                        >
+                            <AlignCenterVerticalSimpleIcon />
+                        </TipButton>
+                        <TipButton tip="Align bottom" onClick={() => alignSelectedLayers('bottom')}>
+                            <AlignBottomSimpleIcon />
+                        </TipButton>
+                    </div>
+                ) : null}
             </div>
             <SlidesJsonDialog open={jsonDialogOpen} onOpenChange={setJsonDialogOpen} />
             <Dialog open={clearStageDialogOpen} onOpenChange={setClearStageDialogOpen}>

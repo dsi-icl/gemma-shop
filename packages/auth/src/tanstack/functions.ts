@@ -34,6 +34,11 @@ export const $getUser = createServerFn({ method: 'GET' }).handler(async () => {
     return serializeForClient(user);
 });
 
+export const $getAuthSession = createServerFn({ method: 'GET' }).handler(async () => {
+    const session = await _getAuthSession();
+    return serializeForClient(session);
+});
+
 interface GetUserServerQuery {
     disableCookieCache?: boolean | undefined;
     disableRefresh?: boolean | undefined;
@@ -45,6 +50,15 @@ interface GetUserServerQuery {
  * For server app logic, use $getUser or the auth middleware instead.
  */
 export const _getUser = createServerOnlyFn(async (query?: GetUserServerQuery) => {
+    const session = await _getAuthSession(query);
+    return session?.user || null;
+});
+
+/**
+ * Server-only util for getting the full auth session payload (session + user).
+ * For server app logic, use $getAuthSession or auth middleware.
+ */
+export const _getAuthSession = createServerOnlyFn(async (query?: GetUserServerQuery) => {
     const session = await auth.api.getSession({
         headers: getRequest().headers,
         query,
@@ -57,5 +71,5 @@ export const _getUser = createServerOnlyFn(async (query?: GetUserServerQuery) =>
         setResponseHeader('Set-Cookie', cookies);
     }
 
-    return session.response?.user || null;
+    return session.response || null;
 });

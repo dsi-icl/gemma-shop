@@ -7,6 +7,7 @@ import {
     $getProject,
     $getProjectCommits,
     $listAssets,
+    $listAssetsByUrlsForPicker,
     $listKnownTags,
     $listProjects,
     $listPublishedProjects
@@ -44,6 +45,14 @@ export const projectAssetsQueryOptions = (projectId: string) =>
         queryKey: ['projects', projectId, 'assets'],
         queryFn: () => $listAssets({ data: { projectId } })
     });
+
+export const projectPickerSelectedAssetsQueryOptions = (projectId: string, urls: string[]) => {
+    const normalized = Array.from(new Set(urls.map((url) => url.replace(/^\/api\/assets\//, ''))));
+    return queryOptions({
+        queryKey: ['projects', projectId, 'assets', 'picker-selected', normalized.sort()],
+        queryFn: () => $listAssetsByUrlsForPicker({ data: { projectId, urls: normalized } })
+    });
+};
 
 export const projectQueryOptions = (id: string) =>
     queryOptions({

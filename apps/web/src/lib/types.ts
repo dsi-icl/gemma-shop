@@ -114,6 +114,20 @@ const LayerSchema = z.discriminatedUnion('type', [
             strokeDash: z.array(z.number()),
             strokeWidth: z.number()
         })
+        .extend(LayerBaseSchema.shape),
+    z
+        .object({
+            type: z.literal('background'),
+            backgroundType: z
+                .enum(['solid', 'i-pattern', 'waves', 'particle'])
+                .default('i-pattern'),
+            backgroundColor: z.string().default('#0a0a14'),
+            atmosphereColor: z.string().default('#1a1a3a'),
+            motifColor1: z.string().default('#2a1a4a'),
+            motifColor2: z.string().default('#0a2a3a'),
+            noiseSeed: z.number().default(0),
+            speedFactor: z.number().default(1)
+        })
         .extend(LayerBaseSchema.shape)
 ]);
 
@@ -214,6 +228,9 @@ export const GSMessageSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal('hydrate'),
         layers: LayerSchema.array(),
+        projectId: z.string().optional(),
+        commitId: z.string().optional(),
+        slideId: z.string().optional(),
         customRender: z
             .object({
                 url: z.string(),

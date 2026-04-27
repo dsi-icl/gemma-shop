@@ -1,13 +1,13 @@
 import '@tanstack/react-start/server-only';
-import { render } from '@react-email/render';
 import { db } from '@repo/db';
 import { getSmtpConfig } from '@repo/db/config';
 import { OtpEmail } from '@repo/emails/OtpEmail';
 import { env, splitCsv } from '@repo/env';
 import { mongodbAdapter } from 'better-auth/adapters/mongodb';
 import { betterAuth } from 'better-auth/minimal';
-import { admin, emailOTP, testUtils } from 'better-auth/plugins';
+import { admin, createAccessControl, emailOTP, testUtils } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
+import { render } from 'react-email';
 
 import { createSmtpTransport } from './smtp';
 
@@ -61,6 +61,47 @@ function buildTrustedOrigins(values: string[], fallbackBaseUrl: string): string[
 const safeAllowedHosts = buildAllowedHosts(allowedHosts, env.VITE_BASE_URL);
 const trustedOriginSeeds = buildTrustedOrigins(trustedOrigins, env.VITE_BASE_URL);
 
+const adminAc = createAccessControl({
+    user: [
+        'create',
+        'list',
+        'set-role',
+        'ban',
+        'impersonate',
+        'impersonate-admins',
+        'delete',
+        'set-password',
+        'get',
+        'update'
+    ],
+    session: ['list', 'revoke', 'delete']
+});
+
+const adminRole = adminAc.newRole({
+    user: [
+        'create',
+        'list',
+        'set-role',
+        'ban',
+        'impersonate',
+        'delete',
+        'set-password',
+        'get',
+        'update'
+    ],
+    session: ['list', 'revoke', 'delete']
+});
+
+const operatorRole = adminAc.newRole({
+    user: ['update'],
+    session: []
+});
+
+const userRole = adminAc.newRole({
+    user: [],
+    session: []
+});
+
 async function sendAuthEmail(input: {
     to: string;
     subject: string;
@@ -110,11 +151,34 @@ export const auth = betterAuth({
         enabled: false
     },
     database: mongodbAdapter(db),
+    user: {
+        additionalFields: {
+            trustedPublisher: {
+                type: 'boolean',
+                required: false,
+                defaultValue: false,
+                input: false
+            },
+            lastSeen: {
+                type: 'date',
+                required: false,
+                input: false
+            }
+        }
+    },
 
     // https://www.better-auth.com/docs/integrations/tanstack#usage-tips
     plugins: [
         tanstackStartCookies(),
-        admin(),
+        admin({
+            ac: adminAc,
+            roles: {
+                admin: adminRole,
+                operator: operatorRole,
+                user: userRole
+            },
+            adminRoles: ['admin']
+        }),
         ...(env.NODE_ENV === 'test' ? [testUtils()] : []),
         emailOTP({
             sendVerificationOTP: async ({ email, otp, type }) => {

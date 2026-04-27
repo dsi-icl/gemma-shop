@@ -20,6 +20,8 @@ export interface UserDocument {
     name?: string | null;
     image?: string | null;
     role?: string | null;
+    trustedPublisher?: boolean | null;
+    lastSeen?: Date | null;
     banned?: boolean | null;
     emailVerified?: boolean | null;
     createdAt: Date;
@@ -69,7 +71,7 @@ export interface CommitDocument {
     id: string;
     projectId: string;
     parentId: string | null;
-    authorId: string;
+    authorEmail: string | null;
     message: string;
     content: {
         slides: Array<{
@@ -155,7 +157,9 @@ export interface AuthContext {
     guest?: boolean;
     user?: {
         email: string;
-        role: 'admin' | 'user';
+        role: 'admin' | 'operator' | 'user';
+        trustedPublisher?: boolean;
+        impersonatedBy?: string;
     };
     device?: {
         id: string;

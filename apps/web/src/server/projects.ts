@@ -187,6 +187,23 @@ export async function listAssets(projectId: string) {
     return [...projectDocs, ...publicAssets];
 }
 
+export async function listAssetsByUrlsForPicker(projectId: string, urls: string[]) {
+    const project = await getProject(projectId);
+    if (!project) throw new Error('Project not found');
+
+    const normalizedUrls = Array.from(
+        new Set(
+            urls
+                .map((value) => normalizeAssetFilename(value))
+                .filter((value): value is string => Boolean(value))
+        )
+    );
+
+    if (normalizedUrls.length === 0) return [];
+
+    return dbCol.assets.findByProjectOrPublicUrls(projectId, normalizedUrls, true);
+}
+
 export async function getProject(id: string) {
     const project = await dbCol.projects.findById(id);
     if (!project) return null;
@@ -402,7 +419,7 @@ export async function publishCustomRenderProject(
     const sentinel = await dbCol.commits.insert({
         projectId,
         parentId: null,
-        authorId: 'system',
+        authorEmail: userEmail,
         message: 'Published (custom render)',
         content: { slides: [{ id: crypto.randomUUID(), order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
@@ -435,7 +452,7 @@ export async function ensureMutableHead(
         const newHead = await dbCol.commits.insert({
             projectId,
             parentId: project.headCommitId,
-            authorId: 'system',
+            authorEmail: userEmail,
             message: 'HEAD',
             content: head?.content ?? { slides: [] },
             isAutoSave: false,
@@ -458,7 +475,7 @@ export async function ensureMutableHead(
     const newHead = await dbCol.commits.insert({
         projectId,
         parentId: null,
-        authorId: 'system',
+        authorEmail: userEmail,
         message: 'HEAD',
         content: { slides: [{ id: crypto.randomUUID(), order: 0, name: 'Slide 1', layers: [] }] },
         isAutoSave: false,
@@ -498,7 +515,7 @@ export async function createBranchHead(
     const branchHead = await dbCol.commits.insert({
         projectId,
         parentId: sourceCommitId,
-        authorId: 'system',
+        authorEmail: userEmail,
         message: 'HEAD',
         content: source.content ?? { slides: [] },
         isAutoSave: false,
