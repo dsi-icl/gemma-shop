@@ -2,7 +2,6 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { scopedState, wallBindings } from '~/lib/busState';
 import { pruneExpiredPortalTokens, validatePortalToken } from '~/lib/portalTokens';
-import { z } from '~/lib/zod';
 import { logAuditDenied } from '~/server/audit';
 import { getSlidesMetadata } from '~/server/bus/bus.binding';
 

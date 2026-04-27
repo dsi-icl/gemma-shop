@@ -1,13 +1,3 @@
-// call the bus function that calls
-// another api in v1 to get slides of the project, pass pid
-// search token, with token get the slides, create button to bind the slides.
-// serving the file from a predictable url with pid cid
-// new server fn code editor for admins only $getControlPanelHtml({ projectId, commitId })
-// upsert server functions for code editor with admin middleware $upsertControlPanelHtml({ projectId, commitId, html })
-// new tab: code editor <textarea> in projects pages only for admins routes/_auth/quarry/projects/$projectId/code-editor.tsx + update $projectId/route.tsx for code-editor route and filter by admin
-// extra route to aware of the pid and cid to serve the html
-// no code in html template (hello world), first save
-
 import { createFileRoute } from '@tanstack/react-router';
 
 import { scopedState, wallBindings } from '~/lib/busState';
