@@ -22,6 +22,7 @@ const RawEnvSchema = z.object({
     UPLOAD_DIR: z.string().optional(),
     TMP_DIR: z.string().optional(),
     ASSET_DIR: z.string().optional(),
+    CONTROLLER_DIR: z.string().optional(),
 
     PLAYWRIGHT_BROWSERS_PATH: z.string().optional(),
     FFMPEG_PATH: z.string().optional(),
@@ -77,6 +78,7 @@ export const env = {
     UPLOAD_DIR: raw.UPLOAD_DIR ?? '',
     TMP_DIR: raw.TMP_DIR ?? '',
     ASSET_DIR: raw.ASSET_DIR ?? '',
+    CONTROLLER_DIR: raw.CONTROLLER_DIR ?? '',
 
     PLAYWRIGHT_BROWSERS_PATH: raw.PLAYWRIGHT_BROWSERS_PATH ?? '',
     FFMPEG_PATH: raw.FFMPEG_PATH ?? '',

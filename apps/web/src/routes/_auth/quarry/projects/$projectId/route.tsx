@@ -7,7 +7,8 @@ import {
     GitBranchIcon,
     ImageIcon,
     PencilSimpleIcon,
-    UsersIcon
+    UsersIcon,
+    CodeIcon
 } from '@phosphor-icons/react';
 import { authQueryOptions } from '@repo/auth/tanstack/queries';
 import { Badge } from '@repo/ui/components/badge';
@@ -50,7 +51,14 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId')({
     })
 });
 
-const TAB_ORDER = { info: 0, permissions: 1, commits: 2, history: 3, assets: 4 } as const;
+const TAB_ORDER = {
+    info: 0,
+    permissions: 1,
+    commits: 2,
+    history: 3,
+    assets: 4,
+    controller: 5
+} as const;
 type TabKey = keyof typeof TAB_ORDER;
 
 const ALL_TABS: { key: TabKey; label: string; to: string; icon: any }[] = [
@@ -58,7 +66,8 @@ const ALL_TABS: { key: TabKey; label: string; to: string; icon: any }[] = [
     { key: 'permissions', label: 'Permissions', to: './permissions', icon: UsersIcon },
     { key: 'commits', label: 'Commits', to: './commits', icon: GitBranchIcon },
     { key: 'history', label: 'History', to: './history', icon: ClockIcon },
-    { key: 'assets', label: 'Assets', to: './assets', icon: ImageIcon }
+    { key: 'assets', label: 'Assets', to: './assets', icon: ImageIcon },
+    { key: 'controller', label: 'Controller', to: './controller_editor', icon: CodeIcon }
 ];
 
 const CUSTOM_RENDER_HIDDEN_TABS: ReadonlySet<TabKey> = new Set(['commits', 'assets']);
@@ -83,6 +92,10 @@ const TAB_SUBHEADERS: Record<TabKey, { title: string; description?: string }> = 
     assets: {
         title: 'Project Media',
         description: 'Manage the media assets associated with this project.'
+    },
+    controller: {
+        title: 'Controller Editor',
+        description: 'Edit the custom controller for this project.'
     }
 };
 
@@ -106,22 +119,23 @@ function getTabFromPath(pathname: string): TabKey {
     if (pathname.endsWith('/commits')) return 'commits';
     if (pathname.endsWith('/history')) return 'history';
     if (pathname.endsWith('/assets')) return 'assets';
+    if (pathname.endsWith('/controller_editor')) return 'controller';
     return 'info';
 }
 
 function ProjectLayout() {
     const { projectId } = Route.useParams();
-    const { data: user } = useSuspenseQuery(authQueryOptions());
     const { data: project } = useSuspenseQuery(projectQueryOptions(projectId));
+    const { data: user } = useSuspenseQuery(authQueryOptions());
     const location = useLocation();
     const navigate = useNavigate();
     const currentTab = getTabFromPath(location.pathname);
     const hasCustomRender = !!project.customRenderUrl;
     const canPublish =
         user?.role === 'admin' || user?.role === 'operator' || user?.trustedPublisher === true;
-    const tabs = hasCustomRender
-        ? ALL_TABS.filter((t) => !CUSTOM_RENDER_HIDDEN_TABS.has(t.key))
-        : ALL_TABS;
+    const tabs = (
+        hasCustomRender ? ALL_TABS.filter((t) => !CUSTOM_RENDER_HIDDEN_TABS.has(t.key)) : ALL_TABS
+    ).filter((t) => t.key !== 'controller' || user?.role === 'admin');
     const queryClient = useQueryClient();
     const [openingEditor, setOpeningEditor] = useState(false);
 

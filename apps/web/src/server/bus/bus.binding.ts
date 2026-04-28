@@ -95,7 +95,7 @@ export async function resolveBoundSlideId(
     return slides[0]?.id ?? null;
 }
 
-async function getSlidesMetadata(
+export async function getSlidesMetadata(
     commitId: string
 ): Promise<Array<{ id: string; order: number; name: string }>> {
     try {
