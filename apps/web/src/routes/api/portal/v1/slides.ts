@@ -1,40 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import { scopedState, wallBindings } from '~/lib/busState';
+import { getCorsHeaders, getBearerToken, json } from '~/lib/portalHttp';
 import { pruneExpiredPortalTokens, validatePortalToken } from '~/lib/portalTokens';
 import { logAuditDenied } from '~/server/audit';
 import { getSlidesMetadata } from '~/server/bus/bus.binding';
-
-function getCorsHeaders(request: Request) {
-    const origin = request.headers.get('origin');
-    return {
-        'Access-Control-Allow-Origin': origin ?? '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-        'Access-Control-Max-Age': '86400',
-        Vary: 'Origin'
-    } as const;
-}
-
-function json(request: Request, status: number, payload: unknown) {
-    return new Response(JSON.stringify(payload), {
-        status,
-        headers: {
-            'Content-Type': 'application/json',
-            ...getCorsHeaders(request)
-        }
-    });
-}
-
-function getBearerToken(request: Request): string | null {
-    const auth = request.headers.get('authorization');
-    if (auth && auth.toLowerCase().startsWith('bearer ')) {
-        return auth.slice(7).trim();
-    }
-    const url = new URL(request.url);
-    const fallback = url.searchParams.get('_gem_t');
-    return fallback && fallback.trim().length > 0 ? fallback.trim() : null;
-}
 
 export const Route = createFileRoute('/api/portal/v1/slides')({
     server: {
@@ -77,25 +47,7 @@ export const Route = createFileRoute('/api/portal/v1/slides')({
                     return json(request, 401, { error: 'Invalid or expired token' });
                 }
 
-                const targetWallId = validated.wallId;
-                if (targetWallId !== validated.wallId) {
-                    await logAuditDenied({
-                        action: 'PORTAL_SLIDES_DENIED',
-                        resourceType: 'portal_token',
-                        resourceId: targetWallId,
-                        reasonCode: 'TOKEN_WALL_MISMATCH',
-                        executionContext: {
-                            surface: 'http',
-                            operation: 'GET /api/portal/v1/slides',
-                            request
-                        }
-                    });
-                    return json(request, 403, {
-                        error: 'Token is not allowed to control this wall'
-                    });
-                }
-
-                const currentScopeId = wallBindings.get(targetWallId);
+                const currentScopeId = wallBindings.get(validated.wallId);
                 if (currentScopeId === undefined || currentScopeId !== validated.scopeId) {
                     return json(request, 409, {
                         error: 'Wall is no longer bound to the token scope'

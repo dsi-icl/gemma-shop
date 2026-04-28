@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { createFileRoute } from '@tanstack/react-router';
 
+import { getCorsHeaders, json } from '~/lib/portalHttp';
 import { CONTROLLER_DIR } from '~/lib/serverVariables';
 import { logAuditDenied } from '~/server/audit';
 import { getProject } from '~/server/projects';
@@ -10,6 +11,11 @@ import { getProject } from '~/server/projects';
 export const Route = createFileRoute('/api/portal/v1/controllers/$projectId')({
     server: {
         handlers: {
+            OPTIONS: async ({ request }: { request: Request }) =>
+                new Response(null, {
+                    status: 204,
+                    headers: getCorsHeaders(request)
+                }),
             GET: async ({
                 params,
                 request
@@ -32,17 +38,17 @@ export const Route = createFileRoute('/api/portal/v1/controllers/$projectId')({
                             request
                         }
                     });
-                    return new Response('Project not found', { status: 404 });
+                    return json(request, 404, { error: 'Project not found' });
                 }
 
                 let html: string;
                 try {
                     html = await readFile(
-                        join(CONTROLLER_DIR, projectId, 'controller.html'),
+                        join(CONTROLLER_DIR, project.id, 'controller.html'),
                         'utf8'
                     );
                 } catch {
-                    return new Response('No controller HTML found', { status: 404 });
+                    return json(request, 404, { error: 'No controller HTML found' });
                 }
 
                 return new Response(html, {

@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import { scopedState, wallBindings } from '~/lib/busState';
+import { getCorsHeaders, json, getBearerToken } from '~/lib/portalHttp';
 import {
     pruneExpiredPortalTokens,
     validatePortalToken,
@@ -13,37 +14,6 @@ import { performLiveBind } from '~/server/bus/bus.binding';
 const bindRequestSchema = z.object({
     slideId: z.string()
 });
-
-function getCorsHeaders(request: Request) {
-    const origin = request.headers.get('origin');
-    return {
-        'Access-Control-Allow-Origin': origin ?? '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-        'Access-Control-Max-Age': '86400',
-        Vary: 'Origin'
-    } as const;
-}
-
-function json(request: Request, status: number, payload: unknown) {
-    return new Response(JSON.stringify(payload), {
-        status,
-        headers: {
-            'Content-Type': 'application/json',
-            ...getCorsHeaders(request)
-        }
-    });
-}
-
-function getBearerToken(request: Request): string | null {
-    const auth = request.headers.get('authorization');
-    if (auth && auth.toLowerCase().startsWith('bearer ')) {
-        return auth.slice(7).trim();
-    }
-    const url = new URL(request.url);
-    const fallback = url.searchParams.get('_gem_t');
-    return fallback && fallback.trim().length > 0 ? fallback.trim() : null;
-}
 
 export const Route = createFileRoute('/api/portal/v1/bind')({
     server: {
@@ -96,25 +66,7 @@ export const Route = createFileRoute('/api/portal/v1/bind')({
                     });
                 }
 
-                const targetWallId = validated.wallId;
-                if (targetWallId !== validated.wallId) {
-                    await logAuditDenied({
-                        action: 'PORTAL_BIND_DENIED',
-                        resourceType: 'portal_token',
-                        resourceId: targetWallId,
-                        reasonCode: 'TOKEN_WALL_MISMATCH',
-                        executionContext: {
-                            surface: 'http',
-                            operation: 'POST /api/portal/v1/bind',
-                            request
-                        }
-                    });
-                    return json(request, 403, {
-                        error: 'Token is not allowed to control this wall'
-                    });
-                }
-
-                const currentScopeId = wallBindings.get(targetWallId);
+                const currentScopeId = wallBindings.get(validated.wallId);
                 if (currentScopeId === undefined || currentScopeId !== validated.scopeId) {
                     return json(request, 409, {
                         error: 'Wall is no longer bound to the token scope'
@@ -134,16 +86,20 @@ export const Route = createFileRoute('/api/portal/v1/bind')({
                     'gallery'
                 );
 
-                if (!result.ok) {
-                    const status = result.error === 'unknown_wall' ? 404 : 400;
-                    return json(request, status, { error: result.error ?? 'bind_failed' });
-                }
-
                 const newScopeId = wallBindings.get(validated.wallId);
                 const fresh =
                     newScopeId !== undefined
                         ? createPortalToken(validated.wallId, newScopeId)
                         : null;
+
+                if (!result.ok) {
+                    const status = result.error === 'unknown_wall' ? 404 : 400;
+                    return json(request, status, {
+                        error: result.error ?? 'bind_failed',
+                        token: fresh?.token,
+                        expiresAt: fresh?.expiresAt
+                    });
+                }
 
                 return json(request, 200, {
                     ok: true,

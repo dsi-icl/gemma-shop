@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import { wallBindings } from '~/lib/busState';
+import { getCorsHeaders, getBearerToken, json } from '~/lib/portalHttp';
 import { pruneExpiredPortalTokens, validatePortalToken } from '~/lib/portalTokens';
 import { z } from '~/lib/zod';
 import { logAuditDenied } from '~/server/audit';
@@ -12,37 +13,6 @@ const rebootRequestSchema = z
         r: z.number().int().nonnegative().optional()
     })
     .default({});
-
-function getCorsHeaders(request: Request) {
-    const origin = request.headers.get('origin');
-    return {
-        'Access-Control-Allow-Origin': origin ?? '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-        'Access-Control-Max-Age': '86400',
-        Vary: 'Origin'
-    } as const;
-}
-
-function json(request: Request, status: number, payload: unknown) {
-    return new Response(JSON.stringify(payload), {
-        status,
-        headers: {
-            'Content-Type': 'application/json',
-            ...getCorsHeaders(request)
-        }
-    });
-}
-
-function getBearerToken(request: Request): string | null {
-    const auth = request.headers.get('authorization');
-    if (auth && auth.toLowerCase().startsWith('bearer ')) {
-        return auth.slice(7).trim();
-    }
-    const url = new URL(request.url);
-    const fallback = url.searchParams.get('_gem_t');
-    return fallback && fallback.trim().length > 0 ? fallback.trim() : null;
-}
 
 export const Route = createFileRoute('/api/portal/v1/reboot')({
     server: {

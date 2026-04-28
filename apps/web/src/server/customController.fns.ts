@@ -34,7 +34,7 @@ export const $getCustomControllerHtml = createServerFn({ method: 'GET' })
 
         try {
             const html = await readFile(
-                join(CONTROLLER_DIR, data.projectId, 'controller.html'),
+                join(CONTROLLER_DIR, project.id, 'controller.html'),
                 'utf8'
             );
             return html;
@@ -67,7 +67,7 @@ export const $upsertCustomControllerHtml = createServerFn({ method: 'POST' })
             throw new Error('Project not found');
         }
 
-        const dir = join(CONTROLLER_DIR, data.projectId);
+        const dir = join(CONTROLLER_DIR, project.id);
         await mkdir(dir, { recursive: true });
         await writeFile(join(dir, 'controller.html'), data.html, 'utf8');
         return { ok: true };
