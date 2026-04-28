@@ -1,7 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import { scopedState, wallBindings } from '~/lib/busState';
-import { pruneExpiredPortalTokens, validatePortalToken } from '~/lib/portalTokens';
+import {
+    pruneExpiredPortalTokens,
+    validatePortalToken,
+    createPortalToken
+} from '~/lib/portalTokens';
 import { z } from '~/lib/zod';
 import { logAuditDenied } from '~/server/audit';
 import { performLiveBind } from '~/server/bus/bus.binding';
@@ -135,12 +139,20 @@ export const Route = createFileRoute('/api/portal/v1/bind')({
                     return json(request, status, { error: result.error ?? 'bind_failed' });
                 }
 
+                const newScopeId = wallBindings.get(validated.wallId);
+                const fresh =
+                    newScopeId !== undefined
+                        ? createPortalToken(validated.wallId, newScopeId)
+                        : null;
+
                 return json(request, 200, {
                     ok: true,
                     wallId: validated.wallId,
                     projectId: scope.projectId,
                     commitId: scope.commitId,
-                    slideId: result.resolvedSlideId
+                    slideId: result.resolvedSlideId,
+                    token: fresh?.token ?? null,
+                    expiresAt: fresh?.expiresAt ?? null
                 });
             }
         }
