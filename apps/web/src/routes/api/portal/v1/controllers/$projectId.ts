@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { createFileRoute } from '@tanstack/react-router';
+import { setResponseHeader } from '@tanstack/react-start/server';
 
 import { getCorsHeaders, json } from '~/lib/portalHttp';
 import { CONTROLLER_DIR } from '~/lib/serverVariables';
@@ -50,6 +51,25 @@ export const Route = createFileRoute('/api/portal/v1/controllers/$projectId')({
                 } catch {
                     return json(request, 404, { error: 'No controller HTML found' });
                 }
+
+                const isDev = import.meta.env.DEV;
+                const headerName = isDev
+                    ? 'Content-Security-Policy-Report-Only'
+                    : 'Content-Security-Policy';
+                setResponseHeader(
+                    headerName,
+                    [
+                        'upgrade-insecure-requests',
+                        "default-src 'none'",
+                        "script-src 'self' 'unsafe-inline' https:",
+                        "style-src 'self' 'unsafe-inline' https:",
+                        "img-src 'self' data: blob: https:",
+                        "font-src 'self' data: https:",
+                        "connect-src 'self' https: ws: wss:",
+                        "frame-ancestors 'self'",
+                        "base-uri 'self'"
+                    ].join('; ')
+                );
 
                 return new Response(html, {
                     status: 200,
