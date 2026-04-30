@@ -647,7 +647,7 @@ function WallApp() {
                         {...iframeProps}
                         src={iframeSrc}
                         title={`Web layer ${layer.numericId}`}
-                        sandbox="allow-scripts allow-same-origin"
+                        sandbox="allow-scripts"
                         onLoad={() => {
                             markIframeReady(`web:${layer.numericId}`, iframeGateCycle);
                         }}
@@ -793,6 +793,7 @@ function WallApp() {
                 key={`custom-render:${iframeGateCycle}`}
                 title="Custom Render Wall"
                 src={finalSrc}
+                sandbox="allow-scripts"
                 style={{
                     position: 'absolute',
                     top: customRenderCompat ? `${-myViewport.y}px` : 0,
