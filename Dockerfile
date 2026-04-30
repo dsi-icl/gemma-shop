@@ -83,7 +83,7 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends tini ca-certificates curl xz-utils iputils-ping netcat-openbsd gosu; \
     rm -rf /var/lib/apt/lists/*
 
-# Layer C: browser shared-library dependencies used by Playwright Chromium.
+# Layer browser shared-library dependencies used by Playwright Chromium.
 RUN set -eux; \
     PW_VERSION="$(cat /app/.playwright-version)"; \
     bunx "playwright@$PW_VERSION" install-deps chromium; \
@@ -97,6 +97,14 @@ RUN groupadd --system --gid 10001 app && \
 COPY --from=build --chown=app:app /workspace/apps/web/.output/server ./.output/server
 COPY --from=build --chown=app:app /workspace/apps/web/.output/public ./.output/public
 COPY --from=build --chown=app:app /workspace/apps/web/.output/nitro.json ./.output/nitro.json
+
+RUN set -eux; \
+    PW_VERSION="$(cat /app/.playwright-version)"; \
+    mkdir -p /tmp/pw && \
+    printf '{"name":"pw","private":true}\n' > /tmp/pw/package.json && \
+    cd /tmp/pw && bun add "playwright@${PW_VERSION}" && \
+    cp -r /tmp/pw/node_modules/. /app/node_modules/ && \
+    rm -rf /tmp/pw
 
 # Source maps are not needed in production runtime image.
 RUN if [ "${KEEP_SOURCE_MAPS}" = "true" ] || [ "${KEEP_SOURCE_MAPS}" = "1" ]; then \
