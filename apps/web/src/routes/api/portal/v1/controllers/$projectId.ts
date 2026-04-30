@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { createFileRoute } from '@tanstack/react-router';
 import { setResponseHeader } from '@tanstack/react-start/server';
 
+import { type CspDirectives, modifyCsp, serializeCsp } from '~/lib/csp';
 import { getCorsHeaders, json } from '~/lib/portalHttp';
 import { CONTROLLER_DIR } from '~/lib/serverVariables';
 import { logAuditDenied } from '~/server/audit';
@@ -19,10 +20,16 @@ export const Route = createFileRoute('/api/portal/v1/controllers/$projectId')({
                 }),
             GET: async ({
                 params,
-                request
+                request,
+                context
             }: {
                 params: { projectId: string };
                 request: Request;
+                context?: {
+                    cspDirectives?: CspDirectives;
+                    cspHeaderName?: string;
+                    [key: string]: unknown;
+                };
             }) => {
                 const { projectId } = params;
 
@@ -52,24 +59,15 @@ export const Route = createFileRoute('/api/portal/v1/controllers/$projectId')({
                     return json(request, 404, { error: 'No controller HTML found' });
                 }
 
-                const isDev = import.meta.env.DEV;
-                const headerName = isDev
-                    ? 'Content-Security-Policy-Report-Only'
-                    : 'Content-Security-Policy';
-                setResponseHeader(
-                    headerName,
-                    [
-                        'upgrade-insecure-requests',
-                        "default-src 'none'",
-                        "script-src 'self' 'unsafe-inline' https:",
-                        "style-src 'self' 'unsafe-inline' https:",
-                        "img-src 'self' data: blob: https:",
-                        "font-src 'self' data: https:",
-                        "connect-src 'self' https: ws: wss:",
-                        "frame-ancestors 'self'",
-                        "base-uri 'self'"
-                    ].join('; ')
-                );
+                if (context?.cspDirectives && context.cspHeaderName) {
+                    const directives = modifyCsp(context.cspDirectives, {
+                        'script-src': ["'self'", "'unsafe-inline'", 'https:'],
+                        'style-src': ["'self'", "'unsafe-inline'", 'https:'],
+                        'style-src-elem': ["'self'", "'unsafe-inline'", 'https:'],
+                        'frame-ancestors': ["'self'"]
+                    });
+                    setResponseHeader(context.cspHeaderName, serializeCsp(directives));
+                }
 
                 return new Response(html, {
                     status: 200,

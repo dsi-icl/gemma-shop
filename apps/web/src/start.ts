@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { createMiddleware, createStart } from '@tanstack/react-start';
 import { setResponseHeader } from '@tanstack/react-start/server';
 
+import { buildBaseCsp, serializeCsp } from '~/lib/csp';
 import { logAuditDenied } from '~/server/audit';
 import {
     buildRateLimitSubjectKey,
@@ -68,43 +69,15 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
               ? 'http'
               : 'https');
     const reportUrl = `${protocol}://${host}/api/report-csp`;
-    const needsScannerCompatEval = /^\/admin\/walls\/[^/]+\/devices\/?$/.test(requestUrl.pathname);
-    const scriptSrc = [
-        "'strict-dynamic'",
-        `'nonce-${nonce}'`,
-        // Required by modern engines for WebAssembly compilation without opening
-        // JS eval permissions.
-        "'wasm-unsafe-eval'",
-        // Compatibility fallback for engines that still gate WASM compile behind
-        // 'unsafe-eval' (kept narrowly scoped to scanner route in production).
-        ...(isDev || needsScannerCompatEval ? ["'unsafe-eval'"] : [])
-    ].join(' ');
-    const connectSrc = ["'self'", 'ws:', 'wss:', 'https:', ...(isDev ? ['http:'] : [])].join(' ');
-    const frameSrc = ["'self'", 'https:', ...(isDev ? ['http:'] : [])].join(' ');
-    const styleSrcElem = "'self' 'unsafe-inline'";
-    const directives = [
-        'upgrade-insecure-requests',
-        "default-src 'none'",
-        "base-uri 'self'",
-        "object-src 'none'",
-        "form-action 'self'",
-        `connect-src ${connectSrc}`,
-        "manifest-src 'self'",
-        `frame-src ${frameSrc}`,
-        "img-src 'self' data: blob: https:",
-        `media-src 'self' data: blob: https:${isDev ? ' http:' : ''}`,
-        `font-src 'self' data: https:${isDev ? ' http:' : ''}`,
-        "worker-src 'self' blob:",
-        `script-src ${scriptSrc}`,
-        `style-src ${styleSrcElem}`,
-        `style-src-elem ${styleSrcElem}`,
-        "style-src-attr 'unsafe-inline'",
-        `report-uri ${reportUrl}`,
-        'report-to csp-endpoint'
-    ].join('; ');
 
+    const cspDirectives = buildBaseCsp({
+        nonce,
+        isDev,
+        pathname: requestUrl.pathname,
+        reportUrl
+    });
     const headerName = isDev ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy';
-    setResponseHeader(headerName, directives);
+    setResponseHeader(headerName, serializeCsp(cspDirectives));
     setResponseHeader('Reporting-Endpoints', `csp-endpoint="${reportUrl}"`);
     setResponseHeader(
         'Report-To',
@@ -116,7 +89,7 @@ const cspMiddleware = createMiddleware().server(({ next, request }) => {
     );
 
     return next({
-        context: { nonce }
+        context: { nonce, cspDirectives, cspHeaderName: headerName }
     });
 });
 
