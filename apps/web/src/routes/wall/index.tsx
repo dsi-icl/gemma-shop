@@ -647,7 +647,7 @@ function WallApp() {
                         {...iframeProps}
                         src={iframeSrc}
                         title={`Web layer ${layer.numericId}`}
-                        sandbox="allow-scripts"
+                        sandbox="allow-scripts allow-same-origin"
                         onLoad={() => {
                             markIframeReady(`web:${layer.numericId}`, iframeGateCycle);
                         }}
