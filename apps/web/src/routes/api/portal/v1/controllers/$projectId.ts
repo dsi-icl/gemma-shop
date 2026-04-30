@@ -2,7 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { createFileRoute } from '@tanstack/react-router';
+import { setResponseHeader } from '@tanstack/react-start/server';
 
+import { type CspDirectives, modifyCsp, serializeCsp } from '~/lib/csp';
 import { getCorsHeaders, json } from '~/lib/portalHttp';
 import { CONTROLLER_DIR } from '~/lib/serverVariables';
 import { logAuditDenied } from '~/server/audit';
@@ -18,10 +20,16 @@ export const Route = createFileRoute('/api/portal/v1/controllers/$projectId')({
                 }),
             GET: async ({
                 params,
-                request
+                request,
+                context
             }: {
                 params: { projectId: string };
                 request: Request;
+                context?: {
+                    cspDirectives?: CspDirectives;
+                    cspHeaderName?: string;
+                    [key: string]: unknown;
+                };
             }) => {
                 const { projectId } = params;
 
@@ -49,6 +57,16 @@ export const Route = createFileRoute('/api/portal/v1/controllers/$projectId')({
                     );
                 } catch {
                     return json(request, 404, { error: 'No controller HTML found' });
+                }
+
+                if (context?.cspDirectives && context.cspHeaderName) {
+                    const directives = modifyCsp(context.cspDirectives, {
+                        'script-src': ["'self'", "'unsafe-inline'", 'https:'],
+                        'style-src': ["'self'", "'unsafe-inline'", 'https:'],
+                        'style-src-elem': ["'self'", "'unsafe-inline'", 'https:'],
+                        'frame-ancestors': ["'self'"]
+                    });
+                    setResponseHeader(context.cspHeaderName, serializeCsp(directives));
                 }
 
                 return new Response(html, {
