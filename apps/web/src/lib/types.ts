@@ -49,7 +49,7 @@ const OptionalSizesSchema = z.preprocess((value) => {
     if (!Array.isArray(value)) return undefined;
     const numericSizes = value.filter((size): size is number => typeof size === 'number');
     return numericSizes.length > 0 ? numericSizes : undefined;
-}, z.array(z.number()).optional());
+}, z.array(z.number())).optional();
 
 const LayerSchema = z.discriminatedUnion('type', [
     z
