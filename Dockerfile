@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM oven/bun:1.3.11 AS build
+FROM oven/bun:1.3.13 AS build
 ARG BUILD_SOURCEMAPS=false
 ARG VITE_GIT_SHA=
 ARG APP_COMMIT_SHA=
@@ -27,7 +27,7 @@ COPY . .
 RUN NITRO_PRESET=bun bun run faviconize --filter=@repo/web
 RUN NITRO_PRESET=bun bun run build --filter=@repo/web
 
-FROM oven/bun:1.3.11 AS runtime
+FROM oven/bun:1.3.13 AS runtime
 ARG KEEP_SOURCE_MAPS=false
 
 ARG OCI_CREATED=unknown
