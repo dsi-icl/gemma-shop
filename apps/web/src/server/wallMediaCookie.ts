@@ -84,7 +84,7 @@ function serializeCookie(input: {
     return [
         `${input.name}=${input.value}`,
         `Max-Age=${input.maxAgeSeconds}`,
-        'Path=/api/assets',
+        'Path=/api',
         'HttpOnly',
         'SameSite=Lax',
         ...(input.secure ? ['Secure'] : [])

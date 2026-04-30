@@ -188,6 +188,7 @@ export default defineEventHandler(async (event) => {
         headers: event.req.headers
     });
     const { authContext } = await resolveRequestAuthContext(request);
+    console.log('defineEventHandler:proxy', authContext);
     if (authContext.device?.kind !== 'wall') {
         await logAuditDenied({
             action: 'PROXY_DENIED',
