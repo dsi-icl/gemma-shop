@@ -268,6 +268,8 @@ export const Route = createFileRoute('/api/proxy')({
                 const timeout = setTimeout(() => controller.abort(), PROXY_FETCH_TIMEOUT_MS);
 
                 try {
+                    // Intentionally do NOT forward caller cookies/auth headers to upstream.
+                    // This keeps wall/session credentials scoped to this app only.
                     const upstreamResponse = await fetch(rawUrl, {
                         redirect: 'follow',
                         signal: controller.signal,
@@ -322,11 +324,14 @@ export const Route = createFileRoute('/api/proxy')({
                     const sourceHtml = await readWithCap(upstreamResponse, PROXY_MAX_BYTES);
                     const rewritten = rewriteHtml(sourceHtml, upstreamResponse.url || rawUrl);
 
+                    // Intentionally return a strict header allowlist only.
+                    // Do not relay upstream response headers such as Set-Cookie/CSP/XFO.
                     return new Response(rewritten, {
                         status: 200,
                         headers: {
                             'content-type': 'text/html; charset=utf-8',
-                            'cache-control': 'public, max-age=30'
+                            'cache-control': 'no-store',
+                            'x-content-type-options': 'nosniff'
                         }
                     });
                 } catch {
