@@ -33,6 +33,15 @@ export const Route = createFileRoute('/gallery/')({
     })
 });
 
+type TagBucketKey = 'A-F' | 'G-L' | 'M-R' | 'S-Z' | '#';
+const TAG_BUCKETS: { key: TagBucketKey; matches: (tag: string) => boolean }[] = [
+    { key: 'A-F', matches: (t) => /^[a-f]/i.test(t) },
+    { key: 'G-L', matches: (t) => /^[g-l]/i.test(t) },
+    { key: 'M-R', matches: (t) => /^[m-r]/i.test(t) },
+    { key: 'S-Z', matches: (t) => /^[s-z]/i.test(t) },
+    { key: '#', matches: (t) => !/^[a-z]/i.test(t) }
+];
+
 type ProjectWithId = Project & { id: string; publishedCommitId?: string | null };
 type WallListEntry = {
     wallId: string;
@@ -47,6 +56,7 @@ type WallListEntry = {
 function HomePage() {
     const { user } = useAuth();
     const [activeTag, setActiveTag] = useState<string | null>(null);
+    const [activeBucket, setActiveBucket] = useState<TagBucketKey | null>(null);
     const [enrollmentQrDataUrl, setEnrollmentQrDataUrl] = useState<string | null>(null);
     const [autoOpenRevision, setAutoOpenRevision] = useState(0);
     const [liveSessionRevision, setLiveSessionRevision] = useState(0);
@@ -474,6 +484,27 @@ function HomePage() {
         return Array.from(tags).sort((a, b) => a.localeCompare(b));
     }, [projectsData]);
 
+    const visibleBuckets = useMemo(
+        () => TAG_BUCKETS.filter((b) => allTags.some((t) => b.matches(t))),
+        [allTags]
+    );
+
+    const visibleTags = useMemo(() => {
+        if (!activeBucket) return allTags;
+        const bucket = TAG_BUCKETS.find((b) => b.key === activeBucket);
+        return bucket ? allTags.filter((t) => bucket.matches(t)) : allTags;
+    }, [allTags, activeBucket]);
+
+    const handleBucketClick = (key: TagBucketKey) => {
+        setActiveBucket((prev) => (prev === key ? null : key));
+        setActiveTag(null);
+    };
+
+    const handleClearAll = () => {
+        setActiveTag(null);
+        setActiveBucket(null);
+    };
+
     const filteredProjects = useMemo(() => {
         if (!activeTag) return projectsData;
         return projectsData.filter((p) => p.tags.includes(activeTag));
@@ -594,15 +625,29 @@ function HomePage() {
                     className="w-full shrink-0 md:flex md:min-h-0 md:w-1/5 md:flex-col"
                 >
                     <h2 className="mb-4 text-lg font-semibold">Filters</h2>
+                    <Button
+                        variant={!activeTag && !activeBucket ? 'secondary' : 'ghost'}
+                        onClick={handleClearAll}
+                        className="mb-2 justify-start"
+                    >
+                        All ({projectsData.length})
+                    </Button>
+                    {visibleBuckets.length > 0 && (
+                        <div className="mb-2 flex flex-wrap gap-1">
+                            {visibleBuckets.map((bucket) => (
+                                <Button
+                                    key={bucket.key}
+                                    variant={activeBucket === bucket.key ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => handleBucketClick(bucket.key)}
+                                >
+                                    {bucket.key}
+                                </Button>
+                            ))}
+                        </div>
+                    )}
                     <div className="flex flex-wrap gap-2 md:min-h-0 md:flex-1 md:flex-col md:flex-nowrap md:overflow-y-auto md:pr-2">
-                        <Button
-                            variant={!activeTag ? 'secondary' : 'ghost'}
-                            onClick={() => setActiveTag(null)}
-                            className="justify-start"
-                        >
-                            All ({projectsData.length})
-                        </Button>
-                        {allTags.map((tag) => (
+                        {visibleTags.map((tag) => (
                             <Button
                                 key={tag}
                                 variant={activeTag === tag ? 'secondary' : 'ghost'}
