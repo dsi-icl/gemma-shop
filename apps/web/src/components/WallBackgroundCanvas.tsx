@@ -23,10 +23,10 @@ interface WallBackgroundCanvasProps {
 
 export function WallBackgroundCanvas({ layer, col, row, getNow }: WallBackgroundCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const playerRef = useRef(getNow);
-    if (playerRef.current === null) {
-        playerRef.current = getNow;
-    }
+    const getNowRef = useRef(getNow);
+    useEffect(() => {
+        getNowRef.current = getNow;
+    }, [getNow]);
 
     useEffect(() => {
         if (layer.backgroundType === 'solid') {
