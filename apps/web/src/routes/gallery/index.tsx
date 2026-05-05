@@ -471,7 +471,7 @@ function HomePage() {
                 tags.add(t);
             }
         }
-        return Array.from(tags);
+        return Array.from(tags).sort((a, b) => a.localeCompare(b));
     }, [projectsData]);
 
     const filteredProjects = useMemo(() => {
@@ -589,9 +589,12 @@ function HomePage() {
                 </div>
             ) : null}
             <div className="flex min-h-0 flex-1 flex-col gap-8 px-8 md:flex-row md:px-[5vw]">
-                <aside ref={filtersAsideRef} className="w-full shrink-0 md:w-1/5">
+                <aside
+                    ref={filtersAsideRef}
+                    className="w-full shrink-0 md:flex md:min-h-0 md:w-1/5 md:flex-col"
+                >
                     <h2 className="mb-4 text-lg font-semibold">Filters</h2>
-                    <div className="flex flex-wrap gap-2 md:flex-col md:flex-nowrap">
+                    <div className="flex flex-wrap gap-2 md:min-h-0 md:flex-1 md:flex-col md:flex-nowrap md:overflow-y-auto md:pr-2">
                         <Button
                             variant={!activeTag ? 'secondary' : 'ghost'}
                             onClick={() => setActiveTag(null)}
