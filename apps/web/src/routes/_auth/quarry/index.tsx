@@ -11,6 +11,7 @@ import {
 import type { ProjectDocument } from '@repo/db/documents';
 
 type Project = Omit<ProjectDocument, '_id' | '_version'>;
+import { authSessionQueryOptions } from '@repo/auth/tanstack/queries';
 import { Badge } from '@repo/ui/components/badge';
 import AnimatedBlurPattern from '@repo/ui/components/blur-pattern';
 import { Button } from '@repo/ui/components/button';
@@ -65,6 +66,12 @@ function QuarryIndex() {
         enabled: showArchived
     });
     const projects = showArchived ? (archivedProjects ?? defaultProjects) : defaultProjects;
+    const { data: sessionData } = useQuery(authSessionQueryOptions());
+    const impersonatedBy =
+        sessionData?.session && typeof sessionData.session === 'object'
+            ? (sessionData.session as { impersonatedBy?: unknown }).impersonatedBy
+            : null;
+    const isImpersonating = typeof impersonatedBy === 'string' && impersonatedBy.length > 0;
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -270,7 +277,9 @@ function QuarryIndex() {
     });
 
     return (
-        <div className="flex h-full flex-col overflow-hidden pt-14 pb-14">
+        <div
+            className={`flex h-full flex-col overflow-hidden pb-14 ${isImpersonating ? 'pt-24' : 'pt-14'}`}
+        >
             <div className="mx-auto w-full max-w-5xl shrink-0 px-6 pt-4">
                 <div className="mb-6 flex items-center justify-between">
                     <h2 className="text-xl font-semibold">Projects</h2>
