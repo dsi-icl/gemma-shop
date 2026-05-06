@@ -30,7 +30,7 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId/history'
     },
     component: HistoryTab,
     head: ({ loaderData }) => ({
-        meta: [{ title: `History · ${loaderData?.projectName ?? 'Project'} · GemmaShop` }]
+        meta: [{ title: `History · ${loaderData?.projectName ?? 'Project'} · Vizzy Studio` }]
     })
 });
 

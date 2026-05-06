@@ -20,7 +20,7 @@ jobs:
             CI: true
             TURBO_TELEMETRY_DISABLED: '1'
             VITE_BASE_URL: http://localhost:3670
-            SERVER_DATABASE_URL: mongodb://127.0.0.1:27017/gemmashop?directConnection=true
+            SERVER_DATABASE_URL: mongodb://127.0.0.1:27017/vizzy?directConnection=true
             SERVER_AUTH_SECRET: 00000000000000000000000000000000
             SERVER_CONFIG_ENCRYPTION_KEY: ci-test-config-key
         steps:
@@ -59,7 +59,7 @@ jobs:
             WEB_HOST_PORT: 3870
             TEST_BASE_URL: http://127.0.0.1:3870
             VITE_BASE_URL: http://127.0.0.1:3870
-            SERVER_DATABASE_URL: mongodb://127.0.0.1:37017/gemmashop?replicaSet=rs0&directConnection=true
+            SERVER_DATABASE_URL: mongodb://127.0.0.1:37017/vizzy?replicaSet=rs0&directConnection=true
             SERVER_AUTH_SECRET: 00000000000000000000000000000000
             SERVER_CONFIG_ENCRYPTION_KEY: ci-test-config-key
             ALLOWED_HOSTS: http://127.0.0.1:3870

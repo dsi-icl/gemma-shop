@@ -29,7 +29,7 @@ export const Route = createFileRoute('/gallery/')({
     },
     component: HomePage,
     head: () => ({
-        meta: [{ title: 'Gallery · GemmaShop' }]
+        meta: [{ title: 'Gallery · Vizzy Studio' }]
     })
 });
 

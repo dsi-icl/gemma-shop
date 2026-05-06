@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/legal/privacy')({
     head: () => ({
-        meta: [{ title: 'Privacy Notice · GemmaShop' }]
+        meta: [{ title: 'Privacy Notice · Vizzy Studio' }]
     }),
     component: PrivacyNoticePage
 });
@@ -38,10 +38,10 @@ function PrivacyNoticePage() {
                         <section className="rounded-lg border p-4">
                             <h2 className="text-lg font-medium">What this app collects</h2>
                             <p className="mt-2 text-muted-foreground">
-                                GemmaShop stores account and project information needed to run the
-                                service. This may include your account identifier (such as email),
-                                project metadata, collaborators, uploaded assets, and editing
-                                activity.
+                                Vizzy Studio stores account and project information needed to run
+                                the service. This may include your account identifier (such as
+                                email), project metadata, collaborators, uploaded assets, and
+                                editing activity.
                             </p>
                         </section>
 

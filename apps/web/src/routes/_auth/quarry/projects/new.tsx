@@ -9,7 +9,7 @@ import { $createProject } from '~/server/projects.fns';
 
 export const Route = createFileRoute('/_auth/quarry/projects/new')({
     head: () => ({
-        meta: [{ title: 'New Project · Quarry · GemmaShop' }]
+        meta: [{ title: 'New Project · Quarry · Vizzy Studio' }]
     }),
     component: NewProject
 });

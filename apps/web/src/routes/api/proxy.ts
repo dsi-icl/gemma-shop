@@ -274,7 +274,7 @@ export const Route = createFileRoute('/api/proxy')({
                         redirect: 'follow',
                         signal: controller.signal,
                         headers: {
-                            'user-agent': 'gemma-wall-proxy/1.0',
+                            'user-agent': 'vizzy-wall-proxy/1.0',
                             accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5'
                         }
                     });

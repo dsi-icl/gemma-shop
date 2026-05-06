@@ -46,7 +46,7 @@ export const Route = createFileRoute('/_auth/quarry/view/$projectId/$commitId')(
     },
     component: CommitViewer,
     head: ({ loaderData }) => ({
-        meta: [{ title: `Commit Viewer · ${loaderData?.projectName ?? 'Project'} · GemmaShop` }]
+        meta: [{ title: `Commit Viewer · ${loaderData?.projectName ?? 'Project'} · Vizzy Studio` }]
     })
 });
 

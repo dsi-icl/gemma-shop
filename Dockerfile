@@ -33,13 +33,13 @@ ARG KEEP_SOURCE_MAPS=false
 ARG OCI_CREATED=unknown
 ARG OCI_VERSION=dev
 ARG OCI_REVISION=unknown
-ARG OCI_SOURCE=https://github.com/dsi-icl/gemma-shop
+ARG OCI_SOURCE=https://github.com/dsi-icl/vizzy-studio
 
-LABEL org.opencontainers.image.title="gemma-shop" \
+LABEL org.opencontainers.image.title="vizzy-studio" \
       org.opencontainers.image.description="Collaborative multi-tenant presentation system for large video walls" \
-      org.opencontainers.image.url="https://github.com/dsi-icl/gemma-shop" \
+      org.opencontainers.image.url="https://github.com/dsi-icl/vizzy-studio" \
       org.opencontainers.image.source="${OCI_SOURCE}" \
-      org.opencontainers.image.documentation="https://github.com/dsi-icl/gemma-shop#readme" \
+      org.opencontainers.image.documentation="https://github.com/dsi-icl/vizzy-studio#readme" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${OCI_VERSION}" \
       org.opencontainers.image.revision="${OCI_REVISION}" \

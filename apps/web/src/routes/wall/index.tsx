@@ -34,7 +34,7 @@ type HydrateStagePayload = {
 
 export const Route = createFileRoute('/wall/')({
     head: () => ({
-        meta: [{ title: 'Wall Display · GemmaShop' }]
+        meta: [{ title: 'Wall Display · Vizzy Studio' }]
     }),
     component: WallApp
 });

@@ -1,5 +1,5 @@
 {
-    "name": "@gemma/shop",
+    "name": "@vizzy/studio",
     "private": true,
     "workspaces": {
         "packages": [

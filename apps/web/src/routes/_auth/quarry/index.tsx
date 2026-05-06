@@ -47,7 +47,7 @@ export const Route = createFileRoute('/_auth/quarry/')({
     },
     component: QuarryIndex,
     head: () => ({
-        meta: [{ title: 'Projects · Quarry · GemmaShop' }]
+        meta: [{ title: 'Projects · Quarry · Vizzy Studio' }]
     })
 });
 

@@ -24,7 +24,7 @@ type ThirdPartyNoticePayload = {
 
 export const Route = createFileRoute('/legal/notices')({
     head: () => ({
-        meta: [{ title: 'Legal Notices · GemmaShop' }]
+        meta: [{ title: 'Legal Notices · Vizzy Studio' }]
     }),
     component: LegalNoticesPage
 });

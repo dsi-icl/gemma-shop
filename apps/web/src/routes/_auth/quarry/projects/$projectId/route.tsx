@@ -47,7 +47,7 @@ export const Route = createFileRoute('/_auth/quarry/projects/$projectId')({
     },
     component: ProjectLayout,
     head: ({ loaderData }) => ({
-        meta: [{ title: `${loaderData?.projectName ?? 'Project'} · Quarry · GemmaShop` }]
+        meta: [{ title: `${loaderData?.projectName ?? 'Project'} · Quarry · Vizzy Studio` }]
     })
 });
 

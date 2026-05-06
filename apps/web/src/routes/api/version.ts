@@ -7,7 +7,7 @@ export const Route = createFileRoute('/api/version')({
         handlers: {
             GET: async () =>
                 Response.json({
-                    name: 'GemmaShop',
+                    name: 'Vizzy Studio',
                     commit: buildInfo.commitSha,
                     builtAt: buildInfo.builtAt
                 })

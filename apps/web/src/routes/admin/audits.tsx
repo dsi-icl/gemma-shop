@@ -19,7 +19,7 @@ import { adminAuditsInfiniteQueryOptions, type AdminAuditFilters } from '~/serve
 export const Route = createFileRoute('/admin/audits')({
     component: AdminAudits,
     head: () => ({
-        meta: [{ title: 'Audits · Admin · GemmaShop' }]
+        meta: [{ title: 'Audits · Admin · Vizzy Studio' }]
     })
 });
 
