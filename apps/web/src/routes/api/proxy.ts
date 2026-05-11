@@ -1,3 +1,4 @@
+import type { JsonValue } from '@repo/db/documents';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { logAuditDenied } from '~/server/audit';
@@ -5,6 +6,7 @@ import type { AuthContext } from '~/server/requestAuthContext';
 import { resolveRequestAuthContext } from '~/server/requestAuthContext';
 import { resolveWallMediaCookieAuthContext } from '~/server/wallMediaCookie';
 
+const isDev = process.env.NODE_ENV === 'development';
 const PROXY_ALLOWED_REFERRERS = (process.env.PROXY_ALLOWED_REFERRERS ?? '')
     .split(',')
     .map((v) => v.trim())
@@ -18,7 +20,29 @@ function redirectTo(path: '/web-nonet?l=wall' | '/web-corsissue?l=wall'): Respon
     return new Response(null, {
         status: 302,
         headers: {
-            location: path
+            location: path,
+            ...(isDev ? { 'X-Dev-Status-Message': `Redirect: ${path}` } : {})
+        }
+    });
+}
+
+async function logAssetDenied(input: {
+    request: Request;
+    authContext: AuthContext;
+    reasonCode: string;
+    details?: Record<string, JsonValue>;
+    statusMessage?: string;
+}) {
+    await logAuditDenied({
+        action: 'PROXY_DENIED',
+        reasonCode: input.reasonCode,
+        statusMessage: input.statusMessage,
+        authContext: input.authContext,
+        ...(input.details ? { changes: input.details } : {}),
+        executionContext: {
+            surface: 'http',
+            operation: 'GET /api/proxy',
+            request: input.request
         }
     });
 }
@@ -202,15 +226,11 @@ export const Route = createFileRoute('/api/proxy')({
                 }
 
                 if (authContext.device?.kind !== 'wall') {
-                    await logAuditDenied({
-                        action: 'PROXY_DENIED',
-                        reasonCode: 'WALL_DEVICE_REQUIRED',
+                    await logAssetDenied({
+                        request,
                         authContext,
-                        executionContext: {
-                            surface: 'http',
-                            operation: 'GET /api/proxy',
-                            request
-                        }
+                        reasonCode: 'WALL_DEVICE_REQUIRED',
+                        statusMessage: 'Redirect: /web-nonet?l=wall'
                     });
                     return redirectTo('/web-nonet?l=wall');
                 }
@@ -223,7 +243,12 @@ export const Route = createFileRoute('/api/proxy')({
                     if (checkOnly) {
                         return Response.json(
                             { ok: false, reason: 'invalid_url', fallback: '/web-nonet?l=wall' },
-                            { status: 200 }
+                            {
+                                status: 200,
+                                headers: isDev
+                                    ? { 'X-Dev-Status-Message': 'Invalid URL' }
+                                    : undefined
+                            }
                         );
                     }
                     return redirectTo('/web-nonet?l=wall');
@@ -237,18 +262,14 @@ export const Route = createFileRoute('/api/proxy')({
                     isAllowedReferrer(origin ?? null, allowlist);
 
                 if (!allowed && !PROXY_ALLOW_MISSING_REFERRER) {
-                    await logAuditDenied({
-                        action: 'PROXY_DENIED',
-                        reasonCode: 'FORBIDDEN_ORIGIN',
+                    await logAssetDenied({
+                        request,
                         authContext,
-                        changes: {
+                        reasonCode: 'FORBIDDEN_ORIGIN',
+                        statusMessage: 'Forbidden Origin',
+                        details: {
                             referer: referer ?? null,
                             origin: origin ?? null
-                        },
-                        executionContext: {
-                            surface: 'http',
-                            operation: 'GET /api/proxy',
-                            request
                         }
                     });
                     if (checkOnly) {
@@ -258,7 +279,12 @@ export const Route = createFileRoute('/api/proxy')({
                                 reason: 'forbidden_origin',
                                 fallback: '/web-nonet?l=wall'
                             },
-                            { status: 200 }
+                            {
+                                status: 200,
+                                headers: isDev
+                                    ? { 'X-Dev-Status-Message': 'Forbidden Origin' }
+                                    : undefined
+                            }
                         );
                     }
                     return redirectTo('/web-nonet?l=wall');
@@ -287,7 +313,14 @@ export const Route = createFileRoute('/api/proxy')({
                                     reason: `upstream_status_${upstreamResponse.status}`,
                                     fallback: '/web-nonet?l=wall'
                                 },
-                                { status: 200 }
+                                {
+                                    status: 200,
+                                    headers: isDev
+                                        ? {
+                                              'X-Dev-Status-Message': `Upstream Status ${upstreamResponse.status}`
+                                          }
+                                        : undefined
+                                }
                             );
                         }
                         return redirectTo('/web-nonet?l=wall');
@@ -306,7 +339,15 @@ export const Route = createFileRoute('/api/proxy')({
                                     reason: framing.reason ?? 'frame_blocked',
                                     fallback: '/web-corsissue?l=wall'
                                 },
-                                { status: 200 }
+                                {
+                                    status: 200,
+                                    headers: isDev
+                                        ? {
+                                              'X-Dev-Status-Message':
+                                                  framing.reason ?? 'Frame Blocked'
+                                          }
+                                        : undefined
+                                }
                             );
                         }
                         return Response.json({ ok: true }, { status: 200 });
@@ -338,7 +379,12 @@ export const Route = createFileRoute('/api/proxy')({
                     if (checkOnly) {
                         return Response.json(
                             { ok: false, reason: 'network_error', fallback: '/web-nonet?l=wall' },
-                            { status: 200 }
+                            {
+                                status: 200,
+                                headers: isDev
+                                    ? { 'X-Dev-Status-Message': 'Network Error' }
+                                    : undefined
+                            }
                         );
                     }
                     return redirectTo('/web-nonet?l=wall');

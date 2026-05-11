@@ -86,6 +86,15 @@ function deviceKindFromChanges(changes: unknown): 'wall' | 'gallery' | 'controll
     return null;
 }
 
+function hasPayload(event: {
+    changes?: unknown;
+    error?: string | null;
+    authContext?: unknown;
+    executionContext?: unknown;
+}): boolean {
+    return Boolean(event.changes || event.error || event.authContext || event.executionContext);
+}
+
 function eventCollapseSignature(event: {
     action?: string | null;
     outcome?: string | null;
@@ -423,8 +432,17 @@ function AdminAudits() {
                                 {event.executionContext?.operation && (
                                     <span>Operation: {event.executionContext.operation}</span>
                                 )}
+                                {event.executionContext?.method && (
+                                    <span>Method: {event.executionContext.method}</span>
+                                )}
                                 {event.executionContext?.path && (
                                     <span>Path: {event.executionContext.path}</span>
+                                )}
+                                {event.executionContext?.requestId && (
+                                    <span>Request ID: {event.executionContext.requestId}</span>
+                                )}
+                                {event.executionContext?.peerId && (
+                                    <span>Peer ID: {event.executionContext.peerId}</span>
                                 )}
                                 {event.reasonCode && (
                                     <span>Reason: {labelize(event.reasonCode)}</span>
@@ -434,13 +452,22 @@ function AdminAudits() {
                                 )}
                             </div>
 
-                            {event.changes && (
+                            {hasPayload(event) && (
                                 <details className="mt-2">
                                     <summary className="cursor-pointer text-xs text-muted-foreground">
                                         View payload
                                     </summary>
                                     <pre className="mt-2 max-h-44 max-w-full overflow-auto rounded-lg bg-muted/50 p-2 text-xs break-words whitespace-pre-wrap select-text">
-                                        {JSON.stringify(event.changes, null, 2)}
+                                        {JSON.stringify(
+                                            {
+                                                changes: event.changes ?? null,
+                                                error: event.error ?? null,
+                                                authContext: event.authContext ?? null,
+                                                executionContext: event.executionContext ?? null
+                                            },
+                                            null,
+                                            2
+                                        )}
                                     </pre>
                                 </details>
                             )}
