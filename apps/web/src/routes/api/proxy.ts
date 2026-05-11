@@ -1,7 +1,7 @@
 import type { JsonValue } from '@repo/db/documents';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { logAuditDenied } from '~/server/audit';
+import { logAuditDenied, logAuditFailure, logAuditSuccess } from '~/server/audit';
 import type { AuthContext } from '~/server/requestAuthContext';
 import { resolveRequestAuthContext } from '~/server/requestAuthContext';
 import { resolveWallMediaCookieAuthContext } from '~/server/wallMediaCookie';
@@ -306,6 +306,17 @@ export const Route = createFileRoute('/api/proxy')({
                     });
 
                     if (!upstreamResponse.ok) {
+                        await logAuditFailure({
+                            action: 'PROXY_FETCH_FAILED',
+                            reasonCode: `UPSTREAM_HTTP_${upstreamResponse.status}`,
+                            statusMessage: `Upstream Status ${upstreamResponse.status}`,
+                            authContext,
+                            executionContext: {
+                                surface: 'http',
+                                operation: 'GET /api/proxy',
+                                request
+                            }
+                        });
                         if (checkOnly) {
                             return Response.json(
                                 {
@@ -333,6 +344,17 @@ export const Route = createFileRoute('/api/proxy')({
                             getAncestorOrigin(request)
                         );
                         if (framing.reject) {
+                            await logAuditFailure({
+                                action: 'PROXY_FRAME_CHECK_FAILED',
+                                reasonCode: 'FRAME_BLOCKED',
+                                statusMessage: framing.reason ?? 'Frame Blocked',
+                                authContext,
+                                executionContext: {
+                                    surface: 'http',
+                                    operation: 'GET /api/proxy',
+                                    request
+                                }
+                            });
                             return Response.json(
                                 {
                                     ok: false,
@@ -350,6 +372,15 @@ export const Route = createFileRoute('/api/proxy')({
                                 }
                             );
                         }
+                        await logAuditSuccess({
+                            action: 'PROXY_FRAME_CHECK_PASSED',
+                            authContext,
+                            executionContext: {
+                                surface: 'http',
+                                operation: 'GET /api/proxy',
+                                request
+                            }
+                        });
                         return Response.json({ ok: true }, { status: 200 });
                     }
 
@@ -359,11 +390,30 @@ export const Route = createFileRoute('/api/proxy')({
                         contentType.includes('application/xhtml+xml') ||
                         contentType === '';
                     if (!isHtmlLike) {
+                        await logAuditFailure({
+                            action: 'PROXY_CONTENT_TYPE_REJECTED',
+                            reasonCode: 'NON_HTML_CONTENT',
+                            authContext,
+                            executionContext: {
+                                surface: 'http',
+                                operation: 'GET /api/proxy',
+                                request
+                            }
+                        });
                         return redirectTo('/web-nonet?l=wall');
                     }
 
                     const sourceHtml = await readWithCap(upstreamResponse, PROXY_MAX_BYTES);
                     const rewritten = rewriteHtml(sourceHtml, upstreamResponse.url || rawUrl);
+                    await logAuditSuccess({
+                        action: 'PROXY_FETCH_SUCCEEDED',
+                        authContext,
+                        executionContext: {
+                            surface: 'http',
+                            operation: 'GET /api/proxy',
+                            request
+                        }
+                    });
 
                     // Intentionally return a strict header allowlist only.
                     // Do not relay upstream response headers such as Set-Cookie/CSP/XFO.
@@ -376,6 +426,17 @@ export const Route = createFileRoute('/api/proxy')({
                         }
                     });
                 } catch {
+                    await logAuditFailure({
+                        action: 'PROXY_FETCH_FAILED',
+                        reasonCode: 'NETWORK_ERROR',
+                        statusMessage: 'Network Error',
+                        authContext,
+                        executionContext: {
+                            surface: 'http',
+                            operation: 'GET /api/proxy',
+                            request
+                        }
+                    });
                     if (checkOnly) {
                         return Response.json(
                             { ok: false, reason: 'network_error', fallback: '/web-nonet?l=wall' },

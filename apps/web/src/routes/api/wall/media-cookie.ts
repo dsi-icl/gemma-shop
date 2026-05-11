@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { logAuditDenied } from '~/server/audit';
+import { logAuditDenied, logAuditSuccess } from '~/server/audit';
 import type { AuthContext } from '~/server/requestAuthContext';
 import { createWallMediaCookie } from '~/server/wallMediaCookie';
 
@@ -63,6 +63,19 @@ export const Route = createFileRoute('/api/wall/media-cookie')({
                             : undefined
                     });
                 }
+
+                await logAuditSuccess({
+                    action: 'WALL_MEDIA_COOKIE_ISSUED',
+                    actorId: `device:${device.id}`,
+                    resourceType: 'device',
+                    resourceId: device.id,
+                    authContext,
+                    executionContext: {
+                        surface: 'http',
+                        operation: 'POST /api/wall/media-cookie',
+                        request
+                    }
+                });
 
                 return new Response(null, {
                     status: 204,
